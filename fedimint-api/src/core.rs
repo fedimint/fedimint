@@ -19,9 +19,6 @@ pub mod encode;
 pub mod client;
 pub mod server;
 
-pub use self::client::*;
-pub use self::server::*;
-
 /// A module key identifing a module
 ///
 /// Used as an unique ID, and also as prefix in serialization
@@ -47,22 +44,14 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             }
         }
 
-        impl Decodable<$crate::server::ServerModule> for $name {
-            fn consensus_decode<R: std::io::Read>(
+        impl Decodable for $name {
+            fn consensus_decode<M, R: std::io::Read>(
                 r: &mut R,
-                modules: &BTreeMap<ModuleKey, $crate::server::ServerModule>,
-            ) -> Result<Self, DecodeError> {
-                $crate::core::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
-                    m.$decode_fn(r)
-                })
-            }
-        }
-
-        impl Decodable<$crate::client::ClientModule> for $name {
-            fn consensus_decode<R: std::io::Read>(
-                r: &mut R,
-                modules: &BTreeMap<ModuleKey, $crate::client::ClientModule>,
-            ) -> Result<Self, DecodeError> {
+                modules: &BTreeMap<ModuleKey, M>,
+            ) -> Result<Self, DecodeError>
+            where
+                M: $crate::core::ModuleDecode,
+            {
                 $crate::core::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
                     m.$decode_fn(r)
                 })
@@ -87,7 +76,7 @@ macro_rules! module_plugin_trait_define {
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
         pub trait $plugin_ty:
-            DynEncodable + Decodable<()> + Encodable + Clone + Send + Sync + 'static
+            DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
         {
             fn module_key(&self) -> ModuleKey;
 
@@ -115,13 +104,13 @@ macro_rules! module_plugin_trait_define {
     };
 }
 
-/// Common functionality of a Fedimint module
+/// Module Decoder trait
 ///
-/// Both backend and server part of the module will need
-/// things like decoding module-specific data.
-pub trait ModuleCommon {
-    fn module_key() -> ModuleKey;
-
+/// Static-polymorphism version of [`ModuleDecode`]
+///
+/// All methods are static, as the decoding code is supposed to be instance-independent,
+/// at least until we start to support modules with overriden [`ModuleKey`]s
+pub trait PluginDecode {
     /// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
     fn decode_spendable_output(r: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError>;
 
@@ -136,6 +125,58 @@ pub trait ModuleCommon {
 
     /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
     fn decode_output_outcome(r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+
+    /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    fn decode_consensus_item(r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+}
+
+pub trait ModuleDecode {
+    /// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
+    fn decode_spendable_output(&self, r: &mut dyn io::Read)
+        -> Result<SpendableOutput, DecodeError>;
+
+    /// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
+
+    /// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
+
+    /// Decode `PendingOutput` compatible with this module, after the module key prefix was already decoded
+    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
+
+    /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+
+    /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+}
+
+impl ModuleDecode for () {
+    fn decode_spendable_output(
+        &self,
+        _r: &mut dyn io::Read,
+    ) -> Result<SpendableOutput, DecodeError> {
+        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    }
+    fn decode_input(&self, _r: &mut dyn io::Read) -> Result<Input, DecodeError> {
+        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    }
+
+    fn decode_output(&self, _r: &mut dyn io::Read) -> Result<Output, DecodeError> {
+        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    }
+
+    fn decode_pending_output(&self, _r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    }
+
+    fn decode_output_outcome(&self, _r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    }
+
+    fn decode_consensus_item(&self, _r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
+        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    }
 }
 
 /// Something that can be an [`Input`] in a [`Transaction`]
@@ -301,6 +342,27 @@ module_dyn_newtype_impl_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
 
+pub trait ModuleConsensusItem: DynEncodable {
+    fn as_any(&self) -> &(dyn Any + 'static);
+    /// Module key
+    fn module_key(&self) -> ModuleKey;
+    fn clone(&self) -> ConsensusItem;
+}
+
+dyn_newtype_define! {
+    /// An owned, immutable output of a [`Transaction`] before it was finalized
+    pub ConsensusItem(Box<ModuleConsensusItem>)
+}
+module_plugin_trait_define! {
+    ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
+    { }
+    { }
+}
+module_dyn_newtype_impl_encode_decode! {
+    ConsensusItem, decode_consensus_item
+}
+dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
+
 #[derive(Encodable, Decodable)]
 pub struct Signature;
 
@@ -312,15 +374,18 @@ pub struct Transaction {
     signature: Signature,
 }
 
-impl<M> Decodable<M> for Transaction
+impl Decodable for Transaction
 where
-    Input: Decodable<M>,
-    Output: Decodable<M>,
+    Input: Decodable,
+    Output: Decodable,
 {
-    fn consensus_decode<R: std::io::Read>(
+    fn consensus_decode<M, R: std::io::Read>(
         r: &mut R,
         modules: &BTreeMap<ModuleKey, M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
         Ok(Self {
             inputs: Decodable::consensus_decode(r, modules)?,
             outputs: Decodable::consensus_decode(r, modules)?,

@@ -20,17 +20,21 @@ use thiserror::Error;
 use super::*;
 use crate::module_plugin_trait_define;
 
-pub trait ModuleConsensusItem: DynEncodable {
-    fn as_any(&self) -> &(dyn Any + 'static);
-    fn module_key(&self) -> ModuleKey;
-    fn clone(&self) -> ConsensusItem;
+/// Api Endpoint exposed by a server side module
+pub struct ApiEndpoint {
+    pub path: String,
+    pub handler: ApiHandler,
+}
+
+#[async_trait]
+pub trait ModuleApiHandler {
+    async fn handle(&self, params: &serde_json::Value) -> Result<serde_json::Value, ApiError>;
 }
 
 dyn_newtype_define! {
-    pub ConsensusItem(Box<ModuleConsensusItem>)
+    /// [`ApiEndpoint`] handler exposed by the server side module
+    pub ApiHandler(Box<ModuleApiHandler>)
 }
-dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
-module_plugin_trait_define!(ConsensusItem, PluginConsensusItem, ModuleConsensusItem, {} {});
 
 pub trait ModuleVerificationCache: DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
@@ -92,6 +96,8 @@ pub trait IServerModule {
     fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
 
     /// Initialize the module on registration in Fedimint
     fn init(&self, backend: &mut dyn InitHandle);
@@ -195,9 +201,38 @@ dyn_newtype_define!(
     pub ServerModule(Arc<IServerModule>)
 );
 
+impl ModuleDecode for ServerModule {
+    fn decode_spendable_output(
+        &self,
+        r: &mut dyn io::Read,
+    ) -> Result<SpendableOutput, DecodeError> {
+        (**self).decode_spendable_output(r)
+    }
+
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
+        (**self).decode_input(r)
+    }
+
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
+        (**self).decode_output(r)
+    }
+
+    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+        (**self).decode_pending_output(r)
+    }
+
+    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+        (**self).decode_output_outcome(r)
+    }
+
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
+        (**self).decode_consensus_item(r)
+    }
+}
+
 #[async_trait(?Send)]
 pub trait ServerModulePlugin: Sized {
-    type Common: ModuleCommon;
+    type Decoder: PluginDecode;
     type Input: PluginInput;
     type Output: PluginOutput;
     type PendingOutput: PluginPendingOutput;
@@ -206,6 +241,7 @@ pub trait ServerModulePlugin: Sized {
     type ConsensusItem: PluginConsensusItem;
     type VerificationCache: PluginVerificationCache;
 
+    fn module_key(&self) -> ModuleKey;
     fn init(&self, backend: &mut dyn InitHandle);
 
     /// Blocks until a new `consensus_proposal` is available.
@@ -311,30 +347,34 @@ where
     T: ServerModulePlugin,
 {
     fn module_key(&self) -> ModuleKey {
-        <Self as ServerModulePlugin>::Common::module_key()
+        <Self as ServerModulePlugin>::module_key(self)
     }
 
     fn decode_spendable_output(
         &self,
         r: &mut dyn io::Read,
     ) -> Result<SpendableOutput, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_spendable_output(r)
+        <Self as ServerModulePlugin>::Decoder::decode_spendable_output(r)
     }
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_input(r)
+        <Self as ServerModulePlugin>::Decoder::decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_output(r)
+        <Self as ServerModulePlugin>::Decoder::decode_output(r)
     }
 
     fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_pending_output(r)
+        <Self as ServerModulePlugin>::Decoder::decode_pending_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_output_outcome(r)
+        <Self as ServerModulePlugin>::Decoder::decode_output_outcome(r)
+    }
+
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
+        <Self as ServerModulePlugin>::Decoder::decode_consensus_item(r)
     }
 
     fn init(&self, backend: &mut dyn InitHandle) {

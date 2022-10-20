@@ -1,9 +1,12 @@
 use super::ModuleRegistry;
-use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::{
+    core::ModuleDecode,
+    encoding::{Decodable, DecodeError, Encodable},
+};
 
 macro_rules! impl_external_encode_bls {
     ($ext:ident $(:: $ext_path:ident)*, $group:ty, $byte_len:expr) => {
-        impl crate::encoding::Encodable for $ext $(:: $ext_path)* {
+        impl $crate::encoding::Encodable for $ext $(:: $ext_path)* {
             fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
                 let bytes = self.0.to_compressed();
                 writer.write_all(&bytes)?;
@@ -11,11 +14,11 @@ macro_rules! impl_external_encode_bls {
             }
         }
 
-        impl<M> crate::encoding::Decodable<M> for $ext $(:: $ext_path)* {
-            fn consensus_decode<D: std::io::Read>(
+        impl $crate::encoding::Decodable for $ext $(:: $ext_path)* {
+            fn consensus_decode<M, D: std::io::Read>(
                 d: &mut D,
                 _modules: &crate::encoding::ModuleRegistry<M>,
-            ) -> Result<Self, crate::encoding::DecodeError> {
+            ) -> Result<Self, crate::encoding::DecodeError> where M : $crate::core::ModuleDecode {
                 let mut bytes = [0u8; $byte_len];
                 d.read_exact(&mut bytes).map_err(crate::encoding::DecodeError::from_err)?;
                 let msg = <$group>::from_compressed(&bytes);
@@ -43,11 +46,14 @@ impl Encodable for tbs::BlindingKey {
     }
 }
 
-impl<M> Decodable<M> for tbs::BlindingKey {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for tbs::BlindingKey {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
         let mut bytes = [0u8; 32];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         let key = tbs::Scalar::from_bytes(&bytes);

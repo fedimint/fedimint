@@ -1,10 +1,9 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use fedimint_api::core::{
-    Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache, ServerModulePlugin,
-};
+use fedimint_api::core::{ModuleKey, PluginConsensusItem};
 use fedimint_api::server::InitHandle;
+use fedimint_api::server::{Error, InputMeta, PluginVerificationCache, ServerModulePlugin};
 use fedimint_api::{
     db::DatabaseTransaction,
     encoding::{Decodable, Encodable},
@@ -12,7 +11,7 @@ use fedimint_api::{
     Amount, OutPoint, PeerId,
 };
 use fedimint_mint_common::{
-    MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
+    MintInput, MintModuleDecoder, MintOutput, MintOutputOutcome, MintPendingOutput,
     MintSpendableOutput, MINT_MODULE_KEY,
 };
 
@@ -45,7 +44,7 @@ impl MintServerModule {
 
 #[async_trait(?Send)]
 impl ServerModulePlugin for MintServerModule {
-    type Common = MintModuleCommon;
+    type Decoder = MintModuleDecoder;
     type Input = MintInput;
     type Output = MintOutput;
     type PendingOutput = MintPendingOutput;
@@ -53,6 +52,10 @@ impl ServerModulePlugin for MintServerModule {
     type OutputOutcome = MintOutputOutcome;
     type ConsensusItem = MintConsensusItem;
     type VerificationCache = MintVerificationCache;
+
+    fn module_key(&self) -> ModuleKey {
+        MINT_MODULE_KEY
+    }
 
     fn init(&self, backend: &mut dyn InitHandle) {
         // TODO: delete this dummy endpoint
