@@ -158,6 +158,7 @@ impl FedimintServer {
         let last_saved_response = self
             .consensus
             .db
+            .begin_transaction()
             .get_value(&LastEpochKey)
             .expect("DB error");
         let last_saved_epoch = last_saved_response.map(|e| e.0);
@@ -189,10 +190,16 @@ impl FedimintServer {
         last_outcome: ConsensusOutcome,
     ) -> Result<(), EpochVerifyError> {
         let mut epochs: Vec<EpochHistory> = vec![];
-        let saved_epoch_key = self.consensus.db.get_value(&LastEpochKey).unwrap();
+        let saved_epoch_key = self
+            .consensus
+            .db
+            .begin_transaction()
+            .get_value(&LastEpochKey)
+            .unwrap();
 
         let download_epoch_num = saved_epoch_key.map(|e| e.0 + 1).unwrap_or(0);
-        let mut prev_epoch = saved_epoch_key.and_then(|e| self.consensus.db.get_value(&e).unwrap());
+        let mut prev_epoch = saved_epoch_key
+            .and_then(|e| self.consensus.db.begin_transaction().get_value(&e).unwrap());
 
         for epoch_num in download_epoch_num..=last_outcome.epoch {
             let current_epoch = if epoch_num == last_outcome.epoch {
@@ -243,7 +250,11 @@ impl FedimintServer {
         let threshold = self.cfg.peers.threshold();
 
         // include our expected next_epoch as well in case we can contribute to the next consensus
-        let last_saved = self.consensus.db.get_value(&LastEpochKey);
+        let last_saved = self
+            .consensus
+            .db
+            .begin_transaction()
+            .get_value(&LastEpochKey);
         let next_epoch = last_saved.expect("DB error").map(|e| e.0 + 1).unwrap_or(0);
         consensus_peers.insert(self.cfg.identity, next_epoch);
 
@@ -413,7 +424,11 @@ impl FedimintServer {
     /// Searches back in saved epoch history for the last signed epoch
     fn last_signed_epoch(&self, mut epoch: u64) -> Option<EpochHistory> {
         loop {
-            let query = self.consensus.db.get_value(&EpochHistoryKey(epoch));
+            let query = self
+                .consensus
+                .db
+                .begin_transaction()
+                .get_value(&EpochHistoryKey(epoch));
             match query.expect("DB error") {
                 Some(result) if result.signature.is_some() => break Some(result),
                 _ if epoch == 0 => break None,

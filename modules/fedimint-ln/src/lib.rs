@@ -163,6 +163,7 @@ impl FederationModule for LightningModule {
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
         self.db
+            .begin_transaction()
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
             .map(|res| {
                 let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
@@ -275,6 +276,7 @@ impl FederationModule for LightningModule {
         let account_db_key = ContractKey(input.contract_id);
         let mut contract_account = self
             .db
+            .begin_transaction()
             .get_value(&account_db_key)
             .expect("DB error")
             .expect("Should fail validation if contract account doesn't exist");
@@ -295,6 +297,7 @@ impl FederationModule for LightningModule {
                 if let Contract::Incoming(incoming) = &contract.contract {
                     let offer = self
                         .db
+                        .begin_transaction()
                         .get_value(&OfferKey(incoming.hash))
                         .expect("DB error")
                         .ok_or(LightningModuleError::NoOffer(incoming.hash))?;
@@ -330,6 +333,7 @@ impl FederationModule for LightningModule {
             } => {
                 let contract_account = self
                     .db
+                    .begin_transaction()
                     .get_value(&ContractKey(*contract))
                     .expect("DB error")
                     .ok_or(LightningModuleError::UnknownContract(*contract))?;
@@ -367,6 +371,7 @@ impl FederationModule for LightningModule {
                 let contract_db_key = ContractKey(contract.contract.contract_id());
                 let updated_contract_account = self
                     .db
+                    .begin_transaction()
                     .get_value(&contract_db_key)
                     .expect("DB error")
                     .map(|mut value: ContractAccount| {
@@ -392,6 +397,7 @@ impl FederationModule for LightningModule {
                 if let Contract::Incoming(incoming) = &contract.contract {
                     let offer = self
                         .db
+                        .begin_transaction()
                         .get_value(&OfferKey(incoming.hash))
                         .expect("DB error")
                         .expect("offer exists if output is valid");
@@ -423,6 +429,7 @@ impl FederationModule for LightningModule {
                 let updated_contract_account = {
                     let mut contract_account = self
                         .db
+                        .begin_transaction()
                         .get_value(&ContractKey(*contract))
                         .expect("DB error")
                         .expect("Contract exists if output is valid");
@@ -457,6 +464,7 @@ impl FederationModule for LightningModule {
         // Decrypt preimages
         let preimage_decryption_shares = self
             .db
+            .begin_transaction()
             .find_by_prefix(&AgreedDecryptionShareKeyPrefix)
             .map(|res| {
                 let (key, value) = res.expect("DB error");
@@ -576,6 +584,7 @@ impl FederationModule for LightningModule {
             let contract_db_key = ContractKey(contract_id);
             let mut contract_account = self
                 .db
+                .begin_transaction()
                 .get_value(&contract_db_key)
                 .expect("DB error")
                 .expect("checked before that it exists");
@@ -592,6 +601,7 @@ impl FederationModule for LightningModule {
             let outcome_db_key = ContractUpdateKey(out_point);
             let mut outcome = self
                 .db
+                .begin_transaction()
                 .get_value(&outcome_db_key)
                 .expect("DB error")
                 .expect("outcome was created on funding");
@@ -612,6 +622,7 @@ impl FederationModule for LightningModule {
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         self.db
+            .begin_transaction()
             .get_value(&ContractUpdateKey(out_point))
             .expect("DB error")
     }
@@ -693,12 +704,14 @@ impl LightningModule {
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -> Option<IncomingContractOffer> {
         self.db
+            .begin_transaction()
             .get_value(&OfferKey(payment_hash))
             .expect("DB error")
     }
 
     pub fn get_offers(&self) -> Vec<IncomingContractOffer> {
         self.db
+            .begin_transaction()
             .find_by_prefix(&OfferKeyPrefix)
             .map(|res| res.expect("DB error").1)
             .collect()
@@ -706,21 +719,24 @@ impl LightningModule {
 
     pub fn get_contract_account(&self, contract_id: ContractId) -> Option<ContractAccount> {
         self.db
+            .begin_transaction()
             .get_value(&ContractKey(contract_id))
             .expect("DB error")
     }
 
     pub fn list_gateways(&self) -> Vec<LightningGateway> {
         self.db
+            .begin_transaction()
             .find_by_prefix(&LightningGatewayKeyPrefix)
             .map(|res| res.expect("DB error").1)
             .collect()
     }
 
     pub fn register_gateway(&self, gateway: LightningGateway) {
-        self.db
-            .insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
+        let mut dbtx = self.db.begin_transaction();
+        dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
             .expect("DB error");
+        dbtx.commit_tx().expect("DB Error");
     }
 }
 

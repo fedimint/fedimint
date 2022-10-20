@@ -1,5 +1,5 @@
 use bitcoin::KeyPair;
-use fedimint_api::db::batch::{BatchItem, BatchTx};
+use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_core::config::ClientConfig;
@@ -124,10 +124,10 @@ impl TransactionBuilder {
         (coin_finalization_data, coin_output)
     }
 
-    pub fn build<R: RngCore + CryptoRng>(
+    pub fn build<'a, R: RngCore + CryptoRng>(
         mut self,
         change_required: Amount,
-        mut batch: BatchTx,
+        dbtx: &mut DatabaseTransaction<'a>,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
         tbs_pks: &Tiered<AggregatePublicKey>,
         mut rng: R,
@@ -144,28 +144,30 @@ impl TransactionBuilder {
 
         // move input coins to pending state, awaiting a transaction
         if !self.input_notes.item_count() != 0 {
-            batch.append_from_iter(self.input_notes.iter_items().map(|(amount, coin)| {
+            self.input_notes.iter_items().for_each(|(amount, coin)| {
                 // maybe_delete because coins might have been received from another user directly
-                BatchItem::maybe_delete(CoinKey {
+                dbtx.remove_entry(&CoinKey {
                     amount,
                     nonce: coin.note.0.clone(),
                 })
-            }));
-            batch.append_insert(PendingCoinsKey(txid), self.input_notes);
+                .expect("DB Error");
+            });
+            dbtx.insert_entry(&PendingCoinsKey(txid), &self.input_notes)
+                .expect("DB Error");
         }
 
         // write coin output to db to await for tx success to be fetched later
         self.output_notes.iter().for_each(|(out_idx, coins)| {
-            batch.append_insert_new(
-                OutputFinalizationKey(OutPoint {
+            dbtx.insert_new_entry(
+                &OutputFinalizationKey(OutPoint {
                     txid,
                     out_idx: *out_idx,
                 }),
-                coins.clone(),
-            );
+                &coins.clone(),
+            )
+            .expect("DB Error");
         });
 
-        batch.commit();
         self.tx
     }
 
