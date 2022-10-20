@@ -34,6 +34,11 @@ use crate::ln::{LightningError, LnRpc};
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ReceiveInvoicePayload {
+    htlc_accepted: HtlcAccepted,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BalancePayload;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,7 +63,7 @@ pub struct WithdrawPayload {
 
 #[derive(Debug)]
 pub enum GatewayRequest {
-    HtlcAccepted(GatewayRequestInner<HtlcAccepted>),
+    ReceiveInvoice(GatewayRequestInner<ReceiveInvoicePayload>),
     PayInvoice(GatewayRequestInner<ContractId>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
@@ -91,7 +96,11 @@ macro_rules! impl_gateway_request_trait {
         }
     };
 }
-impl_gateway_request_trait!(HtlcAccepted, Preimage, GatewayRequest::HtlcAccepted);
+impl_gateway_request_trait!(
+    ReceiveInvoicePayload,
+    Preimage,
+    GatewayRequest::ReceiveInvoice
+);
 impl_gateway_request_trait!(ContractId, (), GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
 impl_gateway_request_trait!(
@@ -367,9 +376,9 @@ impl LnGateway {
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
-                    GatewayRequest::HtlcAccepted(inner) => {
+                    GatewayRequest::ReceiveInvoice(inner) => {
                         inner
-                            .handle(|htlc_accepted| self.handle_htlc_incoming_msg(htlc_accepted))
+                            .handle(|inner| self.handle_htlc_incoming_msg(inner.htlc_accepted))
                             .await;
                     }
                     GatewayRequest::PayInvoice(inner) => {
