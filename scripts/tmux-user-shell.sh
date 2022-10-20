@@ -27,6 +27,7 @@ echo "This shell provides the following commands:"
 echo "  fedimint-cli:  cli client to interact with the federation"
 echo "  ln1, ln2:     cli clients for the two lightning nodes (1 is gateway)"
 echo "  btc_client:   cli client for bitcoind"
+echo "  gateway-cli:  cli client for the gateway"
 echo
 echo Use fedimint-cli as follows:
 fedimint-cli --help
