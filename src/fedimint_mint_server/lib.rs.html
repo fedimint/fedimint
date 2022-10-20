@@ -132,9 +132,6 @@
 <span id="132">132</span>
 <span id="133">133</span>
 <span id="134">134</span>
-<span id="135">135</span>
-<span id="136">136</span>
-<span id="137">137</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -145,7 +142,7 @@
     Amount, OutPoint, PeerId,
 };
 <span class="kw">use </span>fedimint_core_server::{
-    ApiEndpoint, Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
+    Error, InitHandle, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
     ServerModulePlugin,
 };
 <span class="kw">use </span>fedimint_mint_common::{
@@ -191,7 +188,12 @@
     <span class="kw">type </span>ConsensusItem = MintConsensusItem;
     <span class="kw">type </span>VerificationCache = MintVerificationCache;
 
-    <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>) {}
+    <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle) {
+        <span class="comment">// TODO: delete this dummy endpoint
+        </span>backend.register_endpoint(<span class="string">&quot;/mint/echo&quot;</span>, |value, _ctx| {
+            Box::pin(<span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(value) })
+        });
+    }
 
     <span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) {
         <span class="macro">todo!</span>()
@@ -261,14 +263,6 @@
     }
 
     <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, _audit: <span class="kw-2">&amp;mut </span>Audit) {
-        <span class="macro">todo!</span>()
-    }
-
-    <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
-        <span class="macro">todo!</span>()
-    }
-
-    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&gt; {
         <span class="macro">todo!</span>()
     }
 }

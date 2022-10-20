@@ -784,11 +784,11 @@
     </span><span class="kw">pub </span>cfg: ServerConfig,
 
     <span class="doccomment">/// Our local mint
-    </span><span class="kw">pub </span>mint: Mint, <span class="comment">// TODO: generate consensus code using Macro, making modules replaceable for testing and easy adaptability
     </span><span class="kw">pub </span>wallet: Wallet,
     <span class="kw">pub </span>ln: LightningModule,
+    <span class="kw">pub </span>mint: Mint,
 
-    modules: BTreeMap&lt;ModuleKey, ServerModule&gt;,
+    <span class="kw">pub </span>modules: BTreeMap&lt;ModuleKey, ServerModule&gt;,
     <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash
     </span><span class="kw">pub </span>db: Database,
 

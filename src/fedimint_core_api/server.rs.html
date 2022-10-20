@@ -523,42 +523,6 @@
 <span id="523">523</span>
 <span id="524">524</span>
 <span id="525">525</span>
-<span id="526">526</span>
-<span id="527">527</span>
-<span id="528">528</span>
-<span id="529">529</span>
-<span id="530">530</span>
-<span id="531">531</span>
-<span id="532">532</span>
-<span id="533">533</span>
-<span id="534">534</span>
-<span id="535">535</span>
-<span id="536">536</span>
-<span id="537">537</span>
-<span id="538">538</span>
-<span id="539">539</span>
-<span id="540">540</span>
-<span id="541">541</span>
-<span id="542">542</span>
-<span id="543">543</span>
-<span id="544">544</span>
-<span id="545">545</span>
-<span id="546">546</span>
-<span id="547">547</span>
-<span id="548">548</span>
-<span id="549">549</span>
-<span id="550">550</span>
-<span id="551">551</span>
-<span id="552">552</span>
-<span id="553">553</span>
-<span id="554">554</span>
-<span id="555">555</span>
-<span id="556">556</span>
-<span id="557">557</span>
-<span id="558">558</span>
-<span id="559">559</span>
-<span id="560">560</span>
-<span id="561">561</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -575,25 +539,10 @@
     module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
     Amount, OutPoint, PeerId,
 };
+<span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
-
-<span class="doccomment">/// Api Endpoint exposed by a server side module
-</span><span class="kw">pub struct </span>ApiEndpoint {
-    <span class="kw">pub </span>path: String,
-    <span class="kw">pub </span>handler: ApiHandler,
-}
-
-<span class="attribute">#[async_trait]
-</span><span class="kw">pub trait </span>ModuleApiHandler {
-    <span class="kw">async fn </span>handle(<span class="kw-2">&amp;</span><span class="self">self</span>, params: <span class="kw-2">&amp;</span>serde_json::Value) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;;
-}
-
-<span class="macro">dyn_newtype_define! </span>{
-    <span class="doccomment">/// [`ApiEndpoint`] handler exposed by the server side module
-    </span><span class="kw">pub </span>ApiHandler(Box&lt;ModuleApiHandler&gt;)
-}
 
 <span class="kw">pub trait </span>ModuleConsensusItem: DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + <span class="lifetime">&#39;static</span>);
@@ -634,6 +583,22 @@
     <span class="kw">pub </span>puk_keys: Vec&lt;XOnlyPublicKey&gt;,
 }
 
+<span class="doccomment">/// An interface rpc handlers can use to query to access current running context
+</span><span class="kw">pub trait </span>RpcHandlerCtx: Sync {}
+
+<span class="doccomment">/// An interface exposed to Fedimint modules
+</span><span class="kw">pub trait </span>InitHandle {
+    <span class="doccomment">/// Register an rpc handler at a given path
+    </span><span class="kw">fn </span>register_endpoint(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+        handler: <span class="kw">fn</span>(
+            serde_json::Value,
+            ctx: <span class="kw-2">&amp;</span><span class="kw">dyn </span>RpcHandlerCtx,
+        ) -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;,
+    );
+}
+
 <span class="doccomment">/// Backend side module interface
 ///
 /// Server side Fedimint mondule needs to implement this trait.
@@ -653,7 +618,7 @@
     <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt;;
 
     <span class="doccomment">/// Initialize the module on registration in Fedimint
-    </span><span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>);
+    </span><span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle);
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
     </span><span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>);
@@ -747,17 +712,6 @@
     /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
     /// and consensus should halt.
     </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit);
-
-    <span class="doccomment">/// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module&#39;s base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    </span><span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
-
-    <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&gt;;
 }
 
 <span class="macro">dyn_newtype_define!</span>(
@@ -776,7 +730,7 @@
     <span class="kw">type </span>ConsensusItem: PluginConsensusItem;
     <span class="kw">type </span>VerificationCache: PluginVerificationCache;
 
-    <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>);
+    <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle);
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
     </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>);
@@ -873,17 +827,6 @@
     /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
     /// and consensus should halt.
     </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit);
-
-    <span class="doccomment">/// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module&#39;s base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    </span><span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
-
-    <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&gt;;
 }
 
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
@@ -918,8 +861,8 @@
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Common::decode_output_outcome(r)
     }
 
-    <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::init(<span class="self">self</span>)
+    <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle) {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::init(<span class="self">self</span>, backend)
     }
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
@@ -1103,21 +1046,6 @@
     /// and consensus should halt.
     </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit) {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::audit(<span class="self">self</span>, audit)
-    }
-
-    <span class="doccomment">/// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module&#39;s base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    </span><span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::api_base_name(<span class="self">self</span>)
-    }
-
-    <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::api_endpoints(<span class="self">self</span>)
     }
 }
 </code></pre></div>
