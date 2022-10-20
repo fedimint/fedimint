@@ -5,6 +5,7 @@ pub mod webserver;
 
 use std::borrow::Cow;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::{
     io::Cursor,
     sync::Arc,
@@ -36,6 +37,14 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 // Placeholder struct for identifying federations within a gateway
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FederationId(pub String);
+
+impl FromStr for FederationId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(FederationId(s.to_string()))
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReceiveInvoicePayload {

@@ -25,13 +25,13 @@ pub enum Commands {
     Info,
     /// Check gateway balance
     /// TODO: add federation id to scope the federation for which we want a pegin address
-    Balance { federation_id: String },
+    Balance { federation_id: FederationId },
     /// Generate a new peg-in address, funds sent to it can later be claimed
-    Address { federation_id: String },
+    Address { federation_id: FederationId },
     /// Deposit funds into a gateway federation
     /// TODO: add federation id to scope the federation for which we want a pegin address
     Deposit {
-        federation_id: String,
+        federation_id: FederationId,
         /// The TxOutProof which was created from sending BTC to the pegin-address
         #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
@@ -41,7 +41,7 @@ pub enum Commands {
     /// Claim funds from a gateway federation
     /// TODO: add federation id to scope the federation for which we want a pegin address
     Withdraw {
-        federation_id: String,
+        federation_id: FederationId,
         /// The amount to withdraw
         amount: Amount,
         /// The address to send the funds to
@@ -63,9 +63,7 @@ async fn main() {
             call(
                 cli.url,
                 String::from("/balance"),
-                BalancePayload {
-                    federation_id: FederationId(federation_id),
-                },
+                BalancePayload { federation_id },
             )
             .await;
         }
@@ -73,9 +71,7 @@ async fn main() {
             call(
                 cli.url,
                 String::from("/address"),
-                DepositAddressPayload {
-                    federation_id: FederationId(federation_id),
-                },
+                DepositAddressPayload { federation_id },
             )
             .await;
         }
@@ -88,7 +84,7 @@ async fn main() {
                 cli.url,
                 String::from("/deposit"),
                 DepositPayload {
-                    federation_id: FederationId(federation_id),
+                    federation_id,
                     txout_proof,
                     transaction,
                 },
@@ -104,7 +100,7 @@ async fn main() {
                 cli.url,
                 String::from("/withdraw"),
                 WithdrawPayload {
-                    federation_id: FederationId(federation_id),
+                    federation_id,
                     amount,
                     address,
                 },
