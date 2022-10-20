@@ -18,6 +18,7 @@ use futures::future::BoxFuture;
 use thiserror::Error;
 
 use super::*;
+use crate::module_plugin_trait_define;
 
 pub trait ModuleConsensusItem: DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);

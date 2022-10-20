@@ -1,12 +1,12 @@
 use std::{collections::BTreeMap, io};
 
+use fedimint_api::core::{
+    Input, ModuleCommon, ModuleKey, Output, OutputOutcome, PendingOutput, PluginInput,
+    PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
+};
 use fedimint_api::{
     encoding::{Decodable, DecodeError, Encodable},
     Amount,
-};
-use fedimint_core_api::{
-    Input, ModuleCommon, ModuleKey, Output, OutputOutcome, PendingOutput, PluginInput,
-    PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
 };
 
 pub const MINT_MODULE_KEY: u16 = 0;

@@ -1,8 +1,5 @@
 [workspace]
 members = [
-    "core/api",
-    "core/client",
-    "core/server",
     "crypto/tbs",
     "gateway/ln-gateway",
     "gateway/cli",

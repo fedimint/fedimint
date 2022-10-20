@@ -4,8 +4,8 @@
 
 use std::collections::BTreeMap;
 
+use fedimint_api::core::{ClientModule, ModuleKey, Output, SpendableOutput, Transaction};
 use fedimint_api::Amount;
-use fedimint_core_client::{ClientModule, ModuleKey, Output, SpendableOutput, Transaction};
 use thiserror::Error;
 
 /// Transaction, without a signature yet

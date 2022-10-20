@@ -36,19 +36,19 @@ impl std::fmt::Debug for RpcHandlerCtx {
     }
 }
 
-impl fedimint_core_api::server::RpcHandlerCtx for FedimintConsensus {}
+impl fedimint_api::server::RpcHandlerCtx for FedimintConsensus {}
 
 struct InitHandle<'a> {
     rpc_module: &'a mut RpcModule<RpcHandlerCtx>,
 }
 
-impl<'a> fedimint_core_api::server::InitHandle for InitHandle<'a> {
+impl<'a> fedimint_api::server::InitHandle for InitHandle<'a> {
     fn register_endpoint(
         &mut self,
         path: &'static str,
         handler: fn(
             serde_json::Value,
-            &dyn fedimint_core_api::server::RpcHandlerCtx,
+            &dyn fedimint_api::server::RpcHandlerCtx,
         ) -> BoxFuture<'static, Result<serde_json::Value, ApiError>>,
     ) {
         self.rpc_module
