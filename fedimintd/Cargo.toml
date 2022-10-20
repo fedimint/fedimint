@@ -30,7 +30,7 @@ bitcoin = "0.29.1"
 bytes = "1.1.0"
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
 clap = { version = "4.0.17", features = ["derive"] }
-futures = "0.3.24"
+futures = "0.3.25"
 hex = "0.4.2"
 itertools = "0.10.5"
 jsonrpsee = { version = "0.15.1", features = ["ws-server"] }
