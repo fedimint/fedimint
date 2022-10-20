@@ -35,7 +35,7 @@ thiserror = "1.0.37"
 tracing ="0.1.37"
 jsonrpsee-types = "0.15.1"
 jsonrpsee-core = { version = "0.15.1", features = [ "client" ] }
-serde_json = "1.0.86"
+serde_json = "1.0.87"
 url = { version = "2.3.1", features = ["serde"] }
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 
