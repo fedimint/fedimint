@@ -930,6 +930,18 @@
 <span id="930">930</span>
 <span id="931">931</span>
 <span id="932">932</span>
+<span id="933">933</span>
+<span id="934">934</span>
+<span id="935">935</span>
+<span id="936">936</span>
+<span id="937">937</span>
+<span id="938">938</span>
+<span id="939">939</span>
+<span id="940">940</span>
+<span id="941">941</span>
+<span id="942">942</span>
+<span id="943">943</span>
+<span id="944">944</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1054,6 +1066,7 @@
         _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
         <span class="self">self</span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(key, partial_signature) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1123,6 +1136,7 @@
 
             <span class="kw">if </span><span class="self">self
                 </span>.db
+                .begin_transaction()
                 .get_value(<span class="kw-2">&amp;</span>NonceKey(coin.<span class="number">0</span>.clone()))
                 .expect(<span class="string">&quot;DB error&quot;</span>)
                 .is_some()
@@ -1218,6 +1232,7 @@
         <span class="comment">// Finalize partial signatures for which we now have enough shares
         </span><span class="kw">let </span>req_psigs = <span class="self">self
             </span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 <span class="kw">let </span>(key, partial_sig) = entry_res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1234,7 +1249,11 @@
                 <span class="kw">let </span>proposal_key = ProposedPartialSignatureKey {
                     request_id: issuance_id,
                 };
-                <span class="kw">let </span>our_contribution = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>proposal_key).expect(<span class="string">&quot;DB error&quot;</span>);
+                <span class="kw">let </span>our_contribution = <span class="self">self
+                    </span>.db
+                    .begin_transaction()
+                    .get_value(<span class="kw-2">&amp;</span>proposal_key)
+                    .expect(<span class="string">&quot;DB error&quot;</span>);
                 <span class="kw">let </span>(bsig, errors) = <span class="self">self</span>.combine(our_contribution, shares.clone());
 
                 <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible
@@ -1282,6 +1301,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>redemptions = Amount::from_sat(<span class="number">0</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>issuances = Amount::from_sat(<span class="number">0</span>);
         <span class="self">self</span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>MintAuditItemKeyPrefix)
             .for_each(|res| {
                 <span class="kw">let </span>(key, amount) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1304,6 +1324,7 @@
     <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
         <span class="kw">let </span>we_proposed = <span class="self">self
             </span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey {
                 request_id: out_point,
             })
@@ -1311,6 +1332,7 @@
             .is_some();
         <span class="kw">let </span>was_consensus_outcome = <span class="self">self
             </span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKeyOutputPrefix {
                 request_id: out_point,
             })
@@ -1318,6 +1340,7 @@
 
         <span class="kw">let </span>final_sig = <span class="self">self
             </span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point))
             .expect(<span class="string">&quot;DB error&quot;</span>);
 
@@ -1557,6 +1580,7 @@
     ) {
         <span class="kw">if </span><span class="self">self
             </span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(output_id))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some()

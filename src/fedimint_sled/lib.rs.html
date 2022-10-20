@@ -205,83 +205,6 @@
 <span id="205">205</span>
 <span id="206">206</span>
 <span id="207">207</span>
-<span id="208">208</span>
-<span id="209">209</span>
-<span id="210">210</span>
-<span id="211">211</span>
-<span id="212">212</span>
-<span id="213">213</span>
-<span id="214">214</span>
-<span id="215">215</span>
-<span id="216">216</span>
-<span id="217">217</span>
-<span id="218">218</span>
-<span id="219">219</span>
-<span id="220">220</span>
-<span id="221">221</span>
-<span id="222">222</span>
-<span id="223">223</span>
-<span id="224">224</span>
-<span id="225">225</span>
-<span id="226">226</span>
-<span id="227">227</span>
-<span id="228">228</span>
-<span id="229">229</span>
-<span id="230">230</span>
-<span id="231">231</span>
-<span id="232">232</span>
-<span id="233">233</span>
-<span id="234">234</span>
-<span id="235">235</span>
-<span id="236">236</span>
-<span id="237">237</span>
-<span id="238">238</span>
-<span id="239">239</span>
-<span id="240">240</span>
-<span id="241">241</span>
-<span id="242">242</span>
-<span id="243">243</span>
-<span id="244">244</span>
-<span id="245">245</span>
-<span id="246">246</span>
-<span id="247">247</span>
-<span id="248">248</span>
-<span id="249">249</span>
-<span id="250">250</span>
-<span id="251">251</span>
-<span id="252">252</span>
-<span id="253">253</span>
-<span id="254">254</span>
-<span id="255">255</span>
-<span id="256">256</span>
-<span id="257">257</span>
-<span id="258">258</span>
-<span id="259">259</span>
-<span id="260">260</span>
-<span id="261">261</span>
-<span id="262">262</span>
-<span id="263">263</span>
-<span id="264">264</span>
-<span id="265">265</span>
-<span id="266">266</span>
-<span id="267">267</span>
-<span id="268">268</span>
-<span id="269">269</span>
-<span id="270">270</span>
-<span id="271">271</span>
-<span id="272">272</span>
-<span id="273">273</span>
-<span id="274">274</span>
-<span id="275">275</span>
-<span id="276">276</span>
-<span id="277">277</span>
-<span id="278">278</span>
-<span id="279">279</span>
-<span id="280">280</span>
-<span id="281">281</span>
-<span id="282">282</span>
-<span id="283">283</span>
-<span id="284">284</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
@@ -289,7 +212,6 @@
 <span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>fedimint_api::db::batch::{BatchItem, DbBatch};
 <span class="kw">use </span>fedimint_api::db::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     PrefixIter,
@@ -297,7 +219,6 @@
 <span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction};
 <span class="kw">pub use </span>sled;
 <span class="kw">use </span>sled::transaction::TransactionError;
-<span class="kw">use </span>tracing::error;
 
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">pub struct </span>SledDb(sled::Tree);
@@ -335,73 +256,6 @@
 
 <span class="comment">// TODO: maybe make the concrete impl its own crate
 </span><span class="kw">impl </span>IDatabase <span class="kw">for </span>SledDb {
-    <span class="kw">fn </span>raw_insert_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="kw">let </span>ret = <span class="self">self</span>.inner().insert(key, value)<span class="question-mark">?</span>.map(|bytes| bytes.to_vec());
-        <span class="self">self</span>.inner().flush().expect(<span class="string">&quot;DB failure&quot;</span>);
-        <span class="prelude-val">Ok</span>(ret)
-    }
-
-    <span class="kw">fn </span>raw_get_value(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.inner()
-            .get(key)
-            .map_err(anyhow::Error::from)<span class="question-mark">?
-            </span>.map(|bytes| bytes.to_vec()))
-    }
-
-    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="kw">let </span>ret = <span class="self">self
-            </span>.inner()
-            .remove(key)
-            .map_err(anyhow::Error::from)<span class="question-mark">?
-            </span>.map(|bytes| bytes.to_vec());
-        <span class="self">self</span>.inner().flush().expect(<span class="string">&quot;DB failure&quot;</span>);
-        <span class="prelude-val">Ok</span>(ret)
-    }
-
-    <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
-        Box::new(<span class="self">self</span>.inner().scan_prefix(key_prefix).map(|res| {
-            res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map_err(anyhow::Error::from)
-        }))
-    }
-
-    <span class="kw">fn </span>raw_apply_batch(<span class="kw-2">&amp;</span><span class="self">self</span>, batch: DbBatch) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>batch: Vec&lt;<span class="kw">_</span>&gt; = batch.into();
-
-        <span class="kw">let </span>ret = <span class="self">self
-            </span>.inner()
-            .transaction::&lt;<span class="kw">_</span>, <span class="kw">_</span>, TransactionError&gt;(|t| {
-                <span class="kw">for </span>change <span class="kw">in </span>batch.iter() {
-                    <span class="kw">match </span>change {
-                        BatchItem::InsertNewElement(element) =&gt; {
-                            <span class="kw">if </span>t.insert(element.key.to_bytes(), element.value.to_bytes())<span class="question-mark">?
-                                </span>.is_some()
-                            {
-                                <span class="macro">error!</span>(<span class="string">&quot;Database replaced element! {:?}&quot;</span>, element.key);
-                            }
-                        }
-                        BatchItem::InsertElement(element) =&gt; {
-                            t.insert(element.key.to_bytes(), element.value.to_bytes())<span class="question-mark">?</span>;
-                        }
-                        BatchItem::DeleteElement(key) =&gt; {
-                            <span class="kw">if </span>t.remove(key.to_bytes())<span class="question-mark">?</span>.is_none() {
-                                <span class="macro">error!</span>(<span class="string">&quot;Database deleted absent element! {:?}&quot;</span>, key);
-                            }
-                        }
-                        BatchItem::MaybeDeleteElement(key) =&gt; {
-                            t.remove(key.to_bytes())<span class="question-mark">?</span>;
-                        }
-                    }
-                }
-
-                <span class="prelude-val">Ok</span>(())
-            })
-            .map_err(anyhow::Error::from);
-        <span class="self">self</span>.inner().flush().expect(<span class="string">&quot;DB failure&quot;</span>);
-        ret
-    }
-
     <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction {
         <span class="kw">let </span><span class="kw-2">mut </span>tx: DatabaseTransaction = SledTransaction {
             operations: Vec::new(),
@@ -462,13 +316,14 @@
             </span>.map(|bytes| bytes.to_vec()))
     }
 
-    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+        <span class="kw">let </span>ret = <span class="self">self</span>.raw_get_bytes(key);
         <span class="self">self</span>.operations
             .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
                 key: key.to_vec(),
             }));
         <span class="self">self</span>.num_pending_operations += <span class="number">1</span>;
-        <span class="prelude-val">Ok</span>(())
+        ret
     }
 
     <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
@@ -546,15 +401,6 @@
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::SledDb;
-    <span class="attribute">#[test_log::test]
-    </span><span class="kw">fn </span>test_basic_rw() {
-        <span class="kw">let </span>path = tempfile::Builder::new()
-            .prefix(<span class="string">&quot;fcb-sled-test&quot;</span>)
-            .tempdir()
-            .unwrap();
-        <span class="kw">let </span>db = SledDb::open(path, <span class="string">&quot;default&quot;</span>).unwrap();
-        fedimint_api::db::test_db_impl(db.into());
-    }
 
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_basic_dbtx_rw() {

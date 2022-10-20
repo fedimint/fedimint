@@ -1291,6 +1291,18 @@
 <span id="1291">1291</span>
 <span id="1292">1292</span>
 <span id="1293">1293</span>
+<span id="1294">1294</span>
+<span id="1295">1295</span>
+<span id="1296">1296</span>
+<span id="1297">1297</span>
+<span id="1298">1298</span>
+<span id="1299">1299</span>
+<span id="1300">1300</span>
+<span id="1301">1301</span>
+<span id="1302">1302</span>
+<span id="1303">1303</span>
+<span id="1304">1304</span>
+<span id="1305">1305</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1516,6 +1528,7 @@
         });
 
         <span class="self">self</span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>PegOutTxSignatureCIPrefix)
             .map(|res| {
                 <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;FB error&quot;</span>);
@@ -1599,6 +1612,7 @@
 
         <span class="kw">if </span><span class="self">self
             </span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>UTXOKey(input.outpoint()))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some()
@@ -1735,6 +1749,7 @@
         <span class="comment">// Sign and finalize any unsigned transactions that have signatures
         </span><span class="kw">let </span>unsigned_txs: Vec&lt;(UnsignedTransactionKey, UnsignedTransaction)&gt; = <span class="self">self
             </span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey)
             .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
             .filter(|(<span class="kw">_</span>, unsigned)| !unsigned.signatures.is_empty())
@@ -1788,6 +1803,7 @@
 
     <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
         <span class="self">self</span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point))
             .expect(<span class="string">&quot;DB error&quot;</span>)
     }
@@ -1886,6 +1902,7 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>cache: BTreeMap&lt;Txid, UnsignedTransaction&gt; = <span class="self">self
             </span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey)
             .map(|res| {
                 <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -2045,7 +2062,10 @@
     }
 
     <span class="kw">pub fn </span>current_round_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;RoundConsensus&gt; {
-        <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>RoundConsensusKey).expect(<span class="string">&quot;DB error&quot;</span>)
+        <span class="self">self</span>.db
+            .begin_transaction()
+            .get_value(<span class="kw-2">&amp;</span>RoundConsensusKey)
+            .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>target_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
@@ -2101,6 +2121,7 @@
 
             </span><span class="kw">let </span>pending_transactions = <span class="self">self
                 </span>.db
+                .begin_transaction()
                 .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
                 .map(|res| {
                     <span class="kw">let </span>(key, transaction) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -2160,6 +2181,7 @@
 
     <span class="kw">fn </span>block_is_known(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: BlockHash) -&gt; bool {
         <span class="self">self</span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>BlockHashKey(block_hash))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some()
@@ -2178,6 +2200,7 @@
 
     <span class="kw">fn </span>available_utxos(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(UTXOKey, SpendableUTXO)&gt; {
         <span class="self">self</span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>UTXOPrefixKey)
             .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
             .expect(<span class="string">&quot;DB error&quot;</span>)
@@ -2495,6 +2518,7 @@
 
 <span class="kw">pub async fn </span>broadcast_pending_tx(db: <span class="kw-2">&amp;</span>Database, rpc: <span class="kw-2">&amp;</span>BitcoindRpc) {
     <span class="kw">let </span>pending_tx = db
+        .begin_transaction()
         .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
         .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
         .expect(<span class="string">&quot;DB error&quot;</span>);

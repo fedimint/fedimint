@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["TestDbKeyPrefix",""]],"fn":[["test_db_impl",""],["test_dbtx_impl",""]],"struct":[["AltDbPrefixTestPrefix",""],["AltTestKey",""],["DbPrefixTestPrefix",""],["TestKey",""],["TestVal",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["TestDbKeyPrefix",""]],"fn":[["test_dbtx_impl",""]],"struct":[["AltDbPrefixTestPrefix",""],["AltTestKey",""],["DbPrefixTestPrefix",""],["TestKey",""],["TestVal",""]]};

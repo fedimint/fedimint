@@ -3,7 +3,7 @@ var sourcesIndex = JSON.parse('{\
 "clientd_cli":["",[],["clientd-cli.rs"]],\
 "configgen":["",[],["configgen.rs"]],\
 "distributedgen":["",[],["distributedgen.rs"]],\
-"fedimint_api":["",[["db",[],["batch.rs","mem_impl.rs","mod.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","testing.rs"]],["net",[],["mod.rs","peers.rs"]]],["config.rs","lib.rs","macros.rs","task.rs","tiered.rs","tiered_multi.rs"]],\
+"fedimint_api":["",[["db",[],["mem_impl.rs","mod.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","testing.rs"]],["net",[],["mod.rs","peers.rs"]]],["config.rs","lib.rs","macros.rs","task.rs","tiered.rs","tiered_multi.rs"]],\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
 "fedimint_client":["",[],["lib.rs"]],\

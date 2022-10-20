@@ -225,8 +225,10 @@
 <span id="225">225</span>
 <span id="226">226</span>
 <span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
-<span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
+<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
@@ -351,10 +353,10 @@
         (coin_finalization_data, coin_output)
     }
 
-    <span class="kw">pub fn </span>build&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub fn </span>build&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
         change_required: Amount,
-        <span class="kw-2">mut </span>batch: BatchTx,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         <span class="kw-2">mut </span>rng: R,
@@ -371,28 +373,30 @@
 
         <span class="comment">// move input coins to pending state, awaiting a transaction
         </span><span class="kw">if </span>!<span class="self">self</span>.input_notes.item_count() != <span class="number">0 </span>{
-            batch.append_from_iter(<span class="self">self</span>.input_notes.iter_items().map(|(amount, coin)| {
+            <span class="self">self</span>.input_notes.iter_items().for_each(|(amount, coin)| {
                 <span class="comment">// maybe_delete because coins might have been received from another user directly
-                </span>BatchItem::maybe_delete(CoinKey {
+                </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>CoinKey {
                     amount,
                     nonce: coin.note.<span class="number">0</span>.clone(),
                 })
-            }));
-            batch.append_insert(PendingCoinsKey(txid), <span class="self">self</span>.input_notes);
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
+            });
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>PendingCoinsKey(txid), <span class="kw-2">&amp;</span><span class="self">self</span>.input_notes)
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
         }
 
         <span class="comment">// write coin output to db to await for tx success to be fetched later
         </span><span class="self">self</span>.output_notes.iter().for_each(|(out_idx, coins)| {
-            batch.append_insert_new(
-                OutputFinalizationKey(OutPoint {
+            dbtx.insert_new_entry(
+                <span class="kw-2">&amp;</span>OutputFinalizationKey(OutPoint {
                     txid,
                     out_idx: <span class="kw-2">*</span>out_idx,
                 }),
-                coins.clone(),
-            );
+                <span class="kw-2">&amp;</span>coins.clone(),
+            )
+            .expect(<span class="string">&quot;DB Error&quot;</span>);
         });
 
-        batch.commit();
         <span class="self">self</span>.tx
     }
 

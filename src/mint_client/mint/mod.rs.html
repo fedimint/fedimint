@@ -641,12 +641,16 @@
 <span id="641">641</span>
 <span id="642">642</span>
 <span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-<span class="kw">use </span>fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
+<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
@@ -734,6 +738,7 @@
     <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.context
             .db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(key, spendable_coin) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -751,21 +756,21 @@
         <span class="prelude-val">Ok</span>(coins)
     }
 
-    <span class="kw">pub async fn </span>submit_tx_with_change&lt;C, R&gt;(
+    <span class="kw">pub async fn </span>submit_tx_with_change&lt;<span class="lifetime">&#39;a</span>, C, R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client: <span class="kw-2">&amp;</span>Client&lt;C&gt;,
         tx: TransactionBuilder,
-        <span class="kw-2">mut </span>batch: Accumulator&lt;BatchItem&gt;,
         rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;
     <span class="kw">where
         </span>C: AsRef&lt;ClientConfig&gt; + Clone,
         R: RngCore + CryptoRng,
     {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
         <span class="kw">let </span>change_required = tx.change_required(client);
         <span class="kw">let </span>final_tx = tx.build(
             change_required,
-            batch.transaction(),
+            <span class="kw-2">&amp;mut </span>dbtx,
             <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp,
             <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
             rng,
@@ -777,14 +782,14 @@
             <span class="string">&quot;Federation is faulty, returned wrong tx id.&quot;
         </span>);
 
-        <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
+        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
         <span class="prelude-val">Ok</span>(txid)
     }
 
-    <span class="kw">pub fn </span>receive_coins&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        <span class="kw-2">mut </span>tx: BatchTx,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         rng: <span class="kw-2">&amp;mut </span>R,
         <span class="kw-2">mut </span>create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
     ) {
@@ -793,14 +798,19 @@
         <span class="kw">let </span>(finalization, coins) =
             builder.create_output_coins(amount, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks, rng);
         <span class="kw">let </span>out_point = create_tx(coins);
-        tx.append_insert_new(OutputFinalizationKey(out_point), finalization);
-        tx.commit();
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
+            .expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
-    <span class="kw">pub async fn </span>fetch_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>fetch_coins&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        outpoint: OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>issuance = <span class="self">self
             </span>.context
             .db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .ok_or(MintClientError::FinalizationError(
@@ -816,20 +826,18 @@
 
         <span class="kw">let </span>coins = issuance.finalize(bsig, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks)<span class="question-mark">?</span>;
 
-        batch.append_from_iter(
-            coins
-                .into_iter()
-                .map(|(amount, coin): (Amount, SpendableNote)| {
-                    <span class="kw">let </span>key = CoinKey {
-                        amount,
-                        nonce: coin.note.<span class="number">0</span>.clone(),
-                    };
-                    <span class="kw">let </span>value = coin;
-                    BatchItem::insert_new(key, value)
-                }),
-        );
-        batch.append_delete(OutputFinalizationKey(outpoint));
-        batch.commit();
+        coins
+            .into_iter()
+            .for_each(|(amount, coin): (Amount, SpendableNote)| {
+                <span class="kw">let </span>key = CoinKey {
+                    amount,
+                    nonce: coin.note.<span class="number">0</span>.clone(),
+                };
+                <span class="kw">let </span>value = coin;
+                dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value).expect(<span class="string">&quot;DB Error&quot;</span>);
+            });
+        dbtx.remove_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
+            .expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -837,6 +845,7 @@
     <span class="kw">pub fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {
         <span class="self">self</span>.context
             .db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(OutputFinalizationKey(outpoint), cfd) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -854,11 +863,11 @@
         <span class="kw">let </span>stream = active_issuances
             .into_iter()
             .map(|(out_point, <span class="kw">_</span>)| <span class="kw">async move </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
                 <span class="kw">loop </span>{
-                    <span class="kw">match </span><span class="self">self</span>.fetch_coins(batch.transaction(), out_point).<span class="kw">await </span>{
+                    <span class="kw">match </span><span class="self">self</span>.fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
+                            dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(out_point);
                         }
                         <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
@@ -1035,7 +1044,6 @@
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Address;
-    <span class="kw">use </span>fedimint_api::db::batch::DbBatch;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::module::testing::FakeFed;
@@ -1171,8 +1179,8 @@
         <span class="kw">let </span>txid = TransactionId::from_inner([<span class="number">0x42</span>; <span class="number">32</span>]);
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
-        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
-        client.receive_coins(amt, batch.transaction(), rng, |output| {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction();
+        client.receive_coins(amt, <span class="kw-2">&amp;mut </span>dbtx, rng, |output| {
             <span class="comment">// Agree on output
             </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
             block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, output)]));
@@ -1181,7 +1189,7 @@
 
             out_point
         });
-        client_db.apply_batch(batch).unwrap();
+        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
         client.fetch_all_coins().<span class="kw">await</span>;
     }
@@ -1224,7 +1232,7 @@
         .<span class="kw">await</span>;
 
         <span class="comment">// Spending works
-        </span><span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.context.db.begin_transaction();
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
         <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
@@ -1234,8 +1242,8 @@
             .create_input_from_coins(coins.clone(), secp)
             .unwrap();
         builder.input_coins(coins, secp).unwrap();
-        builder.build(Amount::from_sat(<span class="number">0</span>), batch.transaction(), secp, tbs_pks, rng);
-        client_context.db.apply_batch(batch).unwrap();
+        builder.build(Amount::from_sat(<span class="number">0</span>), <span class="kw-2">&amp;mut </span>dbtx, secp, tbs_pks, rng);
+        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
         <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);
@@ -1259,7 +1267,7 @@
         </span><span class="macro">assert!</span>(fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).is_err());
 
         <span class="comment">// We can exactly spend the remainder
-        </span><span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.context.db.begin_transaction();
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
         <span class="kw">let </span>rng = rand::rngs::OsRng;
@@ -1267,8 +1275,8 @@
             .create_input_from_coins(coins.clone(), secp)
             .unwrap();
         builder.input_coins(coins, secp).unwrap();
-        builder.build(Amount::from_sat(<span class="number">0</span>), batch.transaction(), secp, tbs_pks, rng);
-        client_context.db.apply_batch(batch).unwrap();
+        builder.build(Amount::from_sat(<span class="number">0</span>), <span class="kw-2">&amp;mut </span>dbtx, secp, tbs_pks, rng);
+        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
         <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);

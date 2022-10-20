@@ -432,6 +432,21 @@
 <span id="432">432</span>
 <span id="433">433</span>
 <span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -592,6 +607,7 @@
         <span class="kw">let </span>last_saved_response = <span class="self">self
             </span>.consensus
             .db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
             .expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="kw">let </span>last_saved_epoch = last_saved_response.map(|e| e.<span class="number">0</span>);
@@ -623,10 +639,16 @@
         last_outcome: ConsensusOutcome,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>epochs: Vec&lt;EpochHistory&gt; = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>saved_epoch_key = <span class="self">self</span>.consensus.db.get_value(<span class="kw-2">&amp;</span>LastEpochKey).unwrap();
+        <span class="kw">let </span>saved_epoch_key = <span class="self">self
+            </span>.consensus
+            .db
+            .begin_transaction()
+            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
+            .unwrap();
 
         <span class="kw">let </span>download_epoch_num = saved_epoch_key.map(|e| e.<span class="number">0 </span>+ <span class="number">1</span>).unwrap_or(<span class="number">0</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>prev_epoch = saved_epoch_key.and_then(|e| <span class="self">self</span>.consensus.db.get_value(<span class="kw-2">&amp;</span>e).unwrap());
+        <span class="kw">let </span><span class="kw-2">mut </span>prev_epoch = saved_epoch_key
+            .and_then(|e| <span class="self">self</span>.consensus.db.begin_transaction().get_value(<span class="kw-2">&amp;</span>e).unwrap());
 
         <span class="kw">for </span>epoch_num <span class="kw">in </span>download_epoch_num..=last_outcome.epoch {
             <span class="kw">let </span>current_epoch = <span class="kw">if </span>epoch_num == last_outcome.epoch {
@@ -677,7 +699,11 @@
         <span class="kw">let </span>threshold = <span class="self">self</span>.cfg.peers.threshold();
 
         <span class="comment">// include our expected next_epoch as well in case we can contribute to the next consensus
-        </span><span class="kw">let </span>last_saved = <span class="self">self</span>.consensus.db.get_value(<span class="kw-2">&amp;</span>LastEpochKey);
+        </span><span class="kw">let </span>last_saved = <span class="self">self
+            </span>.consensus
+            .db
+            .begin_transaction()
+            .get_value(<span class="kw-2">&amp;</span>LastEpochKey);
         <span class="kw">let </span>next_epoch = last_saved.expect(<span class="string">&quot;DB error&quot;</span>).map(|e| e.<span class="number">0 </span>+ <span class="number">1</span>).unwrap_or(<span class="number">0</span>);
         consensus_peers.insert(<span class="self">self</span>.cfg.identity, next_epoch);
 
@@ -847,7 +873,11 @@
     <span class="doccomment">/// Searches back in saved epoch history for the last signed epoch
     </span><span class="kw">fn </span>last_signed_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;EpochHistory&gt; {
         <span class="kw">loop </span>{
-            <span class="kw">let </span>query = <span class="self">self</span>.consensus.db.get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch));
+            <span class="kw">let </span>query = <span class="self">self
+                </span>.consensus
+                .db
+                .begin_transaction()
+                .get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch));
             <span class="kw">match </span>query.expect(<span class="string">&quot;DB error&quot;</span>) {
                 <span class="prelude-val">Some</span>(result) <span class="kw">if </span>result.signature.is_some() =&gt; <span class="kw">break </span><span class="prelude-val">Some</span>(result),
                 <span class="kw">_ if </span>epoch == <span class="number">0 </span>=&gt; <span class="kw">break </span><span class="prelude-val">None</span>,

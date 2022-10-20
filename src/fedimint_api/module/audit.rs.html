@@ -59,6 +59,7 @@
 <span id="59">59</span>
 <span id="60">60</span>
 <span id="61">61</span>
+<span id="62">62</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseKeyPrefix, DatabaseKeyPrefixConst};
@@ -87,6 +88,7 @@
         F: Fn(KP::Key, KP::Value) -&gt; i64,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>new_items = db
+            .begin_transaction()
             .find_by_prefix(key_prefix)
             .map(|res| {
                 <span class="kw">let </span>(key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);

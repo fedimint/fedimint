@@ -159,78 +159,12 @@
 <span id="159">159</span>
 <span id="160">160</span>
 <span id="161">161</span>
-<span id="162">162</span>
-<span id="163">163</span>
-<span id="164">164</span>
-<span id="165">165</span>
-<span id="166">166</span>
-<span id="167">167</span>
-<span id="168">168</span>
-<span id="169">169</span>
-<span id="170">170</span>
-<span id="171">171</span>
-<span id="172">172</span>
-<span id="173">173</span>
-<span id="174">174</span>
-<span id="175">175</span>
-<span id="176">176</span>
-<span id="177">177</span>
-<span id="178">178</span>
-<span id="179">179</span>
-<span id="180">180</span>
-<span id="181">181</span>
-<span id="182">182</span>
-<span id="183">183</span>
-<span id="184">184</span>
-<span id="185">185</span>
-<span id="186">186</span>
-<span id="187">187</span>
-<span id="188">188</span>
-<span id="189">189</span>
-<span id="190">190</span>
-<span id="191">191</span>
-<span id="192">192</span>
-<span id="193">193</span>
-<span id="194">194</span>
-<span id="195">195</span>
-<span id="196">196</span>
-<span id="197">197</span>
-<span id="198">198</span>
-<span id="199">199</span>
-<span id="200">200</span>
-<span id="201">201</span>
-<span id="202">202</span>
-<span id="203">203</span>
-<span id="204">204</span>
-<span id="205">205</span>
-<span id="206">206</span>
-<span id="207">207</span>
-<span id="208">208</span>
-<span id="209">209</span>
-<span id="210">210</span>
-<span id="211">211</span>
-<span id="212">212</span>
-<span id="213">213</span>
-<span id="214">214</span>
-<span id="215">215</span>
-<span id="216">216</span>
-<span id="217">217</span>
-<span id="218">218</span>
-<span id="219">219</span>
-<span id="220">220</span>
-<span id="221">221</span>
-<span id="222">222</span>
-<span id="223">223</span>
-<span id="224">224</span>
-<span id="225">225</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>tracing::error;
 
-<span class="kw">use </span><span class="kw">super</span>::batch::{BatchItem, DbBatch};
 <span class="kw">use super</span>::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     IDatabase, IDatabaseTransaction,
@@ -270,62 +204,6 @@
 }
 
 <span class="kw">impl </span>IDatabase <span class="kw">for </span>MemDatabase {
-    <span class="kw">fn </span>raw_insert_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.data.lock().unwrap().insert(key.to_vec(), value))
-    }
-
-    <span class="kw">fn </span>raw_get_value(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.data.lock().unwrap().get(key).cloned())
-    }
-
-    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.data.lock().unwrap().remove(key))
-    }
-
-    <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="self">self
-            </span>.data
-            .lock()
-            .unwrap()
-            .range::&lt;Vec&lt;u8&gt;, <span class="kw">_</span>&gt;((key_prefix.to_vec())..)
-            .take_while(|(key, <span class="kw">_</span>)| key.starts_with(key_prefix))
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        data.reverse();
-
-        Box::new(MemDbIter { data })
-    }
-
-    <span class="kw">fn </span>raw_apply_batch(<span class="kw-2">&amp;</span><span class="self">self</span>, batch: DbBatch) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>batch: Vec&lt;<span class="kw">_</span>&gt; = batch.into();
-
-        <span class="kw">for </span>change <span class="kw">in </span>batch.iter() {
-            <span class="kw">match </span>change {
-                BatchItem::InsertNewElement(element) =&gt; {
-                    <span class="kw">if </span><span class="self">self
-                        </span>.raw_insert_entry(<span class="kw-2">&amp;</span>element.key.to_bytes(), element.value.to_bytes())<span class="question-mark">?
-                        </span>.is_some()
-                    {
-                        <span class="macro">error!</span>(<span class="string">&quot;Database replaced element! {:?}&quot;</span>, element.key);
-                    }
-                }
-                BatchItem::InsertElement(element) =&gt; {
-                    <span class="self">self</span>.raw_insert_entry(<span class="kw-2">&amp;</span>element.key.to_bytes(), element.value.to_bytes())<span class="question-mark">?</span>;
-                }
-                BatchItem::DeleteElement(key) =&gt; {
-                    <span class="kw">if </span><span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key.to_bytes())<span class="question-mark">?</span>.is_none() {
-                        <span class="macro">error!</span>(<span class="string">&quot;Database deleted absent element! {:?}&quot;</span>, key);
-                    }
-                }
-                BatchItem::MaybeDeleteElement(key) =&gt; {
-                    <span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key.to_bytes())<span class="question-mark">?</span>;
-                }
-            }
-        }
-
-        <span class="prelude-val">Ok</span>(())
-    }
-
     <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction {
         <span class="kw">let </span>db_copy = <span class="self">self</span>.data.lock().unwrap().clone();
         <span class="kw">let </span><span class="kw-2">mut </span>tx: DatabaseTransaction = MemTransaction {
@@ -362,15 +240,15 @@
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.tx_data.get(key).cloned())
     }
 
-    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="comment">// Remove data from copy so we can read our own writes
-        </span><span class="self">self</span>.tx_data.remove(<span class="kw-2">&amp;</span>key.to_vec());
+        </span><span class="kw">let </span>ret = <span class="self">self</span>.tx_data.remove(<span class="kw-2">&amp;</span>key.to_vec());
         <span class="self">self</span>.operations
             .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
                 key: key.to_vec(),
             }));
         <span class="self">self</span>.num_pending_operations += <span class="number">1</span>;
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(ret)
     }
 
     <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
@@ -435,12 +313,6 @@
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::MemDatabase;
-
-    <span class="attribute">#[test_log::test]
-    </span><span class="kw">fn </span>test_basic_rw() {
-        <span class="kw">let </span>mem_db = MemDatabase::new();
-        <span class="kw">crate</span>::db::tests::test_db_impl(mem_db.into());
-    }
 
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_basic_dbtx_rw() {

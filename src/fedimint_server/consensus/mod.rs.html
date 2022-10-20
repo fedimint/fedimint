@@ -704,6 +704,28 @@
 <span id="704">704</span>
 <span id="705">705</span>
 <span id="706">706</span>
+<span id="707">707</span>
+<span id="708">708</span>
+<span id="709">709</span>
+<span id="710">710</span>
+<span id="711">711</span>
+<span id="712">712</span>
+<span id="713">713</span>
+<span id="714">714</span>
+<span id="715">715</span>
+<span id="716">716</span>
+<span id="717">717</span>
+<span id="718">718</span>
+<span id="719">719</span>
+<span id="720">720</span>
+<span id="721">721</span>
+<span id="722">722</span>
+<span id="723">723</span>
+<span id="724">724</span>
+<span id="725">725</span>
+<span id="726">726</span>
+<span id="727">727</span>
+<span id="728">728</span>
 </pre><pre class="rust"><code><span class="attribute">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">mod </span>conflictfilter;
@@ -907,10 +929,11 @@
 
         funding_verifier.verify_funding()<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>new = <span class="self">self
-            </span>.db
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction();
+        <span class="kw">let </span>new = dbtx
             .insert_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(tx_hash), <span class="kw-2">&amp;</span>transaction)
             .expect(<span class="string">&quot;DB error&quot;</span>);
+        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">if </span>new.is_some() {
             <span class="macro">warn!</span>(<span class="string">&quot;Added consensus item was already in consensus queue&quot;</span>);
@@ -985,7 +1008,7 @@
                 <span class="comment">// in_scope to make sure that no await is in the middle of the span
                 </span><span class="kw">let </span>_enter = span.in_scope(|| {
                     <span class="macro">trace!</span>(<span class="question-mark">?</span>transaction);
-                    dbtx.maybe_remove_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(transaction.tx_hash()))
+                    dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(transaction.tx_hash()))
                         .expect(<span class="string">&quot;DB Error&quot;</span>);
 
                     <span class="comment">// TODO: use borrowed transaction
@@ -1056,7 +1079,10 @@
     }
 
     <span class="kw">pub fn </span>epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;EpochHistory&gt; {
-        <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch)).unwrap()
+        <span class="self">self</span>.db
+            .begin_transaction()
+            .get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
+            .unwrap()
     }
 
     <span class="kw">fn </span>save_epoch_history&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1067,7 +1093,11 @@
     ) {
         <span class="kw">let </span>prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(<span class="number">1</span>));
         <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = outcome.contributions.keys().cloned().collect();
-        <span class="kw">let </span>maybe_prev_epoch = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>prev_epoch_key).expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>maybe_prev_epoch = <span class="self">self
+            </span>.db
+            .begin_transaction()
+            .get_value(<span class="kw-2">&amp;</span>prev_epoch_key)
+            .expect(<span class="string">&quot;DB error&quot;</span>);
 
         <span class="kw">let </span>current = EpochHistory::new(outcome.epoch, outcome.contributions, <span class="kw-2">&amp;</span>maybe_prev_epoch);
 
@@ -1111,6 +1141,7 @@
     <span class="kw">pub async fn </span>get_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusProposal {
         <span class="kw">let </span>drop_peers = <span class="self">self
             </span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>DropPeerKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>key = res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span>;
@@ -1120,6 +1151,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;ConsensusItem&gt; = <span class="self">self
             </span>.db
+            .begin_transaction()
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposedTransactionKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(_key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1148,8 +1180,18 @@
             )
             .collect();
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>LastEpochKey).unwrap() {
-            <span class="kw">let </span>last_epoch = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>epoch).unwrap().unwrap();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = <span class="self">self
+            </span>.db
+            .begin_transaction()
+            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
+            .unwrap()
+        {
+            <span class="kw">let </span>last_epoch = <span class="self">self
+                </span>.db
+                .begin_transaction()
+                .get_value(<span class="kw-2">&amp;</span>epoch)
+                .unwrap()
+                .unwrap();
             <span class="kw">let </span>sig = <span class="self">self</span>.cfg.epoch_sks.<span class="number">0</span>.sign(last_epoch.hash);
             <span class="kw">let </span>item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
             items.push(item);
@@ -1222,6 +1264,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::outcome::TransactionStatus&gt; {
         <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; = <span class="self">self
             </span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid))
             .expect(<span class="string">&quot;DB error&quot;</span>);
 
@@ -1270,6 +1313,7 @@
 
         <span class="kw">let </span>rejected: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="self">self
             </span>.db
+            .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid))
             .expect(<span class="string">&quot;DB error&quot;</span>);
 

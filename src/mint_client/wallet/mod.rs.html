@@ -401,10 +401,14 @@
 <span id="401">401</span>
 <span id="402">402</span>
 <span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>db::PegInKey;
-<span class="kw">use </span>fedimint_api::db::batch::BatchTx;
+<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::{Amount, FederationModule};
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
@@ -461,9 +465,9 @@
     /// prevent front-running by a malicious  federation member
     /// The returned bitcoin-address is derived from the script. Thus sending bitcoin to that address will result in a
     /// transaction containing the scripts public-key in at least one of it&#39;s outpoints.
-    </span><span class="kw">pub fn </span>get_new_pegin_address&lt;R: RngCore + CryptoRng&gt;(
+    </span><span class="kw">pub fn </span>get_new_pegin_address&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; Address {
         <span class="kw">let </span>peg_in_keypair = bitcoin::KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
@@ -480,14 +484,14 @@
         <span class="kw">let </span>address = Address::from_script(<span class="kw-2">&amp;</span>script, <span class="self">self</span>.config.network)
             .expect(<span class="string">&quot;Script from descriptor should have an address&quot;</span>);
 
-        batch.append_insert_new(
-            PegInKey {
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>PegInKey {
                 peg_in_script: script,
             },
-            peg_in_keypair.secret_bytes(),
-        );
+            <span class="kw-2">&amp;</span>peg_in_keypair.secret_bytes(),
+        )
+        .expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        batch.commit();
         address
     }
 
@@ -504,6 +508,7 @@
                 <span class="macro">debug!</span>(output_script = <span class="question-mark">?</span>out.script_pubkey);
                 <span class="self">self</span>.context
                     .db
+                    .begin_transaction()
                     .get_value(<span class="kw-2">&amp;</span>PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
@@ -735,9 +740,10 @@
                 amount: bitcoin::Amount::from_sat(<span class="number">48000</span>),
             };
 
-            db.insert_entry(<span class="kw-2">&amp;</span>UTXOKey(out_point), <span class="kw-2">&amp;</span>utxo).unwrap();
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction();
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>UTXOKey(out_point), <span class="kw-2">&amp;</span>utxo).unwrap();
 
-            db.insert_entry(
+            dbtx.insert_entry(
                 <span class="kw-2">&amp;</span>RoundConsensusKey,
                 <span class="kw-2">&amp;</span>RoundConsensus {
                     block_height: <span class="number">0</span>,
@@ -746,6 +752,8 @@
                 },
             )
             .unwrap();
+
+            dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
         });
 
         <span class="kw">let </span>addr = Address::from_str(<span class="string">&quot;msFGPqHVk8rbARMd69FfGYxwcboZLemdBi&quot;</span>).unwrap();
