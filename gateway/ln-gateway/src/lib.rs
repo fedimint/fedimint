@@ -38,6 +38,11 @@ pub struct ReceiveInvoicePayload {
     htlc_accepted: HtlcAccepted,
 }
 
+#[derive(Debug)]
+pub struct PayInvoicePayload {
+    contract_id: ContractId,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BalancePayload;
 
@@ -64,7 +69,7 @@ pub struct WithdrawPayload {
 #[derive(Debug)]
 pub enum GatewayRequest {
     ReceiveInvoice(GatewayRequestInner<ReceiveInvoicePayload>),
-    PayInvoice(GatewayRequestInner<ContractId>),
+    PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
     Deposit(GatewayRequestInner<DepositPayload>),
@@ -101,7 +106,7 @@ impl_gateway_request_trait!(
     Preimage,
     GatewayRequest::ReceiveInvoice
 );
-impl_gateway_request_trait!(ContractId, (), GatewayRequest::PayInvoice);
+impl_gateway_request_trait!(PayInvoicePayload, (), GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
 impl_gateway_request_trait!(
     DepositAddressPayload,
@@ -383,7 +388,7 @@ impl LnGateway {
                     }
                     GatewayRequest::PayInvoice(inner) => {
                         inner
-                            .handle(|contract_id| self.handle_pay_invoice_msg(contract_id))
+                            .handle(|inner| self.handle_pay_invoice_msg(inner.contract_id))
                             .await;
                     }
                     GatewayRequest::Balance(inner) => {

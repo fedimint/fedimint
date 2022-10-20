@@ -10,7 +10,7 @@ use tracing::{debug, instrument};
 
 use crate::{
     rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    LnGatewayError, WithdrawPayload,
+    LnGatewayError, PayInvoicePayload, WithdrawPayload,
 };
 
 pub async fn run_webserver(
@@ -97,6 +97,6 @@ async fn pay_invoice(
     Json(contract_id): Json<ContractId>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     debug!(%contract_id, "Received request to pay invoice");
-    rpc.send(contract_id).await?;
+    rpc.send(PayInvoicePayload { contract_id }).await?;
     Ok(())
 }
