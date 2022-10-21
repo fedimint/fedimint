@@ -34,3 +34,4 @@ hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-
 tokio = {version = "1.21.2", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
+fedimint-testing = { path = "../../fedimint-testing" }

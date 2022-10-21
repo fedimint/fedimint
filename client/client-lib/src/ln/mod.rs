@@ -301,7 +301,6 @@ mod tests {
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -312,6 +311,7 @@ mod tests {
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
+    use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
     use threshold_crypto::PublicKey;
     use url::Url;
