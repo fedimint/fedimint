@@ -584,6 +584,7 @@
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>fedimint_api::module::testing::FakeFed;
     <span class="kw">use </span>fedimint_api::{OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -599,7 +600,6 @@
     };
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
-    <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>threshold_crypto::PublicKey;
 
     <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;

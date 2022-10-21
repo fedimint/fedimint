@@ -832,6 +832,7 @@
     <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>fedimint_api::module::testing::FakeFed;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
     <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -842,7 +843,6 @@
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
-    <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>lightning_invoice::Invoice;
     <span class="kw">use </span>threshold_crypto::PublicKey;
     <span class="kw">use </span>url::Url;

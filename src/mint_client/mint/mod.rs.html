@@ -1046,6 +1046,7 @@
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
+    <span class="kw">use </span>fedimint_api::module::testing::FakeFed;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -1056,7 +1057,6 @@
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
-    <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>futures::executor::block_on;
     <span class="kw">use </span>threshold_crypto::PublicKey;
 
