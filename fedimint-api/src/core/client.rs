@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use fedimint_api::dyn_newtype_define;
 
 use super::*;
@@ -42,6 +43,37 @@ dyn_newtype_define! {
     pub ClientModule(Arc<IClientModule>)
 }
 
+impl ModuleDecode for ClientModule {
+    fn decode_spendable_output(
+        &self,
+        r: &mut dyn io::Read,
+    ) -> Result<SpendableOutput, DecodeError> {
+        (**self).decode_spendable_output(r)
+    }
+
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
+        (**self).decode_input(r)
+    }
+
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
+        (**self).decode_output(r)
+    }
+
+    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+        (**self).decode_pending_output(r)
+    }
+
+    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+        (**self).decode_output_outcome(r)
+    }
+
+    fn decode_consensus_item(&self, _r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
+        Err(DecodeError(anyhow!(
+            "Client modules should not need to decode consensus items"
+        )))
+    }
+}
+
 /// Result of [`ClientModulePlugin::poll_pending_outputs`]
 pub struct PollPendingOutputs<S, P> {
     done: Vec<S>,
@@ -49,13 +81,14 @@ pub struct PollPendingOutputs<S, P> {
 }
 
 pub trait ClientModulePlugin: Sized {
-    type Common: ModuleCommon;
+    type Decoder: PluginDecode;
     type Input: PluginInput;
     type Output: PluginOutput;
     type PendingOutput: PluginPendingOutput;
     type SpendableOutput: PluginSpendableOutput;
     type OutputOutcome: PluginOutputOutcome;
 
+    fn module_key(&self) -> ModuleKey;
     fn init(&self, core: FedimintClientCore);
     fn poll_pending_outputs(
         &self,
@@ -68,30 +101,30 @@ where
     T: ClientModulePlugin,
 {
     fn module_key(&self) -> ModuleKey {
-        <Self as ClientModulePlugin>::Common::module_key()
+        <Self as ClientModulePlugin>::module_key(self)
     }
 
     fn decode_spendable_output(
         &self,
         r: &mut dyn io::Read,
     ) -> Result<SpendableOutput, DecodeError> {
-        <Self as ClientModulePlugin>::Common::decode_spendable_output(r)
+        <Self as ClientModulePlugin>::Decoder::decode_spendable_output(r)
     }
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        <Self as ClientModulePlugin>::Common::decode_input(r)
+        <Self as ClientModulePlugin>::Decoder::decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        <Self as ClientModulePlugin>::Common::decode_output(r)
+        <Self as ClientModulePlugin>::Decoder::decode_output(r)
     }
 
     fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
-        <Self as ClientModulePlugin>::Common::decode_pending_output(r)
+        <Self as ClientModulePlugin>::Decoder::decode_pending_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        <Self as ClientModulePlugin>::Common::decode_output_outcome(r)
+        <Self as ClientModulePlugin>::Decoder::decode_output_outcome(r)
     }
 
     fn init(&self, core: FedimintClientCore) {

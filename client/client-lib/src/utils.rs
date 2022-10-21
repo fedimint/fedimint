@@ -20,11 +20,11 @@ pub fn serialize_coins(c: &TieredMulti<SpendableNote>) -> String {
     base64::encode(&bytes)
 }
 
-pub fn from_hex<D: Decodable<()>>(s: &str) -> Result<D, anyhow::Error> {
+pub fn from_hex<D: Decodable>(s: &str) -> Result<D, anyhow::Error> {
     let bytes = hex::decode(s)?;
     Ok(D::consensus_decode(
         &mut std::io::Cursor::new(bytes),
-        &BTreeMap::new(),
+        &BTreeMap::<_, ()>::new(),
     )?)
 }
 

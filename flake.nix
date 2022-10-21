@@ -547,7 +547,6 @@
           name = "gateway-cli";
           bin = "gateway-cli";
           dirs = [
-            "core"
             "crypto/tbs"
             "client/client-lib"
             "modules/fedimint-ln"

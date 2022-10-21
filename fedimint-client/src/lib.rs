@@ -4,7 +4,8 @@
 
 use std::collections::BTreeMap;
 
-use fedimint_api::core::{ClientModule, ModuleKey, Output, SpendableOutput, Transaction};
+use fedimint_api::client::ClientModule;
+use fedimint_api::core::{ModuleKey, Output, SpendableOutput, Transaction};
 use fedimint_api::Amount;
 use thiserror::Error;
 

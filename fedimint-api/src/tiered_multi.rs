@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use serde::{Deserialize, Serialize};
 
+use crate::core::ModuleDecode;
 use crate::encoding::ModuleRegistry;
 use crate::tiered::InvalidAmountTierError;
 use crate::{Amount, Tiered};
@@ -208,14 +209,17 @@ where
     }
 }
 
-impl<M, C> Decodable<M> for TieredMulti<C>
+impl<C> Decodable for TieredMulti<C>
 where
-    C: Decodable<M>,
+    C: Decodable,
 {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
         let mut res = BTreeMap::new();
         let len = u64::consensus_decode(d, modules)?;
         for _ in 0..len {
