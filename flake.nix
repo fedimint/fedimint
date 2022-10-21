@@ -500,8 +500,8 @@
           name = "fedimintd";
           bin = "fedimintd";
           dirs = [
-            "crypto/tbs"
             "client/client-lib"
+            "crypto/hkdf"
             "crypto/tbs"
             "fedimintd"
             "fedimint-api"
@@ -527,6 +527,7 @@
           bin = "ln-gateway";
           dirs = [
             "crypto/tbs"
+            "crypto/hkdf"
             "client/client-lib"
             "modules/fedimint-ln"
             "fedimint-api"
@@ -550,6 +551,7 @@
           bin = "gateway-cli";
           dirs = [
             "crypto/tbs"
+            "crypto/hkdf"
             "client/client-lib"
             "modules/fedimint-ln"
             "fedimint-api"
@@ -576,6 +578,7 @@
             "client/client-lib"
             "client/cli"
             "crypto/tbs"
+            "crypto/hkdf"
             "fedimint-api"
             "fedimint-bitcoind"
             "fedimint-core"
@@ -596,6 +599,7 @@
           dirs = [
             "client/client-lib"
             "crypto/tbs"
+            "crypto/hkdf"
             "fedimint-api"
             "fedimint-bitcoind"
             "fedimint-core"
@@ -617,6 +621,7 @@
             "client/client-lib"
             "client/clientd"
             "crypto/tbs"
+            "crypto/hkdf"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
@@ -635,6 +640,7 @@
             "client/client-lib"
             "client/clientd"
             "crypto/tbs"
+            "crypto/hkdf"
             "gateway/ln-gateway"
             "fedimint-api"
             "fedimint-core"

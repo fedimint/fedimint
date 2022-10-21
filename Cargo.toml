@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crypto/hkdf",
     "crypto/tbs",
     "gateway/ln-gateway",
     "gateway/cli",
