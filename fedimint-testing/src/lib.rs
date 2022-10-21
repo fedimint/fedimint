@@ -5,14 +5,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::module::TransactionItemAmount;
-
-use super::ApiError;
-use crate::config::GenerateConfig;
-use crate::db::mem_impl::MemDatabase;
-use crate::db::Database;
-use crate::module::interconnect::ModuleInterconect;
-use crate::{FederationModule, InputMeta, OutPoint, PeerId};
+use fedimint_api::config::GenerateConfig;
+use fedimint_api::db::mem_impl::MemDatabase;
+use fedimint_api::db::Database;
+use fedimint_api::module::interconnect::ModuleInterconect;
+use fedimint_api::module::{ApiError, TransactionItemAmount};
+use fedimint_api::InputMeta;
+use fedimint_api::{FederationModule, OutPoint, PeerId};
 
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, Database)>,

@@ -399,7 +399,6 @@ mod tests {
     use bitcoin::Address;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
-    use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -410,6 +409,7 @@ mod tests {
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
+    use fedimint_testing::FakeFed;
     use futures::executor::block_on;
     use threshold_crypto::PublicKey;
 

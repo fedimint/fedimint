@@ -907,6 +907,7 @@ dependencies = [
  "bincode",
  "bitcoin_hashes",
  "fedimint-api",
+ "fedimint-testing",
  "futures",
  "hbbft",
  "itertools",
@@ -1043,6 +1044,17 @@ dependencies = [
  "test-log",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-testing"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "fedimint-api",
+ "rand",
+ "secp256k1-zkp",
+ "serde_json",
 ]
 
 [[package]]
@@ -2148,6 +2160,7 @@ dependencies = [
  "bitcoin_hashes",
  "fedimint-api",
  "fedimint-core",
+ "fedimint-testing",
  "futures",
  "hex",
  "js-sys",

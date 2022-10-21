@@ -177,7 +177,6 @@ mod tests {
     use bitcoin_hashes::Hash;
     use fedimint_api::config::BitcoindRpcCfg;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -193,6 +192,7 @@ mod tests {
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
+    use fedimint_testing::FakeFed;
     use threshold_crypto::PublicKey;
 
     use crate::api::IFederationApi;

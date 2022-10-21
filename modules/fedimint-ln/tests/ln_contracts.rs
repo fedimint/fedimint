@@ -1,6 +1,5 @@
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_api::module::testing::FakeFed;
 use fedimint_api::{Amount, OutPoint};
 use fedimint_ln::config::LightningModuleClientConfig;
 use fedimint_ln::contracts::account::AccountContract;
@@ -14,6 +13,7 @@ use fedimint_ln::{
     ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
     OutputOutcome,
 };
+use fedimint_testing::FakeFed;
 use secp256k1::KeyPair;
 
 #[test_log::test(tokio::test)]
