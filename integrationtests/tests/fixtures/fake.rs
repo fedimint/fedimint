@@ -11,11 +11,11 @@ use bitcoin::{
     secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, PackedLockTime,
     Transaction, TxOut,
 };
-use fedimint_api::Amount;
+use fedimint_api::bitcoin_rpc::IBitcoindRpc;
+use fedimint_api::bitcoin_rpc::Result as BitcoinRpcResult;
+use fedimint_api::{Amount, Feerate};
 use fedimint_server::modules::ln::contracts::Preimage;
-use fedimint_wallet::bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};
 use fedimint_wallet::txoproof::TxOutProof;
-use fedimint_wallet::Feerate;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln_gateway::ln::{LightningError, LnRpc};

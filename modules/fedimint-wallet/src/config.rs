@@ -5,13 +5,13 @@ use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
-use fedimint_api::{NumPeers, PeerId};
+use fedimint_api::{Feerate, NumPeers, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
 use crate::keys::CompressedPublicKey;
-use crate::{Feerate, PegInDescriptor};
+use crate::PegInDescriptor;
 
 const FINALITY_DELAY: u32 = 10;
 

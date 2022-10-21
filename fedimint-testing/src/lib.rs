@@ -13,6 +13,8 @@ use fedimint_api::module::{ApiError, TransactionItemAmount};
 use fedimint_api::InputMeta;
 use fedimint_api::{FederationModule, OutPoint, PeerId};
 
+pub mod bitcoind;
+
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, Database)>,
     client_cfg: CC,

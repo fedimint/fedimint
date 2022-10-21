@@ -1,21 +1,24 @@
 [package]
-name = "fedimint-testing"
+name = "fedimint-bitcoind"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "mint-client provides a library for sending transactions to the federation."
+description = "Bitcoin Core connectivity used by Fedimint"
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "fedimint_testing"
+name = "fedimint_bitcoind"
 path = "src/lib.rs"
 
 
 [dependencies]
-async-trait = "*"
+anyhow = "1.0.65"
 bitcoin = "0.29.1"
+bitcoincore-rpc = {version = "0.16.0" }
+async-trait = "*"
 fedimint-api  = { path = "../fedimint-api" }
-secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
-serde_json = "*"
 rand = "0.8"
+serde = { version = "1.0.145", features = [ "derive" ] }
+tracing = "0.1.37"
+thiserror = "1.0.37"

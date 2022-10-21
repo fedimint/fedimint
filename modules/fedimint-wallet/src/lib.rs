@@ -15,6 +15,7 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use bitcoin::{PackedLockTime, Sequence};
+use fedimint_api::bitcoin_rpc::BitcoindRpc;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::audit::Audit;
@@ -22,7 +23,7 @@ use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiEndpoint;
 use fedimint_api::module::{api_endpoint, TransactionItemAmount};
 use fedimint_api::task::sleep;
-use fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
+use fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
 use rand::{CryptoRng, Rng, RngCore};
@@ -31,7 +32,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::bitcoind::BitcoindRpc;
 use crate::config::WalletConfig;
 use crate::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
@@ -42,15 +42,11 @@ use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 
-pub mod bitcoind;
 pub mod config;
 pub mod db;
 pub mod keys;
 pub mod tweakable;
 pub mod txoproof;
-
-#[cfg(feature = "native")]
-pub mod bitcoincore_rpc;
 
 pub const CONFIRMATION_TARGET: u16 = 10;
 
@@ -121,24 +117,6 @@ struct StatelessWallet<'a> {
     descriptor: &'a Descriptor<CompressedPublicKey>,
     secret_key: &'a secp256k1::SecretKey,
     secp: &'a secp256k1::Secp256k1<secp256k1::All>,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    Encodable,
-    Decodable,
-)]
-pub struct Feerate {
-    pub sats_per_kvb: u64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -1226,13 +1204,6 @@ pub async fn broadcast_pending_tx(db: &Database, rpc: &BitcoindRpc) {
         );
         trace!(transaction = ?tx);
         let _ = rpc.submit_transaction(tx).await;
-    }
-}
-
-impl Feerate {
-    pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
-        let sats = self.sats_per_kvb * weight / 1000;
-        bitcoin::Amount::from_sat(sats)
     }
 }
 

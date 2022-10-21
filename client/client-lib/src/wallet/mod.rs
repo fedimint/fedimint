@@ -177,21 +177,19 @@ mod tests {
     use bitcoin_hashes::Hash;
     use fedimint_api::config::BitcoindRpcCfg;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::{OutPoint, TransactionId};
+    use fedimint_api::{Feerate, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-    use fedimint_core::modules::wallet::bitcoind::test::{
-        FakeBitcoindRpc, FakeBitcoindRpcController,
-    };
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     use fedimint_core::modules::wallet::{
-        Feerate, PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
+        PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
+    use fedimint_testing::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
     use threshold_crypto::PublicKey;
 

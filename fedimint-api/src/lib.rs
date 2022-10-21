@@ -19,6 +19,7 @@ use crate::core::ModuleDecode;
 pub use crate::core::{client, server};
 use crate::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
+pub mod bitcoin_rpc;
 pub mod config;
 pub mod core;
 pub mod db;
@@ -307,5 +308,30 @@ impl Decodable for TransactionId {
         let mut bytes = [0u8; 32];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(TransactionId::from_inner(bytes))
+    }
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+pub struct Feerate {
+    pub sats_per_kvb: u64,
+}
+
+impl Feerate {
+    pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
+        let sats = self.sats_per_kvb * weight / 1000;
+        bitcoin::Amount::from_sat(sats)
     }
 }
