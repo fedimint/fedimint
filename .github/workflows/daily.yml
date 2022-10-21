@@ -29,4 +29,4 @@ jobs:
         run: cargo install --force cargo-udeps
 
       - name: Run cargo udeps
-        run: cargo udeps
+        run: cargo udeps --all-targets --all-features
