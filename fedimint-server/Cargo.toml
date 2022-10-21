@@ -45,7 +45,6 @@ threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch
 
 # setup dependencies
 askama = { version = "0.11.1", features = ["with-axum"] }
-axum-core = "0.2"
 http = "0.2"
 http-body = "0.4"
 askama_axum = "0.1.0"

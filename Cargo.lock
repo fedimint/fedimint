@@ -996,7 +996,6 @@ dependencies = [
  "askama_axum",
  "async-trait",
  "axum 0.4.8",
- "axum-core 0.2.9",
  "bincode",
  "bitcoin",
  "bytes",
