@@ -328,6 +328,71 @@
 <span id="328">328</span>
 <span id="329">329</span>
 <span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -348,9 +413,6 @@
 
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>server;
-
-<span class="kw">pub use </span><span class="self">self</span>::client::<span class="kw-2">*</span>;
-<span class="kw">pub use </span><span class="self">self</span>::server::<span class="kw-2">*</span>;
 
 <span class="doccomment">/// A module key identifing a module
 ///
@@ -377,22 +439,14 @@
             }
         }
 
-        <span class="kw">impl </span>Decodable&lt;<span class="macro-nonterminal">$crate::server::ServerModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+        <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
+            <span class="kw">fn </span>consensus_decode&lt;M, R: std::io::Read&gt;(
                 r: <span class="kw-2">&amp;mut </span>R,
-                modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, <span class="macro-nonterminal">$crate::server::ServerModule</span>&gt;,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-                <span class="macro-nonterminal">$crate::core::encode::module_decode_key_prefixed_decodable</span>(r, modules, |r, m| {
-                    m.<span class="macro-nonterminal">$decode_fn</span>(r)
-                })
-            }
-        }
-
-        <span class="kw">impl </span>Decodable&lt;<span class="macro-nonterminal">$crate::client::ClientModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-                r: <span class="kw-2">&amp;mut </span>R,
-                modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, <span class="macro-nonterminal">$crate::client::ClientModule</span>&gt;,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+                modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+            <span class="kw">where
+                </span>M: <span class="macro-nonterminal">$crate::core::ModuleDecode</span>,
+            {
                 <span class="macro-nonterminal">$crate::core::encode::module_decode_key_prefixed_decodable</span>(r, modules, |r, m| {
                     m.<span class="macro-nonterminal">$decode_fn</span>(r)
                 })
@@ -417,7 +471,7 @@
         <span class="macro-nonterminal">$newtype_ty</span>:ident, <span class="macro-nonterminal">$plugin_ty</span>:ident, <span class="macro-nonterminal">$module_ty</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)*  } { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }
     ) =&gt; {
         <span class="kw">pub trait </span><span class="macro-nonterminal">$plugin_ty</span>:
-            DynEncodable + Decodable&lt;()&gt; + Encodable + Clone + Send + Sync + <span class="lifetime">&#39;static
+            DynEncodable + Decodable + Encodable + Clone + Send + Sync + <span class="lifetime">&#39;static
         </span>{
             <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
 
@@ -445,13 +499,13 @@
     };
 }
 
-<span class="doccomment">/// Common functionality of a Fedimint module
+<span class="doccomment">/// Module Decoder trait
 ///
-/// Both backend and server part of the module will need
-/// things like decoding module-specific data.
-</span><span class="kw">pub trait </span>ModuleCommon {
-    <span class="kw">fn </span>module_key() -&gt; ModuleKey;
-
+/// Static-polymorphism version of [`ModuleDecode`]
+///
+/// All methods are static, as the decoding code is supposed to be instance-independent,
+/// at least until we start to support modules with overriden [`ModuleKey`]s
+</span><span class="kw">pub trait </span>PluginDecode {
     <span class="doccomment">/// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
     </span><span class="kw">fn </span>decode_spendable_output(r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt;;
 
@@ -466,6 +520,58 @@
 
     <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
     </span><span class="kw">fn </span>decode_output_outcome(r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt;;
+
+    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    </span><span class="kw">fn </span>decode_consensus_item(r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt;;
+}
+
+<span class="kw">pub trait </span>ModuleDecode {
+    <span class="doccomment">/// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
+    </span><span class="kw">fn </span>decode_spendable_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read)
+        -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt;;
+
+    <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    </span><span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt;;
+
+    <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    </span><span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt;;
+
+    <span class="doccomment">/// Decode `PendingOutput` compatible with this module, after the module key prefix was already decoded
+    </span><span class="kw">fn </span>decode_pending_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt;;
+
+    <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    </span><span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt;;
+
+    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    </span><span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt;;
+}
+
+<span class="kw">impl </span>ModuleDecode <span class="kw">for </span>() {
+    <span class="kw">fn </span>decode_spendable_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;() is just a placeholder for when modules are not needed and should never be actually called&quot;</span>);
+    }
+    <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, _r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;() is just a placeholder for when modules are not needed and should never be actually called&quot;</span>);
+    }
+
+    <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, _r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;() is just a placeholder for when modules are not needed and should never be actually called&quot;</span>);
+    }
+
+    <span class="kw">fn </span>decode_pending_output(<span class="kw-2">&amp;</span><span class="self">self</span>, _r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;() is just a placeholder for when modules are not needed and should never be actually called&quot;</span>);
+    }
+
+    <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, _r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;() is just a placeholder for when modules are not needed and should never be actually called&quot;</span>);
+    }
+
+    <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, _r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;() is just a placeholder for when modules are not needed and should never be actually called&quot;</span>);
+    }
 }
 
 <span class="doccomment">/// Something that can be an [`Input`] in a [`Transaction`]
@@ -631,6 +737,27 @@
 }
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(OutputOutcome);
 
+<span class="kw">pub trait </span>ModuleConsensusItem: DynEncodable {
+    <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + <span class="lifetime">&#39;static</span>);
+    <span class="doccomment">/// Module key
+    </span><span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusItem;
+}
+
+<span class="macro">dyn_newtype_define! </span>{
+    <span class="doccomment">/// An owned, immutable output of a [`Transaction`] before it was finalized
+    </span><span class="kw">pub </span>ConsensusItem(Box&lt;ModuleConsensusItem&gt;)
+}
+<span class="macro">module_plugin_trait_define! </span>{
+    ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
+    { }
+    { }
+}
+<span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
+    ConsensusItem, decode_consensus_item
+}
+<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(ConsensusItem);
+
 <span class="attribute">#[derive(Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Signature;
 
@@ -642,15 +769,18 @@
     signature: Signature,
 }
 
-<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>Transaction
+<span class="kw">impl </span>Decodable <span class="kw">for </span>Transaction
 <span class="kw">where
-    </span>Input: Decodable&lt;M&gt;,
-    Output: Decodable&lt;M&gt;,
+    </span>Input: Decodable,
+    Output: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;M, R: std::io::Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+    <span class="kw">where
+        </span>M: ModuleDecode,
+    {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             inputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
             outputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
@@ -659,4 +789,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

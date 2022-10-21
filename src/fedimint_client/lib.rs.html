@@ -82,13 +82,15 @@
 <span id="82">82</span>
 <span id="83">83</span>
 <span id="84">84</span>
+<span id="85">85</span>
 </pre><pre class="rust"><code><span class="doccomment">//! This is a sketch/frame of future &quot;modularized&quot; fedimint client library
 //!
 //! It&#39;s not being used by anything yet.
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
 
-<span class="kw">use </span>fedimint_api::core::{ClientModule, ModuleKey, Output, SpendableOutput, Transaction};
+<span class="kw">use </span>fedimint_api::client::ClientModule;
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, Output, SpendableOutput, Transaction};
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>thiserror::Error;
 
@@ -167,4 +169,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

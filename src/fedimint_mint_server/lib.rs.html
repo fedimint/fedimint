@@ -132,13 +132,15 @@
 <span id="132">132</span>
 <span id="133">133</span>
 <span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::core::{
-    Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache, ServerModulePlugin,
-};
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, PluginConsensusItem};
 <span class="kw">use </span>fedimint_api::server::InitHandle;
+<span class="kw">use </span>fedimint_api::server::{Error, InputMeta, PluginVerificationCache, ServerModulePlugin};
 <span class="kw">use </span>fedimint_api::{
     db::DatabaseTransaction,
     encoding::{Decodable, Encodable},
@@ -146,7 +148,7 @@
     Amount, OutPoint, PeerId,
 };
 <span class="kw">use </span>fedimint_mint_common::{
-    MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
+    MintInput, MintModuleDecoder, MintOutput, MintOutputOutcome, MintPendingOutput,
     MintSpendableOutput, MINT_MODULE_KEY,
 };
 
@@ -179,7 +181,7 @@
 
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>MintServerModule {
-    <span class="kw">type </span>Common = MintModuleCommon;
+    <span class="kw">type </span>Decoder = MintModuleDecoder;
     <span class="kw">type </span>Input = MintInput;
     <span class="kw">type </span>Output = MintOutput;
     <span class="kw">type </span>PendingOutput = MintPendingOutput;
@@ -187,6 +189,10 @@
     <span class="kw">type </span>OutputOutcome = MintOutputOutcome;
     <span class="kw">type </span>ConsensusItem = MintConsensusItem;
     <span class="kw">type </span>VerificationCache = MintVerificationCache;
+
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
+        MINT_MODULE_KEY
+    }
 
     <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle) {
         <span class="comment">// TODO: delete this dummy endpoint
@@ -267,4 +273,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

@@ -90,11 +90,11 @@
     base64::encode(<span class="kw-2">&amp;</span>bytes)
 }
 
-<span class="kw">pub fn </span>from_hex&lt;D: Decodable&lt;()&gt;&gt;(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;D, anyhow::Error&gt; {
+<span class="kw">pub fn </span>from_hex&lt;D: Decodable&gt;(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;D, anyhow::Error&gt; {
     <span class="kw">let </span>bytes = hex::decode(s)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(D::consensus_decode(
         <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
-        <span class="kw-2">&amp;</span>BTreeMap::new(),
+        <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new(),
     )<span class="question-mark">?</span>)
 }
 
@@ -139,4 +139,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

@@ -122,8 +122,42 @@
 <span id="122">122</span>
 <span id="123">123</span>
 <span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>fedimint_api::dyn_newtype_define;
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
@@ -166,6 +200,37 @@
     </span><span class="kw">pub </span>ClientModule(Arc&lt;IClientModule&gt;)
 }
 
+<span class="kw">impl </span>ModuleDecode <span class="kw">for </span>ClientModule {
+    <span class="kw">fn </span>decode_spendable_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_spendable_output(r)
+    }
+
+    <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_input(r)
+    }
+
+    <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_output(r)
+    }
+
+    <span class="kw">fn </span>decode_pending_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_pending_output(r)
+    }
+
+    <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_output_outcome(r)
+    }
+
+    <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, _r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
+        <span class="prelude-val">Err</span>(DecodeError(<span class="macro">anyhow!</span>(
+            <span class="string">&quot;Client modules should not need to decode consensus items&quot;
+        </span>)))
+    }
+}
+
 <span class="doccomment">/// Result of [`ClientModulePlugin::poll_pending_outputs`]
 </span><span class="kw">pub struct </span>PollPendingOutputs&lt;S, P&gt; {
     done: Vec&lt;S&gt;,
@@ -173,13 +238,14 @@
 }
 
 <span class="kw">pub trait </span>ClientModulePlugin: Sized {
-    <span class="kw">type </span>Common: ModuleCommon;
+    <span class="kw">type </span>Decoder: PluginDecode;
     <span class="kw">type </span>Input: PluginInput;
     <span class="kw">type </span>Output: PluginOutput;
     <span class="kw">type </span>PendingOutput: PluginPendingOutput;
     <span class="kw">type </span>SpendableOutput: PluginSpendableOutput;
     <span class="kw">type </span>OutputOutcome: PluginOutputOutcome;
 
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
     <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, core: FedimintClientCore);
     <span class="kw">fn </span>poll_pending_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -192,30 +258,30 @@
     </span>T: ClientModulePlugin,
 {
     <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Common::module_key()
+        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::module_key(<span class="self">self</span>)
     }
 
     <span class="kw">fn </span>decode_spendable_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Common::decode_spendable_output(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_spendable_output(r)
     }
 
     <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Common::decode_input(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_input(r)
     }
 
     <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Common::decode_output(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_output(r)
     }
 
     <span class="kw">fn </span>decode_pending_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Common::decode_pending_output(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_pending_output(r)
     }
 
     <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Common::decode_output_outcome(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_output_outcome(r)
     }
 
     <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, core: FedimintClientCore) {
@@ -247,4 +313,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

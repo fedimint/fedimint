@@ -3,14 +3,11 @@ var sourcesIndex = JSON.parse('{\
 "clientd_cli":["",[],["clientd-cli.rs"]],\
 "configgen":["",[],["configgen.rs"]],\
 "distributedgen":["",[],["distributedgen.rs"]],\
-"fedimint_api":["",[["core",[],["client.rs","encode.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","testing.rs"]],["net",[],["mod.rs","peers.rs"]]],["config.rs","core.rs","lib.rs","macros.rs","task.rs","tiered.rs","tiered_multi.rs"]],\
+"fedimint_api":["",[["core",[],["client.rs","encode.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs"]],["net",[],["mod.rs","peers.rs"]]],["config.rs","core.rs","lib.rs","macros.rs","task.rs","tiered.rs","tiered_multi.rs"]],\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
 "fedimint_client":["",[],["lib.rs"]],\
 "fedimint_core":["",[],["config.rs","epoch.rs","lib.rs","outcome.rs","transaction.rs"]],\
-"fedimint_core_api":["",[],["client.rs","encode.rs","lib.rs","server.rs"]],\
-"fedimint_core_client":["",[],["lib.rs"]],\
-"fedimint_core_server":["",[],["lib.rs"]],\
 "fedimint_derive":["",[],["lib.rs"]],\
 "fedimint_ln":["",[["contracts",[],["account.rs","incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]],\
 "fedimint_mint":["",[],["config.rs","db.rs","lib.rs"]],\
@@ -20,6 +17,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
 "fedimint_server":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]],["ui",[],["configgen.rs","mod.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
 "fedimint_sled":["",[],["lib.rs"]],\
+"fedimint_testing":["",[],["lib.rs"]],\
 "fedimint_wallet":["",[],["bitcoincore_rpc.rs","bitcoind.rs","config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
 "fedimintd":["",[],["main.rs"]],\
 "gateway_cli":["",[],["main.rs"]],\

@@ -142,11 +142,29 @@
 <span id="142">142</span>
 <span id="143">143</span>
 <span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 
-<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+<span class="kw">use crate</span>::{
+    core::ModuleDecode,
+    encoding::{Decodable, DecodeError, Encodable, ModuleRegistry},
+};
 
 <span class="macro">macro_rules! </span>impl_encode_decode_bridge {
     (<span class="macro-nonterminal">$btc_type</span>:ty) =&gt; {
@@ -159,11 +177,14 @@
             }
         }
 
-        <span class="kw">impl</span>&lt;M&gt; <span class="kw">crate</span>::encoding::Decodable&lt;M&gt; <span class="kw">for </span><span class="macro-nonterminal">$btc_type </span>{
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        <span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span><span class="macro-nonterminal">$btc_type </span>{
+            <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
                 d: <span class="kw-2">&amp;mut </span>D,
                 _modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt;
+            <span class="kw">where
+                </span>M: <span class="macro-nonterminal">$crate::core::ModuleDecode</span>,
+            {
                 bitcoin::consensus::Decodable::consensus_decode(d)
                     .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
             }
@@ -186,11 +207,14 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>bitcoin::Amount {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::Amount {
+    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+    <span class="kw">where
+        </span>M: ModuleDecode,
+    {
         <span class="prelude-val">Ok</span>(bitcoin::Amount::from_sat(u64::consensus_decode(
             d, modules,
         )<span class="question-mark">?</span>))
@@ -206,11 +230,14 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>bitcoin::Address {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::Address {
+    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
         <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+    <span class="kw">where
+        </span>M: ModuleDecode,
+    {
         <span class="kw">let </span>network = bitcoin::Network::from_magic(u32::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>)
             .ok_or_else(|| DecodeError::from_str(<span class="string">&quot;Unknown network&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>script_pk = bitcoin::Script::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
@@ -226,11 +253,14 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>bitcoin::hashes::sha256::Hash {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::hashes::sha256::Hash {
+    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+    <span class="kw">where
+        </span>M: ModuleDecode,
+    {
         <span class="prelude-val">Ok</span>(bitcoin::hashes::sha256::Hash::from_inner(
             Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
         ))
@@ -287,4 +317,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

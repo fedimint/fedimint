@@ -524,6 +524,46 @@
 <span id="524">524</span>
 <span id="525">525</span>
 <span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -546,17 +586,21 @@
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
 <span class="kw">use </span><span class="kw">crate</span>::module_plugin_trait_define;
 
-<span class="kw">pub trait </span>ModuleConsensusItem: DynEncodable {
-    <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + <span class="lifetime">&#39;static</span>);
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusItem;
+<span class="doccomment">/// Api Endpoint exposed by a server side module
+</span><span class="kw">pub struct </span>ApiEndpoint {
+    <span class="kw">pub </span>path: String,
+    <span class="kw">pub </span>handler: ApiHandler,
+}
+
+<span class="attribute">#[async_trait]
+</span><span class="kw">pub trait </span>ModuleApiHandler {
+    <span class="kw">async fn </span>handle(<span class="kw-2">&amp;</span><span class="self">self</span>, params: <span class="kw-2">&amp;</span>serde_json::Value) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
-    <span class="kw">pub </span>ConsensusItem(Box&lt;ModuleConsensusItem&gt;)
+    <span class="doccomment">/// [`ApiEndpoint`] handler exposed by the server side module
+    </span><span class="kw">pub </span>ApiHandler(Box&lt;ModuleApiHandler&gt;)
 }
-<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(ConsensusItem);
-<span class="macro">module_plugin_trait_define!</span>(ConsensusItem, PluginConsensusItem, ModuleConsensusItem, {} {});
 
 <span class="kw">pub trait </span>ModuleVerificationCache: DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + <span class="lifetime">&#39;static</span>);
@@ -618,6 +662,8 @@
     <span class="kw">fn </span>decode_pending_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt;;
 
     <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt;;
+
+    <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt;;
 
     <span class="doccomment">/// Initialize the module on registration in Fedimint
     </span><span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle);
@@ -721,9 +767,38 @@
     </span><span class="kw">pub </span>ServerModule(Arc&lt;IServerModule&gt;)
 );
 
+<span class="kw">impl </span>ModuleDecode <span class="kw">for </span>ServerModule {
+    <span class="kw">fn </span>decode_spendable_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_spendable_output(r)
+    }
+
+    <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_input(r)
+    }
+
+    <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_output(r)
+    }
+
+    <span class="kw">fn </span>decode_pending_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_pending_output(r)
+    }
+
+    <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_output_outcome(r)
+    }
+
+    <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).decode_consensus_item(r)
+    }
+}
+
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">pub trait </span>ServerModulePlugin: Sized {
-    <span class="kw">type </span>Common: ModuleCommon;
+    <span class="kw">type </span>Decoder: PluginDecode;
     <span class="kw">type </span>Input: PluginInput;
     <span class="kw">type </span>Output: PluginOutput;
     <span class="kw">type </span>PendingOutput: PluginPendingOutput;
@@ -732,6 +807,7 @@
     <span class="kw">type </span>ConsensusItem: PluginConsensusItem;
     <span class="kw">type </span>VerificationCache: PluginVerificationCache;
 
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
     <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle);
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
@@ -837,30 +913,34 @@
     </span>T: ServerModulePlugin,
 {
     <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Common::module_key()
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::module_key(<span class="self">self</span>)
     }
 
     <span class="kw">fn </span>decode_spendable_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Common::decode_spendable_output(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Decoder::decode_spendable_output(r)
     }
 
     <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Common::decode_input(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Decoder::decode_input(r)
     }
 
     <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Common::decode_output(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Decoder::decode_output(r)
     }
 
     <span class="kw">fn </span>decode_pending_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Common::decode_pending_output(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Decoder::decode_pending_output(r)
     }
 
     <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Common::decode_output_outcome(r)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Decoder::decode_output_outcome(r)
+    }
+
+    <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Decoder::decode_consensus_item(r)
     }
 
     <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>InitHandle) {
@@ -1051,4 +1131,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

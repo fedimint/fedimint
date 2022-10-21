@@ -117,11 +117,28 @@
 <span id="117">117</span>
 <span id="118">118</span>
 <span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, io};
 
 <span class="kw">use </span>fedimint_api::core::{
-    Input, ModuleCommon, ModuleKey, Output, OutputOutcome, PendingOutput, PluginInput,
-    PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
+    ConsensusItem, Input, ModuleKey, Output, OutputOutcome, PendingOutput, PluginConsensusItem,
+    PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome, PluginPendingOutput,
+    PluginSpendableOutput, SpendableOutput,
 };
 <span class="kw">use </span>fedimint_api::{
     encoding::{Decodable, DecodeError, Encodable},
@@ -132,12 +149,9 @@
 
 <span class="comment">// TODO: DELME
 </span><span class="attribute">#[derive(Default, Clone)]
-</span><span class="kw">pub struct </span>MintModuleCommon;
+</span><span class="kw">pub struct </span>MintModuleDecoder;
 
-<span class="kw">impl </span>ModuleCommon <span class="kw">for </span>MintModuleCommon {
-    <span class="kw">fn </span>module_key() -&gt; ModuleKey {
-        MINT_MODULE_KEY
-    }
+<span class="kw">impl </span>PluginDecode <span class="kw">for </span>MintModuleDecoder {
     <span class="kw">fn </span>decode_spendable_output(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(SpendableOutput::from(
             MintSpendableOutput::consensus_decode(<span class="kw-2">&amp;mut </span>d, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new())<span class="question-mark">?</span>,
@@ -167,6 +181,15 @@
     <span class="kw">fn </span>decode_input(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(Input::from(MintInput::consensus_decode(
             <span class="kw-2">&amp;mut </span>d,
+            <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new(),
+        )<span class="question-mark">?</span>))
+    }
+
+    <span class="kw">fn </span>decode_consensus_item(
+        <span class="kw-2">mut </span>r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::core::ConsensusItem, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(ConsensusItem::from(MintConsensusItem::consensus_decode(
+            <span class="kw-2">&amp;mut </span>r,
             <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new(),
         )<span class="question-mark">?</span>))
     }
@@ -236,5 +259,14 @@
         <span class="macro">todo!</span>()
     }
 }
+
+<span class="attribute">#[derive(Encodable, Decodable, Clone)]
+</span><span class="kw">pub struct </span>MintConsensusItem;
+
+<span class="kw">impl </span>PluginConsensusItem <span class="kw">for </span>MintConsensusItem {
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
+        MINT_MODULE_KEY
+    }
+}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_common" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_common" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

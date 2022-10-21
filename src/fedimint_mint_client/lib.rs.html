@@ -74,13 +74,14 @@
 <span id="74">74</span>
 <span id="75">75</span>
 <span id="76">76</span>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::core::{
-    ClientModulePlugin, FedimintClientCore, Output, PendingOutput, PollPendingOutputs,
-};
+<span id="77">77</span>
+<span id="78">78</span>
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::client::{ClientModulePlugin, FedimintClientCore, PollPendingOutputs};
+<span class="kw">use </span>fedimint_api::core::{Output, PendingOutput};
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_mint_common::{
-    MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
-    MintSpendableOutput,
+    MintInput, MintModuleDecoder, MintOutput, MintOutputOutcome, MintPendingOutput,
+    MintSpendableOutput, MINT_MODULE_KEY,
 };
 
 <span class="attribute">#[derive(Clone)]
@@ -129,13 +130,16 @@
 }
 
 <span class="kw">impl </span>ClientModulePlugin <span class="kw">for </span>MintClientModule {
-    <span class="kw">type </span>Common = MintModuleCommon;
+    <span class="kw">type </span>Decoder = MintModuleDecoder;
     <span class="kw">type </span>Input = MintInput;
     <span class="kw">type </span>Output = MintOutput;
     <span class="kw">type </span>PendingOutput = MintPendingOutput;
     <span class="kw">type </span>SpendableOutput = MintSpendableOutput;
     <span class="kw">type </span>OutputOutcome = MintOutputOutcome;
 
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_api::core::ModuleKey {
+        MINT_MODULE_KEY
+    }
     <span class="kw">fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: FedimintClientCore) {
         <span class="macro">todo!</span>()
     }
@@ -151,4 +155,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

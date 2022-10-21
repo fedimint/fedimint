@@ -1,3 +1,0 @@
-(function() {var implementors = {
-"fedimint_mint_common":[["impl <a class=\"trait\" href=\"fedimint_core_api/trait.PluginInput.html\" title=\"trait fedimint_core_api::PluginInput\">PluginInput</a> for <a class=\"struct\" href=\"fedimint_mint_common/struct.MintInput.html\" title=\"struct fedimint_mint_common::MintInput\">MintInput</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

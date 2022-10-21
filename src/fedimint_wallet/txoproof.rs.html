@@ -363,6 +363,13 @@
 <span id="363">363</span>
 <span id="364">364</span>
 <span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::convert::Infallible;
@@ -371,6 +378,7 @@
 
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
+<span class="kw">use </span>fedimint_api::core::ModuleDecode;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
 <span class="kw">use </span>secp256k1::{Secp256k1, Verification};
@@ -421,11 +429,14 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>TxOutProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+<span class="kw">impl </span>Decodable <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+    <span class="kw">where
+        </span>M: ModuleDecode,
+    {
         <span class="kw">let </span>block_header = BlockHeader::consensus_decode(d, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(d, modules)<span class="question-mark">?</span>;
 
@@ -655,11 +666,14 @@
 
 <span class="kw">impl </span>Eq <span class="kw">for </span>TxOutProof {}
 
-<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>PegInProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+<span class="kw">impl </span>Decodable <span class="kw">for </span>PegInProof {
+    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+    <span class="kw">where
+        </span>M: ModuleDecode,
+    {
         <span class="kw">let </span>slf = PegInProof {
             txout_proof: TxOutProof::consensus_decode(d, modules)<span class="question-mark">?</span>,
             transaction: Transaction::consensus_decode(d, modules)<span class="question-mark">?</span>,
@@ -729,4 +743,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

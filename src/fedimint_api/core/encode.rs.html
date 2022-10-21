@@ -23,10 +23,13 @@
 <span id="23">23</span>
 <span id="24">24</span>
 <span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, io};
 
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError};
 
+<span class="kw">use </span><span class="kw">super</span>::ModuleDecode;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::ModuleKey;
 
 <span class="kw">pub fn </span>module_decode_key_prefixed_decodable&lt;T, F, R, M&gt;(
@@ -37,6 +40,7 @@
 <span class="kw">where
     </span>R: io::Read,
     F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>M) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
+    M: ModuleDecode,
 {
     <span class="kw">let </span>key = ModuleKey::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
 
@@ -49,4 +53,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>

@@ -305,6 +305,10 @@
 <span id="305">305</span>
 <span id="306">306</span>
 <span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -322,6 +326,7 @@
 <span class="kw">pub use </span>tiered::Tiered;
 <span class="kw">pub use </span>tiered_multi::<span class="kw-2">*</span>;
 
+<span class="kw">use </span><span class="kw">crate</span>::core::ModuleDecode;
 <span class="kw">pub use </span><span class="kw">crate</span>::core::{client, server};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
@@ -602,15 +607,18 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>TransactionId {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+<span class="kw">impl </span>Decodable <span class="kw">for </span>TransactionId {
+    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
+    <span class="kw">where
+        </span>M: ModuleDecode,
+    {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(TransactionId::from_inner(bytes))
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4b8f43199 2022-10-19)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (dcb376115 2022-10-20)" ></div></body></html>
