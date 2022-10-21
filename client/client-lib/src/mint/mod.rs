@@ -42,8 +42,6 @@ pub struct MintClient<'c> {
 pub struct NoteIssuanceRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
     spend_key: KeyPair,
-    /// Nonce belonging to the secret key
-    nonce: Nonce,
     /// Key to unblind the blind signature supplied by the mint for this coin
     blinding_key: BlindingKey,
 }
@@ -294,7 +292,7 @@ impl NoteIssuanceRequests {
             .enumerate()
             .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
                 let sig = unblind_signature(coin_req.blinding_key, bsig);
-                let coin = Note(coin_req.nonce.clone(), sig);
+                let coin = Note(coin_req.nonce(), sig);
                 if coin.verify(*mint_pub_key.tier(&amt)?) {
                     let coin = SpendableNote {
                         note: coin,
@@ -334,11 +332,14 @@ impl NoteIssuanceRequest {
 
         let cr = NoteIssuanceRequest {
             spend_key,
-            nonce,
             blinding_key,
         };
 
         (cr, blinded_nonce)
+    }
+
+    pub fn nonce(&self) -> Nonce {
+        Nonce(self.spend_key.x_only_public_key().0)
     }
 }
 
