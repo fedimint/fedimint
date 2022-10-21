@@ -253,7 +253,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         mut rng: R,
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
-        tx.input_coins(notes, &self.context.secp)?;
+        tx.input_coins(notes)?;
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
@@ -293,7 +293,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let input_coins = self
             .mint_client()
             .select_coins(blind_nonces.total_amount())?;
-        tx.input_coins(input_coins, &self.context.secp)?;
+        tx.input_coins(input_coins)?;
         tx.output(Output::Mint(blind_nonces));
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
 
@@ -340,7 +340,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let funding_amount = self.config.as_ref().wallet.fee_consensus.peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
-        tx.input_coins(coins, &self.context.secp)?;
+        tx.input_coins(coins)?;
         let peg_out_idx = tx.output(Output::Wallet(peg_out));
 
         let fedimint_tx_id = self.submit_tx_with_change(tx, &mut rng).await?;
@@ -381,7 +381,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             coins
         } else {
             let mut tx = TransactionBuilder::default();
-            tx.input_coins(coins, &self.context.secp)?;
+            tx.input_coins(coins)?;
             tx.output_coins(
                 amount,
                 &self.mint_client().context.secp,
@@ -577,7 +577,7 @@ impl Client<UserClientConfig> {
         };
 
         let coins = self.mint_client().select_coins(amount)?;
-        tx.input_coins(coins, &self.context.secp)?;
+        tx.input_coins(coins)?;
         tx.output(Output::LN(contract));
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
@@ -958,7 +958,7 @@ impl Client<GatewayClientConfig> {
         // Inputs
         let mut builder = TransactionBuilder::default();
         let coins = self.mint_client().select_coins(offer.amount)?;
-        builder.input_coins(coins, &self.context.secp)?;
+        builder.input_coins(coins)?;
 
         // Outputs
         let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key).0;

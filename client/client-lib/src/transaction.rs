@@ -38,10 +38,9 @@ impl TransactionBuilder {
     pub fn input_coins(
         &mut self,
         coins: TieredMulti<SpendableNote>,
-        secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     ) -> Result<(), MintClientError> {
         self.input_notes.extend(coins.clone());
-        let (mut coin_keys, coin_input) = self.create_input_from_coins(coins, secp)?;
+        let (mut coin_keys, coin_input) = self.create_input_from_coins(coins)?;
         self.input(&mut coin_keys, Input::Mint(coin_input));
         Ok(())
     }
@@ -49,19 +48,15 @@ impl TransactionBuilder {
     pub fn create_input_from_coins(
         &mut self,
         coins: TieredMulti<SpendableNote>,
-        secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     ) -> Result<(Vec<KeyPair>, TieredMulti<Note>), MintClientError> {
         let coin_key_pairs = coins
             .into_iter()
             .map(|(amt, coin)| {
-                let spend_key = bitcoin::KeyPair::from_seckey_slice(secp, &coin.spend_key)
-                    .map_err(|_| MintClientError::ReceivedUspendableCoin)?;
-
                 // We check for coin validity in case we got it from an untrusted third party. We
                 // don't want to needlessly create invalid tx and bother the federation with them.
-                let spend_pub_key = spend_key.x_only_public_key().0;
+                let spend_pub_key = coin.spend_key.x_only_public_key().0;
                 if &spend_pub_key == coin.note.spend_key() {
-                    Ok((spend_key, (amt, coin.note)))
+                    Ok((coin.spend_key, (amt, coin.note)))
                 } else {
                     Err(MintClientError::ReceivedUspendableCoin)
                 }
