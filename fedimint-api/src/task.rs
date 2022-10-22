@@ -1,11 +1,152 @@
 use std::future::Future;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::SeqCst;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use anyhow::anyhow;
+use futures::lock::Mutex;
+pub use imp::*;
 use thiserror::Error;
+#[cfg(not(target_family = "wasm"))]
+use tokio::task::JoinHandle;
+use tracing::info;
+#[cfg(target_family = "wasm")]
+type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
 
 #[derive(Debug, Error)]
 #[error("deadline has elapsed")]
 pub struct Elapsed;
+
+#[derive(Debug, Default)]
+struct TaskGroupInner {
+    /// Was the shutdown requested, either externally or due to any task failure?
+    is_shutting_down: AtomicBool,
+    join: Mutex<Vec<(String, JoinHandle<()>)>>,
+}
+
+/// A group of task working together
+///
+/// Using this struct it is possible to spawn one or more
+/// main thread collabarating, which can cooperatively gracefully
+/// shut down, either due to external request, or failure of
+/// one of them.
+///
+/// Each thread should periodically check [`TaskHandle`] or rely
+/// on condition like channel disconnection to detect when it is time
+/// to finish.
+#[derive(Clone, Default, Debug)]
+pub struct TaskGroup {
+    inner: Arc<TaskGroupInner>,
+}
+
+impl TaskGroup {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn make_handle(&self) -> TaskHandle {
+        TaskHandle {
+            inner: self.inner.clone(),
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    pub async fn spawn<Fut>(
+        &mut self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + Send + 'static,
+    ) where
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        let name = name.into();
+        let mut guard = TaskPanicGuard {
+            name: name.clone(),
+            inner: self.inner.clone(),
+            completed: false,
+        };
+        let handle = self.make_handle();
+
+        if let Some(handle) = self::imp::spawn(async move {
+            f(handle).await;
+        }) {
+            self.inner.join.lock().await.push((name, handle));
+        }
+        guard.completed = true;
+    }
+
+    // TODO: Send vs lack of Send bound; do something about it
+    #[cfg(target_family = "wasm")]
+    pub async fn spawn<Fut>(
+        &mut self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + 'static,
+    ) where
+        Fut: Future<Output = ()> + 'static,
+    {
+        let name = name.into();
+        let mut guard = TaskPanicGuard {
+            name: name.clone(),
+            inner: self.inner.clone(),
+            completed: false,
+        };
+        let handle = self.make_handle();
+
+        if let Some(handle) = self::imp::spawn(async move {
+            f(handle).await;
+        }) {
+            self.inner.join.lock().await.push((name, handle));
+        }
+        guard.completed = true;
+    }
+
+    pub fn shutdown(&self) {
+        self.inner.is_shutting_down.store(true, SeqCst);
+    }
+
+    pub async fn join_all(self) -> anyhow::Result<()> {
+        for (name, join) in self.inner.join.lock().await.drain(..) {
+            join.await
+                .map_err(|e| anyhow!("Thread {name} panicked with: {e}"))?
+        }
+        Ok(())
+    }
+}
+
+pub struct TaskPanicGuard {
+    name: String,
+    inner: Arc<TaskGroupInner>,
+    /// Did the future completed successfully (no panic)
+    completed: bool,
+}
+
+impl TaskPanicGuard {
+    pub fn is_shutting_down(&self) -> bool {
+        self.inner.is_shutting_down.load(SeqCst)
+    }
+}
+
+impl Drop for TaskPanicGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            info!(
+                "Task {} shut down uncleanly. Shutting down task group.",
+                self.name
+            );
+            self.inner.is_shutting_down.store(true, SeqCst);
+        }
+    }
+}
+
+pub struct TaskHandle {
+    inner: Arc<TaskGroupInner>,
+}
+
+impl TaskHandle {
+    pub fn is_shutting_down(&self) -> bool {
+        self.inner.is_shutting_down.load(SeqCst)
+    }
+}
 
 #[cfg(not(target_family = "wasm"))]
 mod imp {
@@ -13,11 +154,11 @@ mod imp {
 
     use super::*;
 
-    pub fn spawn<F>(future: F)
+    pub(crate) fn spawn<F>(future: F) -> Option<JoinHandle<()>>
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        tokio::spawn(future);
+        Some(tokio::spawn(future))
     }
 
     pub fn block_in_place<F, R>(f: F) -> R
@@ -52,12 +193,13 @@ mod imp {
 
     use super::*;
 
-    pub fn spawn<F>(future: F)
+    pub(crate) fn spawn<F>(future: F) -> Option<JoinHandle<()>>
     where
         // No Send needed on wasm
         F: Future<Output = ()> + 'static,
     {
-        wasm_bindgen_futures::spawn_local(future)
+        wasm_bindgen_futures::spawn_local(future);
+        None
     }
 
     pub fn block_in_place<F, R>(f: F) -> R
@@ -87,5 +229,3 @@ mod imp {
         }
     }
 }
-
-pub use imp::*;

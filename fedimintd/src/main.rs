@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use fedimint_api::db::Database;
+use fedimint_api::task::TaskGroup;
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_mint_server::MintServerModule;
 use fedimint_server::config::ServerConfig;
@@ -86,11 +87,14 @@ async fn main() -> anyhow::Result<()> {
         .into();
     let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;
 
+    let mut task_group = TaskGroup::new();
+
     let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), db.clone());
 
-    let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), db.clone(), btc_rpc)
-        .await
-        .expect("Couldn't create wallet");
+    let wallet =
+        Wallet::new_with_bitcoind(cfg.wallet.clone(), db.clone(), btc_rpc, &mut task_group)
+            .await
+            .expect("Couldn't create wallet");
 
     let ln = LightningModule::new(cfg.ln.clone(), db.clone());
 

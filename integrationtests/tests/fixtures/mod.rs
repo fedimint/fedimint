@@ -19,7 +19,7 @@ use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
-use fedimint_api::task::spawn;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_api::FederationModule;
 use fedimint_api::OutPoint;
@@ -94,13 +94,14 @@ pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
 pub async fn fixtures(
     num_peers: u16,
     amount_tiers: &[Amount],
-) -> (
+) -> anyhow::Result<(
     FederationTest,
     UserTest,
     Box<dyn BitcoinTest>,
     GatewayTest,
     Box<dyn LightningTest>,
-) {
+)> {
+    let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
@@ -152,13 +153,14 @@ pub async fn fixtures(
                 &fed_db,
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
+                &mut task_group,
             )
             .await;
 
             let user_cfg = UserClientConfig(client_config.clone());
             let user_db = rocks(dir.clone()).into();
             let user = UserTest::new(user_cfg.clone(), peers, user_db);
-            user.client.await_consensus_block_height(0).await;
+            user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
                 lightning_rpc_adapter,
@@ -168,7 +170,7 @@ pub async fn fixtures(
             )
             .await;
 
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+            Ok((fed, user, Box::new(bitcoin), gateway, Box::new(lightning)))
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
@@ -184,12 +186,19 @@ pub async fn fixtures(
             let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
 
             let fed_db = || MemDatabase::new().into();
-            let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
+            let fed = FederationTest::new(
+                server_config,
+                &fed_db,
+                &bitcoin_rpc,
+                &connect_gen,
+                &mut task_group,
+            )
+            .await;
 
             let user_db = MemDatabase::new().into();
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(user_cfg.clone(), peers, user_db);
-            user.client.await_consensus_block_height(0).await;
+            user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
                 ln_rpc_adapter,
@@ -199,7 +208,7 @@ pub async fn fixtures(
             )
             .await;
 
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+            Ok((fed, user, Box::new(bitcoin), gateway, Box::new(lightning)))
         }
     }
 }
@@ -757,26 +766,36 @@ impl FederationTest {
         database_gen: &impl Fn() -> Database,
         bitcoin_gen: &impl Fn() -> BitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
+        task_group: &mut TaskGroup,
     ) -> Self {
-        let servers = join_all(server_config.values().map(|cfg| async move {
+        let servers = join_all(server_config.values().map(|cfg| async {
             let btc_rpc = bitcoin_gen();
             let db = database_gen();
+            let mut task_group = task_group.clone();
 
             let mint = Mint::new(cfg.mint.clone(), db.clone());
 
-            let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), db.clone(), btc_rpc.clone())
-                .await
-                .expect("Couldn't create wallet");
+            let wallet = Wallet::new_with_bitcoind(
+                cfg.wallet.clone(),
+                db.clone(),
+                btc_rpc.clone(),
+                &mut task_group.clone(),
+            )
+            .await
+            .expect("Couldn't create wallet");
 
             let ln = LightningModule::new(cfg.ln.clone(), db.clone());
 
             let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db.clone());
             let fedimint = FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg)).await;
 
-            spawn(fedimint_server::net::api::run_server(
-                cfg.clone(),
-                fedimint.consensus.clone(),
-            ));
+            let cfg = cfg.clone();
+            let consensus = fedimint.consensus.clone();
+            task_group
+                .spawn("rpc server", move |_handle| async {
+                    fedimint_server::net::api::run_server(cfg, consensus).await
+                })
+                .await;
 
             Rc::new(RefCell::new(ServerTest {
                 fedimint,

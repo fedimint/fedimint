@@ -177,6 +177,7 @@ mod tests {
     use bitcoin_hashes::Hash;
     use fedimint_api::config::BitcoindRpcCfg;
     use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::task::TaskGroup;
     use fedimint_api::{Feerate, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -273,7 +274,9 @@ mod tests {
         }
     }
 
-    async fn new_mint_and_client() -> (
+    async fn new_mint_and_client(
+        task_group: &mut TaskGroup,
+    ) -> (
         Arc<tokio::sync::Mutex<Fed>>,
         WalletClientConfig,
         ClientContext,
@@ -286,11 +289,17 @@ mod tests {
             FakeFed::<Wallet, WalletClientConfig>::new(
                 4,
                 move |cfg, db| {
+                    let mut task_group = task_group.clone();
                     let btc_rpc_clone = btc_rpc.clone();
                     async move {
-                        Wallet::new_with_bitcoind(cfg, db, btc_rpc_clone.clone().into())
-                            .await
-                            .unwrap()
+                        Wallet::new_with_bitcoind(
+                            cfg,
+                            db,
+                            btc_rpc_clone.clone().into(),
+                            &mut task_group,
+                        )
+                        .await
+                        .unwrap()
                     }
                 },
                 &BitcoindRpcCfg {
@@ -316,7 +325,9 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn create_output() {
-        let (fed, client_config, client_context, btc_rpc) = new_mint_and_client().await;
+        let mut task_group = TaskGroup::new();
+        let (fed, client_config, client_context, btc_rpc) =
+            new_mint_and_client(&mut task_group).await;
         let _client = WalletClient {
             config: &client_config,
             context: &client_context,

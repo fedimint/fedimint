@@ -551,8 +551,11 @@ async fn handle_command(
                 )
         }
         Command::WaitBlockHeight { height } => {
-            client.await_consensus_block_height(height).await;
-            Ok(CliOutput::WaitBlockHeight { reached: (height) })
+            client.await_consensus_block_height(height).await.transform(
+                |_| CliOutput::WaitBlockHeight { reached: (height) },
+                CliErrorKind::Timeout,
+                "timeout reached",
+            )
         }
         Command::ConnectInfo => {
             let info = WsFederationConnect::from(client.config().as_ref());

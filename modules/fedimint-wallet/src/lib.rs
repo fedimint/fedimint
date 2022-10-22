@@ -21,7 +21,7 @@ use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiEndpoint;
 use fedimint_api::module::{api_endpoint, TransactionItemAmount};
-use fedimint_api::task::sleep;
+use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
 use fedimint_bitcoind::BitcoindRpc;
 use miniscript::psbt::PsbtExt;
@@ -532,12 +532,15 @@ impl Wallet {
         cfg: WalletConfig,
         db: Database,
         bitcoind: BitcoindRpc,
+        task_group: &mut TaskGroup,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
         let broadcaster_db = db.clone();
-        fedimint_api::task::spawn(async move {
-            run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc).await;
-        });
+        task_group
+            .spawn("broadcast pending", |handle| async move {
+                run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, &handle).await;
+            })
+            .await;
 
         let bitcoind_rpc = bitcoind;
 
@@ -1182,8 +1185,8 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 }
 
 #[instrument(level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc) {
-    loop {
+pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc, tg_handle: &TaskHandle) {
+    while !tg_handle.is_shutting_down() {
         broadcast_pending_tx(&db, &rpc).await;
         fedimint_api::task::sleep(Duration::from_secs(10)).await;
     }
