@@ -1,5 +1,6 @@
 pub mod db;
 
+use std::borrow::Cow;
 use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
@@ -14,7 +15,8 @@ use fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse, S
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use rand::{CryptoRng, RngCore};
-use secp256k1_zkp::{Secp256k1, Signing};
+use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
+use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
@@ -39,9 +41,7 @@ pub struct MintClient<'c> {
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
-    spend_key: [u8; 32], // FIXME: either make KeyPair Serializable or add secret key newtype
-    /// Nonce belonging to the secret key
-    nonce: Nonce,
+    spend_key: KeyPair,
     /// Key to unblind the blind signature supplied by the mint for this coin
     blinding_key: BlindingKey,
 }
@@ -60,7 +60,8 @@ pub struct NoteIssuanceRequests {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
     pub note: Note,
-    pub spend_key: [u8; 32],
+    #[serde(deserialize_with = "deserialize_key_pair")]
+    pub spend_key: KeyPair,
 }
 
 impl<'a> ModuleClient for MintClient<'a> {
@@ -291,7 +292,7 @@ impl NoteIssuanceRequests {
             .enumerate()
             .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
                 let sig = unblind_signature(coin_req.blinding_key, bsig);
-                let coin = Note(coin_req.nonce.clone(), sig);
+                let coin = Note(coin_req.nonce(), sig);
                 if coin.verify(*mint_pub_key.tier(&amt)?) {
                     let coin = SpendableNote {
                         note: coin,
@@ -330,12 +331,15 @@ impl NoteIssuanceRequest {
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
         let cr = NoteIssuanceRequest {
-            spend_key: spend_key.secret_bytes(),
-            nonce,
+            spend_key,
             blinding_key,
         };
 
         (cr, blinded_nonce)
+    }
+
+    pub fn nonce(&self) -> Nonce {
+        Nonce(self.spend_key.x_only_public_key().0)
     }
 }
 
@@ -387,6 +391,22 @@ impl MintClientError {
 impl From<InvalidAmountTierError> for CoinFinalizationError {
     fn from(e: InvalidAmountTierError) -> Self {
         CoinFinalizationError::InvalidAmountTier(e.0)
+    }
+}
+
+// TODO: remove once rust-bitcoin/rust-secp256k1#491 is fixed
+fn deserialize_key_pair<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<KeyPair, D::Error> {
+    if d.is_human_readable() {
+        let hex_bytes: Cow<'_, str> = Deserialize::deserialize(d)?;
+        let bytes = hex::decode(hex_bytes.as_ref()).map_err(|_| D::Error::custom("Invalid hex"))?;
+        KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, &bytes)
+            .map_err(|_| D::Error::custom("Not a valid private key"))
+    } else {
+        let bytes: [u8; 32] = Deserialize::deserialize(d)?;
+        KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, &bytes)
+            .map_err(|_| D::Error::custom("Not a valid private key"))
     }
 }
 
@@ -591,10 +611,8 @@ mod tests {
         let tbs_pks = &client.config.tbs_pks;
         let rng = rand::rngs::OsRng;
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
-        let (spend_keys, input) = builder
-            .create_input_from_coins(coins.clone(), secp)
-            .unwrap();
-        builder.input_coins(coins, secp).unwrap();
+        let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
+        builder.input_coins(coins).unwrap();
         builder.build(Amount::from_sat(0), &mut dbtx, secp, tbs_pks, rng);
         dbtx.commit_tx().expect("DB Error");
 
@@ -624,10 +642,8 @@ mod tests {
         let mut builder = TransactionBuilder::default();
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let rng = rand::rngs::OsRng;
-        let (spend_keys, input) = builder
-            .create_input_from_coins(coins.clone(), secp)
-            .unwrap();
-        builder.input_coins(coins, secp).unwrap();
+        let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
+        builder.input_coins(coins).unwrap();
         builder.build(Amount::from_sat(0), &mut dbtx, secp, tbs_pks, rng);
         dbtx.commit_tx().expect("DB Error");
 
