@@ -500,7 +500,6 @@
           name = "fedimintd";
           bin = "fedimintd";
           dirs = [
-            "core"
             "crypto/tbs"
             "client/client-lib"
             "crypto/tbs"
@@ -526,7 +525,6 @@
           name = "ln-gateway";
           bin = "ln-gateway";
           dirs = [
-            "core"
             "crypto/tbs"
             "client/client-lib"
             "modules/fedimint-ln"
@@ -549,7 +547,6 @@
           name = "gateway-cli";
           bin = "gateway-cli";
           dirs = [
-            "core"
             "crypto/tbs"
             "client/client-lib"
             "modules/fedimint-ln"
@@ -573,7 +570,6 @@
           name = "fedimint-cli";
           bin = "fedimint-cli";
           dirs = [
-            "core"
             "client/clientd"
             "client/client-lib"
             "client/cli"
@@ -595,7 +591,6 @@
           name = "mint-client";
           inherit target;
           dirs = [
-            "core"
             "client/client-lib"
             "crypto/tbs"
             "fedimint-api"
@@ -614,7 +609,6 @@
           name = "clientd";
           bin = "clientd";
           dirs = [
-            "core"
             "client/cli"
             "client/client-lib"
             "client/clientd"
@@ -633,7 +627,6 @@
         fedimint-tests = pkg {
           name = "fedimint-tests";
           dirs = [
-            "core"
             "client/cli"
             "client/client-lib"
             "client/clientd"

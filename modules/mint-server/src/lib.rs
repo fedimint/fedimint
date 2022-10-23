@@ -1,18 +1,17 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
+use fedimint_api::core::{ModuleKey, PluginConsensusItem};
+use fedimint_api::server::InitHandle;
+use fedimint_api::server::{Error, InputMeta, PluginVerificationCache, ServerModulePlugin};
 use fedimint_api::{
-    db::batch::BatchTx,
+    db::DatabaseTransaction,
     encoding::{Decodable, Encodable},
     module::{audit::Audit, interconnect::ModuleInterconect},
     Amount, OutPoint, PeerId,
 };
-use fedimint_core_server::{
-    ApiEndpoint, Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
-    ServerModulePlugin,
-};
 use fedimint_mint_common::{
-    MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
+    MintInput, MintModuleDecoder, MintOutput, MintOutputOutcome, MintPendingOutput,
     MintSpendableOutput, MINT_MODULE_KEY,
 };
 
@@ -45,7 +44,7 @@ impl MintServerModule {
 
 #[async_trait(?Send)]
 impl ServerModulePlugin for MintServerModule {
-    type Common = MintModuleCommon;
+    type Decoder = MintModuleDecoder;
     type Input = MintInput;
     type Output = MintOutput;
     type PendingOutput = MintPendingOutput;
@@ -54,7 +53,16 @@ impl ServerModulePlugin for MintServerModule {
     type ConsensusItem = MintConsensusItem;
     type VerificationCache = MintVerificationCache;
 
-    fn init(&self) {}
+    fn module_key(&self) -> ModuleKey {
+        MINT_MODULE_KEY
+    }
+
+    fn init(&self, backend: &mut dyn InitHandle) {
+        // TODO: delete this dummy endpoint
+        backend.register_endpoint("/mint/echo", |value, _ctx| {
+            Box::pin(async move { Ok(value) })
+        });
+    }
 
     async fn await_consensus_proposal<'a>(&'a self) {
         todo!()
@@ -64,9 +72,9 @@ impl ServerModulePlugin for MintServerModule {
         todo!()
     }
 
-    async fn begin_consensus_epoch<'a>(
+    async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
         todo!()
@@ -88,10 +96,10 @@ impl ServerModulePlugin for MintServerModule {
         todo!()
     }
 
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         _interconnect: &'a dyn ModuleInterconect,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b Self::Input,
         _verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, Error> {
@@ -102,19 +110,19 @@ impl ServerModulePlugin for MintServerModule {
         todo!()
     }
 
-    fn apply_output<'a>(
+    fn apply_output<'a, 'b>(
         &'a self,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a Self::Output,
         _out_point: OutPoint,
     ) -> Result<Amount, Error> {
         todo!()
     }
 
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         _consensus_peers: &HashSet<PeerId>,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         todo!()
     }
@@ -124,14 +132,6 @@ impl ServerModulePlugin for MintServerModule {
     }
 
     fn audit(&self, _audit: &mut Audit) {
-        todo!()
-    }
-
-    fn api_base_name(&self) -> &'static str {
-        todo!()
-    }
-
-    fn api_endpoints(&self) -> Vec<ApiEndpoint> {
         todo!()
     }
 }

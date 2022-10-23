@@ -1,10 +1,9 @@
+use fedimint_api::client::{ClientModulePlugin, FedimintClientCore, PollPendingOutputs};
+use fedimint_api::core::{Output, PendingOutput};
 use fedimint_api::Amount;
-use fedimint_core_client::{
-    ClientModulePlugin, FedimintClientCore, Output, PendingOutput, PollPendingOutputs,
-};
 use fedimint_mint_common::{
-    MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
-    MintSpendableOutput,
+    MintInput, MintModuleDecoder, MintOutput, MintOutputOutcome, MintPendingOutput,
+    MintSpendableOutput, MINT_MODULE_KEY,
 };
 
 #[derive(Clone)]
@@ -53,13 +52,16 @@ impl MintClientModule {
 }
 
 impl ClientModulePlugin for MintClientModule {
-    type Common = MintModuleCommon;
+    type Decoder = MintModuleDecoder;
     type Input = MintInput;
     type Output = MintOutput;
     type PendingOutput = MintPendingOutput;
     type SpendableOutput = MintSpendableOutput;
     type OutputOutcome = MintOutputOutcome;
 
+    fn module_key(&self) -> fedimint_api::core::ModuleKey {
+        MINT_MODULE_KEY
+    }
     fn init(&self, _core: FedimintClientCore) {
         todo!()
     }
@@ -69,7 +71,7 @@ impl ClientModulePlugin for MintClientModule {
         _outputs: Vec<MintPendingOutput>,
     ) -> Result<
         PollPendingOutputs<MintSpendableOutput, MintPendingOutput>,
-        fedimint_core_client::FinalizationError,
+        fedimint_api::core::FinalizationError,
     > {
         todo!()
     }

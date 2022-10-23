@@ -26,7 +26,6 @@ jsonrpsee = { version = "0.15.1", features = ["ws-server"] }
 mint-client = { path = "../client/client-lib" }
 fedimint-api = { path = "../fedimint-api" }
 fedimint-core = { path = "../fedimint-core" }
-fedimint-core-api = { path = "../core/api" }
 fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native"] }
 rand = "0.8"
 rayon = "1.5.0"
@@ -46,7 +45,6 @@ threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch
 
 # setup dependencies
 askama = { version = "0.11.1", features = ["with-axum"] }
-axum-core = "0.2"
 http = "0.2"
 http-body = "0.4"
 askama_axum = "0.1.0"

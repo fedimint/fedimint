@@ -6,7 +6,7 @@ pub mod outgoing;
 use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::db::batch::BatchTx;
+use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::{Amount, FederationModule};
@@ -74,9 +74,9 @@ impl<'a> ModuleClient for LnClient<'a> {
 impl<'c> LnClient<'c> {
     /// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
     /// till the block height defined by `timelock`, after that we can claim our money back.
-    pub fn create_outgoing_output<'a>(
+    pub fn create_outgoing_output<'a, 'b>(
         &'a self,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         invoice: Invoice,
         gateway: &LightningGateway,
         timelock: u32,
@@ -111,9 +111,12 @@ impl<'c> LnClient<'c> {
             },
         };
 
-        batch.append_insert_new(OutgoingPaymentKey(contract.contract_id()), outgoing_payment);
+        dbtx.insert_new_entry(
+            &OutgoingPaymentKey(contract.contract_id()),
+            &outgoing_payment,
+        )
+        .expect("DB Error");
 
-        batch.commit();
         Ok(ContractOrOfferOutput::Contract(ContractOutput {
             amount: contract_amount,
             contract: Contract::Outgoing(contract),
@@ -183,6 +186,7 @@ impl<'c> LnClient<'c> {
         // TODO: unify block height type
         self.context
             .db
+            .begin_transaction()
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .filter_map(|res| {
                 let (_key, outgoing_data) = res.expect("DB error");
@@ -245,16 +249,17 @@ impl<'c> LnClient<'c> {
     }
 
     pub fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
-        self.context
-            .db
-            .insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
+        let mut dbtx = self.context.db.begin_transaction();
+        dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .expect("Db error");
+        dbtx.commit_tx().expect("DB Error");
     }
 
     pub fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
         let confirmed_invoice = self
             .context
             .db
+            .begin_transaction()
             .get_value(&ConfirmedInvoiceKey(contract_id))
             .expect("Db error")
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
@@ -295,9 +300,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
-    use fedimint_api::db::batch::DbBatch;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -308,6 +311,7 @@ mod tests {
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
+    use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
     use threshold_crypto::PublicKey;
     use url::Url;
@@ -462,18 +466,12 @@ mod tests {
         };
         let timelock = 42;
 
-        let mut batch = DbBatch::new();
+        let mut dbtx = client.context.db.begin_transaction();
         let output = client
-            .create_outgoing_output(
-                batch.transaction(),
-                invoice.clone(),
-                &gateway,
-                timelock,
-                &mut rng,
-            )
+            .create_outgoing_output(&mut dbtx, invoice.clone(), &gateway, timelock, &mut rng)
             .unwrap();
 
-        client_context.db.apply_batch(batch).unwrap();
+        dbtx.commit_tx().expect("DB Error");
 
         let contract = match &output {
             ContractOrOfferOutput::Contract(c) => &c.contract,

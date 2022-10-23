@@ -122,6 +122,7 @@ impl FederationModule for Mint {
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
         self.db
+            .begin_transaction()
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 let (key, partial_signature) = res.expect("DB error");
@@ -191,6 +192,7 @@ impl FederationModule for Mint {
 
             if self
                 .db
+                .begin_transaction()
                 .get_value(&NonceKey(coin.0.clone()))
                 .expect("DB error")
                 .is_some()
@@ -286,6 +288,7 @@ impl FederationModule for Mint {
         // Finalize partial signatures for which we now have enough shares
         let req_psigs = self
             .db
+            .begin_transaction()
             .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
@@ -302,7 +305,11 @@ impl FederationModule for Mint {
                 let proposal_key = ProposedPartialSignatureKey {
                     request_id: issuance_id,
                 };
-                let our_contribution = self.db.get_value(&proposal_key).expect("DB error");
+                let our_contribution = self
+                    .db
+                    .begin_transaction()
+                    .get_value(&proposal_key)
+                    .expect("DB error");
                 let (bsig, errors) = self.combine(our_contribution, shares.clone());
 
                 // FIXME: validate shares before writing to DB to make combine infallible
@@ -350,6 +357,7 @@ impl FederationModule for Mint {
         let mut redemptions = Amount::from_sat(0);
         let mut issuances = Amount::from_sat(0);
         self.db
+            .begin_transaction()
             .find_by_prefix(&MintAuditItemKeyPrefix)
             .for_each(|res| {
                 let (key, amount) = res.expect("DB error");
@@ -372,6 +380,7 @@ impl FederationModule for Mint {
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         let we_proposed = self
             .db
+            .begin_transaction()
             .get_value(&ProposedPartialSignatureKey {
                 request_id: out_point,
             })
@@ -379,6 +388,7 @@ impl FederationModule for Mint {
             .is_some();
         let was_consensus_outcome = self
             .db
+            .begin_transaction()
             .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix {
                 request_id: out_point,
             })
@@ -386,6 +396,7 @@ impl FederationModule for Mint {
 
         let final_sig = self
             .db
+            .begin_transaction()
             .get_value(&OutputOutcomeKey(out_point))
             .expect("DB error");
 
@@ -625,6 +636,7 @@ impl Mint {
     ) {
         if self
             .db
+            .begin_transaction()
             .get_value(&OutputOutcomeKey(output_id))
             .expect("DB error")
             .is_some()

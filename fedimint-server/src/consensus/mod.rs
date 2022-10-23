@@ -8,18 +8,18 @@ use std::collections::{BTreeMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
 
+use fedimint_api::core::ModuleKey;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::TransactionItemAmount;
+use fedimint_api::server::ServerModule;
 use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
 use fedimint_core::modules::ln::{LightningModule, LightningModuleError};
 use fedimint_core::modules::mint::{Mint, MintError};
-use fedimint_core::modules::wallet::{Wallet, WalletError};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core_api::server::ServerModule;
-use fedimint_core_api::ModuleKey;
+use fedimint_wallet::{Wallet, WalletError};
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
@@ -78,11 +78,11 @@ pub struct FedimintConsensus {
     pub cfg: ServerConfig,
 
     /// Our local mint
-    pub mint: Mint, // TODO: generate consensus code using Macro, making modules replaceable for testing and easy adaptability
     pub wallet: Wallet,
     pub ln: LightningModule,
+    pub mint: Mint,
 
-    modules: BTreeMap<ModuleKey, ServerModule>,
+    pub modules: BTreeMap<ModuleKey, ServerModule>,
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
 
@@ -201,10 +201,11 @@ impl FedimintConsensus {
 
         funding_verifier.verify_funding()?;
 
-        let new = self
-            .db
+        let mut dbtx = self.db.begin_transaction();
+        let new = dbtx
             .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
             .expect("DB error");
+        dbtx.commit_tx().expect("DB Error");
 
         if new.is_some() {
             warn!("Added consensus item was already in consensus queue");
@@ -279,7 +280,7 @@ impl FedimintConsensus {
                 // in_scope to make sure that no await is in the middle of the span
                 let _enter = span.in_scope(|| {
                     trace!(?transaction);
-                    dbtx.maybe_remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
+                    dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
                         .expect("DB Error");
 
                     // TODO: use borrowed transaction
@@ -350,7 +351,10 @@ impl FedimintConsensus {
     }
 
     pub fn epoch_history(&self, epoch: u64) -> Option<EpochHistory> {
-        self.db.get_value(&EpochHistoryKey(epoch)).unwrap()
+        self.db
+            .begin_transaction()
+            .get_value(&EpochHistoryKey(epoch))
+            .unwrap()
     }
 
     fn save_epoch_history<'a>(
@@ -361,7 +365,11 @@ impl FedimintConsensus {
     ) {
         let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
-        let maybe_prev_epoch = self.db.get_value(&prev_epoch_key).expect("DB error");
+        let maybe_prev_epoch = self
+            .db
+            .begin_transaction()
+            .get_value(&prev_epoch_key)
+            .expect("DB error");
 
         let current = EpochHistory::new(outcome.epoch, outcome.contributions, &maybe_prev_epoch);
 
@@ -405,6 +413,7 @@ impl FedimintConsensus {
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
         let drop_peers = self
             .db
+            .begin_transaction()
             .find_by_prefix(&DropPeerKeyPrefix)
             .map(|res| {
                 let key = res.expect("DB error").0;
@@ -414,6 +423,7 @@ impl FedimintConsensus {
 
         let mut items: Vec<ConsensusItem> = self
             .db
+            .begin_transaction()
             .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
@@ -442,8 +452,18 @@ impl FedimintConsensus {
             )
             .collect();
 
-        if let Some(epoch) = self.db.get_value(&LastEpochKey).unwrap() {
-            let last_epoch = self.db.get_value(&epoch).unwrap().unwrap();
+        if let Some(epoch) = self
+            .db
+            .begin_transaction()
+            .get_value(&LastEpochKey)
+            .unwrap()
+        {
+            let last_epoch = self
+                .db
+                .begin_transaction()
+                .get_value(&epoch)
+                .unwrap()
+                .unwrap();
             let sig = self.cfg.epoch_sks.0.sign(last_epoch.hash);
             let item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
             items.push(item);
@@ -516,6 +536,7 @@ impl FedimintConsensus {
     ) -> Option<crate::outcome::TransactionStatus> {
         let accepted: Option<AcceptedTransaction> = self
             .db
+            .begin_transaction()
             .get_value(&AcceptedTransactionKey(txid))
             .expect("DB error");
 
@@ -564,6 +585,7 @@ impl FedimintConsensus {
 
         let rejected: Option<String> = self
             .db
+            .begin_transaction()
             .get_value(&RejectedTransactionKey(txid))
             .expect("DB error");
 

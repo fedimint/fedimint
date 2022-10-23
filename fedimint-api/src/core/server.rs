@@ -9,14 +9,16 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::{
-    db::batch::BatchTx,
+    db::DatabaseTransaction,
     encoding::DynEncodable,
     module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
     Amount, OutPoint, PeerId,
 };
+use futures::future::BoxFuture;
 use thiserror::Error;
 
 use super::*;
+use crate::module_plugin_trait_define;
 
 /// Api Endpoint exposed by a server side module
 pub struct ApiEndpoint {
@@ -33,18 +35,6 @@ dyn_newtype_define! {
     /// [`ApiEndpoint`] handler exposed by the server side module
     pub ApiHandler(Box<ModuleApiHandler>)
 }
-
-pub trait ModuleConsensusItem: DynEncodable {
-    fn as_any(&self) -> &(dyn Any + 'static);
-    fn module_key(&self) -> ModuleKey;
-    fn clone(&self) -> ConsensusItem;
-}
-
-dyn_newtype_define! {
-    pub ConsensusItem(Box<ModuleConsensusItem>)
-}
-dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
-module_plugin_trait_define!(ConsensusItem, PluginConsensusItem, ModuleConsensusItem, {} {});
 
 pub trait ModuleVerificationCache: DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
@@ -73,6 +63,22 @@ pub struct InputMeta {
     pub puk_keys: Vec<XOnlyPublicKey>,
 }
 
+/// An interface rpc handlers can use to query to access current running context
+pub trait RpcHandlerCtx: Sync {}
+
+/// An interface exposed to Fedimint modules
+pub trait InitHandle {
+    /// Register an rpc handler at a given path
+    fn register_endpoint(
+        &mut self,
+        path: &'static str,
+        handler: fn(
+            serde_json::Value,
+            ctx: &dyn RpcHandlerCtx,
+        ) -> BoxFuture<'static, Result<serde_json::Value, ApiError>>,
+    );
+}
+
 /// Backend side module interface
 ///
 /// Server side Fedimint mondule needs to implement this trait.
@@ -91,8 +97,10 @@ pub trait IServerModule {
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
 
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+
     /// Initialize the module on registration in Fedimint
-    fn init(&self);
+    fn init(&self, backend: &mut dyn InitHandle);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self);
@@ -104,9 +112,9 @@ pub trait IServerModule {
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    async fn begin_consensus_epoch(
+    async fn begin_consensus_epoch<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, ConsensusItem)>,
     );
 
@@ -134,10 +142,10 @@ pub trait IServerModule {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
         verification_cache: &VerificationCache,
     ) -> Result<InputMeta, Error>;
@@ -158,9 +166,9 @@ pub trait IServerModule {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output(
+    fn apply_output<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
         out_point: OutPoint,
     ) -> Result<Amount, Error>;
@@ -170,10 +178,10 @@ pub trait IServerModule {
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    async fn end_consensus_epoch(
+    async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
     ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
@@ -186,17 +194,6 @@ pub trait IServerModule {
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit);
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str;
-
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint>;
 }
 
 dyn_newtype_define!(
@@ -204,9 +201,38 @@ dyn_newtype_define!(
     pub ServerModule(Arc<IServerModule>)
 );
 
+impl ModuleDecode for ServerModule {
+    fn decode_spendable_output(
+        &self,
+        r: &mut dyn io::Read,
+    ) -> Result<SpendableOutput, DecodeError> {
+        (**self).decode_spendable_output(r)
+    }
+
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
+        (**self).decode_input(r)
+    }
+
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
+        (**self).decode_output(r)
+    }
+
+    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+        (**self).decode_pending_output(r)
+    }
+
+    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+        (**self).decode_output_outcome(r)
+    }
+
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
+        (**self).decode_consensus_item(r)
+    }
+}
+
 #[async_trait(?Send)]
 pub trait ServerModulePlugin: Sized {
-    type Common: ModuleCommon;
+    type Decoder: PluginDecode;
     type Input: PluginInput;
     type Output: PluginOutput;
     type PendingOutput: PluginPendingOutput;
@@ -215,7 +241,8 @@ pub trait ServerModulePlugin: Sized {
     type ConsensusItem: PluginConsensusItem;
     type VerificationCache: PluginVerificationCache;
 
-    fn init(&self);
+    fn module_key(&self) -> ModuleKey;
+    fn init(&self, backend: &mut dyn InitHandle);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self);
@@ -227,9 +254,9 @@ pub trait ServerModulePlugin: Sized {
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    async fn begin_consensus_epoch<'a>(
+    async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     );
 
@@ -260,10 +287,10 @@ pub trait ServerModulePlugin: Sized {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::Input,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, Error>;
@@ -284,9 +311,9 @@ pub trait ServerModulePlugin: Sized {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output<'a>(
+    fn apply_output<'a, 'b>(
         &'a self,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<Amount, Error>;
@@ -296,10 +323,10 @@ pub trait ServerModulePlugin: Sized {
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
@@ -312,17 +339,6 @@ pub trait ServerModulePlugin: Sized {
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit);
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str;
-
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint>;
 }
 
 #[async_trait(?Send)]
@@ -331,34 +347,38 @@ where
     T: ServerModulePlugin,
 {
     fn module_key(&self) -> ModuleKey {
-        <Self as ServerModulePlugin>::Common::module_key()
+        <Self as ServerModulePlugin>::module_key(self)
     }
 
     fn decode_spendable_output(
         &self,
         r: &mut dyn io::Read,
     ) -> Result<SpendableOutput, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_spendable_output(r)
+        <Self as ServerModulePlugin>::Decoder::decode_spendable_output(r)
     }
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_input(r)
+        <Self as ServerModulePlugin>::Decoder::decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_output(r)
+        <Self as ServerModulePlugin>::Decoder::decode_output(r)
     }
 
     fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_pending_output(r)
+        <Self as ServerModulePlugin>::Decoder::decode_pending_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        <Self as ServerModulePlugin>::Common::decode_output_outcome(r)
+        <Self as ServerModulePlugin>::Decoder::decode_output_outcome(r)
     }
 
-    fn init(&self) {
-        <Self as ServerModulePlugin>::init(self)
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
+        <Self as ServerModulePlugin>::Decoder::decode_consensus_item(r)
+    }
+
+    fn init(&self, backend: &mut dyn InitHandle) {
+        <Self as ServerModulePlugin>::init(self, backend)
     }
 
     /// Blocks until a new `consensus_proposal` is available.
@@ -379,14 +399,14 @@ where
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    async fn begin_consensus_epoch(
+    async fn begin_consensus_epoch<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, ConsensusItem)>,
     ) {
         <Self as ServerModulePlugin>::begin_consensus_epoch(
             self,
-            batch,
+            dbtx,
             consensus_items
                 .into_iter()
                 .map(|(peer, item)| {
@@ -452,17 +472,17 @@ where
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
         verification_cache: &VerificationCache,
     ) -> Result<InputMeta, Error> {
         <Self as ServerModulePlugin>::apply_input(
             self,
             interconnect,
-            batch,
+            dbtx,
             input
                 .as_any()
                 .downcast_ref::<<Self as ServerModulePlugin>::Input>()
@@ -499,15 +519,15 @@ where
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output(
+    fn apply_output<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
         out_point: OutPoint,
     ) -> Result<Amount, Error> {
         <Self as ServerModulePlugin>::apply_output(
             self,
-            batch,
+            dbtx,
             output
                 .as_any()
                 .downcast_ref::<<Self as ServerModulePlugin>::Output>()
@@ -521,12 +541,12 @@ where
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    async fn end_consensus_epoch(
+    async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
     ) -> Vec<PeerId> {
-        <Self as ServerModulePlugin>::end_consensus_epoch(self, consensus_peers, batch).await
+        <Self as ServerModulePlugin>::end_consensus_epoch(self, consensus_peers, dbtx).await
     }
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
@@ -542,20 +562,5 @@ where
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit) {
         <Self as ServerModulePlugin>::audit(self, audit)
-    }
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str {
-        <Self as ServerModulePlugin>::api_base_name(self)
-    }
-
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint> {
-        <Self as ServerModulePlugin>::api_endpoints(self)
     }
 }

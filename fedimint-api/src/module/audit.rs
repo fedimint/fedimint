@@ -26,6 +26,7 @@ impl Audit {
         F: Fn(KP::Key, KP::Value) -> i64,
     {
         let mut new_items = db
+            .begin_transaction()
             .find_by_prefix(key_prefix)
             .map(|res| {
                 let (key, value) = res.expect("DB error");

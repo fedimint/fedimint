@@ -15,7 +15,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.65"
 async-trait = "0.1.52"
-base64 = "0.13.0"
+base64 = "0.13.1"
 bincode = "1.3.1"
 bitcoin = "0.29.1"
 bitcoin_hashes = "0.11.0"
@@ -50,4 +50,5 @@ jsonrpsee-wasm-client = "0.15.1"
 tokio = { version = "1.21.2", features = ["full"] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+fedimint-testing = { path = "../../fedimint-testing" }
 once_cell = "1.15.0"

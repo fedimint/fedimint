@@ -2,7 +2,8 @@ use std::{collections::BTreeMap, io};
 
 use fedimint_api::encoding::{Decodable, DecodeError};
 
-use crate::ModuleKey;
+use super::ModuleDecode;
+use crate::encoding::ModuleKey;
 
 pub fn module_decode_key_prefixed_decodable<T, F, R, M>(
     mut d: &mut R,
@@ -12,6 +13,7 @@ pub fn module_decode_key_prefixed_decodable<T, F, R, M>(
 where
     R: io::Read,
     F: FnOnce(&mut R, &M) -> Result<T, DecodeError>,
+    M: ModuleDecode,
 {
     let key = ModuleKey::consensus_decode(&mut d, modules)?;
 

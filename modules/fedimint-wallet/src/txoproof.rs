@@ -6,6 +6,7 @@ use std::io::Cursor;
 
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
+use fedimint_api::core::ModuleDecode;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 use miniscript::{Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Verification};
@@ -56,11 +57,14 @@ impl TxOutProof {
     }
 }
 
-impl<M> Decodable<M> for TxOutProof {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for TxOutProof {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
         let block_header = BlockHeader::consensus_decode(d, modules)?;
         let merkle_proof = PartialMerkleTree::consensus_decode(d, modules)?;
 
@@ -290,11 +294,14 @@ impl PartialEq for TxOutProof {
 
 impl Eq for TxOutProof {}
 
-impl<M> Decodable<M> for PegInProof {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for PegInProof {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
         let slf = PegInProof {
             txout_proof: TxOutProof::consensus_decode(d, modules)?,
             transaction: Transaction::consensus_decode(d, modules)?,

@@ -32,7 +32,7 @@ for ((ID=0; ID<FM_FED_SIZE; ID++));
 do
   mkdir $FM_CFG_DIR/server-$ID
   base_port=$(echo "4000 + $ID * 10" | bc -l)
-  $FM_BIN_DIR/distributedgen create-cert --out-dir $FM_CFG_DIR/server-$ID --base-port $base_port --name "Server-$ID"
+  $FM_BIN_DIR/distributedgen create-cert --out-dir $FM_CFG_DIR/server-$ID --base-port $base_port --name "Server-$ID" --password "pass$ID"
   CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
 done
 CERTS=${CERTS:1}
@@ -40,16 +40,12 @@ echo "Running DKG with certs: $CERTS"
 
 for ((ID=0; ID<FM_FED_SIZE; ID++));
 do
-  $FM_BIN_DIR/distributedgen run --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS &
+  $FM_BIN_DIR/distributedgen run --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS --password "pass$ID" &
 done
 wait
 
-# Move the client config and all server configs to root dir
+# Move the client config to root dir
 mv $FM_CFG_DIR/server-0/client.json $FM_CFG_DIR/
-for ((ID=0; ID<FM_FED_SIZE; ID++));
-do
-  mv $FM_CFG_DIR/server-$ID/server-$ID.json $FM_CFG_DIR/
-done
 
 # Define clients
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"

@@ -1,24 +1,22 @@
 use std::{collections::BTreeMap, io};
 
+use fedimint_api::core::{
+    ConsensusItem, Input, ModuleKey, Output, OutputOutcome, PendingOutput, PluginConsensusItem,
+    PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome, PluginPendingOutput,
+    PluginSpendableOutput, SpendableOutput,
+};
 use fedimint_api::{
     encoding::{Decodable, DecodeError, Encodable},
     Amount,
-};
-use fedimint_core_api::{
-    Input, ModuleCommon, ModuleKey, Output, OutputOutcome, PendingOutput, PluginInput,
-    PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
 };
 
 pub const MINT_MODULE_KEY: u16 = 0;
 
 // TODO: DELME
 #[derive(Default, Clone)]
-pub struct MintModuleCommon;
+pub struct MintModuleDecoder;
 
-impl ModuleCommon for MintModuleCommon {
-    fn module_key() -> ModuleKey {
-        MINT_MODULE_KEY
-    }
+impl PluginDecode for MintModuleDecoder {
     fn decode_spendable_output(mut d: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError> {
         Ok(SpendableOutput::from(
             MintSpendableOutput::consensus_decode(&mut d, &BTreeMap::<_, ()>::new())?,
@@ -48,6 +46,15 @@ impl ModuleCommon for MintModuleCommon {
     fn decode_input(mut d: &mut dyn io::Read) -> Result<Input, DecodeError> {
         Ok(Input::from(MintInput::consensus_decode(
             &mut d,
+            &BTreeMap::<_, ()>::new(),
+        )?))
+    }
+
+    fn decode_consensus_item(
+        mut r: &mut dyn io::Read,
+    ) -> Result<fedimint_api::core::ConsensusItem, DecodeError> {
+        Ok(ConsensusItem::from(MintConsensusItem::consensus_decode(
+            &mut r,
             &BTreeMap::<_, ()>::new(),
         )?))
     }
@@ -115,5 +122,14 @@ impl PluginInput for MintInput {
 
     fn amount(&self) -> Amount {
         todo!()
+    }
+}
+
+#[derive(Encodable, Decodable, Clone)]
+pub struct MintConsensusItem;
+
+impl PluginConsensusItem for MintConsensusItem {
+    fn module_key(&self) -> ModuleKey {
+        MINT_MODULE_KEY
     }
 }

@@ -1,8 +1,5 @@
 [workspace]
 members = [
-    "core/api",
-    "core/client",
-    "core/server",
     "crypto/tbs",
     "gateway/ln-gateway",
     "gateway/cli",
@@ -12,6 +9,7 @@ members = [
     "fedimint-derive",
     "fedimint-api",
     "fedimint-rocksdb",
+    "fedimint-testing",
     "fedimint-server",
     "fedimint-sled",
     "client/cli",

@@ -1,14 +1,15 @@
-use std::path::{Path, PathBuf};
-
+pub mod lib;
 use clap::Parser;
 use fedimint_api::db::Database;
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_mint_server::MintServerModule;
-use fedimint_server::config::{load_from_file, ServerConfig};
+use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::ui::run_ui;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::{bitcoincore_rpc, Wallet};
+use fedimintd::encrypt::*;
+use std::path::PathBuf;
 use tokio::spawn;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -17,7 +18,8 @@ use tracing_subscriber::Layer;
 #[derive(Parser)]
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
-    pub db_path: PathBuf,
+    #[arg(default_value = None)]
+    pub password: Option<String>,
     #[arg(default_value = None)]
     pub ui_port: Option<u32>,
     #[cfg(feature = "telemetry")]
@@ -34,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
     }
-    let opts = ServerOpts::parse();
+    let opts: ServerOpts = ServerOpts::parse();
     let fmt_layer = tracing_subscriber::fmt::layer();
     let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
@@ -72,13 +74,13 @@ async fn main() -> anyhow::Result<()> {
             .expect("failed to receive setup message");
     }
 
-    if !Path::new(&opts.cfg_path).is_file() {
-        panic!("Config file not found, you can generate one with the webui by running with port as arg 3.");
-    }
+    let salt_path = opts.cfg_path.join(SALT_FILE);
+    let key = get_key(opts.password, salt_path);
+    let (decrypted, _) = encrypted_read(&key, opts.cfg_path.join(CONFIG_FILE));
+    let cfg_string = String::from_utf8(decrypted).expect("is not correctly encoded");
+    let cfg: ServerConfig = serde_json::from_str(&cfg_string).expect("could not parse config");
 
-    let cfg: ServerConfig = load_from_file(&opts.cfg_path);
-
-    let db: Database = fedimint_rocksdb::RocksDb::open(opts.db_path)
+    let db: Database = fedimint_rocksdb::RocksDb::open(opts.cfg_path.join(DB_FILE))
         .expect("Error opening DB")
         .into();
     let btc_rpc = bitcoincore_rpc::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;

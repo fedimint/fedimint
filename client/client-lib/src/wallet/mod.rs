@@ -1,7 +1,7 @@
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
-use fedimint_api::db::batch::BatchTx;
+use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, FederationModule};
 use fedimint_core::modules::wallet::config::WalletClientConfig;
@@ -58,9 +58,9 @@ impl<'c> WalletClient<'c> {
     /// prevent front-running by a malicious  federation member
     /// The returned bitcoin-address is derived from the script. Thus sending bitcoin to that address will result in a
     /// transaction containing the scripts public-key in at least one of it's outpoints.
-    pub fn get_new_pegin_address<R: RngCore + CryptoRng>(
+    pub fn get_new_pegin_address<'a, R: RngCore + CryptoRng>(
         &self,
-        mut batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         mut rng: R,
     ) -> Address {
         let peg_in_keypair = bitcoin::KeyPair::new(&self.context.secp, &mut rng);
@@ -77,14 +77,14 @@ impl<'c> WalletClient<'c> {
         let address = Address::from_script(&script, self.config.network)
             .expect("Script from descriptor should have an address");
 
-        batch.append_insert_new(
-            PegInKey {
+        dbtx.insert_new_entry(
+            &PegInKey {
                 peg_in_script: script,
             },
-            peg_in_keypair.secret_bytes(),
-        );
+            &peg_in_keypair.secret_bytes(),
+        )
+        .expect("DB Error");
 
-        batch.commit();
         address
     }
 
@@ -101,6 +101,7 @@ impl<'c> WalletClient<'c> {
                 debug!(output_script = ?out.script_pubkey);
                 self.context
                     .db
+                    .begin_transaction()
                     .get_value(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
@@ -176,7 +177,6 @@ mod tests {
     use bitcoin_hashes::Hash;
     use fedimint_api::config::BitcoindRpcCfg;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -192,6 +192,7 @@ mod tests {
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
+    use fedimint_testing::FakeFed;
     use threshold_crypto::PublicKey;
 
     use crate::api::IFederationApi;
@@ -332,9 +333,10 @@ mod tests {
                 amount: bitcoin::Amount::from_sat(48000),
             };
 
-            db.insert_entry(&UTXOKey(out_point), &utxo).unwrap();
+            let mut dbtx = db.begin_transaction();
+            dbtx.insert_entry(&UTXOKey(out_point), &utxo).unwrap();
 
-            db.insert_entry(
+            dbtx.insert_entry(
                 &RoundConsensusKey,
                 &RoundConsensus {
                     block_height: 0,
@@ -343,6 +345,8 @@ mod tests {
                 },
             )
             .unwrap();
+
+            dbtx.commit_tx().expect("DB Error");
         });
 
         let addr = Address::from_str("msFGPqHVk8rbARMd69FfGYxwcboZLemdBi").unwrap();

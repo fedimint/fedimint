@@ -1,5 +1,5 @@
 [package]
-name = "fedimint-client"
+name = "fedimint-testing"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
@@ -8,15 +8,13 @@ license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "fedimint_client"
+name = "fedimint_testing"
 path = "src/lib.rs"
 
 
 [dependencies]
-bitcoin = "0.29.0"
-fedimint-api  = { path = "../fedimint-api/" }
-thiserror = "1.0.30"
-
-[dev-dependencies]
-fedimint-mint-client = { path = "../modules/mint-client" }
-fedimint-api = { path = "../fedimint-api/" }
+async-trait = "*"
+fedimint-api  = { path = "../fedimint-api" }
+secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
+serde_json = "*"
+rand = "0.8"

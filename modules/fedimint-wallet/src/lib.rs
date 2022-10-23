@@ -223,6 +223,7 @@ impl FederationModule for Wallet {
         });
 
         self.db
+            .begin_transaction()
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .map(|res| {
                 let (key, val) = res.expect("FB error");
@@ -306,6 +307,7 @@ impl FederationModule for Wallet {
 
         if self
             .db
+            .begin_transaction()
             .get_value(&UTXOKey(input.outpoint()))
             .expect("DB error")
             .is_some()
@@ -442,6 +444,7 @@ impl FederationModule for Wallet {
         // Sign and finalize any unsigned transactions that have signatures
         let unsigned_txs: Vec<(UnsignedTransactionKey, UnsignedTransaction)> = self
             .db
+            .begin_transaction()
             .find_by_prefix(&UnsignedTransactionPrefixKey)
             .map(|res| res.expect("DB error"))
             .filter(|(_, unsigned)| !unsigned.signatures.is_empty())
@@ -495,6 +498,7 @@ impl FederationModule for Wallet {
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         self.db
+            .begin_transaction()
             .get_value(&PegOutBitcoinTransaction(out_point))
             .expect("DB error")
     }
@@ -593,6 +597,7 @@ impl Wallet {
     ) {
         let mut cache: BTreeMap<Txid, UnsignedTransaction> = self
             .db
+            .begin_transaction()
             .find_by_prefix(&UnsignedTransactionPrefixKey)
             .map(|res| {
                 let (key, val) = res.expect("DB error");
@@ -752,7 +757,10 @@ impl Wallet {
     }
 
     pub fn current_round_consensus(&self) -> Option<RoundConsensus> {
-        self.db.get_value(&RoundConsensusKey).expect("DB error")
+        self.db
+            .begin_transaction()
+            .get_value(&RoundConsensusKey)
+            .expect("DB error")
     }
 
     pub async fn target_height(&self) -> u32 {
@@ -808,6 +816,7 @@ impl Wallet {
 
             let pending_transactions = self
                 .db
+                .begin_transaction()
                 .find_by_prefix(&PendingTransactionPrefixKey)
                 .map(|res| {
                     let (key, transaction) = res.expect("DB error");
@@ -867,6 +876,7 @@ impl Wallet {
 
     fn block_is_known(&self, block_hash: BlockHash) -> bool {
         self.db
+            .begin_transaction()
             .get_value(&BlockHashKey(block_hash))
             .expect("DB error")
             .is_some()
@@ -885,6 +895,7 @@ impl Wallet {
 
     fn available_utxos(&self) -> Vec<(UTXOKey, SpendableUTXO)> {
         self.db
+            .begin_transaction()
             .find_by_prefix(&UTXOPrefixKey)
             .collect::<Result<_, _>>()
             .expect("DB error")
@@ -1202,6 +1213,7 @@ pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc) {
 
 pub async fn broadcast_pending_tx(db: &Database, rpc: &BitcoindRpc) {
     let pending_tx = db
+        .begin_transaction()
         .find_by_prefix(&PendingTransactionPrefixKey)
         .collect::<Result<Vec<_>, _>>()
         .expect("DB error");
