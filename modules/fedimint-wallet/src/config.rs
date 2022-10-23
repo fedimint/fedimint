@@ -175,7 +175,7 @@ impl WalletClientConfig {
         Self {
             peg_in_descriptor,
             network: Network::Regtest,
-            finality_delay: 0,
+            finality_delay: FINALITY_DELAY,
             fee_consensus: Default::default(),
         }
     }

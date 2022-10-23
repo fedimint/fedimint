@@ -1137,6 +1137,8 @@ dependencies = [
  "rand",
  "rayon",
  "rcgen",
+ "ring",
+ "rpassword",
  "secp256k1-zkp",
  "serde",
  "serde_json",
@@ -2852,6 +2854,16 @@ checksum = "7e9562ea1d70c0cc63a34a22d977753b50cca91cc6b6527750463bd5dd8697bc"
 dependencies = [
  "libc",
  "librocksdb-sys",
+]
+
+[[package]]
+name = "rpassword"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26b763cb66df1c928432cc35053f8bd4cec3335d8559fc16010017d16b3c1680"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]

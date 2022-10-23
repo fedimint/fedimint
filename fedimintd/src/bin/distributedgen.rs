@@ -7,13 +7,12 @@ use fedimint_api::config::GenerateConfig;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::ClientConfig;
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
+use fedimintd::encrypt::*;
 use itertools::Itertools;
 use rand::rngs::OsRng;
+use ring::aead::LessSafeKey;
 use tokio_rustls::rustls;
 use tracing_subscriber::EnvFilter;
-
-const TLS_PK: &str = "tls-pk";
-const TLS_CERT: &str = "tls-cert";
 
 #[derive(Parser)]
 struct Cli {
@@ -42,6 +41,10 @@ enum Command {
         /// Our node name, must be unique among peers
         #[arg(long = "name")]
         name: String,
+
+        /// The password that encrypts the configs, will prompt if not passed in
+        #[arg(long = "password")]
+        password: Option<String>,
     },
     /// All peers must run distributed key gen at the same time to create configs
     Run {
@@ -70,6 +73,10 @@ enum Command {
         default_value = "1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000"
         )]
         denominations: Vec<Amount>,
+
+        /// The password that encrypts the configs, will prompt if not passed in
+        #[arg(long = "password")]
+        password: Option<String>,
     },
 }
 
@@ -88,8 +95,13 @@ async fn main() {
             address,
             base_port,
             name,
+            password,
         } => {
-            println!("{}", gen_tls(&dir_out_path, address, base_port, name));
+            let salt: [u8; 16] = rand::random();
+            fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect("write error");
+            let key = get_key(password, dir_out_path.join(SALT_FILE));
+            let config_str = gen_tls(&dir_out_path, address, base_port, name, &key);
+            println!("{}", config_str);
         }
         Command::Run {
             dir_out_path,
@@ -97,20 +109,23 @@ async fn main() {
             certs,
             bitcoind_rpc,
             denominations,
+            password,
         } => {
+            let key = get_key(password, dir_out_path.join(SALT_FILE));
+            let (pk_bytes, nonce) = encrypted_read(&key, dir_out_path.join(TLS_PK));
             let (server, client) = run_dkg(
                 &dir_out_path,
                 denominations,
                 federation_name,
                 certs,
                 bitcoind_rpc,
+                rustls::PrivateKey(pk_bytes),
             )
             .await;
 
-            let server_path =
-                dir_out_path.join(format!("server-{}.json", server.identity.to_usize()));
-            let server_file = fs::File::create(server_path).expect("Could not create cfg file");
-            serde_json::to_writer_pretty(server_file, &server).unwrap();
+            let server_path = dir_out_path.join(CONFIG_FILE);
+            let config_bytes = serde_json::to_string(&server).unwrap().into_bytes();
+            encrypted_write(config_bytes, &key, nonce, server_path);
 
             let client_path: PathBuf = dir_out_path.join("client.json");
             let client_file = fs::File::create(client_path).expect("Could not create cfg file");
@@ -128,6 +143,7 @@ async fn run_dkg(
     federation_name: String,
     certs: Vec<String>,
     bitcoind_rpc: String,
+    pk: rustls::PrivateKey,
 ) -> (ServerConfig, ClientConfig) {
     let peers: BTreeMap<PeerId, PeerServerParams> = certs
         .into_iter()
@@ -136,9 +152,8 @@ async fn run_dkg(
         .map(|(idx, cert)| (PeerId::from(idx as u16), parse_peer_params(cert)))
         .collect();
 
-    let pk_string = fs::read_to_string(dir_out_path.join(TLS_PK)).expect("Can't read file.");
     let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT)).expect("Can't read file.");
-    let pk = rustls::PrivateKey(hex::decode(pk_string).expect("not hex encoded"));
+
     let our_params = parse_peer_params(cert_string);
     let our_id = peers
         .iter()
@@ -175,16 +190,19 @@ fn parse_peer_params(url: String) -> PeerServerParams {
     }
 }
 
-fn gen_tls(dir_out_path: &Path, address: String, base_port: u16, name: String) -> String {
+fn gen_tls(
+    dir_out_path: &Path,
+    address: String,
+    base_port: u16,
+    name: String,
+    key: &LessSafeKey,
+) -> String {
     let (cert, pk) = fedimint_server::config::gen_cert_and_key(&name).expect("TLS gen failed");
+    encrypted_write(pk.0, key, zero_nonce(), dir_out_path.join(TLS_PK));
 
-    let pk_string = hex::encode(pk.0);
-    let cert_string = hex::encode(cert.0);
     rustls::ServerName::try_from(name.as_str()).expect("Valid DNS name");
     // TODO Base64 encode name, hash fingerprint cert_string
-    let cert_url = format!("{}:{}:{}:{}", address, base_port, name, cert_string);
-
-    fs::write(dir_out_path.join(TLS_PK), &pk_string).unwrap();
+    let cert_url = format!("{}:{}:{}:{}", address, base_port, name, hex::encode(cert.0));
     fs::write(dir_out_path.join(TLS_CERT), &cert_url).unwrap();
     cert_url
 }
