@@ -107,12 +107,12 @@
 /// salt that is randomly generated to discourage rainbow attacks.  HMAC-SHA256 is used for the
 /// authentication code.  All crypto is from the widely-used `ring` crate we also use for TLS.
 </span><span class="kw">pub mod </span>encrypt {
-    <span class="kw">use </span>ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
-
-    <span class="kw">use </span>ring::{aead, digest, pbkdf2};
     <span class="kw">use </span>std::fs;
     <span class="kw">use </span>std::num::NonZeroU32;
     <span class="kw">use </span>std::path::PathBuf;
+
+    <span class="kw">use </span>ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
+    <span class="kw">use </span>ring::{aead, digest, pbkdf2};
 
     <span class="kw">const </span>ITERATIONS: <span class="prelude-ty">Option</span>&lt;NonZeroU32&gt; = NonZeroU32::new(<span class="number">1_000_000</span>);
 
