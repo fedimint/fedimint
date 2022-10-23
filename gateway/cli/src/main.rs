@@ -1,7 +1,9 @@
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
-use ln_gateway::{BalancePayload, DepositAddressPayload, DepositPayload, WithdrawPayload};
+use ln_gateway::{
+    BalancePayload, DepositAddressPayload, DepositPayload, FederationId, WithdrawPayload,
+};
 use mint_client::utils::from_hex;
 use serde::Serialize;
 
@@ -23,12 +25,13 @@ pub enum Commands {
     Info,
     /// Check gateway balance
     /// TODO: add federation id to scope the federation for which we want a pegin address
-    Balance,
+    Balance { federation_id: FederationId },
     /// Generate a new peg-in address, funds sent to it can later be claimed
-    Address,
+    Address { federation_id: FederationId },
     /// Deposit funds into a gateway federation
     /// TODO: add federation id to scope the federation for which we want a pegin address
     Deposit {
+        federation_id: FederationId,
         /// The TxOutProof which was created from sending BTC to the pegin-address
         #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
@@ -38,6 +41,7 @@ pub enum Commands {
     /// Claim funds from a gateway federation
     /// TODO: add federation id to scope the federation for which we want a pegin address
     Withdraw {
+        federation_id: FederationId,
         /// The amount to withdraw
         amount: Amount,
         /// The address to send the funds to
@@ -55,13 +59,24 @@ async fn main() {
         Commands::Info => {
             call(cli.url, String::from("/info"), ()).await;
         }
-        Commands::Balance => {
-            call(cli.url, String::from("/balance"), BalancePayload {}).await;
+        Commands::Balance { federation_id } => {
+            call(
+                cli.url,
+                String::from("/balance"),
+                BalancePayload { federation_id },
+            )
+            .await;
         }
-        Commands::Address => {
-            call(cli.url, String::from("/address"), DepositAddressPayload {}).await;
+        Commands::Address { federation_id } => {
+            call(
+                cli.url,
+                String::from("/address"),
+                DepositAddressPayload { federation_id },
+            )
+            .await;
         }
         Commands::Deposit {
+            federation_id,
             txout_proof,
             transaction,
         } => {
@@ -69,17 +84,26 @@ async fn main() {
                 cli.url,
                 String::from("/deposit"),
                 DepositPayload {
+                    federation_id,
                     txout_proof,
                     transaction,
                 },
             )
             .await;
         }
-        Commands::Withdraw { amount, address } => {
+        Commands::Withdraw {
+            federation_id,
+            amount,
+            address,
+        } => {
             call(
                 cli.url,
                 String::from("/withdraw"),
-                WithdrawPayload { amount, address },
+                WithdrawPayload {
+                    federation_id,
+                    amount,
+                    address,
+                },
             )
             .await;
         }

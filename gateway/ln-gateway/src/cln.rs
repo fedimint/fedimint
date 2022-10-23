@@ -6,12 +6,13 @@ use cln_plugin::{anyhow, options, Builder, Error, Plugin};
 use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_api::Amount;
 use fedimint_server::modules::ln::contracts::Preimage;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use tokio::io::{stdin, stdout};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
+use crate::ReceiveInvoicePayload;
 use crate::{
     ln::{LightningError, LnRpc, LnRpcRef},
     rpc::GatewayRpcSender,
@@ -29,7 +30,7 @@ where
 }
 
 // TODO: upstream these structs to cln-plugin
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Htlc {
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub amount: Amount,
@@ -38,7 +39,7 @@ pub struct Htlc {
     pub payment_hash: bitcoin_hashes::sha256::Hash,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Onion {
     pub payload: String,
     #[serde(rename = "type")]
@@ -51,7 +52,7 @@ pub struct Onion {
     pub next_onion: String,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct HtlcAccepted {
     pub htlc: Htlc,
     pub onion: Onion,
@@ -113,7 +114,10 @@ async fn htlc_accepted_hook(
     value: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let htlc_accepted: HtlcAccepted = serde_json::from_value(value)?;
-    let preimage = plugin.state().send(htlc_accepted).await?;
+    let preimage = plugin
+        .state()
+        .send(ReceiveInvoicePayload { htlc_accepted })
+        .await?;
     let pk = preimage.to_public_key()?;
     Ok(serde_json::json!({
       "result": "resolve",

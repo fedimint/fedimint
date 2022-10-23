@@ -5,6 +5,7 @@ pub mod webserver;
 
 use std::borrow::Cow;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::{
     io::Cursor,
     sync::Arc,
@@ -33,14 +34,44 @@ use crate::ln::{LightningError, LnRpc};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BalancePayload;
+// Placeholder struct for identifying federations within a gateway
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FederationId(pub String);
+
+impl FromStr for FederationId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(FederationId(s.to_string()))
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DepositAddressPayload;
+pub struct ReceiveInvoicePayload {
+    // NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
+    pub htlc_accepted: HtlcAccepted,
+}
+
+#[derive(Debug)]
+pub struct PayInvoicePayload {
+    #[allow(dead_code)]
+    pub federation_id: FederationId,
+    pub contract_id: ContractId,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BalancePayload {
+    pub federation_id: FederationId,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DepositAddressPayload {
+    pub federation_id: FederationId,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DepositPayload {
+    pub federation_id: FederationId,
     pub txout_proof: TxOutProof,
     #[serde(
         deserialize_with = "serde_hex_deserialize",
@@ -51,6 +82,7 @@ pub struct DepositPayload {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WithdrawPayload {
+    pub federation_id: FederationId,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
     pub address: Address,
@@ -58,8 +90,8 @@ pub struct WithdrawPayload {
 
 #[derive(Debug)]
 pub enum GatewayRequest {
-    HtlcAccepted(GatewayRequestInner<HtlcAccepted>),
-    PayInvoice(GatewayRequestInner<ContractId>),
+    ReceiveInvoice(GatewayRequestInner<ReceiveInvoicePayload>),
+    PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
     Deposit(GatewayRequestInner<DepositPayload>),
@@ -91,8 +123,12 @@ macro_rules! impl_gateway_request_trait {
         }
     };
 }
-impl_gateway_request_trait!(HtlcAccepted, Preimage, GatewayRequest::HtlcAccepted);
-impl_gateway_request_trait!(ContractId, (), GatewayRequest::PayInvoice);
+impl_gateway_request_trait!(
+    ReceiveInvoicePayload,
+    Preimage,
+    GatewayRequest::ReceiveInvoice
+);
+impl_gateway_request_trait!(PayInvoicePayload, (), GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
 impl_gateway_request_trait!(
     DepositAddressPayload,
@@ -367,14 +403,14 @@ impl LnGateway {
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
-                    GatewayRequest::HtlcAccepted(inner) => {
+                    GatewayRequest::ReceiveInvoice(inner) => {
                         inner
-                            .handle(|htlc_accepted| self.handle_htlc_incoming_msg(htlc_accepted))
+                            .handle(|inner| self.handle_htlc_incoming_msg(inner.htlc_accepted))
                             .await;
                     }
                     GatewayRequest::PayInvoice(inner) => {
                         inner
-                            .handle(|contract_id| self.handle_pay_invoice_msg(contract_id))
+                            .handle(|inner| self.handle_pay_invoice_msg(inner.contract_id))
                             .await;
                     }
                     GatewayRequest::Balance(inner) => {
