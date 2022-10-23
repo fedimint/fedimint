@@ -1,4 +1,6 @@
 pub mod lib;
+use std::path::PathBuf;
+
 use clap::Parser;
 use fedimint_api::db::Database;
 use fedimint_core::modules::ln::LightningModule;
@@ -9,7 +11,6 @@ use fedimint_server::ui::run_ui;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::{bitcoincore_rpc, Wallet};
 use fedimintd::encrypt::*;
-use std::path::PathBuf;
 use tokio::spawn;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
