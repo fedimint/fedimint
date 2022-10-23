@@ -15,6 +15,9 @@ struct Cli {
     url: String,
     #[command(subcommand)]
     command: Commands,
+    /// WARNING: Passing in a password from the command line may be less secure!
+    #[clap(long)]
+    rpcpassword: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -57,10 +60,17 @@ async fn main() {
             println!("version: {}", env!("GIT_HASH"));
         }
         Commands::Info => {
-            call(cli.url, String::from("/info"), ()).await;
+            call(
+                source_password(cli.rpcpassword),
+                cli.url,
+                String::from("/info"),
+                (),
+            )
+            .await;
         }
         Commands::Balance { federation_id } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/balance"),
                 BalancePayload { federation_id },
@@ -69,6 +79,7 @@ async fn main() {
         }
         Commands::Address { federation_id } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/address"),
                 DepositAddressPayload { federation_id },
@@ -81,6 +92,7 @@ async fn main() {
             transaction,
         } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/deposit"),
                 DepositPayload {
@@ -97,6 +109,7 @@ async fn main() {
             address,
         } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/withdraw"),
                 WithdrawPayload {
@@ -110,7 +123,7 @@ async fn main() {
     }
 }
 
-pub async fn call<P>(url: String, endpoint: String, payload: P)
+pub async fn call<P>(password: String, url: String, endpoint: String, payload: P)
 where
     P: Serialize,
 {
@@ -118,6 +131,7 @@ where
 
     let response = client
         .post(format!("{}{}", url, endpoint))
+        .bearer_auth(password)
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .json(&payload)
         .send()
@@ -133,6 +147,16 @@ where
         }
         _ => {
             println!("\nError: {}", &response.text().await.unwrap());
+        }
+    }
+}
+
+pub fn source_password(rpcpassword: Option<String>) -> String {
+    match rpcpassword {
+        None => rpassword::prompt_password("Enter gateway password:").unwrap(),
+        Some(password) => {
+            eprintln!("WARNING: Passing in a password from the command line may be less secure!");
+            password
         }
     }
 }

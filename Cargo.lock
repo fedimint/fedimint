@@ -1377,6 +1377,7 @@ dependencies = [
  "ln-gateway",
  "mint-client",
  "reqwest",
+ "rpassword",
  "serde",
  "serde_json",
  "tokio",
