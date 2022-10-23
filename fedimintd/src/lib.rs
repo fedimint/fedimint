@@ -14,12 +14,12 @@
 /// salt that is randomly generated to discourage rainbow attacks.  HMAC-SHA256 is used for the
 /// authentication code.  All crypto is from the widely-used `ring` crate we also use for TLS.
 pub mod encrypt {
-    use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
-
-    use ring::{aead, digest, pbkdf2};
     use std::fs;
     use std::num::NonZeroU32;
     use std::path::PathBuf;
+
+    use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
+    use ring::{aead, digest, pbkdf2};
 
     const ITERATIONS: Option<NonZeroU32> = NonZeroU32::new(1_000_000);
 
