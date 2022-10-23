@@ -100,6 +100,14 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::{response::IntoResponse, routing::post, Extension, Json, Router};
@@ -111,8 +119,8 @@
 <span class="kw">use </span>tracing::{debug, instrument};
 
 <span class="kw">use crate</span>::{
-    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    LnGatewayError, WithdrawPayload,
+    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
+    GatewayRequest, LnGatewayError, PayInvoicePayload, WithdrawPayload,
 };
 
 <span class="kw">pub async fn </span>run_webserver(
@@ -199,7 +207,15 @@
     Json(contract_id): Json&lt;ContractId&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, LnGatewayError&gt; {
     <span class="macro">debug!</span>(%contract_id, <span class="string">&quot;Received request to pay invoice&quot;</span>);
-    rpc.send(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// TODO: Require clients to pass in a federation id on request to pay invoice
+    </span><span class="kw">let </span>federation_id = FederationId(<span class="string">&quot;&quot;</span>.into());
+
+    rpc.send(PayInvoicePayload {
+        federation_id,
+        contract_id,
+    })
+    .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>

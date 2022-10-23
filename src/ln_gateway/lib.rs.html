@@ -456,6 +456,42 @@
 <span id="456">456</span>
 <span id="457">457</span>
 <span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>rpc;
@@ -463,6 +499,7 @@
 
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::{
     io::Cursor,
     sync::Arc,
@@ -491,14 +528,44 @@
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, LnGatewayError&gt;;
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>BalancePayload;
+<span class="comment">// Placeholder struct for identifying federations within a gateway
+</span><span class="attribute">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>FederationId(<span class="kw">pub </span>String);
+
+<span class="kw">impl </span>FromStr <span class="kw">for </span>FederationId {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
+
+    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="prelude-val">Ok</span>(FederationId(s.to_string()))
+    }
+}
 
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>DepositAddressPayload;
+</span><span class="kw">pub struct </span>ReceiveInvoicePayload {
+    <span class="comment">// NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
+    </span><span class="kw">pub </span>htlc_accepted: HtlcAccepted,
+}
+
+<span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>PayInvoicePayload {
+    <span class="attribute">#[allow(dead_code)]
+    </span><span class="kw">pub </span>federation_id: FederationId,
+    <span class="kw">pub </span>contract_id: ContractId,
+}
+
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>BalancePayload {
+    <span class="kw">pub </span>federation_id: FederationId,
+}
+
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>DepositAddressPayload {
+    <span class="kw">pub </span>federation_id: FederationId,
+}
 
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DepositPayload {
+    <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>txout_proof: TxOutProof,
     <span class="attribute">#[serde(
         deserialize_with = <span class="string">&quot;serde_hex_deserialize&quot;</span>,
@@ -509,6 +576,7 @@
 
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WithdrawPayload {
+    <span class="kw">pub </span>federation_id: FederationId,
     <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
     <span class="kw">pub </span>address: Address,
@@ -516,8 +584,8 @@
 
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">pub enum </span>GatewayRequest {
-    HtlcAccepted(GatewayRequestInner&lt;HtlcAccepted&gt;),
-    PayInvoice(GatewayRequestInner&lt;ContractId&gt;),
+    ReceiveInvoice(GatewayRequestInner&lt;ReceiveInvoicePayload&gt;),
+    PayInvoice(GatewayRequestInner&lt;PayInvoicePayload&gt;),
     Balance(GatewayRequestInner&lt;BalancePayload&gt;),
     DepositAddress(GatewayRequestInner&lt;DepositAddressPayload&gt;),
     Deposit(GatewayRequestInner&lt;DepositPayload&gt;),
@@ -549,8 +617,12 @@
         }
     };
 }
-<span class="macro">impl_gateway_request_trait!</span>(HtlcAccepted, Preimage, GatewayRequest::HtlcAccepted);
-<span class="macro">impl_gateway_request_trait!</span>(ContractId, (), GatewayRequest::PayInvoice);
+<span class="macro">impl_gateway_request_trait!</span>(
+    ReceiveInvoicePayload,
+    Preimage,
+    GatewayRequest::ReceiveInvoice
+);
+<span class="macro">impl_gateway_request_trait!</span>(PayInvoicePayload, (), GatewayRequest::PayInvoice);
 <span class="macro">impl_gateway_request_trait!</span>(BalancePayload, Amount, GatewayRequest::Balance);
 <span class="macro">impl_gateway_request_trait!</span>(
     DepositAddressPayload,
@@ -825,14 +897,14 @@
             </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(msg) = <span class="self">self</span>.receiver.try_recv() {
                 <span class="macro">tracing::trace!</span>(<span class="string">&quot;Gateway received message {:?}&quot;</span>, msg);
                 <span class="kw">match </span>msg {
-                    GatewayRequest::HtlcAccepted(inner) =&gt; {
+                    GatewayRequest::ReceiveInvoice(inner) =&gt; {
                         inner
-                            .handle(|htlc_accepted| <span class="self">self</span>.handle_htlc_incoming_msg(htlc_accepted))
+                            .handle(|inner| <span class="self">self</span>.handle_htlc_incoming_msg(inner.htlc_accepted))
                             .<span class="kw">await</span>;
                     }
                     GatewayRequest::PayInvoice(inner) =&gt; {
                         inner
-                            .handle(|contract_id| <span class="self">self</span>.handle_pay_invoice_msg(contract_id))
+                            .handle(|inner| <span class="self">self</span>.handle_pay_invoice_msg(inner.contract_id))
                             .<span class="kw">await</span>;
                     }
                     GatewayRequest::Balance(inner) =&gt; {
