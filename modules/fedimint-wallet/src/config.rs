@@ -128,12 +128,11 @@ impl GenerateConfig for WalletConfig {
 
         connections.send(peers, our_key.clone()).await;
 
-        for _ in 1..peers.len() {
+        peer_peg_in_keys.insert(*our_id, our_key);
+        while peer_peg_in_keys.len() < peers.len() {
             let (peer, msg) = connections.receive().await;
             peer_peg_in_keys.insert(peer, msg);
         }
-        peer_peg_in_keys.insert(*our_id, our_key);
-        assert_eq!(peer_peg_in_keys.len(), peers.len());
 
         let wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
         let client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
