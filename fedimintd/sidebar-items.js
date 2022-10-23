@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["main",""]],"struct":[["ServerOpts",""]]};
+window.SIDEBAR_ITEMS = {"mod":[["encrypt","Encrypt and authenticate data stored on the filesystem with a user-supplied password."]]};

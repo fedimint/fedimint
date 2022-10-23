@@ -188,6 +188,24 @@
 <span id="188">188</span>
 <span id="189">189</span>
 <span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -197,13 +215,12 @@
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
+<span class="kw">use </span>fedimintd::encrypt::<span class="kw-2">*</span>;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>ring::aead::LessSafeKey;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
-
-<span class="kw">const </span>TLS_PK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-pk&quot;</span>;
-<span class="kw">const </span>TLS_CERT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-cert&quot;</span>;
 
 <span class="attribute">#[derive(Parser)]
 </span><span class="kw">struct </span>Cli {
@@ -232,6 +249,10 @@
         <span class="doccomment">/// Our node name, must be unique among peers
         </span><span class="attribute">#[arg(long = <span class="string">&quot;name&quot;</span>)]
         </span>name: String,
+
+        <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;password&quot;</span>)]
+        </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
     <span class="doccomment">/// All peers must run distributed key gen at the same time to create configs
     </span>Run {
@@ -260,6 +281,10 @@
         default_value = <span class="string">&quot;1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000&quot;
         </span>)]
         </span>denominations: Vec&lt;Amount&gt;,
+
+        <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;password&quot;</span>)]
+        </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
 }
 
@@ -278,8 +303,13 @@
             address,
             base_port,
             name,
+            password,
         } =&gt; {
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, gen_tls(<span class="kw-2">&amp;</span>dir_out_path, address, base_port, name));
+            <span class="kw">let </span>salt: [u8; <span class="number">16</span>] = rand::random();
+            fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect(<span class="string">&quot;write error&quot;</span>);
+            <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
+            <span class="kw">let </span>config_str = gen_tls(<span class="kw-2">&amp;</span>dir_out_path, address, base_port, name, <span class="kw-2">&amp;</span>key);
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, config_str);
         }
         Command::Run {
             dir_out_path,
@@ -287,20 +317,23 @@
             certs,
             bitcoind_rpc,
             denominations,
+            password,
         } =&gt; {
+            <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
+            <span class="kw">let </span>(pk_bytes, nonce) = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK));
             <span class="kw">let </span>(server, client) = run_dkg(
                 <span class="kw-2">&amp;</span>dir_out_path,
                 denominations,
                 federation_name,
                 certs,
                 bitcoind_rpc,
+                rustls::PrivateKey(pk_bytes),
             )
             .<span class="kw">await</span>;
 
-            <span class="kw">let </span>server_path =
-                dir_out_path.join(<span class="macro">format!</span>(<span class="string">&quot;server-{}.json&quot;</span>, server.identity.to_usize()));
-            <span class="kw">let </span>server_file = fs::File::create(server_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
-            serde_json::to_writer_pretty(server_file, <span class="kw-2">&amp;</span>server).unwrap();
+            <span class="kw">let </span>server_path = dir_out_path.join(CONFIG_FILE);
+            <span class="kw">let </span>config_bytes = serde_json::to_string(<span class="kw-2">&amp;</span>server).unwrap().into_bytes();
+            encrypted_write(config_bytes, <span class="kw-2">&amp;</span>key, nonce, server_path);
 
             <span class="kw">let </span>client_path: PathBuf = dir_out_path.join(<span class="string">&quot;client.json&quot;</span>);
             <span class="kw">let </span>client_file = fs::File::create(client_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
@@ -318,6 +351,7 @@
     federation_name: String,
     certs: Vec&lt;String&gt;,
     bitcoind_rpc: String,
+    pk: rustls::PrivateKey,
 ) -&gt; (ServerConfig, ClientConfig) {
     <span class="kw">let </span>peers: BTreeMap&lt;PeerId, PeerServerParams&gt; = certs
         .into_iter()
@@ -326,9 +360,8 @@
         .map(|(idx, cert)| (PeerId::from(idx <span class="kw">as </span>u16), parse_peer_params(cert)))
         .collect();
 
-    <span class="kw">let </span>pk_string = fs::read_to_string(dir_out_path.join(TLS_PK)).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
     <span class="kw">let </span>cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT)).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
-    <span class="kw">let </span>pk = rustls::PrivateKey(hex::decode(pk_string).expect(<span class="string">&quot;not hex encoded&quot;</span>));
+
     <span class="kw">let </span>our_params = parse_peer_params(cert_string);
     <span class="kw">let </span>our_id = peers
         .iter()
@@ -365,16 +398,19 @@
     }
 }
 
-<span class="kw">fn </span>gen_tls(dir_out_path: <span class="kw-2">&amp;</span>Path, address: String, base_port: u16, name: String) -&gt; String {
+<span class="kw">fn </span>gen_tls(
+    dir_out_path: <span class="kw-2">&amp;</span>Path,
+    address: String,
+    base_port: u16,
+    name: String,
+    key: <span class="kw-2">&amp;</span>LessSafeKey,
+) -&gt; String {
     <span class="kw">let </span>(cert, pk) = fedimint_server::config::gen_cert_and_key(<span class="kw-2">&amp;</span>name).expect(<span class="string">&quot;TLS gen failed&quot;</span>);
+    encrypted_write(pk.<span class="number">0</span>, key, zero_nonce(), dir_out_path.join(TLS_PK));
 
-    <span class="kw">let </span>pk_string = hex::encode(pk.<span class="number">0</span>);
-    <span class="kw">let </span>cert_string = hex::encode(cert.<span class="number">0</span>);
     rustls::ServerName::try_from(name.as_str()).expect(<span class="string">&quot;Valid DNS name&quot;</span>);
     <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string
-    </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}:{}:{}:{}&quot;</span>, address, base_port, name, cert_string);
-
-    fs::write(dir_out_path.join(TLS_PK), <span class="kw-2">&amp;</span>pk_string).unwrap();
+    </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}:{}:{}:{}&quot;</span>, address, base_port, name, hex::encode(cert.<span class="number">0</span>));
     fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url).unwrap();
     cert_url
 }

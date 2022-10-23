@@ -1,0 +1,188 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimintd/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><a class="sidebar-logo" href="../../fedimintd/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimintd/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+</pre><pre class="rust"><code><span class="doccomment">/// Encrypt and authenticate data stored on the filesystem with a user-supplied password.
+///
+/// We encrypt the configs to prevent attackers from learning the private keys if they gain
+/// file access.  We authenticate the configs to prevent attackers from manipulating the
+/// encrypted files.
+///
+/// Users can safely back-up config and salt files on other media the attacker accesses if they do
+/// not learn the password and the password has enough entropy to prevent brute-forcing (e.g.
+/// 6 random words).  Switching to a memory-hard algorithm like Argon2 would be more future-proof
+/// and safe for weaker passwords.
+///
+/// We use the ChaCha20 stream cipher with Poly1305 message authentication standardized
+/// in IETF RFC 8439.  PBKDF2 with 1M iterations is used for key stretching along with a 128-bit
+/// salt that is randomly generated to discourage rainbow attacks.  HMAC-SHA256 is used for the
+/// authentication code.  All crypto is from the widely-used `ring` crate we also use for TLS.
+</span><span class="kw">pub mod </span>encrypt {
+    <span class="kw">use </span>ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
+
+    <span class="kw">use </span>ring::{aead, digest, pbkdf2};
+    <span class="kw">use </span>std::fs;
+    <span class="kw">use </span>std::num::NonZeroU32;
+    <span class="kw">use </span>std::path::PathBuf;
+
+    <span class="kw">const </span>ITERATIONS: <span class="prelude-ty">Option</span>&lt;NonZeroU32&gt; = NonZeroU32::new(<span class="number">1_000_000</span>);
+
+    <span class="comment">// server files
+    </span><span class="kw">pub const </span>SALT_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;salt&quot;</span>;
+    <span class="kw">pub const </span>CONFIG_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;config&quot;</span>;
+    <span class="kw">pub const </span>DB_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;database&quot;</span>;
+    <span class="kw">pub const </span>TLS_PK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-pk&quot;</span>;
+    <span class="kw">pub const </span>TLS_CERT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-cert&quot;</span>;
+
+    <span class="doccomment">/// Write `data` encrypted to a `file` with an unused `nonce` that will be encoded in the file
+    </span><span class="kw">pub fn </span>encrypted_write(<span class="kw-2">mut </span>data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, nonce: Nonce, file: PathBuf) {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = nonce.as_ref().to_vec();
+        key.seal_in_place_append_tag(nonce, Aad::empty(), <span class="kw-2">&amp;mut </span>data)
+            .expect(<span class="string">&quot;encrypted&quot;</span>);
+        bytes.append(<span class="kw-2">&amp;mut </span>data);
+        fs::write(file, <span class="kw-2">&amp;</span>hex::encode(bytes)).expect(<span class="string">&quot;Can&#39;t write file.&quot;</span>);
+    }
+
+    <span class="doccomment">/// Reads encrypted data from a file, returns an incremented nonce for encrypting the next file
+    </span><span class="kw">pub fn </span>encrypted_read(key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; (Vec&lt;u8&gt;, Nonce) {
+        <span class="kw">let </span>hex = fs::read_to_string(file).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = hex::decode(hex).expect(<span class="string">&quot;not hex encoded&quot;</span>);
+        <span class="kw">let </span>(nonce_bytes, encrypted_bytes) = bytes.split_at_mut(NONCE_LEN);
+        <span class="kw">let </span>(nonce, incremented) = increment_nonce(nonce_bytes);
+        key.open_in_place(nonce, Aad::empty(), encrypted_bytes)
+            .expect(<span class="string">&quot;decrypts&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>encrypted_bytes = encrypted_bytes.to_vec();
+        encrypted_bytes.truncate(encrypted_bytes.len() - key.algorithm().tag_len());
+        (encrypted_bytes, incremented)
+    }
+
+    <span class="kw">pub fn </span>get_key(password: <span class="prelude-ty">Option</span>&lt;String&gt;, salt_path: PathBuf) -&gt; LessSafeKey {
+        <span class="kw">let </span>password = <span class="kw">match </span>password {
+            <span class="prelude-val">None </span>=&gt; rpassword::prompt_password(<span class="string">&quot;Enter a password to encrypt configs: &quot;</span>).unwrap(),
+            <span class="prelude-val">Some</span>(password) =&gt; {
+                <span class="macro">println!</span>(
+                    <span class="string">&quot;WARNING: Passing in a password from the command line may be less secure!&quot;
+                </span>);
+                password
+            }
+        };
+
+        <span class="kw">let </span>salt_str = fs::read_to_string(salt_path).expect(<span class="string">&quot;Can&#39;t read salt file&quot;</span>);
+        <span class="kw">let </span>salt = hex::decode(salt_str).expect(<span class="string">&quot;Can&#39;t decode hex&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>key = [<span class="number">0u8</span>; digest::SHA256_OUTPUT_LEN];
+        <span class="kw">let </span>algo = pbkdf2::PBKDF2_HMAC_SHA256;
+        pbkdf2::derive(
+            algo,
+            ITERATIONS.unwrap(),
+            <span class="kw-2">&amp;</span>salt,
+            password.as_bytes(),
+            <span class="kw-2">&amp;mut </span>key,
+        );
+        <span class="kw">let </span>key = UnboundKey::new(<span class="kw-2">&amp;</span>aead::CHACHA20_POLY1305, <span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;created key&quot;</span>);
+        LessSafeKey::new(key)
+    }
+
+    <span class="doccomment">/// returns a nonce from bytes and an incremented nonce for encrpyting the next message
+    </span><span class="kw">fn </span>increment_nonce(nonce: <span class="kw-2">&amp;</span>[u8]) -&gt; (Nonce, Nonce) {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = nonce.to_vec();
+        bytes[<span class="number">0</span>] += <span class="number">1</span>;
+        <span class="kw">let </span>n1 = Nonce::assume_unique_for_key(nonce.try_into().expect(<span class="string">&quot;right len&quot;</span>));
+        <span class="kw">let </span>n2 = Nonce::assume_unique_for_key(bytes.try_into().expect(<span class="string">&quot;right len&quot;</span>));
+        (n1, n2)
+    }
+
+    <span class="kw">pub fn </span>zero_nonce() -&gt; Nonce {
+        Nonce::assume_unique_for_key([<span class="number">0</span>; NONCE_LEN])
+    }
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6e95b6da8 2022-10-22)" ></div></body></html>
