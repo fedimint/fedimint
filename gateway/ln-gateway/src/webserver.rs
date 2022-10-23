@@ -19,14 +19,21 @@ pub async fn run_webserver(
 ) -> axum::response::Result<()> {
     let rpc = GatewayRpcSender::new(sender.clone());
 
-    let app = Router::new()
+    // Public routes on gateway webserver
+    let routes = Router::new().route("/pay_invoice", post(pay_invoice));
+
+    // Authenticated, public routes used for gateway administration
+    let admin_routes = Router::new()
         .route("/info", post(info))
         .route("/balance", post(balance))
         .route("/address", post(address))
         .route("/deposit", post(deposit))
-        .route("/withdraw", post(withdraw))
-        .route("/pay_invoice", post(pay_invoice))
-        .layer(Extension(rpc))
+        .route("/withdraw", post(withdraw));
+
+    let app = Router::new()
+        .merge(routes)
+        .merge(admin_routes)
+        .layer(Extension(rpc.clone()))
         .layer(CorsLayer::permissive());
 
     axum::Server::bind(&bind_addr)
