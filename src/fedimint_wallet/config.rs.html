@@ -179,7 +179,6 @@
 <span id="179">179</span>
 <span id="180">180</span>
 <span id="181">181</span>
-<span id="182">182</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -310,12 +309,11 @@
 
         connections.send(peers, our_key.clone()).<span class="kw">await</span>;
 
-        <span class="kw">for _ in </span><span class="number">1</span>..peers.len() {
+        peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
+        <span class="kw">while </span>peer_peg_in_keys.len() &lt; peers.len() {
             <span class="kw">let </span>(peer, msg) = connections.receive().<span class="kw">await</span>;
             peer_peg_in_keys.insert(peer, msg);
         }
-        peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
-        <span class="macro">assert_eq!</span>(peer_peg_in_keys.len(), peers.len());
 
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
         <span class="kw">let </span>client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
@@ -363,4 +361,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (5c8bff74b 2022-10-21)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6e95b6da8 2022-10-22)" ></div></body></html>
