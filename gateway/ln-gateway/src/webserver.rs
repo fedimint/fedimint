@@ -5,7 +5,7 @@ use axum_macros::debug_handler;
 use fedimint_server::modules::ln::contracts::ContractId;
 use serde_json::json;
 use tokio::sync::mpsc;
-use tower_http::cors::CorsLayer;
+use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::{debug, instrument};
 
 use crate::{
@@ -22,13 +22,17 @@ pub async fn run_webserver(
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
+    // TODO: source user configured auth token from gateway config
+    const SERVER_AUTH_TOKEN: &str = "theresnosecondbest";
+
     // Authenticated, public routes used for gateway administration
     let admin_routes = Router::new()
         .route("/info", post(info))
         .route("/balance", post(balance))
         .route("/address", post(address))
         .route("/deposit", post(deposit))
-        .route("/withdraw", post(withdraw));
+        .route("/withdraw", post(withdraw))
+        .layer(RequireAuthorizationLayer::bearer(SERVER_AUTH_TOKEN));
 
     let app = Router::new()
         .merge(routes)
