@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
     let db: Database = fedimint_rocksdb::RocksDb::open(opts.cfg_path.join(DB_FILE))
         .expect("Error opening DB")
         .into();
-    let btc_rpc = fedimint_bitcoind::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;
+    let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;
 
     let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), db.clone());
 

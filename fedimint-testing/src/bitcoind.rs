@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
-use fedimint_api::bitcoin_rpc::{IBitcoindRpc, Result};
 use fedimint_api::Feerate;
+use fedimint_bitcoind::{IBitcoindRpc, Result};
 
 #[derive(Debug, Default)]
 pub struct FakeBitcoindRpcState {

@@ -11,9 +11,9 @@ use bitcoin::{
     secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, PackedLockTime,
     Transaction, TxOut,
 };
-use fedimint_api::bitcoin_rpc::IBitcoindRpc;
-use fedimint_api::bitcoin_rpc::Result as BitcoinRpcResult;
 use fedimint_api::{Amount, Feerate};
+use fedimint_bitcoind::IBitcoindRpc;
+use fedimint_bitcoind::Result as BitcoinRpcResult;
 use fedimint_server::modules::ln::contracts::Preimage;
 use fedimint_wallet::txoproof::TxOutProof;
 use lightning::ln::PaymentSecret;

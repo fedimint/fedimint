@@ -15,7 +15,6 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use bitcoin::{PackedLockTime, Sequence};
-use fedimint_api::bitcoin_rpc::BitcoindRpc;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::audit::Audit;
@@ -24,6 +23,7 @@ use fedimint_api::module::ApiEndpoint;
 use fedimint_api::module::{api_endpoint, TransactionItemAmount};
 use fedimint_api::task::sleep;
 use fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
+use fedimint_bitcoind::BitcoindRpc;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
 use rand::{CryptoRng, Rng, RngCore};

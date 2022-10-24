@@ -16,7 +16,6 @@ use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use fake::{FakeBitcoinTest, FakeLightningTest};
-use fedimint_api::bitcoin_rpc::BitcoindRpc;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
@@ -26,6 +25,7 @@ use fedimint_api::FederationModule;
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
+use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
 use fedimint_mint::Mint;
@@ -129,8 +129,9 @@ pub async fn fixtures(
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
-            let bitcoin_rpc = fedimint_bitcoind::make_bitcoind_rpc(&wallet_config.btc_rpc)
-                .expect("Could not create bitcoinrpc");
+            let bitcoin_rpc =
+                fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&wallet_config.btc_rpc)
+                    .expect("Could not create bitcoinrpc");
             let bitcoin = RealBitcoinTest::new(&wallet_config.btc_rpc);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
