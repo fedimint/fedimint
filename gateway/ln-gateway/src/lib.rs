@@ -385,6 +385,9 @@ impl LnGateway {
 
     pub async fn run(&mut self) -> Result<()> {
         // Regster gateway with federation
+        // FIXME: This call is critically dependent on the federation being up and running.
+        // We should either use a retry strategy, OR register federations on the gateway at runtime
+        // as proposed in https://github.com/fedimint/fedimint/issues/699
         self.federation_client
             .register_with_federation(self.federation_client.config().into())
             .await
