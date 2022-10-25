@@ -827,6 +827,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-bitcoind"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "fedimint-api",
+ "rand",
+ "serde",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-build"
 version = "0.1.0"
 
@@ -1050,7 +1065,9 @@ name = "fedimint-testing"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bitcoin",
  "fedimint-api",
+ "fedimint-bitcoind",
  "rand",
  "secp256k1-zkp",
  "serde_json",
@@ -1066,6 +1083,7 @@ dependencies = [
  "bitcoincore-rpc",
  "cln-rpc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fedimint-api",
+ "fedimint-bitcoind",
  "fedimint-ln",
  "fedimint-mint",
  "fedimint-rocksdb",
@@ -1094,8 +1112,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
- "bitcoincore-rpc",
  "fedimint-api",
+ "fedimint-bitcoind",
  "hex",
  "miniscript",
  "rand",
@@ -1120,6 +1138,7 @@ dependencies = [
  "bytes",
  "clap",
  "fedimint-api",
+ "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
  "fedimint-mint-server",

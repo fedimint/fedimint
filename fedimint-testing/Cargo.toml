@@ -14,7 +14,9 @@ path = "src/lib.rs"
 
 [dependencies]
 async-trait = "*"
+bitcoin = "0.29.1"
 fedimint-api  = { path = "../fedimint-api" }
+fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
 serde_json = "*"
 rand = "0.8"
