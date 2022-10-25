@@ -8,6 +8,7 @@ use futures::future::BoxFuture;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
 use secp256k1_zkp::XOnlyPublicKey;
+use thiserror::Error;
 
 use crate::db::DatabaseTransaction;
 use crate::module::audit::Audit;
@@ -142,9 +143,37 @@ pub struct ApiEndpoint<M> {
         for<'a> fn(&'a M, serde_json::Value) -> BoxFuture<'a, Result<serde_json::Value, ApiError>>,
 }
 
+#[derive(Error, Debug)]
+pub enum ModuleError {
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+/// Extension trait with a function to map `Result`s used by modules to `ModuleError`
+///
+/// Currently each module defined it's own `enum XyzError { ... }` and is not using
+/// `anyhow::Error`. For `?` to work seamlessly two conversion would have to be made:
+/// `enum-Error -> anyhow::Error -> enum-Error`, while `Into`/`From` can only do one.
+///
+/// To avoid the boilerplate, this trait defines an easy conversion method.
+pub trait IntoModuleError {
+    type Target;
+    fn into_module_error_other(self) -> Self::Target;
+}
+
+impl<O, E> IntoModuleError for Result<O, E>
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    type Target = Result<O, ModuleError>;
+
+    fn into_module_error_other(self) -> Self::Target {
+        self.map_err(|e| ModuleError::Other(e.into()))
+    }
+}
+
 #[async_trait(?Send)]
 pub trait FederationModule: Sized {
-    type Error;
     type TxInput: Send + Sync;
     type TxOutput;
     type TxOutputOutcome;
@@ -189,7 +218,7 @@ pub trait FederationModule: Sized {
         interconnect: &dyn ModuleInterconect,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, Self::Error>;
+    ) -> Result<InputMeta<'a>, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
     /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
@@ -204,7 +233,7 @@ pub trait FederationModule: Sized {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::TxInput,
         verification_cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, Self::Error>;
+    ) -> Result<InputMeta<'b>, ModuleError>;
 
     /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -213,7 +242,7 @@ pub trait FederationModule: Sized {
     fn validate_output(
         &self,
         output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, Self::Error>;
+    ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
@@ -230,7 +259,7 @@ pub trait FederationModule: Sized {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::TxOutput,
         out_point: crate::OutPoint,
-    ) -> Result<TransactionItemAmount, Self::Error>;
+    ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// This function is called once all transactions have been processed and changes were written
     /// to the database. This allows running finalization code before the next epoch.

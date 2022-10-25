@@ -121,7 +121,10 @@ async fn test_outgoing() {
         witness: None,
     };
     let err = fed.verify_input(&account_input_no_witness).unwrap_err();
-    assert_eq!(err, LightningModuleError::MissingPreimage);
+    assert_eq!(
+        format!("{err}"),
+        format!("{}", LightningModuleError::MissingPreimage)
+    );
 
     // Ok
     let account_input_witness = ContractInput {
@@ -211,7 +214,10 @@ async fn test_incoming() {
         witness: None,
     };
     let error = fed.verify_input(&incoming_input).unwrap_err();
-    assert_eq!(error, LightningModuleError::ContractNotReady);
+    assert_eq!(
+        format!("{error}"),
+        format!("{}", LightningModuleError::ContractNotReady)
+    );
 
     fed.consensus_round(&[], &[]).await;
     match fed.output_outcome(incoming_out_point).unwrap() {

@@ -24,7 +24,9 @@ use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError, TransactionItemAmount};
+use fedimint_api::module::{
+    api_endpoint, ApiEndpoint, ApiError, IntoModuleError, ModuleError, TransactionItemAmount,
+};
 use fedimint_api::{Amount, FederationModule, PeerId};
 use fedimint_api::{InputMeta, OutPoint};
 use itertools::Itertools;
@@ -145,7 +147,6 @@ pub struct DecryptionShareCI {
 
 #[async_trait(?Send)]
 impl FederationModule for LightningModule {
-    type Error = LightningModuleError;
     type TxInput = ContractInput;
     type TxOutput = ContractOrOfferOutput;
     type TxOutputOutcome = OutputOutcome;
@@ -203,16 +204,18 @@ impl FederationModule for LightningModule {
         interconnect: &dyn ModuleInterconect,
         _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, Self::Error> {
+    ) -> Result<InputMeta<'a>, ModuleError> {
         let account: ContractAccount = self
             .get_contract_account(input.contract_id)
-            .ok_or(LightningModuleError::UnknownContract(input.contract_id))?;
+            .ok_or(LightningModuleError::UnknownContract(input.contract_id))
+            .into_module_error_other()?;
 
         if account.amount < input.amount {
             return Err(LightningModuleError::InsufficientFunds(
                 account.amount,
                 input.amount,
-            ));
+            ))
+            .into_module_error_other();
         }
 
         let pub_key = match account.contract {
@@ -223,13 +226,15 @@ impl FederationModule for LightningModule {
                         &input
                             .witness
                             .as_ref()
-                            .ok_or(LightningModuleError::MissingPreimage)?
+                            .ok_or(LightningModuleError::MissingPreimage)
+                            .into_module_error_other()?
                             .0,
                     );
 
                     // … and the spender provides a valid preimage …
                     if preimage_hash != outgoing.hash {
-                        return Err(LightningModuleError::InvalidPreimage);
+                        return Err(LightningModuleError::InvalidPreimage)
+                            .into_module_error_other();
                     }
 
                     // … then the contract account can be spent using the gateway key,
@@ -243,12 +248,14 @@ impl FederationModule for LightningModule {
             FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
                 // Once the preimage has been decrypted …
                 DecryptedPreimage::Pending => {
-                    return Err(LightningModuleError::ContractNotReady);
+                    return Err(LightningModuleError::ContractNotReady).into_module_error_other();
                 }
                 // … either the user may spend the funds since they sold a valid preimage …
                 DecryptedPreimage::Some(preimage) => match preimage.to_public_key() {
                     Ok(pub_key) => pub_key,
-                    Err(_) => return Err(LightningModuleError::InvalidPreimage),
+                    Err(_) => {
+                        return Err(LightningModuleError::InvalidPreimage).into_module_error_other()
+                    }
                 },
                 // … or the gateway may claim back funds for not receiving the advertised preimage.
                 DecryptedPreimage::Invalid => incoming.contract.gateway_key,
@@ -270,7 +277,7 @@ impl FederationModule for LightningModule {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::TxInput,
         cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, Self::Error> {
+    ) -> Result<InputMeta<'b>, ModuleError> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
         let account_db_key = ContractKey(input.contract_id);
@@ -290,7 +297,7 @@ impl FederationModule for LightningModule {
     fn validate_output(
         &self,
         output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, Self::Error> {
+    ) -> Result<TransactionItemAmount, ModuleError> {
         match output {
             ContractOrOfferOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
@@ -300,19 +307,21 @@ impl FederationModule for LightningModule {
                         .begin_transaction()
                         .get_value(&OfferKey(incoming.hash))
                         .expect("DB error")
-                        .ok_or(LightningModuleError::NoOffer(incoming.hash))?;
+                        .ok_or(LightningModuleError::NoOffer(incoming.hash))
+                        .into_module_error_other()?;
 
                     if contract.amount < offer.amount {
                         // If the account is not sufficiently funded fail the output
                         return Err(LightningModuleError::InsufficientIncomingFunding(
                             offer.amount,
                             contract.amount,
-                        ));
+                        ))
+                        .into_module_error_other();
                     }
                 }
 
                 if contract.amount == Amount::ZERO {
-                    Err(LightningModuleError::ZeroOutput)
+                    Err(LightningModuleError::ZeroOutput).into_module_error_other()
                 } else {
                     Ok(TransactionItemAmount {
                         amount: contract.amount,
@@ -322,7 +331,7 @@ impl FederationModule for LightningModule {
             }
             ContractOrOfferOutput::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
-                    Err(LightningModuleError::InvalidEncryptedPreimage)
+                    Err(LightningModuleError::InvalidEncryptedPreimage).into_module_error_other()
                 } else {
                     Ok(TransactionItemAmount::ZERO)
                 }
@@ -336,12 +345,14 @@ impl FederationModule for LightningModule {
                     .begin_transaction()
                     .get_value(&ContractKey(*contract))
                     .expect("DB error")
-                    .ok_or(LightningModuleError::UnknownContract(*contract))?;
+                    .ok_or(LightningModuleError::UnknownContract(*contract))
+                    .into_module_error_other()?;
 
                 let outgoing_contract = match &contract_account.contract {
                     FundedContract::Outgoing(contract) => contract,
                     _ => {
-                        return Err(LightningModuleError::NotOutgoingContract);
+                        return Err(LightningModuleError::NotOutgoingContract)
+                            .into_module_error_other();
                     }
                 };
 
@@ -351,7 +362,8 @@ impl FederationModule for LightningModule {
                         &outgoing_contract.cancellation_message().into(),
                         &outgoing_contract.gateway_key,
                     )
-                    .map_err(|_| LightningModuleError::InvalidCancellationSignature)?;
+                    .map_err(|_| LightningModuleError::InvalidCancellationSignature)
+                    .into_module_error_other()?;
 
                 Ok(TransactionItemAmount::ZERO)
             }
@@ -363,7 +375,7 @@ impl FederationModule for LightningModule {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::TxOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, Self::Error> {
+    ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(output)?;
 
         match output {

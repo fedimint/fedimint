@@ -12,14 +12,14 @@ use fedimint_api::core::ModuleKey;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
-use fedimint_api::module::TransactionItemAmount;
+use fedimint_api::module::{ModuleError, TransactionItemAmount};
 use fedimint_api::server::ServerModule;
 use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
-use fedimint_core::modules::ln::{LightningModule, LightningModuleError};
-use fedimint_core::modules::mint::{Mint, MintError};
+use fedimint_core::modules::ln::LightningModule;
+use fedimint_core::modules::mint::Mint;
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_wallet::{Wallet, WalletError};
+use fedimint_wallet::Wallet;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
@@ -714,17 +714,17 @@ pub enum TransactionSubmissionError {
     #[error("High level transaction error: {0}")]
     TransactionError(#[from] TransactionError),
     #[error("Input coin error: {0}")]
-    InputCoinError(MintError),
+    InputCoinError(ModuleError),
     #[error("Input peg-in error: {0}")]
-    InputPegIn(WalletError),
+    InputPegIn(ModuleError),
     #[error("LN contract input error: {0}")]
-    ContractInputError(LightningModuleError),
+    ContractInputError(ModuleError),
     #[error("Output coin error: {0}")]
-    OutputCoinError(MintError),
+    OutputCoinError(ModuleError),
     #[error("Output coin error: {0}")]
-    OutputPegOut(WalletError),
+    OutputPegOut(ModuleError),
     #[error("LN contract output error: {0}")]
-    ContractOutputError(LightningModuleError),
+    ContractOutputError(ModuleError),
     #[error("Transaction conflict error")]
     TransactionConflictError,
 }
