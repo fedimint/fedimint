@@ -14,7 +14,6 @@ use fedimint_api::{
     Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
 };
 use itertools::Itertools;
-use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use tbs::{
@@ -111,16 +110,13 @@ impl FederationModule for Mint {
     type ConsensusItem = PartiallySignedRequest;
     type VerificationCache = VerificationCache;
 
-    async fn await_consensus_proposal<'a>(&'a self, rng: impl RngCore + CryptoRng + 'a) {
-        if self.consensus_proposal(rng).await.is_empty() {
+    async fn await_consensus_proposal(&self) {
+        if self.consensus_proposal().await.is_empty() {
             std::future::pending().await
         }
     }
 
-    async fn consensus_proposal<'a>(
-        &'a self,
-        _rng: impl RngCore + CryptoRng + 'a,
-    ) -> Vec<Self::ConsensusItem> {
+    async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
         self.db
             .begin_transaction()
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
@@ -138,7 +134,6 @@ impl FederationModule for Mint {
         &'a self,
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) {
         for (peer, partial_sig) in consensus_items {
             self.process_partial_signature(
@@ -283,7 +278,6 @@ impl FederationModule for Mint {
         &'a self,
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'a>,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Finalize partial signatures for which we now have enough shares
         let req_psigs = self

@@ -239,14 +239,10 @@ impl FedimintConsensus {
         {
             let mut dbtx = self.db.begin_transaction();
             self.wallet
-                .begin_consensus_epoch(&mut dbtx, wallet_cis, self.rng_gen.get_rng())
+                .begin_consensus_epoch(&mut dbtx, wallet_cis)
                 .await;
-            self.mint
-                .begin_consensus_epoch(&mut dbtx, mint_cis, self.rng_gen.get_rng())
-                .await;
-            self.ln
-                .begin_consensus_epoch(&mut dbtx, ln_cis, self.rng_gen.get_rng())
-                .await;
+            self.mint.begin_consensus_epoch(&mut dbtx, mint_cis).await;
+            self.ln.begin_consensus_epoch(&mut dbtx, ln_cis).await;
             dbtx.commit_tx().expect("DB Error");
         }
 
@@ -318,18 +314,12 @@ impl FedimintConsensus {
 
             let mut drop_wallet = self
                 .wallet
-                .end_consensus_epoch(&epoch_peers, &mut dbtx, self.rng_gen.get_rng())
+                .end_consensus_epoch(&epoch_peers, &mut dbtx)
                 .await;
 
-            let mut drop_mint = self
-                .mint
-                .end_consensus_epoch(&epoch_peers, &mut dbtx, self.rng_gen.get_rng())
-                .await;
+            let mut drop_mint = self.mint.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
 
-            let mut drop_ln = self
-                .ln
-                .end_consensus_epoch(&epoch_peers, &mut dbtx, self.rng_gen.get_rng())
-                .await;
+            let mut drop_ln = self.ln.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
 
             drop_peers.append(&mut drop_wallet);
             drop_peers.append(&mut drop_mint);
@@ -405,9 +395,9 @@ impl FedimintConsensus {
 
     pub async fn await_consensus_proposal(&self) {
         select_all(vec![
-            self.wallet.await_consensus_proposal(self.rng_gen.get_rng()),
-            self.ln.await_consensus_proposal(self.rng_gen.get_rng()),
-            self.mint.await_consensus_proposal(self.rng_gen.get_rng()),
+            self.wallet.await_consensus_proposal(),
+            self.ln.await_consensus_proposal(),
+            self.mint.await_consensus_proposal(),
         ])
         .await;
     }
@@ -433,21 +423,21 @@ impl FedimintConsensus {
             })
             .chain(
                 self.wallet
-                    .consensus_proposal(self.rng_gen.get_rng())
+                    .consensus_proposal()
                     .await
                     .into_iter()
                     .map(ConsensusItem::Wallet),
             )
             .chain(
                 self.mint
-                    .consensus_proposal(self.rng_gen.get_rng())
+                    .consensus_proposal()
                     .await
                     .into_iter()
                     .map(ConsensusItem::Mint),
             )
             .chain(
                 self.ln
-                    .consensus_proposal(self.rng_gen.get_rng())
+                    .consensus_proposal()
                     .await
                     .into_iter()
                     .map(ConsensusItem::LN),

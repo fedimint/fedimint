@@ -5,8 +5,6 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use rand::CryptoRng;
-use secp256k1_zkp::rand::RngCore;
 use secp256k1_zkp::XOnlyPublicKey;
 
 use crate::db::DatabaseTransaction;
@@ -152,13 +150,10 @@ pub trait FederationModule: Sized {
     type VerificationCache;
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self, rng: impl RngCore + CryptoRng + 'a);
+    async fn await_consensus_proposal(&self);
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal<'a>(
-        &'a self,
-        rng: impl RngCore + CryptoRng + 'a,
-    ) -> Vec<Self::ConsensusItem>;
+    async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -168,7 +163,6 @@ pub trait FederationModule: Sized {
         &'a self,
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
-        rng: impl RngCore + CryptoRng + 'a,
     );
 
     /// Some modules may have slow to verify inputs that would block transaction processing. If the
@@ -241,7 +235,6 @@ pub trait FederationModule: Sized {
         &'a self,
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'a>,
-        rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
