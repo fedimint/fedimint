@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, NumPeers, PeerId};
 pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::LightningModuleConfig;
@@ -200,6 +201,7 @@ impl GenerateConfig for ServerConfig {
         peers: &[PeerId],
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
+        task_group: &mut TaskGroup,
     ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
@@ -218,25 +220,39 @@ impl GenerateConfig for ServerConfig {
         let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
 
-        let mut wallet = connect(params.wallet_dkg.clone(), params.tls.clone()).await;
+        let mut wallet = connect(params.wallet_dkg.clone(), params.tls.clone(), task_group).await;
         let bitcoin = &BitcoindRpcCfg {
             btc_rpc_address: params.bitcoind_rpc.clone(),
             btc_rpc_user: "bitcoin".into(),
             btc_rpc_pass: "bitcoin".into(),
         };
-        let (wallet_server_cfg, wallet_client_cfg) =
-            WalletConfig::distributed_gen(&mut wallet, our_id, peers, bitcoin, &mut rng)
-                .await
-                .expect("wallet error");
+        let (wallet_server_cfg, wallet_client_cfg) = WalletConfig::distributed_gen(
+            &mut wallet,
+            our_id,
+            peers,
+            bitcoin,
+            &mut rng,
+            task_group,
+        )
+        .await
+        .expect("wallet error");
 
-        let mut ln = connect(params.lightning_dkg.clone(), params.tls.clone()).await;
-        let (ln_server_cfg, ln_client_cfg) =
-            LightningModuleConfig::distributed_gen(&mut ln, our_id, peers, &(), &mut rng).await?;
+        let mut ln = connect(params.lightning_dkg.clone(), params.tls.clone(), task_group).await;
+        let (ln_server_cfg, ln_client_cfg) = LightningModuleConfig::distributed_gen(
+            &mut ln,
+            our_id,
+            peers,
+            &(),
+            &mut rng,
+            task_group,
+        )
+        .await?;
 
-        let mut mint = connect(params.mint_dkg.clone(), params.tls.clone()).await;
+        let mut mint = connect(params.mint_dkg.clone(), params.tls.clone(), task_group).await;
         let param = &params.amount_tiers;
         let (mint_server_cfg, mint_client_cfg) =
-            MintConfig::distributed_gen(&mut mint, our_id, peers, param, &mut rng).await?;
+            MintConfig::distributed_gen(&mut mint, our_id, peers, param, &mut rng, task_group)
+                .await?;
 
         let server = ServerConfig {
             federation_name: params.federation_name.clone(),
@@ -444,12 +460,16 @@ impl ServerConfigParams {
     }
 }
 
-pub async fn connect<T>(network: NetworkConfig, certs: TlsConfig) -> AnyPeerConnections<T>
+pub async fn connect<T>(
+    network: NetworkConfig,
+    certs: TlsConfig,
+    task_group: &mut TaskGroup,
+) -> AnyPeerConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs).into_dyn();
-    ReconnectPeerConnections::new(network, connector)
+    ReconnectPeerConnections::new(network, connector, task_group)
         .await
         .into_dyn()
 }

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use fedimint_api::config::GenerateConfig;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::ClientConfig;
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
@@ -88,6 +89,8 @@ async fn main() {
         )
         .init();
 
+    let mut task_group = TaskGroup::new();
+
     let command: Command = Cli::parse().command;
     match command {
         Command::CreateCert {
@@ -120,6 +123,7 @@ async fn main() {
                 certs,
                 bitcoind_rpc,
                 rustls::PrivateKey(pk_bytes),
+                &mut task_group,
             )
             .await;
 
@@ -144,6 +148,7 @@ async fn run_dkg(
     certs: Vec<String>,
     bitcoind_rpc: String,
     pk: rustls::PrivateKey,
+    task_group: &mut TaskGroup,
 ) -> (ServerConfig, ClientConfig) {
     let peers: BTreeMap<PeerId, PeerServerParams> = certs
         .into_iter()
@@ -170,11 +175,19 @@ async fn run_dkg(
     );
     let param_map = HashMap::from([(our_id, params.clone())]);
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
-    let mut server_conn = fedimint_server::config::connect(params.server_dkg, params.tls).await;
+    let mut server_conn =
+        fedimint_server::config::connect(params.server_dkg, params.tls, task_group).await;
     let rng = OsRng;
-    ServerConfig::distributed_gen(&mut server_conn, &our_id, &peer_ids, &param_map, rng)
-        .await
-        .expect("failed to run DKG to generate configs")
+    ServerConfig::distributed_gen(
+        &mut server_conn,
+        &our_id,
+        &peer_ids,
+        &param_map,
+        rng,
+        task_group,
+    )
+    .await
+    .expect("failed to run DKG to generate configs")
 }
 
 fn parse_peer_params(url: String) -> PeerServerParams {

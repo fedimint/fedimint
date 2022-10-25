@@ -5,6 +5,7 @@ use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Feerate, NumPeers, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
@@ -120,6 +121,7 @@ impl GenerateConfig for WalletConfig {
         peers: &[PeerId],
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
+        _task_group: &mut TaskGroup,
     ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut rng);

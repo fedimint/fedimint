@@ -8,6 +8,7 @@ use std::time::Duration;
 use config::ServerConfig;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 pub use fedimint_core::*;
@@ -17,7 +18,6 @@ use mint_client::api::{IFederationApi, WsFederationApi};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use tokio::task::spawn;
 use tracing::{info, warn};
 
 use crate::consensus::{
@@ -66,28 +66,47 @@ pub struct FedimintServer {
 
 impl FedimintServer {
     /// Start all the components of the mint and plug them together
-    pub async fn run(cfg: ServerConfig, consensus: FedimintConsensus) {
-        let server = FedimintServer::new(cfg.clone(), consensus).await;
-        spawn(net::api::run_server(cfg, server.consensus.clone()));
-        server.run_consensus().await;
+    pub async fn run(
+        cfg: ServerConfig,
+        consensus: FedimintConsensus,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<()> {
+        let server = FedimintServer::new(cfg.clone(), consensus, task_group).await;
+        let server_consensus = server.consensus.clone();
+        task_group
+            .spawn("api-server", |handle| {
+                net::api::run_server(cfg, server_consensus, handle)
+            })
+            .await;
+        task_group
+            .spawn_local("consensus", move |_handle| server.run_consensus())
+            .await;
+        Ok(())
     }
-    pub async fn new(cfg: ServerConfig, consensus: FedimintConsensus) -> Self {
+
+    pub async fn new(
+        cfg: ServerConfig,
+        consensus: FedimintConsensus,
+        task_group: &mut TaskGroup,
+    ) -> Self {
         let connector: PeerConnector<EpochMessage> =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
-        Self::new_with(cfg.clone(), consensus, connector).await
+        Self::new_with(cfg.clone(), consensus, connector, task_group).await
     }
 
     pub async fn new_with(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
         connector: PeerConnector<EpochMessage>,
+        task_group: &mut TaskGroup,
     ) -> Self {
         cfg.validate_config(&cfg.identity);
 
-        let connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
-            .await
-            .into_dyn();
+        let connections =
+            ReconnectPeerConnections::new(cfg.network_config(), connector, task_group)
+                .await
+                .into_dyn();
 
         let net_info = NetworkInfo::new(
             cfg.identity,

@@ -126,7 +126,8 @@ pub async fn fixtures(
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
-            let (server_config, client_config) = distributed_config(&peers, params, max_evil).await;
+            let (server_config, client_config) =
+                distributed_config(&peers, params, max_evil, &mut task_group).await;
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
@@ -217,17 +218,28 @@ async fn distributed_config(
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
     _max_evil: usize,
+    task_group: &mut TaskGroup,
 ) -> (BTreeMap<PeerId, ServerConfig>, ClientConfig) {
     let configs: Vec<(PeerId, (ServerConfig, ClientConfig))> = join_all(peers.iter().map(|peer| {
         let params = params.clone();
         let peers = peers.to_vec();
 
+        let mut task_group = task_group.clone();
+
         async move {
             let our_params = params[peer].clone();
-            let mut server_conn = connect(our_params.server_dkg, our_params.tls).await;
+            let mut server_conn =
+                connect(our_params.server_dkg, our_params.tls, &mut task_group).await;
 
             let rng = OsRng;
-            let cfg = ServerConfig::distributed_gen(&mut server_conn, peer, &peers, &params, rng);
+            let cfg = ServerConfig::distributed_gen(
+                &mut server_conn,
+                peer,
+                &peers,
+                &params,
+                rng,
+                &mut task_group,
+            );
             (*peer, cfg.await.expect("generation failed"))
         }
     }))
@@ -787,13 +799,15 @@ impl FederationTest {
             let ln = LightningModule::new(cfg.ln.clone(), db.clone());
 
             let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db.clone());
-            let fedimint = FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg)).await;
+            let fedimint =
+                FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg), &mut task_group)
+                    .await;
 
             let cfg = cfg.clone();
             let consensus = fedimint.consensus.clone();
             task_group
-                .spawn("rpc server", move |_handle| async {
-                    fedimint_server::net::api::run_server(cfg, consensus).await
+                .spawn("rpc server", move |handle| async {
+                    fedimint_server::net::api::run_server(cfg, consensus, handle).await
                 })
                 .await;
 

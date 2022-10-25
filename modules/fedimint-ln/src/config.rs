@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{NumPeers, PeerId};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -87,6 +88,7 @@ impl GenerateConfig for LightningModuleConfig {
         peers: &[PeerId],
         _params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
+        _task_group: &mut TaskGroup,
     ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
         let (pks, sks) = dkg.run_g1(connections, &mut rng).await[&()].threshold_crypto();

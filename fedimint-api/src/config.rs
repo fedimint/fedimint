@@ -21,6 +21,7 @@ use tbs::serde_impl;
 use tbs::Scalar;
 
 use crate::net::peers::AnyPeerConnections;
+use crate::task::TaskGroup;
 use crate::PeerId;
 
 /// Part of a config that needs to be generated to bootstrap a new federation.
@@ -50,6 +51,7 @@ pub trait GenerateConfig: Sized {
         peers: &[PeerId],
         params: &Self::Params,
         rng: impl RngCore + CryptoRng,
+        task_group: &mut TaskGroup,
     ) -> Result<(Self, Self::ClientConfig), Self::ConfigError>;
 }
 

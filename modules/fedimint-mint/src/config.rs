@@ -4,6 +4,7 @@ use std::iter::FromIterator;
 use async_trait::async_trait;
 use fedimint_api::config::{scalar, DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -117,6 +118,7 @@ impl GenerateConfig for MintConfig {
         peers: &[PeerId],
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
+        _task_group: &mut TaskGroup,
     ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
         let mut dkg = DkgRunner::multi(params.to_vec(), peers.threshold(), our_id, peers);
         let amounts_keys = dkg

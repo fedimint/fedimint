@@ -87,6 +87,8 @@ async fn main() -> anyhow::Result<()> {
     let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;
 
     let mut task_group = TaskGroup::new();
+    let local_task_set = tokio::task::LocalSet::new();
+    let _guard = local_task_set.enter();
 
     let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), db.clone());
 
@@ -101,7 +103,10 @@ async fn main() -> anyhow::Result<()> {
 
     consensus.register_module(MintServerModule::new().into());
 
-    FedimintServer::run(cfg, consensus).await;
+    FedimintServer::run(cfg, consensus, &mut task_group).await?;
+
+    local_task_set.await;
+    task_group.join_all().await?;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();
