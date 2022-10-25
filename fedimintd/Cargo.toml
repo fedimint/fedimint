@@ -12,7 +12,7 @@ license = "MIT"
 
 [[bin]]
 name = "fedimintd"
-path = "src/main.rs"
+path = "src/bin/main.rs"
 
 [[bin]]
 name = "configgen"
@@ -63,6 +63,16 @@ tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 tracing-opentelemetry = { version = "0.18.0", optional = true}
 url = { version = "2.3.1", features = ["serde"] }
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
+
+# setup dependencies
+askama = { version = "0.11.1", features = ["with-axum"] }
+http = "0.2"
+http-body = "0.4"
+askama_axum = "0.1.0"
+axum = { version = "0.4", default-features = false }
+hyper = { version = "0.14", features = ["full"] }
+tower = { version = "0.4", features = ["util"] }
+qrcode-generator = "4.1.6"
 
 [build-dependencies]
 fedimint-build = { path = "../fedimint-build" }

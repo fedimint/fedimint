@@ -1,4 +1,3 @@
-pub mod lib;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -8,10 +7,10 @@ use fedimint_core::modules::ln::LightningModule;
 use fedimint_mint_server::MintServerModule;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::FedimintConsensus;
-use fedimint_server::ui::run_ui;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::Wallet;
 use fedimintd::encrypt::*;
+use fedimintd::ui::run_ui;
 use tokio::spawn;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
