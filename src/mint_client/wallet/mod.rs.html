@@ -403,8 +403,6 @@
 <span id="403">403</span>
 <span id="404">404</span>
 <span id="405">405</span>
-<span id="406">406</span>
-<span id="407">407</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>db::PegInKey;
@@ -584,21 +582,19 @@
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_api::{OutPoint, TransactionId};
+    <span class="kw">use </span>fedimint_api::{Feerate, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-    <span class="kw">use </span>fedimint_core::modules::wallet::bitcoind::test::{
-        FakeBitcoindRpc, FakeBitcoindRpcController,
-    };
     <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
     <span class="kw">use </span>fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     <span class="kw">use </span>fedimint_core::modules::wallet::{
-        Feerate, PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
+        PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
     };
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
+    <span class="kw">use </span>fedimint_testing::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>threshold_crypto::PublicKey;
 

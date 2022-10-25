@@ -309,6 +309,32 @@
 <span id="309">309</span>
 <span id="310">310</span>
 <span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -330,6 +356,7 @@
 <span class="kw">pub use </span><span class="kw">crate</span>::core::{client, server};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
+<span class="kw">pub mod </span>bitcoin_rpc;
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>core;
 <span class="kw">pub mod </span>db;
@@ -618,6 +645,31 @@
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(TransactionId::from_inner(bytes))
+    }
+}
+
+<span class="attribute">#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+</span><span class="kw">pub struct </span>Feerate {
+    <span class="kw">pub </span>sats_per_kvb: u64,
+}
+
+<span class="kw">impl </span>Feerate {
+    <span class="kw">pub fn </span>calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin::Amount {
+        <span class="kw">let </span>sats = <span class="self">self</span>.sats_per_kvb * weight / <span class="number">1000</span>;
+        bitcoin::Amount::from_sat(sats)
     }
 }
 </code></pre></div>

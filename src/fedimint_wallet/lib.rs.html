@@ -1274,35 +1274,6 @@
 <span id="1274">1274</span>
 <span id="1275">1275</span>
 <span id="1276">1276</span>
-<span id="1277">1277</span>
-<span id="1278">1278</span>
-<span id="1279">1279</span>
-<span id="1280">1280</span>
-<span id="1281">1281</span>
-<span id="1282">1282</span>
-<span id="1283">1283</span>
-<span id="1284">1284</span>
-<span id="1285">1285</span>
-<span id="1286">1286</span>
-<span id="1287">1287</span>
-<span id="1288">1288</span>
-<span id="1289">1289</span>
-<span id="1290">1290</span>
-<span id="1291">1291</span>
-<span id="1292">1292</span>
-<span id="1293">1293</span>
-<span id="1294">1294</span>
-<span id="1295">1295</span>
-<span id="1296">1296</span>
-<span id="1297">1297</span>
-<span id="1298">1298</span>
-<span id="1299">1299</span>
-<span id="1300">1300</span>
-<span id="1301">1301</span>
-<span id="1302">1302</span>
-<span id="1303">1303</span>
-<span id="1304">1304</span>
-<span id="1305">1305</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1327,7 +1298,8 @@
 <span class="kw">use </span>fedimint_api::module::ApiEndpoint;
 <span class="kw">use </span>fedimint_api::module::{api_endpoint, TransactionItemAmount};
 <span class="kw">use </span>fedimint_api::task::sleep;
-<span class="kw">use </span>fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_bitcoind::BitcoindRpc;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
@@ -1336,7 +1308,6 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::bitcoind::BitcoindRpc;
 <span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
@@ -1347,15 +1318,11 @@
 <span class="kw">use </span><span class="kw">crate</span>::tweakable::Tweakable;
 <span class="kw">use </span><span class="kw">crate</span>::txoproof::{PegInProof, PegInProofError};
 
-<span class="kw">pub mod </span>bitcoind;
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>keys;
 <span class="kw">pub mod </span>tweakable;
 <span class="kw">pub mod </span>txoproof;
-
-<span class="attribute">#[cfg(feature = <span class="string">&quot;native&quot;</span>)]
-</span><span class="kw">pub mod </span>bitcoincore_rpc;
 
 <span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">10</span>;
 
@@ -1426,24 +1393,6 @@
     descriptor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Descriptor&lt;CompressedPublicKey&gt;,
     secret_key: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>secp256k1::SecretKey,
     secp: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>secp256k1::Secp256k1&lt;secp256k1::All&gt;,
-}
-
-<span class="attribute">#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    Encodable,
-    Decodable,
-)]
-</span><span class="kw">pub struct </span>Feerate {
-    <span class="kw">pub </span>sats_per_kvb: u64,
 }
 
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -2531,13 +2480,6 @@
         );
         <span class="macro">trace!</span>(transaction = <span class="question-mark">?</span>tx);
         <span class="kw">let _ </span>= rpc.submit_transaction(tx).<span class="kw">await</span>;
-    }
-}
-
-<span class="kw">impl </span>Feerate {
-    <span class="kw">pub fn </span>calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin::Amount {
-        <span class="kw">let </span>sats = <span class="self">self</span>.sats_per_kvb * weight / <span class="number">1000</span>;
-        bitcoin::Amount::from_sat(sats)
     }
 }
 

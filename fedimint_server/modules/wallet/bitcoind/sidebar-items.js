@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":[["Error",""]],"mod":[["test",""]],"struct":[["BitcoindRpc",""]],"trait":[["IBitcoindRpc","Trait that allows interacting with the Bitcoin blockchain"]],"type":[["Result",""]]};

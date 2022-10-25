@@ -186,13 +186,13 @@
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
-<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
+<span class="kw">use </span>fedimint_api::{Feerate, NumPeers, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
-<span class="kw">use crate</span>::{Feerate, PegInDescriptor};
+<span class="kw">use </span><span class="kw">crate</span>::PegInDescriptor;
 
 <span class="kw">const </span>FINALITY_DELAY: u32 = <span class="number">10</span>;
 

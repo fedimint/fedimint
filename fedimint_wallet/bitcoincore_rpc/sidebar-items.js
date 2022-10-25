@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":[["RPC_VERIFY_ALREADY_IN_CHAIN",""]],"fn":[["make_bitcoind_rpc",""]],"struct":[["ErrorReporting","Wrapper around [`bitcoincore_rpc::Client`] logging failures"],["RetryClient","Wrapper around [`IBitcoindRpc`] that will retry failed calls"]]};
