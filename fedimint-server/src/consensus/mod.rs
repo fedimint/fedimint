@@ -272,6 +272,8 @@ impl FedimintConsensus {
                     &format!("{:?}", TransactionSubmissionError::TransactionConflictError),
                 )
                 .expect("DB Error");
+                dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
+                    .expect("DB Error");
             }
 
             let caches = self.build_verification_caches(ok_tx.iter());
