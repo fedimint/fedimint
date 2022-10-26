@@ -259,27 +259,26 @@ where
     M: Debug + Clone,
 {
     async fn run(mut self) {
-        loop {
-            self = self.state_transition().await;
+        while let Some(new_self) = self.state_transition().await {
+            self = new_self;
         }
     }
 
-    async fn state_transition(self) -> Self {
+    async fn state_transition(self) -> Option<Self> {
         let PeerConnectionStateMachine { mut common, state } = self;
 
-        let new_state = match state {
+        match state {
             PeerConnectionState::Disconnected(disconnected) => {
                 common.state_transition_disconnected(disconnected).await
             }
             PeerConnectionState::Connected(connected) => {
                 common.state_transition_connected(connected).await
             }
-        };
-
-        PeerConnectionStateMachine {
+        }
+        .map(|new_state| PeerConnectionStateMachine {
             common,
             state: new_state,
-        }
+        })
     }
 }
 
@@ -290,11 +289,18 @@ where
     async fn state_transition_connected(
         &mut self,
         mut connected: ConnectedPeerConnectionState<M>,
-    ) -> PeerConnectionState<M> {
-        tokio::select! {
+    ) -> Option<PeerConnectionState<M>> {
+        Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
-                let msg = maybe_msg.expect("Peer connection was dropped");
-                self.send_message_connected(connected, msg).await
+                match maybe_msg {
+                    Some(msg) => {
+                        self.send_message_connected(connected, msg).await
+                    },
+                    None => {
+                        debug!("Exiting peer connection IO task - parent disconnected");
+                        return None;
+                    },
+                }
             },
             new_connection_res = self.incoming_connections.recv() => {
                 let new_connection = new_connection_res.expect("Listener task died");
@@ -304,7 +310,7 @@ where
             Some(msg_res) = connected.connection.next() => {
                 self.receive_message(connected, msg_res).await
             },
-        }
+        })
     }
 
     async fn connect(
@@ -432,11 +438,17 @@ where
     async fn state_transition_disconnected(
         &mut self,
         disconnected: DisconnectedPeerConnectionState,
-    ) -> PeerConnectionState<M> {
-        tokio::select! {
+    ) -> Option<PeerConnectionState<M>> {
+        Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
-                let msg = maybe_msg.expect("Peer connection was dropped");
-                self.send_message(disconnected, msg).await
+                match maybe_msg {
+                    Some(msg) => {
+                        self.send_message(disconnected, msg).await}
+                    None => {
+                        debug!("Exiting peer connection IO task - parent disconnected");
+                        return None;
+                    }
+                }
             },
             new_connection_res = self.incoming_connections.recv() => {
                 let new_connection = new_connection_res.expect("Listener task died");
@@ -445,7 +457,7 @@ where
             () = tokio::time::sleep_until(disconnected.reconnect_at) => {
                 self.reconnect(disconnected).await
             }
-        }
+        })
     }
 
     async fn send_message(
@@ -559,7 +571,7 @@ where
             state: initial_state,
         };
 
-        state_machine.run().await;
+        state_machine.run().await
     }
 }
 

@@ -11,6 +11,7 @@ use axum::{
 };
 use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_core::config::ClientConfig;
+use fedimint_server::config::ServerConfig;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
@@ -19,7 +20,6 @@ use serde::Deserialize;
 use tokio::sync::mpsc::Sender;
 
 use crate::ui::configgen::configgen;
-use fedimint_server::config::ServerConfig;
 mod configgen;
 
 fn run_fedimint(state: &mut RwLockWriteGuard<State>) {
