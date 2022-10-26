@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub async fn run_webserver(
+    authkey: String,
     bind_addr: SocketAddr,
     sender: mpsc::Sender<GatewayRequest>,
 ) -> axum::response::Result<()> {
@@ -22,9 +23,6 @@ pub async fn run_webserver(
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
-    // TODO: source user configured auth token from gateway config
-    const SERVER_AUTH_TOKEN: &str = "theresnosecondbest";
-
     // Authenticated, public routes used for gateway administration
     let admin_routes = Router::new()
         .route("/info", post(info))
@@ -32,7 +30,7 @@ pub async fn run_webserver(
         .route("/address", post(address))
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
-        .layer(RequireAuthorizationLayer::bearer(SERVER_AUTH_TOKEN));
+        .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
         .merge(routes)
