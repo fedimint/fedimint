@@ -340,6 +340,7 @@
 };
 <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_server::config::ServerConfig;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>mint_client::api::WsFederationConnect;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
@@ -348,7 +349,6 @@
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 
 <span class="kw">use </span><span class="kw">crate</span>::ui::configgen::configgen;
-<span class="kw">use </span>fedimint_server::config::ServerConfig;
 <span class="kw">mod </span>configgen;
 
 <span class="kw">fn </span>run_fedimint(state: <span class="kw-2">&amp;mut </span>RwLockWriteGuard&lt;State&gt;) {

@@ -635,6 +635,18 @@
 <span id="635">635</span>
 <span id="636">636</span>
 <span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -896,27 +908,26 @@
     </span>M: Debug + Clone,
 {
     <span class="kw">async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>) {
-        <span class="kw">loop </span>{
-            <span class="self">self </span>= <span class="self">self</span>.state_transition().<span class="kw">await</span>;
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition().<span class="kw">await </span>{
+            <span class="self">self </span>= new_self;
         }
     }
 
-    <span class="kw">async fn </span>state_transition(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+    <span class="kw">async fn </span>state_transition(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>PeerConnectionStateMachine { <span class="kw-2">mut </span>common, state } = <span class="self">self</span>;
 
-        <span class="kw">let </span>new_state = <span class="kw">match </span>state {
+        <span class="kw">match </span>state {
             PeerConnectionState::Disconnected(disconnected) =&gt; {
                 common.state_transition_disconnected(disconnected).<span class="kw">await
             </span>}
             PeerConnectionState::Connected(connected) =&gt; {
                 common.state_transition_connected(connected).<span class="kw">await
             </span>}
-        };
-
-        PeerConnectionStateMachine {
+        }
+        .map(|new_state| PeerConnectionStateMachine {
             common,
             state: new_state,
-        }
+        })
     }
 }
 
@@ -927,12 +938,19 @@
     <span class="kw">async fn </span>state_transition_connected(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         <span class="kw-2">mut </span>connected: ConnectedPeerConnectionState&lt;M&gt;,
-    ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">tokio::select! </span>{
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;PeerConnectionState&lt;M&gt;&gt; {
+        <span class="prelude-val">Some</span>(<span class="macro">tokio::select! </span>{
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
-                <span class="kw">let </span>msg = maybe_msg.expect(<span class="string">&quot;Peer connection was dropped&quot;</span>);
-                <span class="self">self</span>.send_message_connected(connected, msg).<span class="kw">await
-            </span>},
+                <span class="kw">match </span>maybe_msg {
+                    <span class="prelude-val">Some</span>(msg) =&gt; {
+                        <span class="self">self</span>.send_message_connected(connected, msg).<span class="kw">await
+                    </span>},
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">None</span>;
+                    },
+                }
+            },
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
                 <span class="kw">let </span>new_connection = new_connection_res.expect(<span class="string">&quot;Listener task died&quot;</span>);
                 <span class="macro">warn!</span>(<span class="string">&quot;Replacing existing connection&quot;</span>);
@@ -941,7 +959,7 @@
             <span class="prelude-val">Some</span>(msg_res) = connected.connection.next() =&gt; {
                 <span class="self">self</span>.receive_message(connected, msg_res).<span class="kw">await
             </span>},
-        }
+        })
     }
 
     <span class="kw">async fn </span>connect(
@@ -1069,12 +1087,18 @@
     <span class="kw">async fn </span>state_transition_disconnected(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         disconnected: DisconnectedPeerConnectionState,
-    ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">tokio::select! </span>{
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;PeerConnectionState&lt;M&gt;&gt; {
+        <span class="prelude-val">Some</span>(<span class="macro">tokio::select! </span>{
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
-                <span class="kw">let </span>msg = maybe_msg.expect(<span class="string">&quot;Peer connection was dropped&quot;</span>);
-                <span class="self">self</span>.send_message(disconnected, msg).<span class="kw">await
-            </span>},
+                <span class="kw">match </span>maybe_msg {
+                    <span class="prelude-val">Some</span>(msg) =&gt; {
+                        <span class="self">self</span>.send_message(disconnected, msg).<span class="kw">await</span>}
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">None</span>;
+                    }
+                }
+            },
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
                 <span class="kw">let </span>new_connection = new_connection_res.expect(<span class="string">&quot;Listener task died&quot;</span>);
                 <span class="self">self</span>.receive_connection(disconnected, new_connection).<span class="kw">await
@@ -1082,7 +1106,7 @@
             () = tokio::time::sleep_until(disconnected.reconnect_at) =&gt; {
                 <span class="self">self</span>.reconnect(disconnected).<span class="kw">await
             </span>}
-        }
+        })
     }
 
     <span class="kw">async fn </span>send_message(
@@ -1196,8 +1220,8 @@
             state: initial_state,
         };
 
-        state_machine.run().<span class="kw">await</span>;
-    }
+        state_machine.run().<span class="kw">await
+    </span>}
 }
 
 <span class="attribute">#[cfg(test)]
