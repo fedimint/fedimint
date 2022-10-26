@@ -1,5 +1,3 @@
-mod configgen;
-
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
@@ -21,7 +19,8 @@ use serde::Deserialize;
 use tokio::sync::mpsc::Sender;
 
 use crate::ui::configgen::configgen;
-use crate::ServerConfig;
+use fedimint_server::config::ServerConfig;
+mod configgen;
 
 fn run_fedimint(state: &mut RwLockWriteGuard<State>) {
     let sender = state.sender.clone();

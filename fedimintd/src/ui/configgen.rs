@@ -1,19 +1,18 @@
 use std::collections::{BTreeMap, HashMap};
 
+use crate::ui::Guardian;
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::{ClientConfig, Node};
 use fedimint_core::modules::ln::config::LightningModuleConfig;
 use fedimint_core::modules::mint::config::MintConfig;
+use fedimint_server::config::{gen_cert_and_key, Peer as ServerPeer, ServerConfig};
+use fedimint_server::net::peers::ConnectionConfig;
 use fedimint_wallet::config::WalletConfig;
 use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 use threshold_crypto::serde_impl::SerdeSecret;
 use url::Url;
-
-use crate::config::{gen_cert_and_key, Peer as ServerPeer, ServerConfig};
-use crate::net::peers::ConnectionConfig;
-use crate::ui::Guardian;
-use crate::{CryptoRng, RngCore};
 
 pub fn configgen(
     federation_name: String,
