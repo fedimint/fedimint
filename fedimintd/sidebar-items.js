@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["encrypt","Encrypt and authenticate data stored on the filesystem with a user-supplied password."]]};
+window.SIDEBAR_ITEMS = {"mod":[["encrypt",""],["ui",""]]};

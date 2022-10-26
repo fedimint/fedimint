@@ -16,11 +16,11 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_mint_common":["",[],["lib.rs"]],\
 "fedimint_mint_server":["",[],["lib.rs"]],\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
-"fedimint_server":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]],["ui",[],["configgen.rs","mod.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
+"fedimint_server":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
 "fedimint_sled":["",[],["lib.rs"]],\
 "fedimint_testing":["",[],["bitcoind.rs","lib.rs"]],\
 "fedimint_wallet":["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
-"fedimintd":["",[],["lib.rs"]],\
+"fedimintd":["",[["ui",[],["configgen.rs","mod.rs"]]],["encrypt.rs","lib.rs"]],\
 "gateway_cli":["",[],["main.rs"]],\
 "ln_gateway":["",[],["cln.rs","lib.rs","ln.rs","rpc.rs","webserver.rs"]],\
 "mint_client":["",[["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","lib.rs","query.rs","transaction.rs","utils.rs"]],\
