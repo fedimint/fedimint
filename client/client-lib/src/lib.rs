@@ -17,7 +17,7 @@ use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::db::Database;
 use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::task::sleep;
+use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::TieredMulti;
 use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
@@ -453,7 +453,17 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.reissue(all_coins, rng).await
     }
 
-    pub async fn await_consensus_block_height(&self, block_height: u64) -> u64 {
+    pub async fn await_consensus_block_height(
+        &self,
+        block_height: u64,
+    ) -> std::result::Result<u64, task::Elapsed> {
+        task::timeout(Duration::from_secs(30), async {
+            self.await_consensus_block_height_inner(block_height).await
+        })
+        .await
+    }
+
+    async fn await_consensus_block_height_inner(&self, block_height: u64) -> u64 {
         loop {
             match self.context.api.fetch_consensus_block_height().await {
                 Ok(height) if height >= block_height => return height,
@@ -1159,6 +1169,8 @@ pub enum ClientError {
     FailedPaymentNoRefund,
     #[error("Failed to delete unknown outgoing contract")]
     DeleteUnknownOutgoingContract,
+    #[error("Timeout")]
+    Timeout,
 }
 
 impl From<InvalidAmountTierError> for ClientError {

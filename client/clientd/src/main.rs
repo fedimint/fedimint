@@ -13,7 +13,7 @@ use clientd::{
 };
 use clientd::{Json as JsonExtract, SpendPayload};
 use fedimint_core::config::load_from_file;
-use mint_client::{Client, UserClientConfig};
+use mint_client::{Client, ClientError, UserClientConfig};
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -127,7 +127,10 @@ async fn wait_block_height(
     JsonExtract(payload): JsonExtract<WaitBlockHeightPayload>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    client.await_consensus_block_height(payload.height).await;
+    client
+        .await_consensus_block_height(payload.height)
+        .await
+        .map_err(|_e| ClientError::Timeout)?;
     json_success!("done")
 }
 

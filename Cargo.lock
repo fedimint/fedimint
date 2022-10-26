@@ -1077,6 +1077,7 @@ dependencies = [
 name = "fedimint-tests"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "async-trait",
  "bitcoin",
