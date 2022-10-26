@@ -35,7 +35,7 @@ async-lock = "2.6"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
-getrandom = { version = "0.2.0", features = [ "js" ] }
+getrandom = { version = "0.2.8", features = [ "js" ] }
 gloo-timers = { version = "0.2.4", features = ["futures"] }
 wasm-bindgen-futures = "0.4.33"
 
