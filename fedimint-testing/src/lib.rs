@@ -96,7 +96,6 @@ where
     ) where
         <M as FederationModule>::TxInput: Send + Sync,
     {
-        let mut rng = rand::rngs::OsRng;
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         // TODO: only include some of the proposals for realism
@@ -104,7 +103,7 @@ where
         for (id, member, _db) in &mut self.members {
             consensus.extend(
                 member
-                    .consensus_proposal(&mut rng)
+                    .consensus_proposal()
                     .await
                     .into_iter()
                     .map(|ci| (*id, ci)),
@@ -117,7 +116,7 @@ where
             let mut dbtx = database.begin_transaction();
 
             member
-                .begin_consensus_epoch(&mut dbtx, consensus.clone(), &mut rng)
+                .begin_consensus_epoch(&mut dbtx, consensus.clone())
                 .await;
 
             let cache = member.build_verification_cache(inputs.iter());
@@ -136,9 +135,7 @@ where
             dbtx.commit_tx().expect("DB Error");
 
             let mut dbtx = database.begin_transaction();
-            member
-                .end_consensus_epoch(&peers, &mut dbtx, &mut rng)
-                .await;
+            member.end_consensus_epoch(&peers, &mut dbtx).await;
 
             dbtx.commit_tx().expect("DB Error");
         }

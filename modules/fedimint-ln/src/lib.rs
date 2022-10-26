@@ -30,7 +30,6 @@ use fedimint_api::module::{
 use fedimint_api::{Amount, FederationModule, PeerId};
 use fedimint_api::{InputMeta, OutPoint};
 use itertools::Itertools;
-use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
@@ -153,16 +152,13 @@ impl FederationModule for LightningModule {
     type ConsensusItem = DecryptionShareCI;
     type VerificationCache = ();
 
-    async fn await_consensus_proposal<'a>(&'a self, rng: impl RngCore + CryptoRng + 'a) {
-        if self.consensus_proposal(rng).await.is_empty() {
+    async fn await_consensus_proposal(&self) {
+        if self.consensus_proposal().await.is_empty() {
             std::future::pending().await
         }
     }
 
-    async fn consensus_proposal<'a>(
-        &'a self,
-        _rng: impl RngCore + CryptoRng + 'a,
-    ) -> Vec<Self::ConsensusItem> {
+    async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
         self.db
             .begin_transaction()
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
@@ -177,7 +173,6 @@ impl FederationModule for LightningModule {
         &'a self,
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) {
         consensus_items
             .into_iter()
@@ -471,7 +466,6 @@ impl FederationModule for LightningModule {
         &'a self,
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'a>,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Decrypt preimages
         let preimage_decryption_shares = self

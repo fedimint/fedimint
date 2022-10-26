@@ -26,7 +26,8 @@ use fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
 use fedimint_bitcoind::BitcoindRpc;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
-use rand::{CryptoRng, Rng, RngCore};
+use rand::rngs::OsRng;
+use rand::Rng;
 use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -152,11 +153,11 @@ impl FederationModule for Wallet {
     type ConsensusItem = WalletConsensusItem;
     type VerificationCache = ();
 
-    async fn await_consensus_proposal<'a>(&'a self, rng: impl RngCore + CryptoRng + 'a) {
+    async fn await_consensus_proposal(&self) {
         let mut our_target_height = self.target_height().await;
         let last_consensus_height = self.consensus_height().unwrap_or(0);
 
-        if self.consensus_proposal(rng).await.len() == 1 {
+        if self.consensus_proposal().await.len() == 1 {
             while our_target_height <= last_consensus_height {
                 our_target_height = self.target_height().await;
                 sleep(Duration::from_millis(1000)).await;
@@ -164,10 +165,7 @@ impl FederationModule for Wallet {
         }
     }
 
-    async fn consensus_proposal<'a>(
-        &'a self,
-        mut rng: impl RngCore + CryptoRng + 'a,
-    ) -> Vec<Self::ConsensusItem> {
+    async fn consensus_proposal<'a>(&'a self) -> Vec<Self::ConsensusItem> {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
@@ -196,7 +194,7 @@ impl FederationModule for Wallet {
         let round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
             block_height: proposed_height,
             fee_rate,
-            randomness: rng.gen(),
+            randomness: OsRng.gen(),
         });
 
         self.db
@@ -217,7 +215,6 @@ impl FederationModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) {
         trace!(?consensus_items, "Received consensus proposals");
 
@@ -421,7 +418,6 @@ impl FederationModule for Wallet {
         &'a self,
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'a>,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Sign and finalize any unsigned transactions that have signatures
         let unsigned_txs: Vec<(UnsignedTransactionKey, UnsignedTransaction)> = self
