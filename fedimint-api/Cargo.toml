@@ -31,7 +31,7 @@ tracing ="0.1.37"
 url = { version = "2.3.1", features = ["serde"] }
 
 [target.'cfg(target_family="wasm")'.dependencies]
-async-lock = "2.5"
+async-lock = "2.6"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
