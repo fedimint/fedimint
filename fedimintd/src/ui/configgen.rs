@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::ui::Guardian;
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::{ClientConfig, Node};
@@ -13,6 +12,8 @@ use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use threshold_crypto::serde_impl::SerdeSecret;
 use url::Url;
+
+use crate::ui::Guardian;
 
 pub fn configgen(
     federation_name: String,
