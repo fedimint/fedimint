@@ -1,8 +1,11 @@
+use std::path::PathBuf;
+
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
-    BalancePayload, DepositAddressPayload, DepositPayload, FederationId, WithdrawPayload,
+    config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
+    WithdrawPayload,
 };
 use mint_client::utils::from_hex;
 use serde::Serialize;
@@ -22,6 +25,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Ganerate gateway configuration
+    /// NOTE: This command can only be used on a local gateway
+    GenerateConfig {
+        /// The gateway configuration directory
+        #[clap(default_value = ".gateway")]
+        out_dir: PathBuf,
+    },
     /// Display CLI version hash
     VersionHash,
     /// Display high-level information about the Gateway
@@ -56,6 +66,22 @@ pub enum Commands {
 async fn main() {
     let cli = Cli::parse();
     match cli.command {
+        Commands::GenerateConfig { mut out_dir } => {
+            // Recursively create config directory if it doesn't exist
+            std::fs::create_dir_all(&out_dir).expect("Failed to create config directory");
+            // Create config file
+            out_dir.push("gateway.config");
+
+            let cfg_file =
+                std::fs::File::create(out_dir).expect("Failed to create gateway config file");
+            serde_json::to_writer_pretty(
+                cfg_file,
+                &GatewayConfig {
+                    password: source_password(cli.rpcpassword),
+                },
+            )
+            .expect("Failed to write gateway configs to file");
+        }
         Commands::VersionHash => {
             println!("version: {}", env!("GIT_HASH"));
         }
