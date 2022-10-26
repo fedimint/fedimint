@@ -262,9 +262,6 @@
 <span id="262">262</span>
 <span id="263">263</span>
 <span id="264">264</span>
-<span id="265">265</span>
-<span id="266">266</span>
-<span id="267">267</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -363,7 +360,6 @@
     ) <span class="kw">where
         </span>&lt;M <span class="kw">as </span>FederationModule&gt;::TxInput: Send + Sync,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
         <span class="comment">// TODO: only include some of the proposals for realism
@@ -371,7 +367,7 @@
         <span class="kw">for </span>(id, member, _db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             consensus.extend(
                 member
-                    .consensus_proposal(<span class="kw-2">&amp;mut </span>rng)
+                    .consensus_proposal()
                     .<span class="kw">await
                     </span>.into_iter()
                     .map(|ci| (<span class="kw-2">*</span>id, ci)),
@@ -384,7 +380,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction();
 
             member
-                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, consensus.clone(), <span class="kw-2">&amp;mut </span>rng)
+                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, consensus.clone())
                 .<span class="kw">await</span>;
 
             <span class="kw">let </span>cache = member.build_verification_cache(inputs.iter());
@@ -403,9 +399,7 @@
             dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction();
-            member
-                .end_consensus_epoch(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>rng)
-                .<span class="kw">await</span>;
+            member.end_consensus_epoch(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
 
             dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
         }
