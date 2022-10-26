@@ -222,6 +222,49 @@
 <span id="222">222</span>
 <span id="223">223</span>
 <span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -233,7 +276,7 @@
 <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{ApiError, TransactionItemAmount};
+<span class="kw">use </span>fedimint_api::module::{ApiError, ModuleError, TransactionItemAmount};
 <span class="kw">use </span>fedimint_api::InputMeta;
 <span class="kw">use </span>fedimint_api::{FederationModule, OutPoint, PeerId};
 
@@ -255,7 +298,6 @@
 <span class="kw">where
     </span>M: FederationModule,
     M::ConsensusItem: Clone,
-    M::Error: Debug + Eq,
     M::TxOutputOutcome: Eq + Debug,
 {
     <span class="kw">pub async fn </span>new&lt;C, F, FF&gt;(
@@ -291,7 +333,7 @@
         <span class="self">self</span>.block_height.store(bh, Ordering::Relaxed);
     }
 
-    <span class="kw">pub fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>M::TxInput) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, M::Error&gt; {
+    <span class="kw">pub fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>M::TxInput) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
         <span class="kw">let </span>results = <span class="self">self</span>.members.iter().map(|(<span class="kw">_</span>, member, <span class="kw">_</span>)| {
@@ -302,7 +344,7 @@
                 keys: puk_keys.collect(),
             })
         });
-        assert_all_equal(results)
+        assert_all_equal_result(results)
     }
 
     <span class="kw">pub fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>M::TxOutput) -&gt; bool {
@@ -412,6 +454,50 @@
     <span class="kw">for </span>item <span class="kw">in </span>iter {
         <span class="macro">assert_eq!</span>(first, item);
     }
+    first
+}
+
+<span class="doccomment">/// Make sure all elements are equal for `Result&lt;O, E&gt;`
+///
+/// For errors their conversion to `String` via `Debug` is used to avoid
+/// `E : Eq`.
+</span><span class="kw">fn </span>assert_all_equal_result&lt;I, O, E&gt;(<span class="kw-2">mut </span>iter: I) -&gt; I::Item
+<span class="kw">where
+    </span>I: Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;O, E&gt;&gt;,
+    O: Eq + Debug,
+    E: Debug,
+{
+    <span class="kw">let </span>first = iter.next().expect(<span class="string">&quot;empty iterator&quot;</span>);
+
+    <span class="kw">match </span><span class="kw-2">&amp;</span>first {
+        <span class="prelude-val">Ok</span>(first) =&gt; {
+            <span class="kw">for </span>item <span class="kw">in </span>iter {
+                <span class="kw">match </span>item {
+                    <span class="prelude-val">Ok</span>(item) =&gt; {
+                        <span class="macro">assert_eq!</span>(first, <span class="kw-2">&amp;</span>item);
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">panic!</span>(<span class="string">&quot;Assertion error: Ok({first:?}) != Err({e:?})&quot;</span>);
+                    }
+                }
+            }
+        }
+        <span class="prelude-val">Err</span>(first) =&gt; {
+            <span class="kw">let </span>first = <span class="macro">format!</span>(<span class="string">&quot;{first:?}&quot;</span>);
+
+            <span class="kw">for </span>item <span class="kw">in </span>iter {
+                <span class="kw">match </span>item {
+                    <span class="prelude-val">Ok</span>(o) =&gt; {
+                        <span class="macro">panic!</span>(<span class="string">&quot;Assertion error: Err({first}) != Ok({o:?})&quot;</span>);
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">assert_eq!</span>(first, <span class="macro">format!</span>(<span class="string">&quot;{e:?}&quot;</span>));
+                    }
+                }
+            }
+        }
+    }
+
     first
 }
 

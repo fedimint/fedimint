@@ -266,6 +266,35 @@
 <span id="266">266</span>
 <span id="267">267</span>
 <span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 
@@ -276,6 +305,7 @@
 <span class="kw">use </span>rand::CryptoRng;
 <span class="kw">use </span>secp256k1_zkp::rand::RngCore;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
+<span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseTransaction;
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
@@ -410,9 +440,37 @@
         <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M, serde_json::Value) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;,
 }
 
+<span class="attribute">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>ModuleError {
+    <span class="attribute">#[error(transparent)]
+    </span>Other(<span class="attribute">#[from] </span>anyhow::Error),
+}
+
+<span class="doccomment">/// Extension trait with a function to map `Result`s used by modules to `ModuleError`
+///
+/// Currently each module defined it&#39;s own `enum XyzError { ... }` and is not using
+/// `anyhow::Error`. For `?` to work seamlessly two conversion would have to be made:
+/// `enum-Error -&gt; anyhow::Error -&gt; enum-Error`, while `Into`/`From` can only do one.
+///
+/// To avoid the boilerplate, this trait defines an easy conversion method.
+</span><span class="kw">pub trait </span>IntoModuleError {
+    <span class="kw">type </span>Target;
+    <span class="kw">fn </span>into_module_error_other(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Target;
+}
+
+<span class="kw">impl</span>&lt;O, E&gt; IntoModuleError <span class="kw">for </span><span class="prelude-ty">Result</span>&lt;O, E&gt;
+<span class="kw">where
+    </span>E: std::error::Error + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">type </span>Target = <span class="prelude-ty">Result</span>&lt;O, ModuleError&gt;;
+
+    <span class="kw">fn </span>into_module_error_other(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Target {
+        <span class="self">self</span>.map_err(|e| ModuleError::Other(e.into()))
+    }
+}
+
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">pub trait </span>FederationModule: Sized {
-    <span class="kw">type </span>Error;
     <span class="kw">type </span>TxInput: Send + Sync;
     <span class="kw">type </span>TxOutput;
     <span class="kw">type </span>TxOutputOutcome;
@@ -457,7 +515,7 @@
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="self">Self</span>::Error&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, ModuleError&gt;;
 
     <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the
     /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
@@ -472,7 +530,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, ModuleError&gt;;
 
     <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -481,7 +539,7 @@
     </span><span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
@@ -498,7 +556,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
         out_point: <span class="kw">crate</span>::OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// This function is called once all transactions have been processed and changes were written
     /// to the database. This allows running finalization code before the next epoch.

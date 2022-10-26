@@ -1277,6 +1277,10 @@
 <span id="1277">1277</span>
 <span id="1278">1278</span>
 <span id="1279">1279</span>
+<span id="1280">1280</span>
+<span id="1281">1281</span>
+<span id="1282">1282</span>
+<span id="1283">1283</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1298,8 +1302,8 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::ApiEndpoint;
-<span class="kw">use </span>fedimint_api::module::{api_endpoint, TransactionItemAmount};
+<span class="kw">use </span>fedimint_api::module::{api_endpoint, IntoModuleError, TransactionItemAmount};
+<span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
 <span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_bitcoind::BitcoindRpc;
@@ -1424,7 +1428,6 @@
 
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Wallet {
-    <span class="kw">type </span>Error = WalletError;
     <span class="kw">type </span>TxInput = Box&lt;PegInProof&gt;;
     <span class="kw">type </span>TxOutput = PegOut;
     <span class="comment">// TODO: implement outcome
@@ -1555,12 +1558,15 @@
         _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, ModuleError&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.block_is_known(input.proof_block()) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::UnknownPegInProofBlock(input.proof_block()));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::UnknownPegInProofBlock(input.proof_block()))
+                .into_module_error_other();
         }
 
-        input.verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_descriptor)<span class="question-mark">?</span>;
+        input
+            .verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_descriptor)
+            .into_module_error_other()<span class="question-mark">?</span>;
 
         <span class="kw">if </span><span class="self">self
             </span>.db
@@ -1569,7 +1575,7 @@
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some()
         {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegInAlreadyClaimed);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegInAlreadyClaimed).into_module_error_other();
         }
 
         <span class="prelude-val">Ok</span>(InputMeta {
@@ -1587,7 +1593,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, ModuleError&gt; {
         <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(outpoint = %input.outpoint(), amount = %meta.amount.amount, <span class="string">&quot;Claiming peg-in&quot;</span>);
 
@@ -1606,22 +1612,24 @@
     <span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">if </span>!is_address_valid_for_network(<span class="kw-2">&amp;</span>output.recipient, <span class="self">self</span>.cfg.network) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
                 <span class="self">self</span>.cfg.network,
                 output.recipient.network,
-            ));
+            ))
+            .into_module_error_other();
         }
         <span class="kw">let </span>consensus_fee_rate = <span class="self">self</span>.current_round_consensus().unwrap().fee_rate;
         <span class="kw">if </span>output.fees.fee_rate &lt; consensus_fee_rate {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegOutFeeRate(
                 output.fees.fee_rate,
                 consensus_fee_rate,
-            ));
+            ))
+            .into_module_error_other();
         }
         <span class="kw">if </span><span class="self">self</span>.create_peg_out_tx(output).is_none() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::NotEnoughSpendableUTXO);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::NotEnoughSpendableUTXO).into_module_error_other();
         }
         <span class="prelude-val">Ok</span>(TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
@@ -1634,7 +1642,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
         out_point: fedimint_api::OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
             amount = %output.amount, recipient = %output.recipient,

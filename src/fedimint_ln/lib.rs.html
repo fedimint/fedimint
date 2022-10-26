@@ -780,6 +780,18 @@
 <span id="780">780</span>
 <span id="781">781</span>
 <span id="782">782</span>
+<span id="783">783</span>
+<span id="784">784</span>
+<span id="785">785</span>
+<span id="786">786</span>
+<span id="787">787</span>
+<span id="788">788</span>
+<span id="789">789</span>
+<span id="790">790</span>
+<span id="791">791</span>
+<span id="792">792</span>
+<span id="793">793</span>
+<span id="794">794</span>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -806,7 +818,9 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError, TransactionItemAmount};
+<span class="kw">use </span>fedimint_api::module::{
+    api_endpoint, ApiEndpoint, ApiError, IntoModuleError, ModuleError, TransactionItemAmount,
+};
 <span class="kw">use </span>fedimint_api::{Amount, FederationModule, PeerId};
 <span class="kw">use </span>fedimint_api::{InputMeta, OutPoint};
 <span class="kw">use </span>itertools::Itertools;
@@ -927,7 +941,6 @@
 
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>LightningModule {
-    <span class="kw">type </span>Error = LightningModuleError;
     <span class="kw">type </span>TxInput = ContractInput;
     <span class="kw">type </span>TxOutput = ContractOrOfferOutput;
     <span class="kw">type </span>TxOutputOutcome = OutputOutcome;
@@ -985,16 +998,18 @@
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, ModuleError&gt; {
         <span class="kw">let </span>account: ContractAccount = <span class="self">self
             </span>.get_contract_account(input.contract_id)
-            .ok_or(LightningModuleError::UnknownContract(input.contract_id))<span class="question-mark">?</span>;
+            .ok_or(LightningModuleError::UnknownContract(input.contract_id))
+            .into_module_error_other()<span class="question-mark">?</span>;
 
         <span class="kw">if </span>account.amount &lt; input.amount {
             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InsufficientFunds(
                 account.amount,
                 input.amount,
-            ));
+            ))
+            .into_module_error_other();
         }
 
         <span class="kw">let </span>pub_key = <span class="kw">match </span>account.contract {
@@ -1005,13 +1020,15 @@
                         <span class="kw-2">&amp;</span>input
                             .witness
                             .as_ref()
-                            .ok_or(LightningModuleError::MissingPreimage)<span class="question-mark">?
+                            .ok_or(LightningModuleError::MissingPreimage)
+                            .into_module_error_other()<span class="question-mark">?
                             </span>.<span class="number">0</span>,
                     );
 
                     <span class="comment">// … and the spender provides a valid preimage …
                     </span><span class="kw">if </span>preimage_hash != outgoing.hash {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InvalidPreimage);
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InvalidPreimage)
+                            .into_module_error_other();
                     }
 
                     <span class="comment">// … then the contract account can be spent using the gateway key,
@@ -1025,12 +1042,14 @@
             FundedContract::Incoming(incoming) =&gt; <span class="kw">match </span>incoming.contract.decrypted_preimage {
                 <span class="comment">// Once the preimage has been decrypted …
                 </span>DecryptedPreimage::Pending =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::ContractNotReady);
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::ContractNotReady).into_module_error_other();
                 }
                 <span class="comment">// … either the user may spend the funds since they sold a valid preimage …
                 </span>DecryptedPreimage::Some(preimage) =&gt; <span class="kw">match </span>preimage.to_public_key() {
                     <span class="prelude-val">Ok</span>(pub_key) =&gt; pub_key,
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InvalidPreimage),
+                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InvalidPreimage).into_module_error_other()
+                    }
                 },
                 <span class="comment">// … or the gateway may claim back funds for not receiving the advertised preimage.
                 </span>DecryptedPreimage::Invalid =&gt; incoming.contract.gateway_key,
@@ -1052,7 +1071,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, ModuleError&gt; {
         <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>account_db_key = ContractKey(input.contract_id);
@@ -1072,7 +1091,7 @@
     <span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">match </span>output {
             ContractOrOfferOutput::Contract(contract) =&gt; {
                 <span class="comment">// Incoming contracts are special, they need to match an offer
@@ -1082,19 +1101,21 @@
                         .begin_transaction()
                         .get_value(<span class="kw-2">&amp;</span>OfferKey(incoming.hash))
                         .expect(<span class="string">&quot;DB error&quot;</span>)
-                        .ok_or(LightningModuleError::NoOffer(incoming.hash))<span class="question-mark">?</span>;
+                        .ok_or(LightningModuleError::NoOffer(incoming.hash))
+                        .into_module_error_other()<span class="question-mark">?</span>;
 
                     <span class="kw">if </span>contract.amount &lt; offer.amount {
                         <span class="comment">// If the account is not sufficiently funded fail the output
                         </span><span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InsufficientIncomingFunding(
                             offer.amount,
                             contract.amount,
-                        ));
+                        ))
+                        .into_module_error_other();
                     }
                 }
 
                 <span class="kw">if </span>contract.amount == Amount::ZERO {
-                    <span class="prelude-val">Err</span>(LightningModuleError::ZeroOutput)
+                    <span class="prelude-val">Err</span>(LightningModuleError::ZeroOutput).into_module_error_other()
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Ok</span>(TransactionItemAmount {
                         amount: contract.amount,
@@ -1104,7 +1125,7 @@
             }
             ContractOrOfferOutput::Offer(offer) =&gt; {
                 <span class="kw">if </span>!offer.encrypted_preimage.<span class="number">0</span>.verify() {
-                    <span class="prelude-val">Err</span>(LightningModuleError::InvalidEncryptedPreimage)
+                    <span class="prelude-val">Err</span>(LightningModuleError::InvalidEncryptedPreimage).into_module_error_other()
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Ok</span>(TransactionItemAmount::ZERO)
                 }
@@ -1118,12 +1139,14 @@
                     .begin_transaction()
                     .get_value(<span class="kw-2">&amp;</span>ContractKey(<span class="kw-2">*</span>contract))
                     .expect(<span class="string">&quot;DB error&quot;</span>)
-                    .ok_or(LightningModuleError::UnknownContract(<span class="kw-2">*</span>contract))<span class="question-mark">?</span>;
+                    .ok_or(LightningModuleError::UnknownContract(<span class="kw-2">*</span>contract))
+                    .into_module_error_other()<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>outgoing_contract = <span class="kw">match </span><span class="kw-2">&amp;</span>contract_account.contract {
                     FundedContract::Outgoing(contract) =&gt; contract,
                     <span class="kw">_ </span>=&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::NotOutgoingContract);
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::NotOutgoingContract)
+                            .into_module_error_other();
                     }
                 };
 
@@ -1133,7 +1156,8 @@
                         <span class="kw-2">&amp;</span>outgoing_contract.cancellation_message().into(),
                         <span class="kw-2">&amp;</span>outgoing_contract.gateway_key,
                     )
-                    .map_err(|<span class="kw">_</span>| LightningModuleError::InvalidCancellationSignature)<span class="question-mark">?</span>;
+                    .map_err(|<span class="kw">_</span>| LightningModuleError::InvalidCancellationSignature)
+                    .into_module_error_other()<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(TransactionItemAmount::ZERO)
             }
@@ -1145,7 +1169,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
 
         <span class="kw">match </span>output {
