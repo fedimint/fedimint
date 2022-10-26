@@ -8,7 +8,7 @@ use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{ApiEndpoint, TransactionItemAmount};
+use fedimint_api::module::{ApiEndpoint, IntoModuleError, ModuleError, TransactionItemAmount};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
     Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
@@ -104,7 +104,6 @@ pub struct VerificationCache {
 
 #[async_trait(?Send)]
 impl FederationModule for Mint {
-    type Error = MintError;
     type TxInput = TieredMulti<Note>;
     type TxOutput = TieredMulti<BlindNonce>;
     type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
@@ -178,30 +177,33 @@ impl FederationModule for Mint {
         _interconnect: &dyn ModuleInterconect,
         cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, Self::Error> {
-        input.iter_items().try_for_each(|(amount, coin)| {
-            let coin_valid = cache
-                .valid_coins
-                .get(coin) // We validated the coin
-                .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
-                .unwrap_or(false); // If we didn't validate the coin return false
+    ) -> Result<InputMeta<'a>, ModuleError> {
+        input
+            .iter_items()
+            .try_for_each(|(amount, coin)| {
+                let coin_valid = cache
+                    .valid_coins
+                    .get(coin) // We validated the coin
+                    .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
+                    .unwrap_or(false); // If we didn't validate the coin return false
 
-            if !coin_valid {
-                return Err(MintError::InvalidSignature);
-            }
+                if !coin_valid {
+                    return Err(MintError::InvalidSignature);
+                }
 
-            if self
-                .db
-                .begin_transaction()
-                .get_value(&NonceKey(coin.0.clone()))
-                .expect("DB error")
-                .is_some()
-            {
-                return Err(MintError::SpentCoin);
-            }
+                if self
+                    .db
+                    .begin_transaction()
+                    .get_value(&NonceKey(coin.0.clone()))
+                    .expect("DB error")
+                    .is_some()
+                {
+                    return Err(MintError::SpentCoin);
+                }
 
-            Ok(())
-        })?;
+                Ok(())
+            })
+            .into_module_error_other()?;
 
         Ok(InputMeta {
             amount: TransactionItemAmount {
@@ -218,7 +220,7 @@ impl FederationModule for Mint {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::TxInput,
         cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, Self::Error> {
+    ) -> Result<InputMeta<'b>, ModuleError> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
         input.iter_items().for_each(|(amount, coin)| {
@@ -234,7 +236,7 @@ impl FederationModule for Mint {
     fn validate_output(
         &self,
         output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, Self::Error> {
+    ) -> Result<TransactionItemAmount, ModuleError> {
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
             if self.pub_key.get(&amount).is_none() {
                 Some(amount)
@@ -242,7 +244,7 @@ impl FederationModule for Mint {
                 None
             }
         }) {
-            Err(MintError::InvalidAmountTier(amount))
+            Err(MintError::InvalidAmountTier(amount)).into_module_error_other()
         } else {
             Ok(TransactionItemAmount {
                 amount: output.total_amount(),
@@ -256,12 +258,12 @@ impl FederationModule for Mint {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::TxOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, Self::Error> {
+    ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(output)?;
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
-        let partial_sig = self.blind_sign(output.clone())?;
+        let partial_sig = self.blind_sign(output.clone()).into_module_error_other()?;
 
         dbtx.insert_new_entry(
             &ProposedPartialSignatureKey {

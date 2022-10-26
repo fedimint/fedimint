@@ -19,8 +19,8 @@ use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::ApiEndpoint;
-use fedimint_api::module::{api_endpoint, TransactionItemAmount};
+use fedimint_api::module::{api_endpoint, IntoModuleError, TransactionItemAmount};
+use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
 use fedimint_bitcoind::BitcoindRpc;
@@ -145,7 +145,6 @@ pub struct PegOutOutcome(pub bitcoin::Txid);
 
 #[async_trait(?Send)]
 impl FederationModule for Wallet {
-    type Error = WalletError;
     type TxInput = Box<PegInProof>;
     type TxOutput = PegOut;
     // TODO: implement outcome
@@ -276,12 +275,15 @@ impl FederationModule for Wallet {
         _interconnect: &dyn ModuleInterconect,
         _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, Self::Error> {
+    ) -> Result<InputMeta<'a>, ModuleError> {
         if !self.block_is_known(input.proof_block()) {
-            return Err(WalletError::UnknownPegInProofBlock(input.proof_block()));
+            return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
+                .into_module_error_other();
         }
 
-        input.verify(&self.secp, &self.cfg.peg_in_descriptor)?;
+        input
+            .verify(&self.secp, &self.cfg.peg_in_descriptor)
+            .into_module_error_other()?;
 
         if self
             .db
@@ -290,7 +292,7 @@ impl FederationModule for Wallet {
             .expect("DB error")
             .is_some()
         {
-            return Err(WalletError::PegInAlreadyClaimed);
+            return Err(WalletError::PegInAlreadyClaimed).into_module_error_other();
         }
 
         Ok(InputMeta {
@@ -308,7 +310,7 @@ impl FederationModule for Wallet {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::TxInput,
         cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, Self::Error> {
+    ) -> Result<InputMeta<'b>, ModuleError> {
         let meta = self.validate_input(interconnect, cache, input)?;
         debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
@@ -327,22 +329,24 @@ impl FederationModule for Wallet {
     fn validate_output(
         &self,
         output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, Self::Error> {
+    ) -> Result<TransactionItemAmount, ModuleError> {
         if !is_address_valid_for_network(&output.recipient, self.cfg.network) {
             return Err(WalletError::WrongNetwork(
                 self.cfg.network,
                 output.recipient.network,
-            ));
+            ))
+            .into_module_error_other();
         }
         let consensus_fee_rate = self.current_round_consensus().unwrap().fee_rate;
         if output.fees.fee_rate < consensus_fee_rate {
             return Err(WalletError::PegOutFeeRate(
                 output.fees.fee_rate,
                 consensus_fee_rate,
-            ));
+            ))
+            .into_module_error_other();
         }
         if self.create_peg_out_tx(output).is_none() {
-            return Err(WalletError::NotEnoughSpendableUTXO);
+            return Err(WalletError::NotEnoughSpendableUTXO).into_module_error_other();
         }
         Ok(TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
@@ -355,7 +359,7 @@ impl FederationModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::TxOutput,
         out_point: fedimint_api::OutPoint,
-    ) -> Result<TransactionItemAmount, Self::Error> {
+    ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(output)?;
         debug!(
             amount = %output.amount, recipient = %output.recipient,

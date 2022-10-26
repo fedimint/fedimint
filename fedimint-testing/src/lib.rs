@@ -9,7 +9,7 @@ use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{ApiError, TransactionItemAmount};
+use fedimint_api::module::{ApiError, ModuleError, TransactionItemAmount};
 use fedimint_api::InputMeta;
 use fedimint_api::{FederationModule, OutPoint, PeerId};
 
@@ -31,7 +31,6 @@ impl<M, CC> FakeFed<M, CC>
 where
     M: FederationModule,
     M::ConsensusItem: Clone,
-    M::Error: Debug + Eq,
     M::TxOutputOutcome: Eq + Debug,
 {
     pub async fn new<C, F, FF>(
@@ -67,7 +66,7 @@ where
         self.block_height.store(bh, Ordering::Relaxed);
     }
 
-    pub fn verify_input(&self, input: &M::TxInput) -> Result<TestInputMeta, M::Error> {
+    pub fn verify_input(&self, input: &M::TxInput) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         let results = self.members.iter().map(|(_, member, _)| {
@@ -78,7 +77,7 @@ where
                 keys: puk_keys.collect(),
             })
         });
-        assert_all_equal(results)
+        assert_all_equal_result(results)
     }
 
     pub fn verify_output(&self, output: &M::TxOutput) -> bool {
@@ -188,6 +187,50 @@ where
     for item in iter {
         assert_eq!(first, item);
     }
+    first
+}
+
+/// Make sure all elements are equal for `Result<O, E>`
+///
+/// For errors their conversion to `String` via `Debug` is used to avoid
+/// `E : Eq`.
+fn assert_all_equal_result<I, O, E>(mut iter: I) -> I::Item
+where
+    I: Iterator<Item = Result<O, E>>,
+    O: Eq + Debug,
+    E: Debug,
+{
+    let first = iter.next().expect("empty iterator");
+
+    match &first {
+        Ok(first) => {
+            for item in iter {
+                match item {
+                    Ok(item) => {
+                        assert_eq!(first, &item);
+                    }
+                    Err(e) => {
+                        panic!("Assertion error: Ok({first:?}) != Err({e:?})");
+                    }
+                }
+            }
+        }
+        Err(first) => {
+            let first = format!("{first:?}");
+
+            for item in iter {
+                match item {
+                    Ok(o) => {
+                        panic!("Assertion error: Err({first}) != Ok({o:?})");
+                    }
+                    Err(e) => {
+                        assert_eq!(first, format!("{e:?}"));
+                    }
+                }
+            }
+        }
+    }
+
     first
 }
 
