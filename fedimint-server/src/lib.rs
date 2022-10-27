@@ -8,7 +8,7 @@ use std::time::Duration;
 use config::ServerConfig;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::net::peers::AnyPeerConnections;
-use fedimint_api::task::TaskGroup;
+use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 pub use fedimint_core::*;
@@ -79,7 +79,7 @@ impl FedimintServer {
             })
             .await;
         task_group
-            .spawn_local("consensus", move |_handle| server.run_consensus())
+            .spawn_local("consensus", move |handle| server.run_consensus(handle))
             .await;
         Ok(())
     }
@@ -136,7 +136,7 @@ impl FedimintServer {
     }
 
     /// Loop `run_conensus_epoch` forever
-    async fn run_consensus(mut self) {
+    async fn run_consensus(mut self, task_handle: TaskHandle) {
         // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
         let mut rng = OsRng;
         let consensus = self.consensus.clone();
@@ -146,7 +146,7 @@ impl FedimintServer {
         self.rejoin_consensus(Duration::from_secs(60), &mut rng)
             .await;
 
-        loop {
+        while !task_handle.is_shutting_down() {
             let outcomes = self
                 .run_consensus_epoch(consensus.get_consensus_proposal(), &mut rng)
                 .await;
