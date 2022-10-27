@@ -24,7 +24,7 @@ fedimint-api = { path = "../../fedimint-api" }
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92", features = [ "compiler", "serde" ] }
 rand = "0.8"
-secp256k1 = { version = "0.24.0", features = [ "serde" ] }
+secp256k1 = { version = "0.24.1", features = [ "serde" ] }
 serde = { version = "1.0.147", features = [ "derive" ] }
 thiserror = "1.0.37"
 tokio = { version = "1.21.2", features = ["sync"], optional = true }
