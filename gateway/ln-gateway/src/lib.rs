@@ -188,6 +188,13 @@ impl LnGateway {
         Ok(actor)
     }
 
+    fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+        self.actors
+            .get(&federation_id)
+            .cloned()
+            .ok_or(LnGatewayError::UnknownFederation)
+    }
+
     pub async fn buy_preimage_offer(
         &self,
         payment_hash: &sha256::Hash,
@@ -465,6 +472,8 @@ pub enum LnGatewayError {
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
+    #[error("Actor not found")]
+    UnknownFederation,
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }
