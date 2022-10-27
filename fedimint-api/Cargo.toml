@@ -14,7 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.65"
 async-trait = "0.1"
-bitcoin = { version = "0.29.1", features = [ "rand", "serde" ] }
+bitcoin = { version = "0.29.2", features = [ "rand", "serde" ] }
 bitcoin_hashes = { version = "0.11", features = ["serde"] }
 futures = "0.3.24"
 hex = "0.4.3"
