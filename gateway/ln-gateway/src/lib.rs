@@ -27,13 +27,12 @@ use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::{
     ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
-    PaymentParameters,
 };
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, warn};
 use webserver::run_webserver;
 
 use crate::ln::{LightningError, LnRpc};
@@ -216,71 +215,6 @@ impl LnGateway {
         Ok(preimage)
     }
 
-    #[instrument(skip_all, fields(%contract_id))]
-    pub async fn pay_invoice(
-        &self,
-        contract_id: ContractId,
-        mut rng: impl RngCore + CryptoRng,
-    ) -> Result<OutPoint> {
-        debug!("Fetching contract");
-        let contract_account = self
-            .federation_client
-            .fetch_outgoing_contract(contract_id)
-            .await?;
-
-        let payment_params = self
-            .federation_client
-            .validate_outgoing_account(&contract_account)
-            .await?;
-
-        debug!(
-            account = ?contract_account,
-            "Fetched and validated contract account"
-        );
-
-        self.federation_client
-            .save_outgoing_payment(contract_account.clone());
-
-        let is_internal_payment = payment_params.maybe_internal
-            && self
-                .federation_client
-                .ln_client()
-                .offer_exists(payment_params.payment_hash)
-                .await
-                .unwrap_or(false);
-
-        let preimage_res = if is_internal_payment {
-            self.buy_preimage_internal(
-                &payment_params.payment_hash,
-                &payment_params.invoice_amount,
-                &mut rng,
-            )
-            .await
-        } else {
-            self.buy_preimage_external(&contract_account.contract.invoice, &payment_params)
-                .await
-        };
-
-        match preimage_res {
-            Ok(preimage) => {
-                let outpoint = self
-                    .federation_client
-                    .claim_outgoing_contract(contract_id, preimage, rng)
-                    .await?;
-
-                Ok(outpoint)
-            }
-            Err(e) => {
-                warn!("Invoice payment failed: {}. Aborting", e);
-                // FIXME: combine both errors?
-                self.federation_client
-                    .abort_outgoing_payment(contract_id)
-                    .await?;
-                Err(e)
-            }
-        }
-    }
-
     async fn buy_preimage_internal(
         &self,
         payment_hash: &sha256::Hash,
@@ -312,31 +246,6 @@ impl LnGateway {
         }
     }
 
-    async fn buy_preimage_external(
-        &self,
-        invoice: &str,
-        payment_params: &PaymentParameters,
-    ) -> Result<Preimage> {
-        match self
-            .ln_client
-            .pay(
-                invoice,
-                payment_params.max_delay,
-                payment_params.max_fee_percent(),
-            )
-            .await
-        {
-            Ok(preimage) => {
-                debug!(?preimage, "Successfully paid LN invoice");
-                Ok(preimage)
-            }
-            Err(e) => {
-                warn!("LN payment failed, aborting");
-                Err(LnGatewayError::CouldNotRoute(e))
-            }
-        }
-    }
-
     pub async fn await_outgoing_contract_claimed(
         &self,
         contract_id: ContractId,
@@ -348,10 +257,18 @@ impl LnGateway {
             .await?)
     }
 
-    async fn handle_pay_invoice_msg(&self, contract_id: ContractId) -> Result<()> {
-        let rng = rand::rngs::OsRng;
-        let outpoint = self.pay_invoice(contract_id, rng).await?;
-        self.await_outgoing_contract_claimed(contract_id, outpoint)
+    async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
+        let PayInvoicePayload {
+            federation_id,
+            contract_id,
+        } = payload;
+
+        let actor = self.select_actor(federation_id)?;
+        let outpoint = actor
+            .pay_invoice(self.ln_client.clone(), contract_id)
+            .await?;
+        actor
+            .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
         Ok(())
     }
@@ -430,7 +347,7 @@ impl LnGateway {
                     }
                     GatewayRequest::PayInvoice(inner) => {
                         inner
-                            .handle(|inner| self.handle_pay_invoice_msg(inner.contract_id))
+                            .handle(|payload| self.handle_pay_invoice_msg(payload))
                             .await;
                     }
                     GatewayRequest::Balance(inner) => {
