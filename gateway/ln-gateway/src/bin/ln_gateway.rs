@@ -37,15 +37,16 @@ async fn main() -> Result<(), Error> {
     let gw_cfg_path = work_dir.clone().join("gateway.config");
     let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path);
 
-    let federation_client = build_federation_client(pub_key, bind_addr, work_dir)?;
+    let federation_client = Arc::new(build_federation_client(pub_key, bind_addr, work_dir)?);
     let mut gateway = LnGateway::new(
         gw_cfg,
-        Arc::new(federation_client),
+        federation_client.clone(),
         ln_rpc,
         tx,
         rx,
         bind_addr,
     );
+    gateway.register_federation(federation_client).await?;
 
     gateway.run().await.expect("gateway failed to run");
     Ok(())

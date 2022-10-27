@@ -168,6 +168,26 @@ impl LnGateway {
         }
     }
 
+    /// Register a federation to the gateway.
+    ///
+    /// # Returns
+    ///
+    /// A `GatewayActor` that can be used to execute gateway functions for the federation
+    pub async fn register_federation(
+        &mut self,
+        client: Arc<GatewayClient>,
+    ) -> Result<Arc<GatewayActor>> {
+        let actor = Arc::new(
+            GatewayActor::new(client.clone())
+                .await
+                .expect("Failed to create actor"),
+        );
+
+        let federation_id = FederationId(client.config().client_config.federation_name);
+        self.actors.insert(federation_id, actor.clone());
+        Ok(actor)
+    }
+
     pub async fn buy_preimage_offer(
         &self,
         payment_hash: &sha256::Hash,
