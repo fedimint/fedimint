@@ -19,6 +19,7 @@ await_block_sync
 sleep 5
 
 # test a peer missing out on epochs and needing to rejoin
+echo "Kill server1..."
 kill $server1
 mine_blocks 100
 await_block_sync
@@ -28,11 +29,14 @@ await_block_sync
 
 # FIXME should await a response from all 4 peers instead of this hack
 sleep 5
+echo "Kill server2..."
 kill $server2
 await_block_sync
 
 # now test what happens if consensus needs to be restarted
+echo "Kill server3..."
 kill $server3
+echo "Kill server4..."
 kill $server4
 ./scripts/start-fed.sh
 mine_blocks 100
