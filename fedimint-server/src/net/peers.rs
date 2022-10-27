@@ -315,9 +315,16 @@ where
                 }
             },
             new_connection_res = self.incoming_connections.recv() => {
-                let new_connection = new_connection_res.expect("Listener task died");
-                warn!("Replacing existing connection");
-                self.connect(new_connection, 0).await
+                match new_connection_res {
+                    Some(new_connection) => {
+                        warn!("Replacing existing connection");
+                        self.connect(new_connection, 0).await
+                    },
+                    None => {
+                        debug!("Exiting peer connection IO task - parent disconnected");
+                        return None;
+                    },
+                }
             },
             Some(msg_res) = connected.connection.next() => {
                 self.receive_message(connected, msg_res).await
@@ -463,8 +470,15 @@ where
                 }
             },
             new_connection_res = self.incoming_connections.recv() => {
-                let new_connection = new_connection_res.expect("Listener task died");
-                self.receive_connection(disconnected, new_connection).await
+                match new_connection_res {
+                    Some(new_connection) => {
+                        self.receive_connection(disconnected, new_connection).await
+                    },
+                    None => {
+                        debug!("Exiting peer connection IO task - parent disconnected");
+                        return None;
+                    },
+                }
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at) => {
                 self.reconnect(disconnected).await
