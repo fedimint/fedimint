@@ -288,9 +288,10 @@ impl LnGateway {
             .get_balance()
             .await
     }
-    async fn handle_address_msg(&self) -> Result<Address> {
-        let mut rng = rand::rngs::OsRng;
-        Ok(self.federation_client.get_new_pegin_address(&mut rng))
+
+    async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
+        self.select_actor(payload.federation_id)?
+            .get_deposit_address()
     }
 
     async fn handle_deposit_msg(&self, deposit: DepositPayload) -> Result<TransactionId> {
@@ -354,7 +355,9 @@ impl LnGateway {
                             .await;
                     }
                     GatewayRequest::DepositAddress(inner) => {
-                        inner.handle(|_| self.handle_address_msg()).await;
+                        inner
+                            .handle(|payload| self.handle_address_msg(payload))
+                            .await;
                     }
                     GatewayRequest::Deposit(inner) => {
                         inner
