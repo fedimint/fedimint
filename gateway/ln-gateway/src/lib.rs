@@ -6,6 +6,7 @@ pub mod rpc;
 pub mod webserver;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::{
     io::Cursor,
@@ -13,6 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use actor::GatewayActor;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
@@ -138,6 +140,7 @@ where
 }
 
 pub struct LnGateway {
+    actors: HashMap<FederationId, Arc<GatewayActor>>,
     federation_client: Arc<GatewayClient>,
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
@@ -157,6 +160,7 @@ impl LnGateway {
         let webserver = tokio::spawn(run_webserver(cfg.password, bind_addr, sender));
 
         Self {
+            actors: HashMap::new(),
             federation_client,
             ln_client,
             webserver,
