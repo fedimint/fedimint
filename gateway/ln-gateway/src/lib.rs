@@ -306,18 +306,16 @@ impl LnGateway {
             .await
     }
 
-    async fn handle_withdraw_msg(&self, withdraw: WithdrawPayload) -> Result<TransactionId> {
-        let rng = rand::rngs::OsRng;
-        let peg_out = self
-            .federation_client
-            .new_peg_out_with_fees(withdraw.amount, withdraw.address)
+    async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> Result<TransactionId> {
+        let WithdrawPayload {
+            amount,
+            address,
+            federation_id,
+        } = payload;
+
+        self.select_actor(federation_id)?
+            .withdraw(amount, address)
             .await
-            .unwrap();
-        self.federation_client
-            .peg_out(peg_out, rng)
-            .await
-            .map_err(LnGatewayError::ClientError)
-            .map(|out_point| out_point.txid)
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -370,7 +368,7 @@ impl LnGateway {
                     }
                     GatewayRequest::Withdraw(inner) => {
                         inner
-                            .handle(|withdraw| self.handle_withdraw_msg(withdraw))
+                            .handle(|payload| self.handle_withdraw_msg(payload))
                             .await;
                     }
                 }
