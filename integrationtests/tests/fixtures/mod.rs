@@ -89,18 +89,19 @@ pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
     bitcoin::secp256k1::Secp256k1::new()
 }
 
+#[non_exhaustive]
+pub struct Fixtures {
+    pub fed: FederationTest,
+    pub user: UserTest,
+    pub bitcoin: Box<dyn BitcoinTest>,
+    pub gateway: GatewayTest,
+    pub lightning: Box<dyn LightningTest>,
+    pub task_group: TaskGroup,
+}
+
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
 /// federation nodes starting at port 4000.
-pub async fn fixtures(
-    num_peers: u16,
-    amount_tiers: &[Amount],
-) -> anyhow::Result<(
-    FederationTest,
-    UserTest,
-    Box<dyn BitcoinTest>,
-    GatewayTest,
-    Box<dyn LightningTest>,
-)> {
+pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
@@ -171,7 +172,14 @@ pub async fn fixtures(
             )
             .await;
 
-            Ok((fed, user, Box::new(bitcoin), gateway, Box::new(lightning)))
+            Ok(Fixtures {
+                fed,
+                user,
+                bitcoin: Box::new(bitcoin),
+                gateway,
+                lightning: Box::new(lightning),
+                task_group,
+            })
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
@@ -209,7 +217,14 @@ pub async fn fixtures(
             )
             .await;
 
-            Ok((fed, user, Box::new(bitcoin), gateway, Box::new(lightning)))
+            Ok(Fixtures {
+                fed,
+                user,
+                bitcoin: Box::new(bitcoin),
+                gateway,
+                lightning: Box::new(lightning),
+                task_group,
+            })
         }
     }
 }
