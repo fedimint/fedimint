@@ -294,12 +294,16 @@ impl LnGateway {
             .get_deposit_address()
     }
 
-    async fn handle_deposit_msg(&self, deposit: DepositPayload) -> Result<TransactionId> {
-        let rng = rand::rngs::OsRng;
-        self.federation_client
-            .peg_in(deposit.txout_proof, deposit.transaction, rng)
+    async fn handle_deposit_msg(&self, payload: DepositPayload) -> Result<TransactionId> {
+        let DepositPayload {
+            txout_proof,
+            transaction,
+            federation_id,
+        } = payload;
+
+        self.select_actor(federation_id)?
+            .deposit(txout_proof, transaction)
             .await
-            .map_err(LnGatewayError::ClientError)
     }
 
     async fn handle_withdraw_msg(&self, withdraw: WithdrawPayload) -> Result<TransactionId> {
@@ -361,7 +365,7 @@ impl LnGateway {
                     }
                     GatewayRequest::Deposit(inner) => {
                         inner
-                            .handle(|deposit| self.handle_deposit_msg(deposit))
+                            .handle(|payload| self.handle_deposit_msg(payload))
                             .await;
                     }
                     GatewayRequest::Withdraw(inner) => {
