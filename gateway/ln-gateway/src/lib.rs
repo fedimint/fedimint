@@ -283,12 +283,10 @@ impl LnGateway {
             .await
     }
 
-    async fn handle_balance_msg(&self) -> Result<Amount> {
-        let fetch_results = self.federation_client.fetch_all_coins().await;
-        fetch_results
-            .into_iter()
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(self.federation_client.coins().total_amount())
+    async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
+        self.select_actor(payload.federation_id)?
+            .get_balance()
+            .await
     }
     async fn handle_address_msg(&self) -> Result<Address> {
         let mut rng = rand::rngs::OsRng;
@@ -351,7 +349,9 @@ impl LnGateway {
                             .await;
                     }
                     GatewayRequest::Balance(inner) => {
-                        inner.handle(|_| self.handle_balance_msg()).await;
+                        inner
+                            .handle(|payload| self.handle_balance_msg(payload))
+                            .await;
                     }
                     GatewayRequest::DepositAddress(inner) => {
                         inner.handle(|_| self.handle_address_msg()).await;
