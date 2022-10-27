@@ -18,8 +18,26 @@ pub struct GatewayActor {
 }
 
 impl GatewayActor {
-    pub fn new(client: Arc<GatewayClient>) -> Self {
-        Self { client }
+    pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
+        // Regster gateway actor with federation
+        // FIXME: This call is critically dependent on the federation being up and running.
+        // We should either use a retry strategy, OR register federations on the gateway at runtime
+        // as proposed in https://github.com/fedimint/fedimint/issues/699
+        client
+            .register_with_federation(client.config().into())
+            .await
+            .expect("Failed to register with federation");
+
+        Ok(Self { client })
+    }
+
+    /// Fetch all coins minted for this gateway by the federation
+    pub async fn fetch_all_coins(&self) {
+        for fetch_result in self.client.fetch_all_coins().await {
+            if let Err(e) = fetch_result {
+                debug!(error = %e, "Fetching coins failed")
+            };
+        }
     }
 
     pub async fn buy_preimage_offer(
