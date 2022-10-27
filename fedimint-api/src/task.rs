@@ -79,6 +79,43 @@ impl TaskGroup {
     }
 
     #[cfg(not(target_family = "wasm"))]
+    pub fn install_kill_handler(&self) {
+        use tokio::signal;
+
+        async fn wait_for_shutdown_signal() {
+            let ctrl_c = async {
+                signal::ctrl_c()
+                    .await
+                    .expect("failed to install Ctrl+C handler");
+            };
+
+            #[cfg(unix)]
+            let terminate = async {
+                signal::unix::signal(signal::unix::SignalKind::terminate())
+                    .expect("failed to install signal handler")
+                    .recv()
+                    .await;
+            };
+
+            #[cfg(not(unix))]
+            let terminate = std::future::pending::<()>();
+
+            tokio::select! {
+                _ = ctrl_c => {},
+                _ = terminate => {},
+            }
+        }
+        tokio::spawn({
+            let task_group = self.clone();
+            async move {
+                wait_for_shutdown_signal().await;
+                info!("signal received, starting graceful shutdown");
+                task_group.shutdown().await;
+            }
+        });
+    }
+
+    #[cfg(not(target_family = "wasm"))]
     pub async fn spawn<Fut>(
         &mut self,
         name: impl Into<String>,
