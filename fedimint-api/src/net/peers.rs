@@ -26,10 +26,14 @@ where
     ///
     /// The message is sent immediately and cached if the peer is reachable and only cached
     /// otherwise.
-    async fn send(&mut self, peers: &[PeerId], msg: T);
+    ///
+    /// Returns `None` during process shutdown
+    async fn send(&mut self, peers: &[PeerId], msg: T) -> Option<()>;
 
     /// Await receipt of a message from any connected peer.
-    async fn receive(&mut self) -> (PeerId, T);
+    ///
+    /// Returns `None` during process shutdown
+    async fn receive(&mut self) -> Option<(PeerId, T)>;
 
     /// Removes a peer connection in case of misbehavior
     async fn ban_peer(&mut self, peer: PeerId);

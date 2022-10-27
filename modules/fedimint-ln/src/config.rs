@@ -89,9 +89,15 @@ impl GenerateConfig for LightningModuleConfig {
         _params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
         _task_group: &mut TaskGroup,
-    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let (pks, sks) = dkg.run_g1(connections, &mut rng).await[&()].threshold_crypto();
+        let g1 = if let Some(g1) = dkg.run_g1(connections, &mut rng).await {
+            g1
+        } else {
+            return Ok(None);
+        };
+
+        let (pks, sks) = g1[&()].threshold_crypto();
 
         let server = LightningModuleConfig {
             threshold_pub_keys: pks.clone(),
@@ -105,7 +111,7 @@ impl GenerateConfig for LightningModuleConfig {
             fee_consensus: Default::default(),
         };
 
-        Ok((server, client))
+        Ok(Some((server, client)))
     }
 }
 

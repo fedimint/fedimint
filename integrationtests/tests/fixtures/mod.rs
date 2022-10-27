@@ -128,7 +128,9 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
             let (server_config, client_config) =
-                distributed_config(&peers, params, max_evil, &mut task_group).await;
+                distributed_config(&peers, params, max_evil, &mut task_group)
+                    .await
+                    .expect("distributed config should not be canceled");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
@@ -234,31 +236,37 @@ async fn distributed_config(
     params: HashMap<PeerId, ServerConfigParams>,
     _max_evil: usize,
     task_group: &mut TaskGroup,
-) -> (BTreeMap<PeerId, ServerConfig>, ClientConfig) {
-    let configs: Vec<(PeerId, (ServerConfig, ClientConfig))> = join_all(peers.iter().map(|peer| {
-        let params = params.clone();
-        let peers = peers.to_vec();
+) -> Option<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
+    let configs: Option<Vec<(PeerId, (ServerConfig, ClientConfig))>> =
+        join_all(peers.iter().map(|peer| {
+            let params = params.clone();
+            let peers = peers.to_vec();
 
-        let mut task_group = task_group.clone();
+            let mut task_group = task_group.clone();
 
-        async move {
-            let our_params = params[peer].clone();
-            let mut server_conn =
-                connect(our_params.server_dkg, our_params.tls, &mut task_group).await;
+            async move {
+                let our_params = params[peer].clone();
+                let mut server_conn =
+                    connect(our_params.server_dkg, our_params.tls, &mut task_group).await;
 
-            let rng = OsRng;
-            let cfg = ServerConfig::distributed_gen(
-                &mut server_conn,
-                peer,
-                &peers,
-                &params,
-                rng,
-                &mut task_group,
-            );
-            (*peer, cfg.await.expect("generation failed"))
-        }
-    }))
-    .await;
+                let rng = OsRng;
+                let cfg = ServerConfig::distributed_gen(
+                    &mut server_conn,
+                    peer,
+                    &peers,
+                    &params,
+                    rng,
+                    &mut task_group,
+                );
+                (*peer, cfg.await.expect("generation failed"))
+            }
+        }))
+        .await
+        .into_iter()
+        .map(|(peer_id, opt)| opt.map(|v| (peer_id, v)))
+        .collect();
+
+    let configs = configs?;
 
     let (_, (_, client_config)) = configs.first().unwrap().clone();
     let server_configs = configs
@@ -266,7 +274,7 @@ async fn distributed_config(
         .map(|(peer, (server, _))| (peer, server))
         .collect();
 
-    (server_configs, client_config)
+    Some((server_configs, client_config))
 }
 
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
@@ -745,7 +753,7 @@ impl FederationTest {
     // Necessary to allow servers to progress concurrently, should be fine since the same server
     // will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
-    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) {
+    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) -> Option<()> {
         tokio::time::sleep(delay).await;
         let mut s = server.borrow_mut();
         let consensus = s.fedimint.consensus.clone();
@@ -755,11 +763,13 @@ impl FederationTest {
         s.dropped_peers
             .append(&mut consensus.get_consensus_proposal().await.drop_peers);
 
-        s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await;
+        s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await?;
 
         for outcome in &s.last_consensus {
             consensus.process_consensus_outcome(outcome.clone()).await;
         }
+
+        Some(())
     }
 
     fn update_last_consensus(&self) {

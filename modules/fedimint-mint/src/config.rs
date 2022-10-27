@@ -119,11 +119,15 @@ impl GenerateConfig for MintConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
         _task_group: &mut TaskGroup,
-    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
         let mut dkg = DkgRunner::multi(params.to_vec(), peers.threshold(), our_id, peers);
-        let amounts_keys = dkg
-            .run_g2(connections, &mut rng)
-            .await
+        let g2 = if let Some(g2) = dkg.run_g2(connections, &mut rng).await {
+            g2
+        } else {
+            return Ok(None);
+        };
+
+        let amounts_keys = g2
             .into_iter()
             .map(|(amount, keys)| (amount, keys.tbs()))
             .collect::<HashMap<_, _>>();
@@ -161,7 +165,7 @@ impl GenerateConfig for MintConfig {
             fee_consensus: Default::default(),
         };
 
-        Ok((server, client))
+        Ok(Some((server, client)))
     }
 }
 

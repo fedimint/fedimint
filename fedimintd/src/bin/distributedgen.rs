@@ -13,6 +13,7 @@ use itertools::Itertools;
 use rand::rngs::OsRng;
 use ring::aead::LessSafeKey;
 use tokio_rustls::rustls;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -116,7 +117,7 @@ async fn main() {
         } => {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
             let (pk_bytes, nonce) = encrypted_read(&key, dir_out_path.join(TLS_PK));
-            let (server, client) = run_dkg(
+            let (server, client) = if let Some(v) = run_dkg(
                 &dir_out_path,
                 denominations,
                 federation_name,
@@ -125,7 +126,13 @@ async fn main() {
                 rustls::PrivateKey(pk_bytes),
                 &mut task_group,
             )
-            .await;
+            .await
+            {
+                v
+            } else {
+                info!("Canceled");
+                return;
+            };
 
             let server_path = dir_out_path.join(CONFIG_FILE);
             let config_bytes = serde_json::to_string(&server).unwrap().into_bytes();
@@ -149,7 +156,7 @@ async fn run_dkg(
     bitcoind_rpc: String,
     pk: rustls::PrivateKey,
     task_group: &mut TaskGroup,
-) -> (ServerConfig, ClientConfig) {
+) -> Option<(ServerConfig, ClientConfig)> {
     let peers: BTreeMap<PeerId, PeerServerParams> = certs
         .into_iter()
         .sorted()

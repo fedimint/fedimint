@@ -122,7 +122,7 @@ impl GenerateConfig for WalletConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
         _task_group: &mut TaskGroup,
-    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut rng);
         let our_key = CompressedPublicKey { key: pk };
@@ -132,14 +132,17 @@ impl GenerateConfig for WalletConfig {
 
         peer_peg_in_keys.insert(*our_id, our_key);
         while peer_peg_in_keys.len() < peers.len() {
-            let (peer, msg) = connections.receive().await;
-            peer_peg_in_keys.insert(peer, msg);
+            if let Some((peer, msg)) = connections.receive().await {
+                peer_peg_in_keys.insert(peer, msg);
+            } else {
+                return Ok(None);
+            }
         }
 
         let wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
         let client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
 
-        Ok((wallet_cfg, client_cfg))
+        Ok(Some((wallet_cfg, client_cfg)))
     }
 }
 

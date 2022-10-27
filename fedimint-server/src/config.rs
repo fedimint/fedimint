@@ -202,11 +202,11 @@ impl GenerateConfig for ServerConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
         task_group: &mut TaskGroup,
-    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
             let (server, client) = Self::trusted_dealer_gen(peers, params, rng);
-            return Ok((server[our_id].clone(), client));
+            return Ok(Some((server[our_id].clone(), client)));
         }
         info!("Peer {} running distributed key generation...", our_id);
 
@@ -216,7 +216,11 @@ impl GenerateConfig for ServerConfig {
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
-        let keys = dkg.run_g1(connections, &mut rng).await;
+        let keys = if let Some(v) = dkg.run_g1(connections, &mut rng).await {
+            v
+        } else {
+            return Ok(None);
+        };
         let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
 
@@ -226,33 +230,43 @@ impl GenerateConfig for ServerConfig {
             btc_rpc_user: "bitcoin".into(),
             btc_rpc_pass: "bitcoin".into(),
         };
-        let (wallet_server_cfg, wallet_client_cfg) = WalletConfig::distributed_gen(
-            &mut wallet,
-            our_id,
-            peers,
-            bitcoin,
-            &mut rng,
-            task_group,
-        )
-        .await
-        .expect("wallet error");
+        let (wallet_server_cfg, wallet_client_cfg) = if let Some(v) =
+            WalletConfig::distributed_gen(&mut wallet, our_id, peers, bitcoin, &mut rng, task_group)
+                .await
+                .expect("wallet error")
+        {
+            v
+        } else {
+            return Ok(None);
+        };
 
         let mut ln = connect(params.lightning_dkg.clone(), params.tls.clone(), task_group).await;
-        let (ln_server_cfg, ln_client_cfg) = LightningModuleConfig::distributed_gen(
-            &mut ln,
-            our_id,
-            peers,
-            &(),
-            &mut rng,
-            task_group,
-        )
-        .await?;
+        let (ln_server_cfg, ln_client_cfg) = if let Some(v) =
+            LightningModuleConfig::distributed_gen(
+                &mut ln,
+                our_id,
+                peers,
+                &(),
+                &mut rng,
+                task_group,
+            )
+            .await?
+        {
+            v
+        } else {
+            return Ok(None);
+        };
 
         let mut mint = connect(params.mint_dkg.clone(), params.tls.clone(), task_group).await;
         let param = &params.amount_tiers;
-        let (mint_server_cfg, mint_client_cfg) =
+        let (mint_server_cfg, mint_client_cfg) = if let Some(v) =
             MintConfig::distributed_gen(&mut mint, our_id, peers, param, &mut rng, task_group)
-                .await?;
+                .await?
+        {
+            v
+        } else {
+            return Ok(None);
+        };
 
         let server = ServerConfig {
             federation_name: params.federation_name.clone(),
@@ -279,7 +293,7 @@ impl GenerateConfig for ServerConfig {
             ln: ln_client_cfg,
         };
 
-        Ok((server, client))
+        Ok(Some((server, client)))
     }
 }
 

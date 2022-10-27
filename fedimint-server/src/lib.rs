@@ -147,9 +147,16 @@ impl FedimintServer {
             .await;
 
         while !task_handle.is_shutting_down() {
-            let outcomes = self
+            let outcomes = if let Some(v) = self
                 .run_consensus_epoch(consensus.get_consensus_proposal(), &mut rng)
-                .await;
+                .await
+            {
+                v
+            } else {
+                // `None` is supposed to mean the proccess is shutting down
+                assert!(task_handle.is_shutting_down());
+                break;
+            };
 
             for outcome in outcomes {
                 self.consensus.process_consensus_outcome(outcome).await;
@@ -166,8 +173,9 @@ impl FedimintServer {
         &mut self,
         timeout: Duration,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) {
-        let (msg_buffer, next_epoch_num) = self.determine_rejoin_epoch(timeout).await;
+    ) -> Option<()> {
+        let (msg_buffer, next_epoch_num) = self.determine_rejoin_epoch(timeout).await?;
+
         info!("Rejoining consensus: at epoch {}", next_epoch_num);
         self.hbbft.skip_to_epoch(next_epoch_num);
 
@@ -183,21 +191,23 @@ impl FedimintServer {
         if next_epoch_num == 0 || last_saved_epoch == Some(next_epoch_num - 1) {
             info!("Rejoining consensus: proposing epoch {}", next_epoch_num);
             let proposal = self.consensus.get_consensus_proposal().await;
-            outcomes = self.propose_epoch(proposal, rng).await
+            outcomes = self.propose_epoch(proposal, rng).await?;
         }
 
         for msg in msg_buffer {
-            outcomes.append(&mut self.handle_message(msg).await);
+            outcomes.append(&mut self.handle_message(msg).await?);
         }
         while outcomes.is_empty() {
-            let msg = self.connections.receive().await;
-            outcomes = self.handle_message(msg).await;
+            let msg = self.connections.receive().await?;
+            outcomes = self.handle_message(msg).await?;
         }
         info!("Rejoining consensus: created outcome");
 
         self.download_history(outcomes[0].clone())
             .await
             .expect("Download error");
+
+        Some(())
     }
 
     /// Requests, verifies and processes history from peers
@@ -248,7 +258,12 @@ impl FedimintServer {
 
     /// Sends a rejoin request and returns the max(valid_epoch) received from a threshold of peers
     /// Also returns any messages that need to be processed by hbbft
-    async fn determine_rejoin_epoch(&mut self, timeout: Duration) -> (Vec<PeerMessage>, u64) {
+    ///
+    /// Returns `None` if process is shutting down.
+    async fn determine_rejoin_epoch(
+        &mut self,
+        timeout: Duration,
+    ) -> Option<(Vec<PeerMessage>, u64)> {
         let mut msg_buffer: Vec<PeerMessage> = vec![];
 
         self.connections
@@ -278,7 +293,7 @@ impl FedimintServer {
             // if a threshold of peers agree on an epoch, go with that
             for epoch in consensus_peers.values() {
                 if consensus_peers.values().filter(|e| *e == epoch).count() >= threshold {
-                    return (msg_buffer, *epoch);
+                    return Some((msg_buffer, *epoch));
                 }
             }
 
@@ -286,32 +301,35 @@ impl FedimintServer {
             if consensus_peers.len() == self.cfg.peers.len() {
                 info!("All peers responded with no consensus epoch");
                 let epoch = *consensus_peers.values().max().expect("len > 0");
-                return (msg_buffer, epoch);
+                return Some((msg_buffer, epoch));
             }
 
             match tokio::time::timeout(timeout, self.connections.receive()).await {
-                Ok((peer, EpochMessage::Rejoin(Some(history), epoch))) => {
+                Ok(None) => {
+                    return None;
+                }
+                Ok(Some((peer, EpochMessage::Rejoin(Some(history), epoch)))) => {
                     let is_recent = epoch <= history.outcome.epoch + max_age;
                     if history.verify_sig(&pks).is_ok() && is_recent {
                         consensus_peers.insert(peer, epoch);
                     }
                 }
-                Ok((peer, EpochMessage::Rejoin(None, epoch))) => {
+                Ok(Some((peer, EpochMessage::Rejoin(None, epoch)))) => {
                     if epoch <= max_age {
                         consensus_peers.insert(peer, epoch);
                     }
                 }
-                Ok((peer, EpochMessage::RejoinRequest)) => {
+                Ok(Some((peer, EpochMessage::RejoinRequest))) => {
                     let msg = EpochMessage::Rejoin(self.last_signed_epoch(next_epoch), next_epoch);
                     self.connections.send(&[peer], msg).await;
                 }
-                Ok(msg) => msg_buffer.push(msg),
+                Ok(Some(msg)) => msg_buffer.push(msg),
                 // if peers had an opportunity to reply take max(next_epoch) from a peer threshold
                 Err(_) => {
                     if consensus_peers.len() >= threshold {
                         warn!("Timed-out waiting for all peers, going with max threshold");
                         let epoch = *consensus_peers.values().max().expect("len > 0");
-                        return (msg_buffer, epoch);
+                        return Some((msg_buffer, epoch));
                     }
                 }
             };
@@ -326,7 +344,7 @@ impl FedimintServer {
         &mut self,
         proposal: impl Future<Output = ConsensusProposal>,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) -> Vec<ConsensusOutcome> {
+    ) -> Option<Vec<ConsensusOutcome>> {
         // for testing federations with one peer
         if self.cfg.peers.len() == 1 {
             tokio::select! {
@@ -336,16 +354,16 @@ impl FedimintServer {
             let proposal = proposal.await;
             let epoch = self.hbbft.next_epoch() + 1;
             self.hbbft.skip_to_epoch(epoch);
-            return vec![ConsensusOutcome {
+            return Some(vec![ConsensusOutcome {
                 epoch,
                 contributions: BTreeMap::from([(self.cfg.identity, proposal.items)]),
-            }];
+            }]);
         }
 
         // process messages until new epoch or we have a proposal
         let mut outcomes: Vec<ConsensusOutcome> = loop {
             match self.await_proposal_or_peer_message().await {
-                Some(msg) if self.start_next_epoch(&msg) => break self.handle_message(msg).await,
+                Some(msg) if self.start_next_epoch(&msg) => break self.handle_message(msg).await?,
                 Some(msg) => self.handle_message(msg).await,
                 None => break vec![],
             };
@@ -355,20 +373,20 @@ impl FedimintServer {
         for peer in proposal.drop_peers.iter() {
             self.connections.ban_peer(*peer).await;
         }
-        outcomes.append(&mut self.propose_epoch(proposal, rng).await);
+        outcomes.append(&mut self.propose_epoch(proposal, rng).await?);
 
         while outcomes.is_empty() {
-            let msg = self.connections.receive().await;
-            outcomes = self.handle_message(msg).await;
+            let msg = self.connections.receive().await?;
+            outcomes = self.handle_message(msg).await?;
         }
-        outcomes
+        Some(outcomes)
     }
 
     async fn propose_epoch(
         &mut self,
         proposal: ConsensusProposal,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) -> Vec<ConsensusOutcome> {
+    ) -> Option<Vec<ConsensusOutcome>> {
         let step = self
             .hbbft
             .propose(&proposal.items, rng)
@@ -380,17 +398,17 @@ impl FedimintServer {
                     &msg.target.peers(&self.peers),
                     EpochMessage::Continue(msg.message),
                 )
-                .await;
+                .await?;
         }
 
-        step.output
+        Some(step.output)
     }
 
     async fn await_proposal_or_peer_message(&mut self) -> Option<PeerMessage> {
         tokio::select! {
             () = self.consensus.transaction_notify.notified() => None,
             () = self.consensus.await_consensus_proposal() => None,
-            msg = self.connections.receive() => Some(msg)
+            msg = self.connections.receive() => msg
         }
     }
 
@@ -403,15 +421,15 @@ impl FedimintServer {
     }
 
     /// Runs a single HBBFT consensus step
-    async fn handle_message(&mut self, msg: PeerMessage) -> Vec<ConsensusOutcome> {
+    async fn handle_message(&mut self, msg: PeerMessage) -> Option<Vec<ConsensusOutcome>> {
         match msg {
-            (_, EpochMessage::Rejoin(_, _)) => vec![],
+            (_, EpochMessage::Rejoin(_, _)) => Some(vec![]),
             (peer, EpochMessage::RejoinRequest) => {
                 let last_signed = self.last_signed_epoch(self.hbbft.epoch());
 
                 let msg = EpochMessage::Rejoin(last_signed, self.hbbft.next_epoch());
-                self.connections.send(&[peer], msg).await;
-                vec![]
+                self.connections.send(&[peer], msg).await?;
+                Some(vec![])
             }
             (peer, EpochMessage::Continue(peer_msg)) => {
                 let step = self
@@ -429,10 +447,10 @@ impl FedimintServer {
                             &msg.target.peers(&self.peers),
                             EpochMessage::Continue(msg.message),
                         )
-                        .await;
+                        .await?;
                 }
 
-                step.output
+                Some(step.output)
             }
         }
     }
