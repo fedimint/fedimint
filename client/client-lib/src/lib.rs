@@ -767,6 +767,10 @@ impl Client<UserClientConfig> {
         rng: impl RngCore + CryptoRng,
     ) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
+
+        let federation_name = self.config().0.federation_name;
+        let payload = PayInvoicePayload::new(FederationId(federation_name), contract_id);
+
         let future = reqwest::Client::new()
             .post(
                 gateway
@@ -775,7 +779,7 @@ impl Client<UserClientConfig> {
                     .expect("'pay_invoice' contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&contract_id)
+            .json(&payload)
             .send();
         let result = fedimint_api::task::timeout(Duration::from_secs(120), future)
             .await
