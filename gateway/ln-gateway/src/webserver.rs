@@ -3,14 +3,15 @@ use std::net::SocketAddr;
 use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
 use axum_macros::debug_handler;
 use fedimint_server::modules::ln::contracts::ContractId;
+use mint_client::FederationId;
 use serde_json::json;
 use tokio::sync::mpsc;
 use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::{debug, instrument};
 
 use crate::{
-    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
-    GatewayRequest, LnGatewayError, PayInvoicePayload, WithdrawPayload,
+    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
+    LnGatewayError, PayInvoicePayload, WithdrawPayload,
 };
 
 pub async fn run_webserver(

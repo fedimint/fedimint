@@ -6,6 +6,7 @@ pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
+use std::str::FromStr;
 use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
@@ -88,6 +89,18 @@ pub struct PaymentParameters {
     pub max_send_amount: Amount,
     pub payment_hash: sha256::Hash,
     pub maybe_internal: bool,
+}
+
+// Placeholder struct for identifying federations across clients
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+pub struct FederationId(pub String);
+
+impl FromStr for FederationId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(FederationId(s.to_string()))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
