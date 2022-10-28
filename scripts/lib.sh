@@ -59,6 +59,7 @@ function kill_fedimint_processes {
 }
 
 function start_gateway() {
+  $FM_GATEWAY_CLI generate-config $FM_CFG_DIR # generate gateway config
   $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR &
   sleep 1 # wait for plugin to start
 }

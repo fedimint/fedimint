@@ -1,8 +1,11 @@
+use std::path::PathBuf;
+
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
-    BalancePayload, DepositAddressPayload, DepositPayload, FederationId, WithdrawPayload,
+    config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
+    WithdrawPayload,
 };
 use mint_client::utils::from_hex;
 use serde::Serialize;
@@ -15,10 +18,20 @@ struct Cli {
     url: String,
     #[command(subcommand)]
     command: Commands,
+    /// WARNING: Passing in a password from the command line may be less secure!
+    #[clap(long)]
+    rpcpassword: Option<String>,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Ganerate gateway configuration
+    /// NOTE: This command can only be used on a local gateway
+    GenerateConfig {
+        /// The gateway configuration directory
+        #[clap(default_value = ".gateway")]
+        out_dir: PathBuf,
+    },
     /// Display CLI version hash
     VersionHash,
     /// Display high-level information about the Gateway
@@ -53,14 +66,37 @@ pub enum Commands {
 async fn main() {
     let cli = Cli::parse();
     match cli.command {
+        Commands::GenerateConfig { mut out_dir } => {
+            // Recursively create config directory if it doesn't exist
+            std::fs::create_dir_all(&out_dir).expect("Failed to create config directory");
+            // Create config file
+            out_dir.push("gateway.config");
+
+            let cfg_file =
+                std::fs::File::create(out_dir).expect("Failed to create gateway config file");
+            serde_json::to_writer_pretty(
+                cfg_file,
+                &GatewayConfig {
+                    password: source_password(cli.rpcpassword),
+                },
+            )
+            .expect("Failed to write gateway configs to file");
+        }
         Commands::VersionHash => {
             println!("version: {}", env!("GIT_HASH"));
         }
         Commands::Info => {
-            call(cli.url, String::from("/info"), ()).await;
+            call(
+                source_password(cli.rpcpassword),
+                cli.url,
+                String::from("/info"),
+                (),
+            )
+            .await;
         }
         Commands::Balance { federation_id } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/balance"),
                 BalancePayload { federation_id },
@@ -69,6 +105,7 @@ async fn main() {
         }
         Commands::Address { federation_id } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/address"),
                 DepositAddressPayload { federation_id },
@@ -81,6 +118,7 @@ async fn main() {
             transaction,
         } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/deposit"),
                 DepositPayload {
@@ -97,6 +135,7 @@ async fn main() {
             address,
         } => {
             call(
+                source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/withdraw"),
                 WithdrawPayload {
@@ -110,7 +149,7 @@ async fn main() {
     }
 }
 
-pub async fn call<P>(url: String, endpoint: String, payload: P)
+pub async fn call<P>(password: String, url: String, endpoint: String, payload: P)
 where
     P: Serialize,
 {
@@ -118,6 +157,7 @@ where
 
     let response = client
         .post(format!("{}{}", url, endpoint))
+        .bearer_auth(password)
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .json(&payload)
         .send()
@@ -133,6 +173,16 @@ where
         }
         _ => {
             println!("\nError: {}", &response.text().await.unwrap());
+        }
+    }
+}
+
+pub fn source_password(rpcpassword: Option<String>) -> String {
+    match rpcpassword {
+        None => rpassword::prompt_password("Enter gateway password:").unwrap(),
+        Some(password) => {
+            eprintln!("WARNING: Passing in a password from the command line may be less secure!");
+            password
         }
     }
 }

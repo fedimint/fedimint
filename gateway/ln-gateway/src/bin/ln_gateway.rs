@@ -3,7 +3,8 @@ use std::{fs::File, net::SocketAddr, path::Path, path::PathBuf, sync::Arc};
 use cln_plugin::Error;
 use fedimint_server::config::{load_from_file, ClientConfig};
 use ln_gateway::{
-    cln::build_cln_rpc, ln::LnRpcRef, rpc::GatewayRpcSender, GatewayRequest, LnGateway,
+    cln::build_cln_rpc, config::GatewayConfig, ln::LnRpcRef, rpc::GatewayRpcSender, GatewayRequest,
+    LnGateway,
 };
 use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
@@ -33,8 +34,18 @@ async fn main() -> Result<(), Error> {
         work_dir,
     } = build_cln_rpc(sender).await?;
 
+    let gw_cfg_path = work_dir.clone().join("gateway.config");
+    let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path);
+
     let federation_client = build_federation_client(pub_key, bind_addr, work_dir)?;
-    let mut gateway = LnGateway::new(Arc::new(federation_client), ln_rpc, tx, rx, bind_addr);
+    let mut gateway = LnGateway::new(
+        gw_cfg,
+        Arc::new(federation_client),
+        ln_rpc,
+        tx,
+        rx,
+        bind_addr,
+    );
 
     gateway.run().await.expect("gateway failed to run");
     Ok(())

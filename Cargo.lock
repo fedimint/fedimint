@@ -1395,6 +1395,7 @@ dependencies = [
  "ln-gateway",
  "mint-client",
  "reqwest",
+ "rpassword",
  "serde",
  "serde_json",
  "tokio",
@@ -3572,6 +3573,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c530c8675c1dbf98facee631536fa116b5fb6382d7dd6dc1b118d970eafe3ba"
 dependencies = [
+ "base64",
  "bitflags",
  "bytes",
  "futures-core",

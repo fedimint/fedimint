@@ -1,4 +1,5 @@
 pub mod cln;
+pub mod config;
 pub mod ln;
 pub mod rpc;
 pub mod webserver;
@@ -17,6 +18,7 @@ use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use cln::HtlcAccepted;
+use config::GatewayConfig;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
@@ -161,6 +163,7 @@ pub struct LnGateway {
 
 impl LnGateway {
     pub fn new(
+        cfg: GatewayConfig,
         federation_client: Arc<GatewayClient>,
         ln_client: Arc<dyn LnRpc>,
         sender: mpsc::Sender<GatewayRequest>,
@@ -168,7 +171,7 @@ impl LnGateway {
         bind_addr: SocketAddr,
     ) -> Self {
         // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(bind_addr, sender));
+        let webserver = tokio::spawn(run_webserver(cfg.password, bind_addr, sender));
 
         Self {
             federation_client,
