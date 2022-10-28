@@ -149,15 +149,10 @@ pub fn dealer_keygen(
     )
 }
 
-pub fn blind_message(msg: Message) -> (BlindingKey, BlindedMessage) {
-    let mut rng = OsRng;
-    let blinding_key = Scalar::random(&mut rng);
-    let blinded_msg = msg.0 * blinding_key;
+pub fn blind_message(msg: Message, blinding_key: BlindingKey) -> BlindedMessage {
+    let blinded_msg = msg.0 * blinding_key.0;
 
-    (
-        BlindingKey(blinding_key),
-        BlindedMessage(blinded_msg.to_affine()),
-    )
+    BlindedMessage(blinded_msg.to_affine())
 }
 
 pub fn sign_blinded_msg(msg: BlindedMessage, sks: SecretKeyShare) -> BlindedSignatureShare {
@@ -244,7 +239,7 @@ impl Aggregatable for Vec<PublicKeyShare> {
 mod tests {
     use crate::{
         blind_message, combine_valid_shares, dealer_keygen, sign_blinded_msg, unblind_signature,
-        verify, Aggregatable, Message,
+        verify, Aggregatable, BlindingKey, Message,
     };
 
     #[test]
@@ -261,7 +256,8 @@ mod tests {
         let msg = Message::from_bytes(b"Hello World!");
         let threshold = 5;
 
-        let (bkey, bmsg) = blind_message(msg);
+        let bkey = BlindingKey::random();
+        let bmsg = blind_message(msg, bkey);
 
         let (pk, _pks, sks) = dealer_keygen(threshold, 15);
 
@@ -298,7 +294,7 @@ mod tests {
         let msg = Message::from_bytes(b"Hello World!");
         let threshold = 5;
 
-        let (_, bmsg) = blind_message(msg);
+        let bmsg = blind_message(msg, BlindingKey::random());
 
         let (_, _pks, sks) = dealer_keygen(threshold, 4);
 

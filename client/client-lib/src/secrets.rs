@@ -12,7 +12,7 @@ const BLS12_381_TAG: &[u8; 8] = b"bls12381";
 
 /// Describes a child key of a [`DerivableSecret`]
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
-pub struct ChildId(u64);
+pub struct ChildId(pub u64);
 
 /// Secret key that allows deriving child secret keys
 pub struct DerivableSecret {

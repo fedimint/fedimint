@@ -73,7 +73,7 @@ use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
 use crate::mint::MintClientError;
-use crate::secrets::DerivableSecret;
+use crate::secrets::{ChildId, DerivableSecret};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
@@ -85,6 +85,7 @@ use crate::{
 };
 
 const TIMELOCK: u64 = 100;
+const MINT_SECRET_CHILD_ID: ChildId = ChildId(0);
 
 type Result<T> = std::result::Result<T, ClientError>;
 pub type GatewayClient = Client<GatewayClientConfig>;
@@ -193,6 +194,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         MintClient {
             config: &self.config.as_ref().mint,
             context: &self.context,
+            secret: self.root_secret.child_key(MINT_SECRET_CHILD_ID),
         }
     }
 
@@ -349,15 +351,18 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
-    pub fn receive_coins<R: RngCore + CryptoRng>(
+    pub fn receive_coins(
         &self,
         amount: Amount,
-        mut rng: R,
         create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
     ) {
         let mut dbtx = self.context.db.begin_transaction();
-        self.mint_client()
-            .receive_coins(amount, &mut dbtx, &mut rng, create_tx);
+        self.mint_client().receive_coins(
+            amount,
+            &mut dbtx,
+            |tx| self.mint_client().new_ecash_note(&self.context.secp, tx),
+            create_tx,
+        );
         dbtx.commit_tx().expect("DB Error");
     }
 
@@ -422,21 +427,26 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub async fn spend_ecash<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
-        mut rng: R,
+        rng: R,
     ) -> Result<TieredMulti<SpendableNote>> {
         let coins = self.mint_client().select_coins(amount)?;
 
         let final_coins = if coins.total_amount() == amount {
             coins
         } else {
+            let mut dbtx = self.context.db.begin_transaction();
+            let dbtx_mutref = &mut dbtx;
             let mut tx = TransactionBuilder::default();
             tx.input_coins(coins)?;
             tx.output_coins(
                 amount,
-                &self.mint_client().context.secp,
+                move || {
+                    self.mint_client()
+                        .new_ecash_note(&self.context.secp, dbtx_mutref)
+                },
                 &self.mint_client().config.tbs_pks,
-                &mut rng,
             );
+            dbtx.commit_tx().expect("committing tx failed"); // FIXME: retry?
             self.submit_tx_with_change(tx, rng).await?;
             self.fetch_all_coins().await;
             self.mint_client().select_coins(amount)?

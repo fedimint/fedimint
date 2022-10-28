@@ -51,8 +51,10 @@ pub struct PartiallySignedRequest {
 }
 
 /// Request to blind sign a certain amount of coins
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct SignRequest(pub TieredMulti<tbs::BlindedMessage>);
+#[derive(
+    Debug, Clone, Eq, PartialEq, Hash, Default, Deserialize, Serialize, Encodable, Decodable,
+)]
+pub struct SignRequest(pub TieredMulti<BlindNonce>);
 
 // FIXME: optimize out blinded msg by making the mint remember it
 /// Blind signature share for a [`SignRequest`]
@@ -691,11 +693,13 @@ impl Nonce {
 
 impl From<SignRequest> for TieredMulti<BlindNonce> {
     fn from(sig_req: SignRequest) -> Self {
-        sig_req
-            .0
-            .into_iter()
-            .map(|(amt, token)| (amt, crate::BlindNonce(token)))
-            .collect()
+        sig_req.0
+    }
+}
+
+impl Extend<(Amount, BlindNonce)> for SignRequest {
+    fn extend<T: IntoIterator<Item = (Amount, BlindNonce)>>(&mut self, iter: T) {
+        self.0.extend(iter)
     }
 }
 
@@ -751,7 +755,7 @@ mod test {
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use rand::rngs::OsRng;
-    use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
+    use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::config::{FeeConsensus, MintClientConfig};
     use crate::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
@@ -784,7 +788,8 @@ mod test {
         let (pk, mut mints) = build_mints();
 
         let nonce = Message::from_bytes(&b"test coin"[..]);
-        let (bkey, bmsg) = blind_message(nonce);
+        let bkey = BlindingKey::random();
+        let bmsg = blind_message(nonce, bkey);
         let blind_tokens = TieredMulti::new(
             vec![(
                 Amount::from_sat(1),
@@ -901,7 +906,7 @@ mod test {
             .0
             .contains(&(PeerId::from(2), PeerErrorType::InvalidSignature)));
 
-        let (_bk, bmsg) = blind_message(Message::from_bytes(b"test"));
+        let bmsg = blind_message(Message::from_bytes(b"test"), BlindingKey::random());
         let (bsig_res, errors) = mint.combine(
             Some(our_sig),
             psigs

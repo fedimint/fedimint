@@ -73,3 +73,4 @@ The Database is split into different key spaces based on prefixing that can be u
 | Pending Coins             | `0x27` | mint tx id (sha256 payment hash)   | `Coins<SpendableCoin>`       |
 | LightingGateway           | `0x28` |                                    | `LightningGateway`           |
 | ClientSecret              | `0x29` |                                    | `ClientSecret`               |
+| Last e-cash note index    | `0x2a` |                                    | `u64`                        |

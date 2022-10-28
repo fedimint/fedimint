@@ -11,27 +11,31 @@ use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse, SignRequest};
+use fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
-use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
+use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindingKey};
 use thiserror::Error;
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 
 use crate::api::ApiError;
+use crate::mint::db::LastECashNoteIndexKey;
 use crate::transaction::TransactionBuilder;
 use crate::utils::ClientContext;
-use crate::{Client, ModuleClient};
+use crate::{ChildId, Client, DerivableSecret, ModuleClient};
+
+const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
 pub struct MintClient<'c> {
     pub config: &'c MintClientConfig,
     pub context: &'c ClientContext,
+    pub secret: DerivableSecret,
 }
 
 /// Single [`Note`] issuance request to the mint.
@@ -50,7 +54,7 @@ pub struct NoteIssuanceRequest {
 ///
 /// Keeps all the data to generate [`SpendableNote`]s once the
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequests {
     /// Finalization data for all coin outputs in this request
     coins: TieredMulti<NoteIssuanceRequest>,
@@ -101,6 +105,28 @@ impl<'c> MintClient<'c> {
             .collect()
     }
 
+    fn new_note_secret(&self, dbtx: &mut DatabaseTransaction<'_>) -> DerivableSecret {
+        let new_idx = dbtx
+            .get_value(&LastECashNoteIndexKey)
+            .expect("DB error")
+            .unwrap_or(0)
+            + 1;
+        dbtx.insert_entry(&LastECashNoteIndexKey, &new_idx)
+            .expect("DB error");
+        self.secret
+            .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
+            .child_key(ChildId(new_idx))
+    }
+
+    pub fn new_ecash_note<C: Signing>(
+        &self,
+        ctx: &Secp256k1<C>,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> (NoteIssuanceRequest, BlindNonce) {
+        let secret = self.new_note_secret(dbtx);
+        NoteIssuanceRequest::new(ctx, secret)
+    }
+
     pub fn select_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
         let coins = self
             .coins()
@@ -125,6 +151,7 @@ impl<'c> MintClient<'c> {
         let final_tx = tx.build(
             change_required,
             &mut dbtx,
+            |tx| self.new_ecash_note(&self.context.secp, tx),
             &self.context.secp,
             &self.config.tbs_pks,
             rng,
@@ -140,17 +167,17 @@ impl<'c> MintClient<'c> {
         Ok(txid)
     }
 
-    pub fn receive_coins<'a, R: RngCore + CryptoRng>(
+    pub fn receive_coins<'a>(
         &self,
         amount: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
-        rng: &mut R,
+        coin_gen: impl Fn(&mut DatabaseTransaction<'_>) -> (NoteIssuanceRequest, BlindNonce),
         mut create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
     ) {
         let mut builder = TransactionBuilder::default();
 
         let (finalization, coins) =
-            builder.create_output_coins(amount, &self.context.secp, &self.config.tbs_pks, rng);
+            builder.create_output_coins(amount, || coin_gen(dbtx), &self.config.tbs_pks);
         let out_point = create_tx(coins);
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .expect("DB Error");
@@ -241,39 +268,13 @@ impl<'c> MintClient<'c> {
     }
 }
 
-impl NoteIssuanceRequests {
-    /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
-    pub fn new<K, C>(
-        amount: Amount,
-        amount_tiers: &Tiered<K>,
-        ctx: &Secp256k1<C>,
-        rng: &mut (impl RngCore + CryptoRng),
-    ) -> (NoteIssuanceRequests, SignRequest)
-    where
-        C: Signing,
-    {
-        let (requests, blinded_nonces): (TieredMulti<_>, TieredMulti<_>) =
-            TieredMulti::represent_amount(amount, amount_tiers)
-                .into_iter()
-                .map(|(amt, ())| {
-                    let (request, blind_msg) = NoteIssuanceRequest::new(ctx, rng);
-                    ((amt, request), (amt, blind_msg))
-                })
-                .unzip();
-
-        debug!(
-            %amount,
-            coins = %requests.item_count(),
-            tiers = ?requests.tiers().collect::<Vec<_>>(),
-            "Generated issuance request"
-        );
-
-        let sig_req = SignRequest(blinded_nonces);
-        let issuance_req = NoteIssuanceRequests { coins: requests };
-
-        (issuance_req, sig_req)
+impl Extend<(Amount, NoteIssuanceRequest)> for NoteIssuanceRequests {
+    fn extend<T: IntoIterator<Item = (Amount, NoteIssuanceRequest)>>(&mut self, iter: T) {
+        self.coins.extend(iter)
     }
+}
 
+impl NoteIssuanceRequests {
     /// Finalize the issuance request using a [`SigResponse`] from the mint containing the blind
     /// signatures for all coins in this `IssuanceRequest`. It also takes the mint's
     /// [`AggregatePublicKey`] to validate the supplied blind signatures.
@@ -319,23 +320,21 @@ impl NoteIssuanceRequests {
 impl NoteIssuanceRequest {
     /// Generate a request session for a single coin and returns it plus the corresponding blinded
     /// message
-    fn new<C>(
-        ctx: &Secp256k1<C>,
-        rng: &mut (impl RngCore + CryptoRng),
-    ) -> (NoteIssuanceRequest, BlindedMessage)
+    fn new<C>(ctx: &Secp256k1<C>, secret: DerivableSecret) -> (NoteIssuanceRequest, BlindNonce)
     where
         C: Signing,
     {
-        let spend_key = bitcoin::KeyPair::new(ctx, rng);
+        let spend_key = secret.child_key(ChildId(0)).to_secp_key(ctx);
         let nonce = Nonce(spend_key.x_only_public_key().0);
-        let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
+        let blinding_key = BlindingKey(secret.child_key(ChildId(1)).to_bls12_381_key());
+        let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
         let cr = NoteIssuanceRequest {
             spend_key,
             blinding_key,
         };
 
-        (cr, blinded_nonce)
+        (cr, BlindNonce(blinded_nonce))
     }
 
     pub fn nonce(&self) -> Nonce {
@@ -435,7 +434,7 @@ mod tests {
 
     use crate::api::IFederationApi;
     use crate::mint::MintClient;
-    use crate::{ClientContext, TransactionBuilder};
+    use crate::{ClientContext, DerivableSecret, TransactionBuilder};
 
     type Fed = FakeFed<Mint, MintClientConfig>;
 
@@ -542,26 +541,30 @@ mod tests {
         (fed, client_config, client_context)
     }
 
-    async fn issue_tokens<'a, R: rand::RngCore + rand::CryptoRng>(
+    async fn issue_tokens<'a>(
         fed: &'a tokio::sync::Mutex<Fed>,
         client: &'a MintClient<'a>,
         client_db: &'a Database,
         amt: Amount,
-        rng: &'a mut R,
     ) {
         let txid = TransactionId::from_inner([0x42; 32]);
         let out_point = OutPoint { txid, out_idx: 0 };
 
         let mut dbtx = client_db.begin_transaction();
-        client.receive_coins(amt, &mut dbtx, rng, |output| {
-            // Agree on output
-            let mut fed = block_on(fed.lock());
-            block_on(fed.consensus_round(&[], &[(out_point, output)]));
-            // Generate signatures
-            block_on(fed.consensus_round(&[], &[]));
+        client.receive_coins(
+            amt,
+            &mut dbtx,
+            |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
+            |output| {
+                // Agree on output
+                let mut fed = block_on(fed.lock());
+                block_on(fed.consensus_round(&[], &[(out_point, output)]));
+                // Generate signatures
+                block_on(fed.consensus_round(&[], &[]));
 
-            out_point
-        });
+                out_point
+            },
+        );
         dbtx.commit_tx().expect("DB Error");
 
         client.fetch_all_coins().await;
@@ -569,40 +572,32 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn create_output() {
-        let mut rng = rand::rngs::OsRng;
         let (fed, client_config, client_context) = new_mint_and_client().await;
 
         let client = MintClient {
             config: &client_config,
             context: &client_context,
+            secret: DerivableSecret::new(&[], &[]),
         };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sat(12);
-        issue_tokens(&fed, &client, &client_context.db, ISSUE_AMOUNT, &mut rng).await;
+        issue_tokens(&fed, &client, &client_context.db, ISSUE_AMOUNT).await;
 
         assert_eq!(client.coins().total_amount(), ISSUE_AMOUNT)
     }
 
     #[test_log::test(tokio::test)]
     async fn create_input() {
-        let mut rng = rand::rngs::OsRng;
-
         const SPEND_AMOUNT: Amount = Amount::from_sat(21);
 
         let (fed, client_config, client_context) = new_mint_and_client().await;
         let client = MintClient {
             config: &client_config,
             context: &client_context,
+            secret: DerivableSecret::new(&[], &[]),
         };
 
-        issue_tokens(
-            &fed,
-            &client,
-            &client_context.db,
-            SPEND_AMOUNT * 2,
-            &mut rng,
-        )
-        .await;
+        issue_tokens(&fed, &client, &client_context.db, SPEND_AMOUNT * 2).await;
 
         // Spending works
         let mut dbtx = client.context.db.begin_transaction();
@@ -613,7 +608,14 @@ mod tests {
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
-        builder.build(Amount::from_sat(0), &mut dbtx, secp, tbs_pks, rng);
+        builder.build(
+            Amount::from_sat(0),
+            &mut dbtx,
+            |dbtx| client.new_ecash_note(secp, dbtx),
+            secp,
+            tbs_pks,
+            rng,
+        );
         dbtx.commit_tx().expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
@@ -644,7 +646,14 @@ mod tests {
         let rng = rand::rngs::OsRng;
         let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
-        builder.build(Amount::from_sat(0), &mut dbtx, secp, tbs_pks, rng);
+        builder.build(
+            Amount::from_sat(0),
+            &mut dbtx,
+            |dbtx| client.new_ecash_note(secp, dbtx),
+            secp,
+            tbs_pks,
+            rng,
+        );
         dbtx.commit_tx().expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
