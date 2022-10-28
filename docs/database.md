@@ -72,3 +72,4 @@ The Database is split into different key spaces based on prefixing that can be u
 | Confirmed Invoice         | `0x26` | contract id (sha256 payment hash)  | `ConfirmedInvoice`           |
 | Pending Coins             | `0x27` | mint tx id (sha256 payment hash)   | `Coins<SpendableCoin>`       |
 | LightingGateway           | `0x28` |                                    | `LightningGateway`           |
+| ClientSecret              | `0x29` |                                    | `ClientSecret`               |

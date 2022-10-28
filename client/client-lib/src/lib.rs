@@ -1,4 +1,5 @@
 pub mod api;
+mod db;
 pub mod ln;
 pub mod mint;
 pub mod query;
@@ -7,6 +8,7 @@ pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
+use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
@@ -18,6 +20,7 @@ use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::db::Database;
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
@@ -51,7 +54,9 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln::{db::LightningGatewayKey, PayInvoicePayload};
 use mint::NoteIssuanceRequests;
-use rand::{CryptoRng, RngCore};
+use rand::distributions::Standard;
+use rand::prelude::*;
+use rand::{thread_rng, CryptoRng, Rng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -59,6 +64,7 @@ use threshold_crypto::PublicKey;
 use tracing::debug;
 use url::Url;
 
+use crate::db::ClientSecretKey;
 use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
@@ -67,6 +73,7 @@ use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
 use crate::mint::MintClientError;
+use crate::secrets::DerivableSecret;
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
@@ -147,7 +154,12 @@ impl From<GatewayClientConfig> for LightningGateway {
 pub struct Client<C> {
     config: C,
     context: ClientContext,
+    #[allow(unused)]
+    root_secret: DerivableSecret,
 }
+
+#[derive(Encodable, Decodable)]
+pub struct ClientSecret([u8; 64]);
 
 impl AsRef<ClientConfig> for GatewayClientConfig {
     fn as_ref(&self) -> &ClientConfig {
@@ -218,10 +230,33 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         api: FederationApi,
         secp: Secp256k1<All>,
     ) -> Client<T> {
+        let root_secret = Self::get_secret(&db);
         Self {
             config,
             context: ClientContext { db, api, secp },
+            root_secret,
         }
+    }
+
+    /// Fetches the client secret from the database or generates a new one if none is present
+    fn get_secret(db: &Database) -> DerivableSecret {
+        let mut tx = db.begin_transaction();
+        let secret = tx
+            .get_value(&ClientSecretKey)
+            .expect("DB error")
+            .unwrap_or_else(|| {
+                let secret: ClientSecret = thread_rng().gen();
+                let no_replacement = tx
+                    .insert_entry(&ClientSecretKey, &secret)
+                    .expect("DB error")
+                    .is_none();
+                assert!(
+                    no_replacement,
+                    "We would have overwritten our secret key, aborting!"
+                );
+                secret
+            });
+        secret.into_root_secret()
     }
 
     pub async fn peg_in<R: RngCore + CryptoRng>(
@@ -1090,6 +1125,27 @@ impl Client<GatewayClientConfig> {
             .register_gateway(config)
             .await
             .map_err(ClientError::MintApiError)
+    }
+}
+
+impl Distribution<ClientSecret> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ClientSecret {
+        let mut secret = [0u8; 64];
+        rng.fill(&mut secret);
+        ClientSecret(secret)
+    }
+}
+
+impl ClientSecret {
+    fn into_root_secret(self) -> DerivableSecret {
+        const FEDIMINT_CLIENT_NONCE: &[u8] = b"Fedimint Client Salt";
+        DerivableSecret::new(&self.0, FEDIMINT_CLIENT_NONCE)
+    }
+}
+
+impl Debug for ClientSecret {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ClientSecret([redacted])")
     }
 }
 
