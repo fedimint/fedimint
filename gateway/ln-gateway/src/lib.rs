@@ -23,7 +23,8 @@ use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::{
-    mint::MintClientError, ClientError, FederationId, GatewayClient, PaymentParameters,
+    ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
+    PaymentParameters,
 };
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -40,13 +41,6 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 pub struct ReceiveInvoicePayload {
     // NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
     pub htlc_accepted: HtlcAccepted,
-}
-
-#[derive(Debug)]
-pub struct PayInvoicePayload {
-    #[allow(dead_code)]
-    pub federation_id: FederationId,
-    pub contract_id: ContractId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

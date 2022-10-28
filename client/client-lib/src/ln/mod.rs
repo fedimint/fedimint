@@ -22,6 +22,7 @@ use fedimint_core::modules::ln::{
 };
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use self::db::ConfirmedInvoiceKey;
@@ -31,7 +32,7 @@ use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::ClientContext;
-use crate::ModuleClient;
+use crate::{FederationId, ModuleClient};
 
 pub struct LnClient<'c> {
     pub config: &'c LightningModuleClientConfig,
@@ -275,6 +276,21 @@ impl<'c> LnClient<'c> {
         ContractOrOfferOutput::CancelOutgoing {
             contract: contract_id,
             gateway_signature: signature,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PayInvoicePayload {
+    pub federation_id: FederationId,
+    pub contract_id: ContractId,
+}
+
+impl PayInvoicePayload {
+    pub fn new(federation_id: FederationId, contract_id: ContractId) -> Self {
+        Self {
+            contract_id,
+            federation_id,
         }
     }
 }

@@ -48,7 +48,7 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use ln::db::LightningGatewayKey;
+use ln::{db::LightningGatewayKey, PayInvoicePayload};
 use mint::NoteIssuanceRequests;
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
