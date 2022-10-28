@@ -2209,6 +2209,7 @@ dependencies = [
  "fedimint-testing",
  "futures",
  "hex",
+ "hkdf",
  "js-sys",
  "jsonrpsee-core",
  "jsonrpsee-types",

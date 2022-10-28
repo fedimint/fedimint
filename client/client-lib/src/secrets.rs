@@ -1,0 +1,60 @@
+//! Scheme for deriving deterministic secret keys
+
+use fedimint_api::encoding::{Decodable, Encodable};
+use hkdf::hashes::Sha512;
+use hkdf::Hkdf;
+use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
+use tbs::Scalar;
+
+const CHILD_TAG: &[u8; 8] = b"childkey";
+const SECP256K1_TAG: &[u8; 8] = b"secp256k";
+const BLS12_381_TAG: &[u8; 8] = b"bls12381";
+
+/// Describes a child key of a [`DerivableSecret`]
+#[derive(Debug, Copy, Clone, Encodable, Decodable)]
+pub struct ChildId(u64);
+
+/// Secret key that allows deriving child secret keys
+pub struct DerivableSecret {
+    // TODO: wrap in some secret protecting wrappers maybe?
+    kdf: Hkdf<Sha512>,
+}
+
+impl DerivableSecret {
+    pub fn new(root_key: &[u8], salt: &[u8]) -> Self {
+        DerivableSecret {
+            kdf: Hkdf::new(root_key, Some(salt)),
+        }
+    }
+
+    pub fn child_key(&self, cid: ChildId) -> DerivableSecret {
+        DerivableSecret {
+            kdf: Hkdf::from_prk(self.kdf.derive_hmac(&tagged_derive(CHILD_TAG, cid))),
+        }
+    }
+
+    pub fn to_secp_key<C: Signing>(self, ctx: &Secp256k1<C>) -> KeyPair {
+        for key_try in 0u64.. {
+            let secret = self
+                .kdf
+                .derive::<32>(&tagged_derive(SECP256K1_TAG, ChildId(key_try)));
+            // The secret not forming a valid key is highly unlikely, this approach is the same used when generating a random secp key.
+            if let Ok(key) = KeyPair::from_seckey_slice(ctx, &secret) {
+                return key;
+            }
+        }
+
+        unreachable!("If key generation fails this often something else has to be wrong.")
+    }
+
+    pub fn to_bls12_381_key(&self) -> Scalar {
+        Scalar::from_bytes_wide(&self.kdf.derive(&tagged_derive(BLS12_381_TAG, ChildId(0))))
+    }
+}
+
+fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
+    let mut derivation_info = [0u8; 16];
+    derivation_info[0..8].copy_from_slice(&tag[..]);
+    derivation_info[8..16].copy_from_slice(&derivation.0.to_le_bytes()[..]);
+    derivation_info
+}

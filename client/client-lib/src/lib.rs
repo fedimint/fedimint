@@ -2,6 +2,7 @@ pub mod api;
 pub mod ln;
 pub mod mint;
 pub mod query;
+pub mod secrets;
 pub mod transaction;
 pub mod utils;
 pub mod wallet;
