@@ -1,3 +1,3 @@
 (function() {var implementors = {
-"fedimint_server":[["impl RpcHandlerCtx for <a class=\"struct\" href=\"fedimint_server/consensus/struct.FedimintConsensus.html\" title=\"struct fedimint_server::consensus::FedimintConsensus\">FedimintConsensus</a>"]]
+"fedimint_server":[["impl <a class=\"trait\" href=\"fedimint_api/core/server/trait.RpcHandlerCtx.html\" title=\"trait fedimint_api::core::server::RpcHandlerCtx\">RpcHandlerCtx</a> for <a class=\"struct\" href=\"fedimint_server/consensus/struct.FedimintConsensus.html\" title=\"struct fedimint_server::consensus::FedimintConsensus\">FedimintConsensus</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

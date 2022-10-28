@@ -495,7 +495,11 @@
 <span id="495">495</span>
 <span id="496">496</span>
 <span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>rpc;
 <span class="kw">pub mod </span>webserver;
@@ -514,6 +518,7 @@
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>cln::HtlcAccepted;
+<span class="kw">use </span>config::GatewayConfig;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_server::modules::wallet::txoproof::TxOutProof;
@@ -658,6 +663,7 @@
 
 <span class="kw">impl </span>LnGateway {
     <span class="kw">pub fn </span>new(
+        cfg: GatewayConfig,
         federation_client: Arc&lt;GatewayClient&gt;,
         ln_client: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
         sender: mpsc::Sender&lt;GatewayRequest&gt;,
@@ -665,7 +671,7 @@
         bind_addr: SocketAddr,
     ) -&gt; <span class="self">Self </span>{
         <span class="comment">// Run webserver asynchronously in tokio
-        </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(bind_addr, sender));
+        </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(cfg.password, bind_addr, sender));
 
         <span class="self">Self </span>{
             federation_client,
