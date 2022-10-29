@@ -480,24 +480,6 @@
 <span id="480">480</span>
 <span id="481">481</span>
 <span id="482">482</span>
-<span id="483">483</span>
-<span id="484">484</span>
-<span id="485">485</span>
-<span id="486">486</span>
-<span id="487">487</span>
-<span id="488">488</span>
-<span id="489">489</span>
-<span id="490">490</span>
-<span id="491">491</span>
-<span id="492">492</span>
-<span id="493">493</span>
-<span id="494">494</span>
-<span id="495">495</span>
-<span id="496">496</span>
-<span id="497">497</span>
-<span id="498">498</span>
-<span id="499">499</span>
-<span id="500">500</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>ln;
@@ -506,7 +488,6 @@
 
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::net::SocketAddr;
-<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::{
     io::Cursor,
     sync::Arc,
@@ -523,8 +504,10 @@
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_server::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>futures::Future;
-<span class="kw">use </span>mint_client::mint::MintClientError;
-<span class="kw">use </span>mint_client::{ClientError, GatewayClient, PaymentParameters};
+<span class="kw">use </span>mint_client::{
+    ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
+    PaymentParameters,
+};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>thiserror::Error;
@@ -536,29 +519,10 @@
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, LnGatewayError&gt;;
 
-<span class="comment">// Placeholder struct for identifying federations within a gateway
-</span><span class="attribute">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>FederationId(<span class="kw">pub </span>String);
-
-<span class="kw">impl </span>FromStr <span class="kw">for </span>FederationId {
-    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
-
-    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
-        <span class="prelude-val">Ok</span>(FederationId(s.to_string()))
-    }
-}
-
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ReceiveInvoicePayload {
     <span class="comment">// NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
     </span><span class="kw">pub </span>htlc_accepted: HtlcAccepted,
-}
-
-<span class="attribute">#[derive(Debug)]
-</span><span class="kw">pub struct </span>PayInvoicePayload {
-    <span class="attribute">#[allow(dead_code)]
-    </span><span class="kw">pub </span>federation_id: FederationId,
-    <span class="kw">pub </span>contract_id: ContractId,
 }
 
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]
@@ -999,4 +963,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>

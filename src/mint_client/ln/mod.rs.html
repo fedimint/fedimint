@@ -529,6 +529,22 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -553,6 +569,7 @@
 };
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use </span><span class="self">self</span>::db::ConfirmedInvoiceKey;
@@ -562,7 +579,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::incoming::IncomingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use </span><span class="kw">crate</span>::ModuleClient;
+<span class="kw">use crate</span>::{FederationId, ModuleClient};
 
 <span class="kw">pub struct </span>LnClient&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>LightningModuleClientConfig,
@@ -806,6 +823,21 @@
         ContractOrOfferOutput::CancelOutgoing {
             contract: contract_id,
             gateway_signature: signature,
+        }
+    }
+}
+
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PayInvoicePayload {
+    <span class="kw">pub </span>federation_id: FederationId,
+    <span class="kw">pub </span>contract_id: ContractId,
+}
+
+<span class="kw">impl </span>PayInvoicePayload {
+    <span class="kw">pub fn </span>new(federation_id: FederationId, contract_id: ContractId) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            contract_id,
+            federation_id,
         }
     }
 }
@@ -1061,4 +1093,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>

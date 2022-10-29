@@ -108,28 +108,19 @@
 <span id="108">108</span>
 <span id="109">109</span>
 <span id="110">110</span>
-<span id="111">111</span>
-<span id="112">112</span>
-<span id="113">113</span>
-<span id="114">114</span>
-<span id="115">115</span>
-<span id="116">116</span>
-<span id="117">117</span>
-<span id="118">118</span>
-<span id="119">119</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::{response::IntoResponse, routing::post, Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
-<span class="kw">use </span>fedimint_server::modules::ln::contracts::ContractId;
+<span class="kw">use </span>mint_client::ln::PayInvoicePayload;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
-<span class="kw">use </span>tracing::{debug, instrument};
+<span class="kw">use </span>tracing::instrument;
 
 <span class="kw">use crate</span>::{
-    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
-    GatewayRequest, LnGatewayError, PayInvoicePayload, WithdrawPayload,
+    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
+    LnGatewayError, WithdrawPayload,
 };
 
 <span class="kw">pub async fn </span>run_webserver(
@@ -222,19 +213,10 @@
 <span class="attribute">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>pay_invoice(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
-    Json(contract_id): Json&lt;ContractId&gt;,
+    Json(payload): Json&lt;PayInvoicePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, LnGatewayError&gt; {
-    <span class="macro">debug!</span>(%contract_id, <span class="string">&quot;Received request to pay invoice&quot;</span>);
-
-    <span class="comment">// TODO: Require clients to pass in a federation id on request to pay invoice
-    </span><span class="kw">let </span>federation_id = FederationId(<span class="string">&quot;&quot;</span>.into());
-
-    rpc.send(PayInvoicePayload {
-        federation_id,
-        contract_id,
-    })
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>

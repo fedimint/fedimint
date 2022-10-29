@@ -185,17 +185,15 @@
 <span id="185">185</span>
 <span id="186">186</span>
 <span id="187">187</span>
-<span id="188">188</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_server::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>ln_gateway::{
-    config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
-    WithdrawPayload,
+    config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
-<span class="kw">use </span>mint_client::utils::from_hex;
+<span class="kw">use </span>mint_client::{utils::from_hex, FederationId};
 <span class="kw">use </span>serde::Serialize;
 
 <span class="attribute">#[derive(Parser)]
@@ -375,4 +373,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="gateway_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="gateway_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>
