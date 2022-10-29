@@ -2,15 +2,15 @@ use std::net::SocketAddr;
 
 use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
 use axum_macros::debug_handler;
-use fedimint_server::modules::ln::contracts::ContractId;
+use mint_client::ln::PayInvoicePayload;
 use serde_json::json;
 use tokio::sync::mpsc;
 use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 use crate::{
-    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
-    GatewayRequest, LnGatewayError, PayInvoicePayload, WithdrawPayload,
+    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
+    LnGatewayError, WithdrawPayload,
 };
 
 pub async fn run_webserver(
@@ -103,17 +103,8 @@ async fn withdraw(
 #[instrument(skip_all, err)]
 async fn pay_invoice(
     Extension(rpc): Extension<GatewayRpcSender>,
-    Json(contract_id): Json<ContractId>,
+    Json(payload): Json<PayInvoicePayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
-    debug!(%contract_id, "Received request to pay invoice");
-
-    // TODO: Require clients to pass in a federation id on request to pay invoice
-    let federation_id = FederationId("".into());
-
-    rpc.send(PayInvoicePayload {
-        federation_id,
-        contract_id,
-    })
-    .await?;
+    rpc.send(payload).await?;
     Ok(())
 }

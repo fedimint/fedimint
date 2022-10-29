@@ -6,7 +6,6 @@ pub mod webserver;
 
 use std::borrow::Cow;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::{
     io::Cursor,
     sync::Arc,
@@ -23,8 +22,10 @@ use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
-use mint_client::mint::MintClientError;
-use mint_client::{ClientError, GatewayClient, PaymentParameters};
+use mint_client::{
+    ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
+    PaymentParameters,
+};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
@@ -36,29 +37,10 @@ use crate::ln::{LightningError, LnRpc};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
-// Placeholder struct for identifying federations within a gateway
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FederationId(pub String);
-
-impl FromStr for FederationId {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Ok(FederationId(s.to_string()))
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReceiveInvoicePayload {
     // NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
     pub htlc_accepted: HtlcAccepted,
-}
-
-#[derive(Debug)]
-pub struct PayInvoicePayload {
-    #[allow(dead_code)]
-    pub federation_id: FederationId,
-    pub contract_id: ContractId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

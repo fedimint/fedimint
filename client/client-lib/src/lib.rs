@@ -6,6 +6,7 @@ pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
+use std::str::FromStr;
 use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
@@ -47,7 +48,7 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use ln::db::LightningGatewayKey;
+use ln::{db::LightningGatewayKey, PayInvoicePayload};
 use mint::NoteIssuanceRequests;
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
@@ -88,6 +89,18 @@ pub struct PaymentParameters {
     pub max_send_amount: Amount,
     pub payment_hash: sha256::Hash,
     pub maybe_internal: bool,
+}
+
+// Placeholder struct for identifying federations across clients
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+pub struct FederationId(pub String);
+
+impl FromStr for FederationId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(FederationId(s.to_string()))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -754,6 +767,10 @@ impl Client<UserClientConfig> {
         rng: impl RngCore + CryptoRng,
     ) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
+
+        let federation_name = self.config().0.federation_name;
+        let payload = PayInvoicePayload::new(FederationId(federation_name), contract_id);
+
         let future = reqwest::Client::new()
             .post(
                 gateway
@@ -762,7 +779,7 @@ impl Client<UserClientConfig> {
                     .expect("'pay_invoice' contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&contract_id)
+            .json(&payload)
             .send();
         let result = fedimint_api::task::timeout(Duration::from_secs(120), future)
             .await
