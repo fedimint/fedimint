@@ -111,13 +111,19 @@
 <span id="111">111</span>
 <span id="112">112</span>
 <span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_api::db::{DatabaseTransaction, PrefixIter};
 <span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction};
 <span class="kw">pub use </span>rocksdb;
-<span class="kw">use </span>rocksdb::OptimisticTransactionDB;
+<span class="kw">use </span>rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 <span class="kw">use </span>tracing::warn;
 
 <span class="attribute">#[derive(Debug)]
@@ -151,7 +157,13 @@
 
 <span class="kw">impl </span>IDatabase <span class="kw">for </span>RocksDb {
     <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction {
-        <span class="kw">let </span><span class="kw-2">mut </span>tx: DatabaseTransaction = RocksDbTransaction(<span class="self">self</span>.<span class="number">0</span>.transaction()).into();
+        <span class="kw">let </span><span class="kw-2">mut </span>optimistic_options = OptimisticTransactionOptions::default();
+        optimistic_options.set_snapshot(<span class="bool-val">true</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>tx: DatabaseTransaction = RocksDbTransaction(
+            <span class="self">self</span>.<span class="number">0
+                </span>.transaction_opt(<span class="kw-2">&amp;</span>WriteOptions::default(), <span class="kw-2">&amp;</span>optimistic_options),
+        )
+        .into();
         tx.set_tx_savepoint();
         tx
     }

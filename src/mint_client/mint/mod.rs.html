@@ -670,6 +670,70 @@
 <span id="670">670</span>
 <span id="671">671</span>
 <span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
+<span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
+<span id="683">683</span>
+<span id="684">684</span>
+<span id="685">685</span>
+<span id="686">686</span>
+<span id="687">687</span>
+<span id="688">688</span>
+<span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
+<span id="694">694</span>
+<span id="695">695</span>
+<span id="696">696</span>
+<span id="697">697</span>
+<span id="698">698</span>
+<span id="699">699</span>
+<span id="700">700</span>
+<span id="701">701</span>
+<span id="702">702</span>
+<span id="703">703</span>
+<span id="704">704</span>
+<span id="705">705</span>
+<span id="706">706</span>
+<span id="707">707</span>
+<span id="708">708</span>
+<span id="709">709</span>
+<span id="710">710</span>
+<span id="711">711</span>
+<span id="712">712</span>
+<span id="713">713</span>
+<span id="714">714</span>
+<span id="715">715</span>
+<span id="716">716</span>
+<span id="717">717</span>
+<span id="718">718</span>
+<span id="719">719</span>
+<span id="720">720</span>
+<span id="721">721</span>
+<span id="722">722</span>
+<span id="723">723</span>
+<span id="724">724</span>
+<span id="725">725</span>
+<span id="726">726</span>
+<span id="727">727</span>
+<span id="728">728</span>
+<span id="729">729</span>
+<span id="730">730</span>
+<span id="731">731</span>
+<span id="732">732</span>
+<span id="733">733</span>
+<span id="734">734</span>
+<span id="735">735</span>
+<span id="736">736</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1083,6 +1147,7 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::collections::HashSet;
     <span class="kw">use </span>std::sync::Arc;
 
     <span class="kw">use </span>async_trait::async_trait;
@@ -1090,7 +1155,7 @@
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
-    <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+    <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
@@ -1104,9 +1169,10 @@
     <span class="kw">use </span>futures::executor::block_on;
     <span class="kw">use </span>threshold_crypto::PublicKey;
 
-    <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
+    <span class="kw">use </span><span class="kw">crate</span>::api::{IFederationApi, WsFederationApi};
+    <span class="kw">use </span><span class="kw">crate</span>::mint::db::LastECashNoteIndexKey;
     <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
-    <span class="kw">use crate</span>::{ClientContext, DerivableSecret, TransactionBuilder};
+    <span class="kw">use crate</span>::{BlindNonce, ClientContext, DerivableSecret, TransactionBuilder};
 
     <span class="kw">type </span>Fed = FakeFed&lt;Mint, MintClientConfig&gt;;
 
@@ -1340,6 +1406,68 @@
 
         <span class="comment">// No money is left
         </span><span class="macro">assert_eq!</span>(client.coins().total_amount(), Amount::ZERO);
+    }
+
+    <span class="attribute">#[allow(clippy::needless_collect)]
+    #[tokio::test]
+    </span><span class="kw">async fn </span>test_parallel_issuance() {
+        <span class="kw">const </span>ITERATIONS: usize = <span class="number">10_000</span>;
+
+        <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap();
+
+        <span class="kw">let </span>client: MintClient&lt;<span class="lifetime">&#39;static</span>&gt; = MintClient {
+            config: Box::leak(Box::new(MintClientConfig {
+                tbs_pks: Tiered::from_iter([]),
+                fee_consensus: Default::default(),
+            })),
+            context: Box::leak(Box::new(ClientContext {
+                db: db.into(),
+                api: WsFederationApi::new(<span class="macro">vec!</span>[]).into(),
+                secp: Default::default(),
+            })),
+            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
+        };
+
+        <span class="kw">let </span>client_ref: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>MintClient&lt;<span class="lifetime">&#39;static</span>&gt; = Box::leak(Box::new(client));
+        <span class="kw">let </span>issuance_thread = || {
+            (<span class="number">0</span>..ITERATIONS)
+                .filter_map(|<span class="kw">_</span>| {
+                    <span class="kw">let </span><span class="kw-2">mut </span>tx = client_ref.context.db.begin_transaction();
+                    <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, <span class="kw-2">&amp;mut </span>tx);
+                    tx.commit_tx().map(|<span class="kw">_</span>| nonce).ok()
+                })
+                .collect::&lt;Vec&lt;BlindNonce&gt;&gt;()
+        };
+
+        <span class="kw">let </span>threads = (<span class="number">0</span>..<span class="number">4</span>)
+            .map(|<span class="kw">_</span>| std::thread::spawn(issuance_thread))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>results = threads
+            .into_iter()
+            .flat_map(|t| {
+                <span class="kw">let </span>output = t.join().unwrap();
+                <span class="comment">// Most threads will have produces far less than ITERATIONS items notes due to
+                // database transactions failing
+                </span><span class="macro">dbg!</span>(output.len());
+                output
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">let </span>result_count = results.len();
+        <span class="kw">let </span>result_count_deduplicated = results.into_iter().collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;().len();
+
+        <span class="comment">// Ensure all notes are unique
+        </span><span class="macro">assert_eq!</span>(result_count, result_count_deduplicated);
+
+        <span class="kw">let </span>last_idx = client_ref
+            .context
+            .db
+            .begin_transaction()
+            .get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey)
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .unwrap_or(<span class="number">0</span>);
+        <span class="comment">// Ensure we didn&#39;t skip any keys
+        </span><span class="macro">assert_eq!</span>(last_idx, result_count <span class="kw">as </span>u64);
     }
 }
 </code></pre></div>
