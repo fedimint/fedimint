@@ -411,6 +411,7 @@ fn deserialize_key_pair<'de, D: serde::Deserializer<'de>>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -418,7 +419,7 @@ mod tests {
     use bitcoin::Address;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
-    use fedimint_api::{Amount, OutPoint, TransactionId};
+    use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
@@ -432,9 +433,10 @@ mod tests {
     use futures::executor::block_on;
     use threshold_crypto::PublicKey;
 
-    use crate::api::IFederationApi;
+    use crate::api::{IFederationApi, WsFederationApi};
+    use crate::mint::db::LastECashNoteIndexKey;
     use crate::mint::MintClient;
-    use crate::{ClientContext, DerivableSecret, TransactionBuilder};
+    use crate::{BlindNonce, ClientContext, DerivableSecret, TransactionBuilder};
 
     type Fed = FakeFed<Mint, MintClientConfig>;
 
@@ -668,5 +670,67 @@ mod tests {
 
         // No money is left
         assert_eq!(client.coins().total_amount(), Amount::ZERO);
+    }
+
+    #[allow(clippy::needless_collect)]
+    #[tokio::test]
+    async fn test_parallel_issuance() {
+        const ITERATIONS: usize = 10_000;
+
+        let db = fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap();
+
+        let client: MintClient<'static> = MintClient {
+            config: Box::leak(Box::new(MintClientConfig {
+                tbs_pks: Tiered::from_iter([]),
+                fee_consensus: Default::default(),
+            })),
+            context: Box::leak(Box::new(ClientContext {
+                db: db.into(),
+                api: WsFederationApi::new(vec![]).into(),
+                secp: Default::default(),
+            })),
+            secret: DerivableSecret::new(&[], &[]),
+        };
+
+        let client_ref: &'static MintClient<'static> = Box::leak(Box::new(client));
+        let issuance_thread = || {
+            (0..ITERATIONS)
+                .filter_map(|_| {
+                    let mut tx = client_ref.context.db.begin_transaction();
+                    let (_, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, &mut tx);
+                    tx.commit_tx().map(|_| nonce).ok()
+                })
+                .collect::<Vec<BlindNonce>>()
+        };
+
+        let threads = (0..4)
+            .map(|_| std::thread::spawn(issuance_thread))
+            .collect::<Vec<_>>();
+        let results = threads
+            .into_iter()
+            .flat_map(|t| {
+                let output = t.join().unwrap();
+                // Most threads will have produces far less than ITERATIONS items notes due to
+                // database transactions failing
+                dbg!(output.len());
+                output
+            })
+            .collect::<Vec<_>>();
+
+        let result_count = results.len();
+        let result_count_deduplicated = results.into_iter().collect::<HashSet<_>>().len();
+
+        // Ensure all notes are unique
+        assert_eq!(result_count, result_count_deduplicated);
+
+        let last_idx = client_ref
+            .context
+            .db
+            .begin_transaction()
+            .get_value(&LastECashNoteIndexKey)
+            .expect("DB error")
+            .unwrap_or(0);
+        // Ensure we didn't skip any keys
+        assert_eq!(last_idx, result_count as u64);
     }
 }
