@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_mint/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_mint/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -938,6 +938,11 @@
 <span id="938">938</span>
 <span id="939">939</span>
 <span id="940">940</span>
+<span id="941">941</span>
+<span id="942">942</span>
+<span id="943">943</span>
+<span id="944">944</span>
+<span id="945">945</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -991,8 +996,10 @@
 }
 
 <span class="doccomment">/// Request to blind sign a certain amount of coins
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>TieredMulti&lt;tbs::BlindedMessage&gt;);
+</span><span class="attribute">#[derive(
+    Debug, Clone, Eq, PartialEq, Hash, Default, Deserialize, Serialize, Encodable, Decodable,
+)]
+</span><span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>TieredMulti&lt;BlindNonce&gt;);
 
 <span class="comment">// FIXME: optimize out blinded msg by making the mint remember it
 </span><span class="doccomment">/// Blind signature share for a [`SignRequest`]
@@ -1631,11 +1638,13 @@
 
 <span class="kw">impl </span>From&lt;SignRequest&gt; <span class="kw">for </span>TieredMulti&lt;BlindNonce&gt; {
     <span class="kw">fn </span>from(sig_req: SignRequest) -&gt; <span class="self">Self </span>{
-        sig_req
-            .<span class="number">0
-            </span>.into_iter()
-            .map(|(amt, token)| (amt, <span class="kw">crate</span>::BlindNonce(token)))
-            .collect()
+        sig_req.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>Extend&lt;(Amount, BlindNonce)&gt; <span class="kw">for </span>SignRequest {
+    <span class="kw">fn </span>extend&lt;T: IntoIterator&lt;Item = (Amount, BlindNonce)&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: T) {
+        <span class="self">self</span>.<span class="number">0</span>.extend(iter)
     }
 }
 
@@ -1691,7 +1700,7 @@
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>rand::rngs::OsRng;
-    <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
+    <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
     <span class="kw">use crate</span>::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
@@ -1724,7 +1733,8 @@
         <span class="kw">let </span>(pk, <span class="kw-2">mut </span>mints) = build_mints();
 
         <span class="kw">let </span>nonce = Message::from_bytes(<span class="kw-2">&amp;</span><span class="string">b&quot;test coin&quot;</span>[..]);
-        <span class="kw">let </span>(bkey, bmsg) = blind_message(nonce);
+        <span class="kw">let </span>bkey = BlindingKey::random();
+        <span class="kw">let </span>bmsg = blind_message(nonce, bkey);
         <span class="kw">let </span>blind_tokens = TieredMulti::new(
             <span class="macro">vec!</span>[(
                 Amount::from_sat(<span class="number">1</span>),
@@ -1841,7 +1851,7 @@
             .<span class="number">0
             </span>.contains(<span class="kw-2">&amp;</span>(PeerId::from(<span class="number">2</span>), PeerErrorType::InvalidSignature)));
 
-        <span class="kw">let </span>(_bk, bmsg) = blind_message(Message::from_bytes(<span class="string">b&quot;test&quot;</span>));
+        <span class="kw">let </span>bmsg = blind_message(Message::from_bytes(<span class="string">b&quot;test&quot;</span>), BlindingKey::random());
         <span class="kw">let </span>(bsig_res, errors) = mint.combine(
             <span class="prelude-val">Some</span>(our_sig),
             psigs
@@ -1879,4 +1889,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>

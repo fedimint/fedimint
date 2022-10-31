@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/transaction.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>transaction.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/transaction.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>transaction.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -222,18 +222,26 @@
 <span id="222">222</span>
 <span id="223">223</span>
 <span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Note};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Note, SignRequest};
 <span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>tbs::AggregatePublicKey;
+<span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
-<span class="kw">use </span><span class="kw">crate</span>::mint::NoteIssuanceRequests;
+<span class="kw">use </span><span class="kw">crate</span>::mint::{NoteIssuanceRequest, NoteIssuanceRequests};
 <span class="kw">use crate</span>::{Client, MintClientError, ModuleClient, SpendableNote};
 
 <span class="kw">pub struct </span>TransactionBuilder {
@@ -306,15 +314,14 @@
         <span class="self">self</span>.input_amount(client) - <span class="self">self</span>.output_amount(client) - <span class="self">self</span>.fee_amount(client)
     }
 
-    <span class="kw">pub fn </span>output_coins&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub fn </span>output_coins(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         amount: Amount,
-        secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
+        coin_gen: <span class="kw">impl </span>FnMut() -&gt; (NoteIssuanceRequest, BlindNonce),
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-        rng: <span class="kw-2">&amp;mut </span>R,
     ) {
         <span class="kw">let </span>(coin_finalization_data, coin_output) =
-            <span class="self">self</span>.create_output_coins(amount, secp, tbs_pks, rng);
+            <span class="self">self</span>.create_output_coins(amount, coin_gen, tbs_pks);
 
         <span class="kw">if </span>!coin_output.is_empty() {
             <span class="kw">let </span>out_idx = <span class="self">self</span>.tx.outputs.len();
@@ -324,35 +331,42 @@
         }
     }
 
-    <span class="kw">pub fn </span>create_output_coins&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub fn </span>create_output_coins(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         amount: Amount,
-        secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
+        <span class="kw-2">mut </span>coin_gen: <span class="kw">impl </span>FnMut() -&gt; (NoteIssuanceRequest, BlindNonce),
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-        rng: <span class="kw-2">&amp;mut </span>R,
     ) -&gt; (NoteIssuanceRequests, TieredMulti&lt;BlindNonce&gt;) {
-        <span class="kw">let </span>(coin_finalization_data, sig_req) =
-            NoteIssuanceRequests::new(amount, tbs_pks, secp, rng);
+        <span class="kw">let </span>(coin_finalization_data, sig_req): (NoteIssuanceRequests, SignRequest) =
+            TieredMulti::represent_amount(amount, tbs_pks)
+                .into_iter()
+                .map(|(amt, ())| {
+                    <span class="kw">let </span>(request, blind_nonce) = coin_gen();
+                    ((amt, request), (amt, blind_nonce))
+                })
+                .unzip();
 
-        <span class="kw">let </span>coin_output = sig_req
-            .<span class="number">0
-            </span>.into_iter()
-            .map(|(amt, token)| (amt, BlindNonce(token)))
-            .collect();
+        <span class="macro">debug!</span>(
+            %amount,
+            coins = %sig_req.<span class="number">0</span>.item_count(),
+            tiers = <span class="question-mark">?</span>sig_req.<span class="number">0</span>.tiers().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+            <span class="string">&quot;Generated issuance request&quot;
+        </span>);
 
-        (coin_finalization_data, coin_output)
+        (coin_finalization_data, sig_req.<span class="number">0</span>)
     }
 
     <span class="kw">pub fn </span>build&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
         change_required: Amount,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="kw-2">mut </span>coin_gen: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; (NoteIssuanceRequest, BlindNonce),
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; Transaction {
         <span class="comment">// add change
-        </span><span class="self">self</span>.output_coins(change_required, secp, tbs_pks, <span class="kw-2">&amp;mut </span>rng);
+        </span><span class="self">self</span>.output_coins(change_required, || coin_gen(dbtx), tbs_pks);
 
         <span class="kw">let </span>txid = <span class="self">self</span>.tx.tx_hash();
         <span class="kw">if </span>!<span class="self">self</span>.keys.is_empty() {
@@ -447,4 +461,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>

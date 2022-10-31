@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["DbKeyPrefix",""]],"struct":[["CoinKey",""],["CoinKeyPrefix",""],["OutputFinalizationKey",""],["OutputFinalizationKeyPrefix",""],["PendingCoinsKey",""],["PendingCoinsKeyPrefix",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["DbKeyPrefix",""]],"struct":[["CoinKey",""],["CoinKeyPrefix",""],["LastECashNoteIndexKey",""],["OutputFinalizationKey",""],["OutputFinalizationKeyPrefix",""],["PendingCoinsKey",""],["PendingCoinsKeyPrefix",""]]};

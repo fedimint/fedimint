@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -661,6 +661,15 @@
 <span id="661">661</span>
 <span id="662">662</span>
 <span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -674,27 +683,31 @@
 <span class="kw">use </span>fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse, SignRequest};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
+<span class="kw">use </span>tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindingKey};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{debug, trace, warn};
+<span class="kw">use </span>tracing::{trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
+<span class="kw">use </span><span class="kw">crate</span>::mint::db::LastECashNoteIndexKey;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use crate</span>::{Client, ModuleClient};
+<span class="kw">use crate</span>::{ChildId, Client, DerivableSecret, ModuleClient};
+
+<span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
 </span><span class="kw">pub struct </span>MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>MintClientConfig,
     <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
+    <span class="kw">pub </span>secret: DerivableSecret,
 }
 
 <span class="doccomment">/// Single [`Note`] issuance request to the mint.
@@ -713,7 +726,7 @@
 ///
 /// Keeps all the data to generate [`SpendableNote`]s once the
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attribute">#[derive(Debug, Clone, Default, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequests {
     <span class="doccomment">/// Finalization data for all coin outputs in this request
     </span>coins: TieredMulti&lt;NoteIssuanceRequest&gt;,
@@ -764,6 +777,28 @@
             .collect()
     }
 
+    <span class="kw">fn </span>new_note_secret(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; DerivableSecret {
+        <span class="kw">let </span>new_idx = dbtx
+            .get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey)
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .unwrap_or(<span class="number">0</span>)
+            + <span class="number">1</span>;
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>LastECashNoteIndexKey, <span class="kw-2">&amp;</span>new_idx)
+            .expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="self">self</span>.secret
+            .child_key(MINT_E_CASH_TYPE_CHILD_ID) <span class="comment">// TODO: cache
+            </span>.child_key(ChildId(new_idx))
+    }
+
+    <span class="kw">pub fn </span>new_ecash_note&lt;C: Signing&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; (NoteIssuanceRequest, BlindNonce) {
+        <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(dbtx);
+        NoteIssuanceRequest::new(ctx, secret)
+    }
+
     <span class="kw">pub fn </span>select_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>coins = <span class="self">self
             </span>.coins()
@@ -788,6 +823,7 @@
         <span class="kw">let </span>final_tx = tx.build(
             change_required,
             <span class="kw-2">&amp;mut </span>dbtx,
+            |tx| <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, tx),
             <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp,
             <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
             rng,
@@ -803,17 +839,17 @@
         <span class="prelude-val">Ok</span>(txid)
     }
 
-    <span class="kw">pub fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        rng: <span class="kw-2">&amp;mut </span>R,
+        coin_gen: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; (NoteIssuanceRequest, BlindNonce),
         <span class="kw-2">mut </span>create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
 
         <span class="kw">let </span>(finalization, coins) =
-            builder.create_output_coins(amount, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks, rng);
+            builder.create_output_coins(amount, || coin_gen(dbtx), <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks);
         <span class="kw">let </span>out_point = create_tx(coins);
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
             .expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -904,39 +940,13 @@
     </span>}
 }
 
-<span class="kw">impl </span>NoteIssuanceRequests {
-    <span class="doccomment">/// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
-    </span><span class="kw">pub fn </span>new&lt;K, C&gt;(
-        amount: Amount,
-        amount_tiers: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;,
-        ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; (NoteIssuanceRequests, SignRequest)
-    <span class="kw">where
-        </span>C: Signing,
-    {
-        <span class="kw">let </span>(requests, blinded_nonces): (TieredMulti&lt;<span class="kw">_</span>&gt;, TieredMulti&lt;<span class="kw">_</span>&gt;) =
-            TieredMulti::represent_amount(amount, amount_tiers)
-                .into_iter()
-                .map(|(amt, ())| {
-                    <span class="kw">let </span>(request, blind_msg) = NoteIssuanceRequest::new(ctx, rng);
-                    ((amt, request), (amt, blind_msg))
-                })
-                .unzip();
-
-        <span class="macro">debug!</span>(
-            %amount,
-            coins = %requests.item_count(),
-            tiers = <span class="question-mark">?</span>requests.tiers().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-            <span class="string">&quot;Generated issuance request&quot;
-        </span>);
-
-        <span class="kw">let </span>sig_req = SignRequest(blinded_nonces);
-        <span class="kw">let </span>issuance_req = NoteIssuanceRequests { coins: requests };
-
-        (issuance_req, sig_req)
+<span class="kw">impl </span>Extend&lt;(Amount, NoteIssuanceRequest)&gt; <span class="kw">for </span>NoteIssuanceRequests {
+    <span class="kw">fn </span>extend&lt;T: IntoIterator&lt;Item = (Amount, NoteIssuanceRequest)&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: T) {
+        <span class="self">self</span>.coins.extend(iter)
     }
+}
 
+<span class="kw">impl </span>NoteIssuanceRequests {
     <span class="doccomment">/// Finalize the issuance request using a [`SigResponse`] from the mint containing the blind
     /// signatures for all coins in this `IssuanceRequest`. It also takes the mint&#39;s
     /// [`AggregatePublicKey`] to validate the supplied blind signatures.
@@ -982,23 +992,21 @@
 <span class="kw">impl </span>NoteIssuanceRequest {
     <span class="doccomment">/// Generate a request session for a single coin and returns it plus the corresponding blinded
     /// message
-    </span><span class="kw">fn </span>new&lt;C&gt;(
-        ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; (NoteIssuanceRequest, BlindedMessage)
+    </span><span class="kw">fn </span>new&lt;C&gt;(ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;, secret: DerivableSecret) -&gt; (NoteIssuanceRequest, BlindNonce)
     <span class="kw">where
         </span>C: Signing,
     {
-        <span class="kw">let </span>spend_key = bitcoin::KeyPair::new(ctx, rng);
+        <span class="kw">let </span>spend_key = secret.child_key(ChildId(<span class="number">0</span>)).to_secp_key(ctx);
         <span class="kw">let </span>nonce = Nonce(spend_key.x_only_public_key().<span class="number">0</span>);
-        <span class="kw">let </span>(blinding_key, blinded_nonce) = blind_message(nonce.to_message());
+        <span class="kw">let </span>blinding_key = BlindingKey(secret.child_key(ChildId(<span class="number">1</span>)).to_bls12_381_key());
+        <span class="kw">let </span>blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
         <span class="kw">let </span>cr = NoteIssuanceRequest {
             spend_key,
             blinding_key,
         };
 
-        (cr, blinded_nonce)
+        (cr, BlindNonce(blinded_nonce))
     }
 
     <span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
@@ -1098,7 +1106,7 @@
 
     <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
     <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
-    <span class="kw">use crate</span>::{ClientContext, TransactionBuilder};
+    <span class="kw">use crate</span>::{ClientContext, DerivableSecret, TransactionBuilder};
 
     <span class="kw">type </span>Fed = FakeFed&lt;Mint, MintClientConfig&gt;;
 
@@ -1205,26 +1213,30 @@
         (fed, client_config, client_context)
     }
 
-    <span class="kw">async fn </span>issue_tokens&lt;<span class="lifetime">&#39;a</span>, R: rand::RngCore + rand::CryptoRng&gt;(
+    <span class="kw">async fn </span>issue_tokens&lt;<span class="lifetime">&#39;a</span>&gt;(
         fed: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>tokio::sync::Mutex&lt;Fed&gt;,
         client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintClient&lt;<span class="lifetime">&#39;a</span>&gt;,
         client_db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
         amt: Amount,
-        rng: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>R,
     ) {
         <span class="kw">let </span>txid = TransactionId::from_inner([<span class="number">0x42</span>; <span class="number">32</span>]);
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction();
-        client.receive_coins(amt, <span class="kw-2">&amp;mut </span>dbtx, rng, |output| {
-            <span class="comment">// Agree on output
-            </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
-            block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, output)]));
-            <span class="comment">// Generate signatures
-            </span>block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]));
+        client.receive_coins(
+            amt,
+            <span class="kw-2">&amp;mut </span>dbtx,
+            |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
+            |output| {
+                <span class="comment">// Agree on output
+                </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
+                block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, output)]));
+                <span class="comment">// Generate signatures
+                </span>block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]));
 
-            out_point
-        });
+                out_point
+            },
+        );
         dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
         client.fetch_all_coins().<span class="kw">await</span>;
@@ -1232,40 +1244,32 @@
 
     <span class="attribute">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_output() {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
 
         <span class="kw">let </span>client = MintClient {
             config: <span class="kw-2">&amp;</span>client_config,
             context: <span class="kw-2">&amp;</span>client_context,
+            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sat(<span class="number">12</span>);
-        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>client_context.db, ISSUE_AMOUNT, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>;
+        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>client_context.db, ISSUE_AMOUNT).<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(client.coins().total_amount(), ISSUE_AMOUNT)
     }
 
     <span class="attribute">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_input() {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
-
         <span class="kw">const </span>SPEND_AMOUNT: Amount = Amount::from_sat(<span class="number">21</span>);
 
         <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
         <span class="kw">let </span>client = MintClient {
             config: <span class="kw-2">&amp;</span>client_config,
             context: <span class="kw-2">&amp;</span>client_context,
+            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
-        issue_tokens(
-            <span class="kw-2">&amp;</span>fed,
-            <span class="kw-2">&amp;</span>client,
-            <span class="kw-2">&amp;</span>client_context.db,
-            SPEND_AMOUNT * <span class="number">2</span>,
-            <span class="kw-2">&amp;mut </span>rng,
-        )
-        .<span class="kw">await</span>;
+        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>client_context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
 
         <span class="comment">// Spending works
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.context.db.begin_transaction();
@@ -1276,7 +1280,14 @@
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
         <span class="kw">let </span>(spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
-        builder.build(Amount::from_sat(<span class="number">0</span>), <span class="kw-2">&amp;mut </span>dbtx, secp, tbs_pks, rng);
+        builder.build(
+            Amount::from_sat(<span class="number">0</span>),
+            <span class="kw-2">&amp;mut </span>dbtx,
+            |dbtx| client.new_ecash_note(secp, dbtx),
+            secp,
+            tbs_pks,
+            rng,
+        );
         dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
@@ -1307,7 +1318,14 @@
         <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>(spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
-        builder.build(Amount::from_sat(<span class="number">0</span>), <span class="kw-2">&amp;mut </span>dbtx, secp, tbs_pks, rng);
+        builder.build(
+            Amount::from_sat(<span class="number">0</span>),
+            <span class="kw-2">&amp;mut </span>dbtx,
+            |dbtx| client.new_ecash_note(secp, dbtx),
+            secp,
+            tbs_pks,
+            rng,
+        );
         dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
@@ -1325,4 +1343,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>

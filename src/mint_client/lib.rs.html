@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -1195,14 +1195,84 @@
 <span id="1195">1195</span>
 <span id="1196">1196</span>
 <span id="1197">1197</span>
+<span id="1198">1198</span>
+<span id="1199">1199</span>
+<span id="1200">1200</span>
+<span id="1201">1201</span>
+<span id="1202">1202</span>
+<span id="1203">1203</span>
+<span id="1204">1204</span>
+<span id="1205">1205</span>
+<span id="1206">1206</span>
+<span id="1207">1207</span>
+<span id="1208">1208</span>
+<span id="1209">1209</span>
+<span id="1210">1210</span>
+<span id="1211">1211</span>
+<span id="1212">1212</span>
+<span id="1213">1213</span>
+<span id="1214">1214</span>
+<span id="1215">1215</span>
+<span id="1216">1216</span>
+<span id="1217">1217</span>
+<span id="1218">1218</span>
+<span id="1219">1219</span>
+<span id="1220">1220</span>
+<span id="1221">1221</span>
+<span id="1222">1222</span>
+<span id="1223">1223</span>
+<span id="1224">1224</span>
+<span id="1225">1225</span>
+<span id="1226">1226</span>
+<span id="1227">1227</span>
+<span id="1228">1228</span>
+<span id="1229">1229</span>
+<span id="1230">1230</span>
+<span id="1231">1231</span>
+<span id="1232">1232</span>
+<span id="1233">1233</span>
+<span id="1234">1234</span>
+<span id="1235">1235</span>
+<span id="1236">1236</span>
+<span id="1237">1237</span>
+<span id="1238">1238</span>
+<span id="1239">1239</span>
+<span id="1240">1240</span>
+<span id="1241">1241</span>
+<span id="1242">1242</span>
+<span id="1243">1243</span>
+<span id="1244">1244</span>
+<span id="1245">1245</span>
+<span id="1246">1246</span>
+<span id="1247">1247</span>
+<span id="1248">1248</span>
+<span id="1249">1249</span>
+<span id="1250">1250</span>
+<span id="1251">1251</span>
+<span id="1252">1252</span>
+<span id="1253">1253</span>
+<span id="1254">1254</span>
+<span id="1255">1255</span>
+<span id="1256">1256</span>
+<span id="1257">1257</span>
+<span id="1258">1258</span>
+<span id="1259">1259</span>
+<span id="1260">1260</span>
+<span id="1261">1261</span>
+<span id="1262">1262</span>
+<span id="1263">1263</span>
+<span id="1264">1264</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
+<span class="kw">mod </span>db;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
 <span class="kw">pub mod </span>query;
+<span class="kw">pub mod </span>secrets;
 <span class="kw">pub mod </span>transaction;
 <span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>wallet;
 
+<span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1214,6 +1284,7 @@
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
@@ -1247,7 +1318,9 @@
 <span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 <span class="kw">use </span>ln::{db::LightningGatewayKey, PayInvoicePayload};
 <span class="kw">use </span>mint::NoteIssuanceRequests;
-<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>rand::distributions::Standard;
+<span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>rand::{thread_rng, CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -1255,6 +1328,7 @@
 <span class="kw">use </span>tracing::debug;
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
@@ -1263,6 +1337,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::LnClientError;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, PendingCoinsKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::mint::MintClientError;
+<span class="kw">use </span><span class="kw">crate</span>::secrets::{ChildId, DerivableSecret};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, ClientContext};
 <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
@@ -1274,6 +1349,7 @@
 };
 
 <span class="kw">const </span>TIMELOCK: u64 = <span class="number">100</span>;
+<span class="kw">const </span>MINT_SECRET_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
 <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ClientError&gt;;
 <span class="kw">pub type </span>GatewayClient = Client&lt;GatewayClientConfig&gt;;
@@ -1343,7 +1419,12 @@
 <span class="kw">pub struct </span>Client&lt;C&gt; {
     config: C,
     context: ClientContext,
+    <span class="attribute">#[allow(unused)]
+    </span>root_secret: DerivableSecret,
 }
+
+<span class="attribute">#[derive(Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ClientSecret([u8; <span class="number">64</span>]);
 
 <span class="kw">impl </span>AsRef&lt;ClientConfig&gt; <span class="kw">for </span>GatewayClientConfig {
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
@@ -1377,6 +1458,7 @@
         MintClient {
             config: <span class="kw-2">&amp;</span><span class="self">self</span>.config.as_ref().mint,
             context: <span class="kw-2">&amp;</span><span class="self">self</span>.context,
+            secret: <span class="self">self</span>.root_secret.child_key(MINT_SECRET_CHILD_ID),
         }
     }
 
@@ -1414,10 +1496,33 @@
         api: FederationApi,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; Client&lt;T&gt; {
+        <span class="kw">let </span>root_secret = <span class="self">Self</span>::get_secret(<span class="kw-2">&amp;</span>db);
         <span class="self">Self </span>{
             config,
             context: ClientContext { db, api, secp },
+            root_secret,
         }
+    }
+
+    <span class="doccomment">/// Fetches the client secret from the database or generates a new one if none is present
+    </span><span class="kw">fn </span>get_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret {
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction();
+        <span class="kw">let </span>secret = tx
+            .get_value(<span class="kw-2">&amp;</span>ClientSecretKey)
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .unwrap_or_else(|| {
+                <span class="kw">let </span>secret: ClientSecret = thread_rng().gen();
+                <span class="kw">let </span>no_replacement = tx
+                    .insert_entry(<span class="kw-2">&amp;</span>ClientSecretKey, <span class="kw-2">&amp;</span>secret)
+                    .expect(<span class="string">&quot;DB error&quot;</span>)
+                    .is_none();
+                <span class="macro">assert!</span>(
+                    no_replacement,
+                    <span class="string">&quot;We would have overwritten our secret key, aborting!&quot;
+                </span>);
+                secret
+            });
+        secret.into_root_secret()
     }
 
     <span class="kw">pub async fn </span>peg_in&lt;R: RngCore + CryptoRng&gt;(
@@ -1510,15 +1615,18 @@
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="kw">pub fn </span>receive_coins&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub fn </span>receive_coins(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        <span class="kw-2">mut </span>rng: R,
         create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
-        <span class="self">self</span>.mint_client()
-            .receive_coins(amount, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>rng, create_tx);
+        <span class="self">self</span>.mint_client().receive_coins(
+            amount,
+            <span class="kw-2">&amp;mut </span>dbtx,
+            |tx| <span class="self">self</span>.mint_client().new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, tx),
+            create_tx,
+        );
         dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
@@ -1583,22 +1691,27 @@
     </span><span class="kw">pub async fn </span>spend_ecash&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        <span class="kw-2">mut </span>rng: R,
+        rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>final_coins = <span class="kw">if </span>coins.total_amount() == amount {
             coins
         } <span class="kw">else </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+            <span class="kw">let </span>dbtx_mutref = <span class="kw-2">&amp;mut </span>dbtx;
             <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
             tx.input_coins(coins)<span class="question-mark">?</span>;
             tx.output_coins(
                 amount,
-                <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().context.secp,
+                <span class="kw">move </span>|| {
+                    <span class="self">self</span>.mint_client()
+                        .new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, dbtx_mutref)
+                },
                 <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().config.tbs_pks,
-                <span class="kw-2">&amp;mut </span>rng,
             );
-            <span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+            dbtx.commit_tx().expect(<span class="string">&quot;committing tx failed&quot;</span>); <span class="comment">// FIXME: retry?
+            </span><span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
             <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?
         </span>};
@@ -2289,6 +2402,27 @@
     }
 }
 
+<span class="kw">impl </span>Distribution&lt;ClientSecret&gt; <span class="kw">for </span>Standard {
+    <span class="kw">fn </span>sample&lt;R: Rng + <span class="question-mark">?</span>Sized&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: <span class="kw-2">&amp;mut </span>R) -&gt; ClientSecret {
+        <span class="kw">let </span><span class="kw-2">mut </span>secret = [<span class="number">0u8</span>; <span class="number">64</span>];
+        rng.fill(<span class="kw-2">&amp;mut </span>secret);
+        ClientSecret(secret)
+    }
+}
+
+<span class="kw">impl </span>ClientSecret {
+    <span class="kw">fn </span>into_root_secret(<span class="self">self</span>) -&gt; DerivableSecret {
+        <span class="kw">const </span>FEDIMINT_CLIENT_NONCE: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;Fedimint Client Salt&quot;</span>;
+        DerivableSecret::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, FEDIMINT_CLIENT_NONCE)
+    }
+}
+
+<span class="kw">impl </span>Debug <span class="kw">for </span>ClientSecret {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;ClientSecret([redacted])&quot;</span>)
+    }
+}
+
 <span class="comment">// FIXME: move this elsewhere. maybe into &quot;core&quot;.
 </span><span class="kw">pub mod </span>serde_keypair {
     <span class="kw">use </span>bitcoin::KeyPair;
@@ -2393,4 +2527,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9565dfeb4 2022-10-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>
