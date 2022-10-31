@@ -3,13 +3,14 @@ use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_core::config::ClientConfig;
-use fedimint_core::modules::mint::{BlindNonce, Note};
+use fedimint_core::modules::mint::{BlindNonce, Note, SignRequest};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use rand::{CryptoRng, RngCore};
 use tbs::AggregatePublicKey;
+use tracing::debug;
 
 use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
-use crate::mint::NoteIssuanceRequests;
+use crate::mint::{NoteIssuanceRequest, NoteIssuanceRequests};
 use crate::{Client, MintClientError, ModuleClient, SpendableNote};
 
 pub struct TransactionBuilder {
@@ -82,15 +83,14 @@ impl TransactionBuilder {
         self.input_amount(client) - self.output_amount(client) - self.fee_amount(client)
     }
 
-    pub fn output_coins<R: RngCore + CryptoRng>(
+    pub fn output_coins(
         &mut self,
         amount: Amount,
-        secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+        coin_gen: impl FnMut() -> (NoteIssuanceRequest, BlindNonce),
         tbs_pks: &Tiered<AggregatePublicKey>,
-        rng: &mut R,
     ) {
         let (coin_finalization_data, coin_output) =
-            self.create_output_coins(amount, secp, tbs_pks, rng);
+            self.create_output_coins(amount, coin_gen, tbs_pks);
 
         if !coin_output.is_empty() {
             let out_idx = self.tx.outputs.len();
@@ -100,35 +100,42 @@ impl TransactionBuilder {
         }
     }
 
-    pub fn create_output_coins<R: RngCore + CryptoRng>(
+    pub fn create_output_coins(
         &mut self,
         amount: Amount,
-        secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+        mut coin_gen: impl FnMut() -> (NoteIssuanceRequest, BlindNonce),
         tbs_pks: &Tiered<AggregatePublicKey>,
-        rng: &mut R,
     ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
-        let (coin_finalization_data, sig_req) =
-            NoteIssuanceRequests::new(amount, tbs_pks, secp, rng);
+        let (coin_finalization_data, sig_req): (NoteIssuanceRequests, SignRequest) =
+            TieredMulti::represent_amount(amount, tbs_pks)
+                .into_iter()
+                .map(|(amt, ())| {
+                    let (request, blind_nonce) = coin_gen();
+                    ((amt, request), (amt, blind_nonce))
+                })
+                .unzip();
 
-        let coin_output = sig_req
-            .0
-            .into_iter()
-            .map(|(amt, token)| (amt, BlindNonce(token)))
-            .collect();
+        debug!(
+            %amount,
+            coins = %sig_req.0.item_count(),
+            tiers = ?sig_req.0.tiers().collect::<Vec<_>>(),
+            "Generated issuance request"
+        );
 
-        (coin_finalization_data, coin_output)
+        (coin_finalization_data, sig_req.0)
     }
 
     pub fn build<'a, R: RngCore + CryptoRng>(
         mut self,
         change_required: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
+        mut coin_gen: impl FnMut(&mut DatabaseTransaction<'_>) -> (NoteIssuanceRequest, BlindNonce),
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
         tbs_pks: &Tiered<AggregatePublicKey>,
         mut rng: R,
     ) -> Transaction {
         // add change
-        self.output_coins(change_required, secp, tbs_pks, &mut rng);
+        self.output_coins(change_required, || coin_gen(dbtx), tbs_pks);
 
         let txid = self.tx.tx_hash();
         if !self.keys.is_empty() {

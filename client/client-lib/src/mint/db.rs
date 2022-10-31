@@ -11,6 +11,7 @@ pub enum DbKeyPrefix {
     Coin = 0x20,
     OutputFinalizationData = 0x21,
     PendingCoins = 0x27,
+    LastECashNoteIndex = 0x2a,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -68,4 +69,13 @@ impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::OutputFinalizationData as u8;
     type Key = OutputFinalizationKey;
     type Value = NoteIssuanceRequests;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct LastECashNoteIndexKey;
+
+impl DatabaseKeyPrefixConst for LastECashNoteIndexKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::LastECashNoteIndex as u8;
+    type Key = Self;
+    type Value = u64;
 }

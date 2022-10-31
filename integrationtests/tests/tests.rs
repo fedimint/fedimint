@@ -196,11 +196,9 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         vec![sats(100), sats(500), sats(500)]
     );
 
-    user_receive
-        .client
-        .receive_coins(sats(400), rng(), |coins| {
-            block_on(user_send.client.pay_to_blind_nonces(coins, rng())).unwrap()
-        });
+    user_receive.client.receive_coins(sats(400), |coins| {
+        block_on(user_send.client.pay_to_blind_nonces(coins, rng())).unwrap()
+    });
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
     user_receive
@@ -632,7 +630,14 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
     builder.output(Output::LN(offer_output));
     let tbs_pks = &user.config.0.mint.tbs_pks;
     let mut dbtx = user.client.mint_client().context.db.begin_transaction();
-    let tx = builder.build(sats(0), &mut dbtx, &secp(), tbs_pks, &mut rng());
+    let tx = builder.build(
+        sats(0),
+        &mut dbtx,
+        |dbtx| user.client.mint_client().new_ecash_note(&secp(), dbtx),
+        &secp(),
+        tbs_pks,
+        &mut rng(),
+    );
     fed.submit_transaction(tx);
     fed.run_consensus_epochs(1).await; // process offer
 

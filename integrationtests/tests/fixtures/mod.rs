@@ -605,7 +605,7 @@ impl FederationTest {
             out_idx: 0,
         };
 
-        user.client.receive_coins(amount, OsRng, |tokens| {
+        user.client.receive_coins(amount, |tokens| {
             for server in &self.servers {
                 let svr = server.borrow_mut();
                 let mut dbtx = svr.database.begin_transaction();
