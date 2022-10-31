@@ -4,7 +4,7 @@ use anyhow::Result;
 use fedimint_api::db::{DatabaseTransaction, PrefixIter};
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 pub use rocksdb;
-use rocksdb::OptimisticTransactionDB;
+use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 use tracing::warn;
 
 #[derive(Debug)]
@@ -38,7 +38,13 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
 
 impl IDatabase for RocksDb {
     fn begin_transaction(&self) -> DatabaseTransaction {
-        let mut tx: DatabaseTransaction = RocksDbTransaction(self.0.transaction()).into();
+        let mut optimistic_options = OptimisticTransactionOptions::default();
+        optimistic_options.set_snapshot(true);
+        let mut tx: DatabaseTransaction = RocksDbTransaction(
+            self.0
+                .transaction_opt(&WriteOptions::default(), &optimistic_options),
+        )
+        .into();
         tx.set_tx_savepoint();
         tx
     }
