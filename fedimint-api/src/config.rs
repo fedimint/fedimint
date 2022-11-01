@@ -21,6 +21,7 @@ use tbs::serde_impl;
 use tbs::Scalar;
 
 use crate::net::peers::AnyPeerConnections;
+use crate::task::TaskGroup;
 use crate::PeerId;
 
 /// Part of a config that needs to be generated to bootstrap a new federation.
@@ -50,7 +51,8 @@ pub trait GenerateConfig: Sized {
         peers: &[PeerId],
         params: &Self::Params,
         rng: impl RngCore + CryptoRng,
-    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError>;
+        task_group: &mut TaskGroup,
+    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError>;
 }
 
 struct Dkg<G> {
@@ -293,7 +295,7 @@ where
         &mut self,
         connections: &mut AnyPeerConnections<(T, DkgMessage<G2Projective>)>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> HashMap<T, DkgKeys<G2Projective>> {
+    ) -> Option<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(G2Projective::generator(), connections, rng).await
     }
 
@@ -302,7 +304,7 @@ where
         &mut self,
         connections: &mut AnyPeerConnections<(T, DkgMessage<G1Projective>)>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> HashMap<T, DkgKeys<G1Projective>> {
+    ) -> Option<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(G1Projective::generator(), connections, rng).await
     }
 
@@ -312,7 +314,7 @@ where
         group: G,
         connections: &mut AnyPeerConnections<(T, DkgMessage<G>)>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> HashMap<T, DkgKeys<G>> {
+    ) -> Option<HashMap<T, DkgKeys<G>>> {
         let mut dkgs: HashMap<T, Dkg<G>> = HashMap::new();
         let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
 
@@ -323,15 +325,14 @@ where
             let (dkg, step) = Dkg::new(group, our_id, peers, *threshold, rng);
             if let DkgStep::Messages(messages) = step {
                 for (peer, msg) in messages {
-                    connections.send(&[peer], (key.clone(), msg)).await;
+                    connections.send(&[peer], (key.clone(), msg)).await?;
                 }
             }
             dkgs.insert(key.clone(), dkg);
         }
 
         // process steps for each key
-        loop {
-            let (peer, (key, message)) = connections.receive().await;
+        while let Some((peer, (key, message))) = connections.receive().await {
             let step = dkgs.get_mut(&key).expect("exists").step(peer, message);
 
             match step {
@@ -346,9 +347,11 @@ where
             }
 
             if results.len() == dkgs.len() {
-                return results;
+                return Some(results);
             }
         }
+
+        None
     }
 }
 

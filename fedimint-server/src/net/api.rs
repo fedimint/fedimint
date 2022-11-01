@@ -6,6 +6,7 @@ use std::sync::Arc;
 use fedimint_api::{
     config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
+    task::TaskHandle,
     FederationModule, TransactionId,
 };
 use fedimint_core::config::ClientConfig;
@@ -81,7 +82,11 @@ impl<'a> fedimint_api::server::InitHandle for InitHandle<'a> {
     }
 }
 
-pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus>) {
+pub async fn run_server(
+    cfg: ServerConfig,
+    fedimint: Arc<FedimintConsensus>,
+    task_handle: TaskHandle,
+) {
     let state = RpcHandlerCtx {
         fedimint: fedimint.clone(),
     };
@@ -111,10 +116,20 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus>) {
         .await
         .expect("Could not start API server");
 
-    server
+    let server_handle = server
         .start(rpc_module)
-        .expect("Could not start API server")
+        .expect("Could not start API server");
+
+    let stop_handle = server_handle.clone();
+
+    task_handle
+        .on_shutdown(|| {
+            // ignore errors: we don't care if already stopped
+            let _ = stop_handle.stop();
+        })
         .await;
+
+    server_handle.await
 }
 
 fn attach_endpoints<M>(

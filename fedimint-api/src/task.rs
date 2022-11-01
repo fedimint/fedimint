@@ -9,7 +9,10 @@ use futures::lock::Mutex;
 pub use imp::*;
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
+use tokio::sync::oneshot;
+#[cfg(not(target_family = "wasm"))]
 use tokio::task::JoinHandle;
+use tracing::debug;
 use tracing::info;
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
@@ -22,9 +25,24 @@ pub struct Elapsed;
 struct TaskGroupInner {
     /// Was the shutdown requested, either externally or due to any task failure?
     is_shutting_down: AtomicBool,
+    on_shutdown: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
     join: Mutex<Vec<(String, JoinHandle<()>)>>,
 }
 
+impl TaskGroupInner {
+    pub async fn shutdown(&self) {
+        loop {
+            let f_opt = self.on_shutdown.lock().await.pop();
+
+            if let Some(f) = f_opt {
+                f();
+            } else {
+                break;
+            }
+        }
+        self.is_shutting_down.store(true, SeqCst);
+    }
+}
 /// A group of task working together
 ///
 /// Using this struct it is possible to spawn one or more
@@ -51,6 +69,52 @@ impl TaskGroup {
         }
     }
 
+    pub async fn shutdown(&self) {
+        self.inner.shutdown().await
+    }
+
+    pub async fn shutdown_join_all(self) -> anyhow::Result<()> {
+        self.shutdown().await;
+        self.join_all().await
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    pub fn install_kill_handler(&self) {
+        use tokio::signal;
+
+        async fn wait_for_shutdown_signal() {
+            let ctrl_c = async {
+                signal::ctrl_c()
+                    .await
+                    .expect("failed to install Ctrl+C handler");
+            };
+
+            #[cfg(unix)]
+            let terminate = async {
+                signal::unix::signal(signal::unix::SignalKind::terminate())
+                    .expect("failed to install signal handler")
+                    .recv()
+                    .await;
+            };
+
+            #[cfg(not(unix))]
+            let terminate = std::future::pending::<()>();
+
+            tokio::select! {
+                _ = ctrl_c => {},
+                _ = terminate => {},
+            }
+        }
+        tokio::spawn({
+            let task_group = self.clone();
+            async move {
+                wait_for_shutdown_signal().await;
+                info!("signal received, starting graceful shutdown");
+                task_group.shutdown().await;
+            }
+        });
+    }
+
     #[cfg(not(target_family = "wasm"))]
     pub async fn spawn<Fut>(
         &mut self,
@@ -75,6 +139,29 @@ impl TaskGroup {
         guard.completed = true;
     }
 
+    #[cfg(not(target_family = "wasm"))]
+    pub async fn spawn_local<Fut>(
+        &mut self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + 'static,
+    ) where
+        Fut: Future<Output = ()> + 'static,
+    {
+        let name = name.into();
+        let mut guard = TaskPanicGuard {
+            name: name.clone(),
+            inner: self.inner.clone(),
+            completed: false,
+        };
+        let handle = self.make_handle();
+
+        if let Some(handle) = self::imp::spawn_local(async move {
+            f(handle).await;
+        }) {
+            self.inner.join.lock().await.push((name, handle));
+        }
+        guard.completed = true;
+    }
     // TODO: Send vs lack of Send bound; do something about it
     #[cfg(target_family = "wasm")]
     pub async fn spawn<Fut>(
@@ -100,14 +187,12 @@ impl TaskGroup {
         guard.completed = true;
     }
 
-    pub fn shutdown(&self) {
-        self.inner.is_shutting_down.store(true, SeqCst);
-    }
-
     pub async fn join_all(self) -> anyhow::Result<()> {
         for (name, join) in self.inner.join.lock().await.drain(..) {
+            debug!("Waiting for {name} task to finish");
             join.await
-                .map_err(|e| anyhow!("Thread {name} panicked with: {e}"))?
+                .map_err(|e| anyhow!("Thread {name} panicked with: {e}"))?;
+            debug!("{name} task finished.");
         }
         Ok(())
     }
@@ -143,8 +228,30 @@ pub struct TaskHandle {
 }
 
 impl TaskHandle {
+    /// Is task group shutting down?
+    ///
+    /// Every task in a task group should detect and stop if `true`.
     pub fn is_shutting_down(&self) -> bool {
         self.inner.is_shutting_down.load(SeqCst)
+    }
+
+    pub async fn on_shutdown(&self, f: impl FnOnce() + Send + 'static) {
+        self.inner.on_shutdown.lock().await.push(Box::new(f))
+    }
+
+    /// Make a [`oneshot::Receiver`] that will fire on shutdown
+    ///
+    /// Tasks can use `select` on the return value to handle shutdown
+    /// signal during otherwise blocking operation.
+    #[cfg(not(target_family = "wasm"))]
+    pub async fn make_shutdown_rx(&self) -> oneshot::Receiver<()> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        self.on_shutdown(|| {
+            let _ = shutdown_tx.send(());
+        })
+        .await;
+
+        shutdown_rx
     }
 }
 
@@ -159,6 +266,13 @@ mod imp {
         F: Future<Output = ()> + Send + 'static,
     {
         Some(tokio::spawn(future))
+    }
+
+    pub(crate) fn spawn_local<F>(future: F) -> Option<JoinHandle<()>>
+    where
+        F: Future<Output = ()> + 'static,
+    {
+        Some(tokio::task::spawn_local(future))
     }
 
     pub fn block_in_place<F, R>(f: F) -> R
@@ -200,6 +314,14 @@ mod imp {
     {
         wasm_bindgen_futures::spawn_local(future);
         None
+    }
+
+    pub(crate) fn spawn_local<F>(future: F) -> Option<JoinHandle<()>>
+    where
+        // No Send needed on wasm
+        F: Future<Output = ()> + 'static,
+    {
+        self::spawn(future)
     }
 
     pub fn block_in_place<F, R>(f: F) -> R

@@ -22,7 +22,9 @@ function open_channel() {
 function await_block_sync() {
   FINALITY_DELAY=$(get_finality_delay)
   EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALITY_DELAY ))"
+  echo "Node at ${EXPECTED_BLOCK_HEIGHT}H"
   $FM_MINT_CLIENT wait-block-height $EXPECTED_BLOCK_HEIGHT
+  echo "Mint at ${EXPECTED_BLOCK_HEIGHT}H"
 }
 
 function await_server_on_port() {

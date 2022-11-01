@@ -90,18 +90,19 @@ pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
     bitcoin::secp256k1::Secp256k1::new()
 }
 
+#[non_exhaustive]
+pub struct Fixtures {
+    pub fed: FederationTest,
+    pub user: UserTest,
+    pub bitcoin: Box<dyn BitcoinTest>,
+    pub gateway: GatewayTest,
+    pub lightning: Box<dyn LightningTest>,
+    pub task_group: TaskGroup,
+}
+
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
 /// federation nodes starting at port 4000.
-pub async fn fixtures(
-    num_peers: u16,
-    amount_tiers: &[Amount],
-) -> anyhow::Result<(
-    FederationTest,
-    UserTest,
-    Box<dyn BitcoinTest>,
-    GatewayTest,
-    Box<dyn LightningTest>,
-)> {
+pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
@@ -127,7 +128,10 @@ pub async fn fixtures(
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
-            let (server_config, client_config) = distributed_config(&peers, params, max_evil).await;
+            let (server_config, client_config) =
+                distributed_config(&peers, params, max_evil, &mut task_group)
+                    .await
+                    .expect("distributed config should not be canceled");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
@@ -171,7 +175,14 @@ pub async fn fixtures(
             )
             .await;
 
-            Ok((fed, user, Box::new(bitcoin), gateway, Box::new(lightning)))
+            Ok(Fixtures {
+                fed,
+                user,
+                bitcoin: Box::new(bitcoin),
+                gateway,
+                lightning: Box::new(lightning),
+                task_group,
+            })
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
@@ -209,7 +220,14 @@ pub async fn fixtures(
             )
             .await;
 
-            Ok((fed, user, Box::new(bitcoin), gateway, Box::new(lightning)))
+            Ok(Fixtures {
+                fed,
+                user,
+                bitcoin: Box::new(bitcoin),
+                gateway,
+                lightning: Box::new(lightning),
+                task_group,
+            })
         }
     }
 }
@@ -218,21 +236,38 @@ async fn distributed_config(
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
     _max_evil: usize,
-) -> (BTreeMap<PeerId, ServerConfig>, ClientConfig) {
-    let configs: Vec<(PeerId, (ServerConfig, ClientConfig))> = join_all(peers.iter().map(|peer| {
-        let params = params.clone();
-        let peers = peers.to_vec();
+    task_group: &mut TaskGroup,
+) -> Option<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
+    let configs: Option<Vec<(PeerId, (ServerConfig, ClientConfig))>> =
+        join_all(peers.iter().map(|peer| {
+            let params = params.clone();
+            let peers = peers.to_vec();
 
-        async move {
-            let our_params = params[peer].clone();
-            let mut server_conn = connect(our_params.server_dkg, our_params.tls).await;
+            let mut task_group = task_group.clone();
 
-            let rng = OsRng;
-            let cfg = ServerConfig::distributed_gen(&mut server_conn, peer, &peers, &params, rng);
-            (*peer, cfg.await.expect("generation failed"))
-        }
-    }))
-    .await;
+            async move {
+                let our_params = params[peer].clone();
+                let mut server_conn =
+                    connect(our_params.server_dkg, our_params.tls, &mut task_group).await;
+
+                let rng = OsRng;
+                let cfg = ServerConfig::distributed_gen(
+                    &mut server_conn,
+                    peer,
+                    &peers,
+                    &params,
+                    rng,
+                    &mut task_group,
+                );
+                (*peer, cfg.await.expect("generation failed"))
+            }
+        }))
+        .await
+        .into_iter()
+        .map(|(peer_id, opt)| opt.map(|v| (peer_id, v)))
+        .collect();
+
+    let configs = configs?;
 
     let (_, (_, client_config)) = configs.first().unwrap().clone();
     let server_configs = configs
@@ -240,7 +275,7 @@ async fn distributed_config(
         .map(|(peer, (server, _))| (peer, server))
         .collect();
 
-    (server_configs, client_config)
+    Some((server_configs, client_config))
 }
 
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
@@ -728,7 +763,7 @@ impl FederationTest {
     // Necessary to allow servers to progress concurrently, should be fine since the same server
     // will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
-    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) {
+    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) -> Option<()> {
         tokio::time::sleep(delay).await;
         let mut s = server.borrow_mut();
         let consensus = s.fedimint.consensus.clone();
@@ -738,11 +773,13 @@ impl FederationTest {
         s.dropped_peers
             .append(&mut consensus.get_consensus_proposal().await.drop_peers);
 
-        s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await;
+        s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await?;
 
         for outcome in &s.last_consensus {
             consensus.process_consensus_outcome(outcome.clone()).await;
         }
+
+        Some(())
     }
 
     fn update_last_consensus(&self) {
@@ -797,13 +834,15 @@ impl FederationTest {
             let ln = LightningModule::new(cfg.ln.clone(), db.clone());
 
             let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db.clone());
-            let fedimint = FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg)).await;
+            let fedimint =
+                FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg), &mut task_group)
+                    .await;
 
             let cfg = cfg.clone();
             let consensus = fedimint.consensus.clone();
             task_group
-                .spawn("rpc server", move |_handle| async {
-                    fedimint_server::net::api::run_server(cfg, consensus).await
+                .spawn("rpc server", move |handle| async {
+                    fedimint_server::net::api::run_server(cfg, consensus, handle).await
                 })
                 .await;
 

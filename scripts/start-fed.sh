@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Generates the configs and starts the federation nodes
 
+echo "Staring Federation..."
 set -euxo pipefail
 SKIPPED_SERVERS=${1:-0}
 

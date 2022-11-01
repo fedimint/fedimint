@@ -11,7 +11,8 @@ use fedimint_server::FedimintServer;
 use fedimint_wallet::Wallet;
 use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
-use tokio::spawn;
+use tokio::signal;
+use tracing::info;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
@@ -68,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(ui_port) = opts.ui_port {
         // Spawn UI, wait for it to finish
-        spawn(run_ui(opts.cfg_path.clone(), sender, ui_port));
+        tokio::spawn(run_ui(opts.cfg_path.clone(), sender, ui_port));
         receiver
             .recv()
             .await
@@ -87,6 +88,17 @@ async fn main() -> anyhow::Result<()> {
     let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;
 
     let mut task_group = TaskGroup::new();
+    let local_task_set = tokio::task::LocalSet::new();
+    let _guard = local_task_set.enter();
+
+    tokio::spawn({
+        let task_group = task_group.clone();
+        async move {
+            wait_for_shutdown_signal().await;
+            info!("signal received, starting graceful shutdown");
+            task_group.shutdown().await;
+        }
+    });
 
     let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), db.clone());
 
@@ -101,10 +113,37 @@ async fn main() -> anyhow::Result<()> {
 
     consensus.register_module(MintServerModule::new().into());
 
-    FedimintServer::run(cfg, consensus).await;
+    FedimintServer::run(cfg, consensus, &mut task_group).await?;
+
+    local_task_set.await;
+    task_group.join_all().await?;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();
 
     Ok(())
+}
+
+async fn wait_for_shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }

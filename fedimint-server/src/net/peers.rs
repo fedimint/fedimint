@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_api::net::peers::PeerConnections;
+use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
 use fedimint_core::config::Node;
 use futures::future::select_all;
@@ -20,7 +21,6 @@ use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use url::Url;
@@ -44,13 +44,11 @@ pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 /// encrypted.
 pub struct ReconnectPeerConnections<T> {
     connections: HashMap<PeerId, PeerConnection<T>>,
-    _listen_task: JoinHandle<()>,
 }
 
 struct PeerConnection<T> {
     outgoing: Sender<T>,
     incoming: Receiver<T>,
-    _io_task: JoinHandle<()>,
 }
 
 /// Specifies the network configuration for federation-internal communication
@@ -130,7 +128,11 @@ where
     /// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for
     /// requirements on the `Connector`.
     #[instrument(skip_all)]
-    pub async fn new(cfg: NetworkConfig, connect: PeerConnector<T>) -> Self {
+    pub async fn new(
+        cfg: NetworkConfig,
+        connect: PeerConnector<T>,
+        task_group: &mut TaskGroup,
+    ) -> Self {
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
 
         let (connection_senders, connections) = cfg
@@ -149,36 +151,42 @@ where
                             cfg.clone(),
                             shared_connector.clone(),
                             connection_receiver,
+                            task_group,
                         ),
                     ),
                 )
             })
             .unzip();
 
-        let listen_task = tokio::spawn(Self::run_listen_task(
-            cfg,
-            shared_connector,
-            connection_senders,
-        ));
+        task_group
+            .spawn("listen task", move |handle| {
+                Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
+            })
+            .await;
 
-        ReconnectPeerConnections {
-            connections,
-            _listen_task: listen_task,
-        }
+        ReconnectPeerConnections { connections }
     }
 
     async fn run_listen_task(
         cfg: NetworkConfig,
         connect: SharedAnyConnector<PeerMessage<T>>,
         mut connection_senders: HashMap<PeerId, Sender<AnyFramedTransport<PeerMessage<T>>>>,
+        task_handle: TaskHandle,
     ) {
         let mut listener = connect
             .listen(cfg.bind_addr.clone())
             .await
             .expect("Could not bind port");
 
-        loop {
-            let (peer, connection) = match listener.next().await.expect("Listener closed") {
+        let mut shutdown_rx = task_handle.make_shutdown_rx().await;
+
+        while !task_handle.is_shutting_down() {
+            let new_connection = tokio::select! {
+                maybe_msg = listener.next() => { maybe_msg },
+                _ = &mut shutdown_rx => { break; },
+            };
+
+            let (peer, connection) = match new_connection.expect("Listener closed") {
                 Ok(connection) => connection,
                 Err(e) => {
                     error!(mint = ?cfg.identity, err = %e, "Error while opening incoming connection");
@@ -223,18 +231,20 @@ impl<T> PeerConnections<T> for ReconnectPeerConnections<T>
 where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
-    async fn send(&mut self, peers: &[PeerId], msg: T) {
+    #[must_use]
+    async fn send(&mut self, peers: &[PeerId], msg: T) -> Option<()> {
         for peer_id in peers {
             trace!(?peer_id, "Sending message to");
             if let Some(peer) = self.connections.get_mut(peer_id) {
-                peer.send(msg.clone()).await;
+                peer.send(msg.clone()).await?;
             } else {
                 trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
             }
         }
+        Some(())
     }
 
-    async fn receive(&mut self) -> (PeerId, T) {
+    async fn receive(&mut self) -> Option<(PeerId, T)> {
         // TODO: optimize, don't throw away remaining futures
 
         let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
@@ -245,7 +255,9 @@ where
             Box::pin(receive_future)
         });
 
-        select_all(futures_non_banned).await.0
+        let first_response = select_all(futures_non_banned).await;
+
+        first_response.0 .1.map(|v| (first_response.0 .0, v))
     }
 
     async fn ban_peer(&mut self, peer: PeerId) {
@@ -258,9 +270,13 @@ impl<M> PeerConnectionStateMachine<M>
 where
     M: Debug + Clone,
 {
-    async fn run(mut self) {
-        while let Some(new_self) = self.state_transition().await {
-            self = new_self;
+    async fn run(mut self, task_handle: &TaskHandle) {
+        while !task_handle.is_shutting_down() {
+            if let Some(new_self) = self.state_transition().await {
+                self = new_self;
+            } else {
+                break;
+            }
         }
     }
 
@@ -303,9 +319,16 @@ where
                 }
             },
             new_connection_res = self.incoming_connections.recv() => {
-                let new_connection = new_connection_res.expect("Listener task died");
-                warn!("Replacing existing connection");
-                self.connect(new_connection, 0).await
+                match new_connection_res {
+                    Some(new_connection) => {
+                        warn!("Replacing existing connection");
+                        self.connect(new_connection, 0).await
+                    },
+                    None => {
+                        debug!("Exiting peer connection IO task - parent disconnected");
+                        return None;
+                    },
+                }
             },
             Some(msg_res) = connected.connection.next() => {
                 self.receive_message(connected, msg_res).await
@@ -451,8 +474,15 @@ where
                 }
             },
             new_connection_res = self.incoming_connections.recv() => {
-                let new_connection = new_connection_res.expect("Listener task died");
-                self.receive_connection(disconnected, new_connection).await
+                match new_connection_res {
+                    Some(new_connection) => {
+                        self.receive_connection(disconnected, new_connection).await
+                    },
+                    None => {
+                        debug!("Exiting peer connection IO task - parent disconnected");
+                        return None;
+                    },
+                }
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at) => {
                 self.reconnect(disconnected).await
@@ -517,32 +547,39 @@ where
         cfg: ConnectionConfig,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
+        task_group: &mut TaskGroup,
     ) -> PeerConnection<M> {
         let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
 
-        let io_thread = tokio::spawn(Self::run_io_thread(
-            incoming_sender,
-            outgoing_receiver,
-            id,
-            cfg,
-            connect,
-            incoming_connections,
+        futures::executor::block_on(task_group.spawn(
+            format!("io-thread-peer-{}", id),
+            move |handle| async move {
+                Self::run_io_thread(
+                    incoming_sender,
+                    outgoing_receiver,
+                    id,
+                    cfg,
+                    connect,
+                    incoming_connections,
+                    &handle,
+                )
+                .await
+            },
         ));
 
         PeerConnection {
             outgoing: outgoing_sender,
             incoming: incoming_receiver,
-            _io_task: io_thread,
         }
     }
 
-    async fn send(&mut self, msg: M) {
-        self.outgoing.send(msg).await.expect("io task died");
+    async fn send(&mut self, msg: M) -> Option<()> {
+        self.outgoing.send(msg).await.ok()
     }
 
-    async fn receive(&mut self) -> M {
-        self.incoming.recv().await.expect("io task died")
+    async fn receive(&mut self) -> Option<M> {
+        self.incoming.recv().await
     }
 
     #[instrument(skip_all, fields(peer))]
@@ -553,6 +590,7 @@ where
         cfg: ConnectionConfig,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
+        task_handle: &TaskHandle,
     ) {
         let common = CommonPeerConnectionState {
             resend_queue: Default::default(),
@@ -571,7 +609,7 @@ where
             state: initial_state,
         };
 
-        state_machine.run().await
+        state_machine.run(task_handle).await;
     }
 }
 
@@ -580,6 +618,7 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
+    use fedimint_api::task::TaskGroup;
     use fedimint_api::PeerId;
     use futures::Future;
     use tracing_subscriber::EnvFilter;
@@ -605,45 +644,51 @@ mod tests {
                     .unwrap_or_else(|_| EnvFilter::new("info,fedimint::net=trace")),
             )
             .init();
+        let task_group = TaskGroup::new();
 
-        let net = MockNetwork::new();
+        {
+            let net = MockNetwork::new();
 
-        let peers = ["a", "b", "c"]
-            .iter()
-            .enumerate()
-            .map(|(idx, &peer)| {
-                let cfg = ConnectionConfig {
-                    address: peer.to_string(),
+            let peers = ["a", "b", "c"]
+                .iter()
+                .enumerate()
+                .map(|(idx, &peer)| {
+                    let cfg = ConnectionConfig {
+                        address: peer.to_string(),
+                    };
+                    (PeerId::from(idx as u16 + 1), cfg)
+                })
+                .collect::<HashMap<_, _>>();
+
+            let peers_ref = &peers;
+            let net_ref = &net;
+            let build_peers = move |bind: &'static str, id: u16, mut task_group: TaskGroup| async move {
+                let cfg = NetworkConfig {
+                    identity: PeerId::from(id),
+                    bind_addr: bind.to_string(),
+                    peers: peers_ref.clone(),
                 };
-                (PeerId::from(idx as u16 + 1), cfg)
-            })
-            .collect::<HashMap<_, _>>();
-
-        let peers_ref = &peers;
-        let net_ref = &net;
-        let build_peers = |bind: &'static str, id: u16| async move {
-            let cfg = NetworkConfig {
-                identity: PeerId::from(id),
-                bind_addr: bind.to_string(),
-                peers: peers_ref.clone(),
+                let connect = net_ref.connector(cfg.identity).into_dyn();
+                ReconnectPeerConnections::<u64>::new(cfg, connect, &mut task_group).await
             };
-            let connect = net_ref.connector(cfg.identity).into_dyn();
-            ReconnectPeerConnections::<u64>::new(cfg, connect).await
-        };
 
-        let mut peers_a = build_peers("a", 1).await;
-        let mut peers_b = build_peers("b", 2).await;
+            let mut peers_a = build_peers("a", 1, task_group.clone()).await;
+            let mut peers_b = build_peers("b", 2, task_group.clone()).await;
 
-        peers_a.send(&[PeerId::from(2)], 42).await;
-        let recv = timeout(peers_b.receive()).await.unwrap();
-        assert_eq!(recv.0, PeerId::from(1));
-        assert_eq!(recv.1, 42);
+            peers_a.send(&[PeerId::from(2)], 42).await;
+            let recv = timeout(peers_b.receive()).await.unwrap().unwrap();
+            assert_eq!(recv.0, PeerId::from(1));
+            assert_eq!(recv.1, 42);
 
-        peers_a.send(&[PeerId::from(3)], 21).await;
+            peers_a.send(&[PeerId::from(3)], 21).await;
 
-        let mut peers_c = build_peers("c", 3).await;
-        let recv = timeout(peers_c.receive()).await.unwrap();
-        assert_eq!(recv.0, PeerId::from(1));
-        assert_eq!(recv.1, 21);
+            let mut peers_c = build_peers("c", 3, task_group.clone()).await;
+            let recv = timeout(peers_c.receive()).await.unwrap().unwrap();
+            assert_eq!(recv.0, PeerId::from(1));
+            assert_eq!(recv.1, 21);
+        }
+
+        task_group.shutdown().await;
+        task_group.join_all().await.unwrap();
     }
 }

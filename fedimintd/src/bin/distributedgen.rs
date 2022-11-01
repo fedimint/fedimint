@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use fedimint_api::config::GenerateConfig;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::ClientConfig;
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
@@ -12,6 +13,7 @@ use itertools::Itertools;
 use rand::rngs::OsRng;
 use ring::aead::LessSafeKey;
 use tokio_rustls::rustls;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -88,6 +90,8 @@ async fn main() {
         )
         .init();
 
+    let mut task_group = TaskGroup::new();
+
     let command: Command = Cli::parse().command;
     match command {
         Command::CreateCert {
@@ -113,15 +117,22 @@ async fn main() {
         } => {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
             let (pk_bytes, nonce) = encrypted_read(&key, dir_out_path.join(TLS_PK));
-            let (server, client) = run_dkg(
+            let (server, client) = if let Some(v) = run_dkg(
                 &dir_out_path,
                 denominations,
                 federation_name,
                 certs,
                 bitcoind_rpc,
                 rustls::PrivateKey(pk_bytes),
+                &mut task_group,
             )
-            .await;
+            .await
+            {
+                v
+            } else {
+                info!("Canceled");
+                return;
+            };
 
             let server_path = dir_out_path.join(CONFIG_FILE);
             let config_bytes = serde_json::to_string(&server).unwrap().into_bytes();
@@ -144,7 +155,8 @@ async fn run_dkg(
     certs: Vec<String>,
     bitcoind_rpc: String,
     pk: rustls::PrivateKey,
-) -> (ServerConfig, ClientConfig) {
+    task_group: &mut TaskGroup,
+) -> Option<(ServerConfig, ClientConfig)> {
     let peers: BTreeMap<PeerId, PeerServerParams> = certs
         .into_iter()
         .sorted()
@@ -170,11 +182,19 @@ async fn run_dkg(
     );
     let param_map = HashMap::from([(our_id, params.clone())]);
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
-    let mut server_conn = fedimint_server::config::connect(params.server_dkg, params.tls).await;
+    let mut server_conn =
+        fedimint_server::config::connect(params.server_dkg, params.tls, task_group).await;
     let rng = OsRng;
-    ServerConfig::distributed_gen(&mut server_conn, &our_id, &peer_ids, &param_map, rng)
-        .await
-        .expect("failed to run DKG to generate configs")
+    ServerConfig::distributed_gen(
+        &mut server_conn,
+        &our_id,
+        &peer_ids,
+        &param_map,
+        rng,
+        task_group,
+    )
+    .await
+    .expect("failed to run DKG to generate configs")
 }
 
 fn parse_peer_params(url: String) -> PeerServerParams {

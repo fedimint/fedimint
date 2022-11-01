@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{NumPeers, PeerId};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -87,9 +88,16 @@ impl GenerateConfig for LightningModuleConfig {
         peers: &[PeerId],
         _params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
-    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+        _task_group: &mut TaskGroup,
+    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let (pks, sks) = dkg.run_g1(connections, &mut rng).await[&()].threshold_crypto();
+        let g1 = if let Some(g1) = dkg.run_g1(connections, &mut rng).await {
+            g1
+        } else {
+            return Ok(None);
+        };
+
+        let (pks, sks) = g1[&()].threshold_crypto();
 
         let server = LightningModuleConfig {
             threshold_pub_keys: pks.clone(),
@@ -103,7 +111,7 @@ impl GenerateConfig for LightningModuleConfig {
             fee_consensus: Default::default(),
         };
 
-        Ok((server, client))
+        Ok(Some((server, client)))
     }
 }
 
