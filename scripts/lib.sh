@@ -101,3 +101,7 @@ function get_raw_transaction() {
     TRANSACTION="$($FM_BTC_CLIENT getrawtransaction $TX_ID)"
     echo $TRANSACTION
 }
+
+function get_federation_name() {
+    cat $FM_CFG_DIR/client.json | jq -r '.federation_name'
+}

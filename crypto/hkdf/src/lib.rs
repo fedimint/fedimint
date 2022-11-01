@@ -110,8 +110,9 @@ impl<H: BitcoinHash> Hkdf<H> {
 
 #[cfg(test)]
 mod tests {
-    use crate::Hkdf;
     use bitcoin_hashes::Hash as BitcoinHash;
+
+    use crate::Hkdf;
 
     #[test]
     #[should_panic(expected = "RFC5869 only supports output length of up to 255*HashLength")]
