@@ -647,6 +647,51 @@
 <span id="647">647</span>
 <span id="648">648</span>
 <span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
+<span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
+<span id="683">683</span>
+<span id="684">684</span>
+<span id="685">685</span>
+<span id="686">686</span>
+<span id="687">687</span>
+<span id="688">688</span>
+<span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
+<span id="694">694</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -660,6 +705,7 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
+<span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>fedimint_core::config::Node;
 <span class="kw">use </span>futures::future::select_all;
@@ -669,7 +715,6 @@
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::mpsc::{Receiver, Sender};
-<span class="kw">use </span>tokio::task::JoinHandle;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
@@ -693,13 +738,11 @@
 /// encrypted.
 </span><span class="kw">pub struct </span>ReconnectPeerConnections&lt;T&gt; {
     connections: HashMap&lt;PeerId, PeerConnection&lt;T&gt;&gt;,
-    _listen_task: JoinHandle&lt;()&gt;,
 }
 
 <span class="kw">struct </span>PeerConnection&lt;T&gt; {
     outgoing: Sender&lt;T&gt;,
     incoming: Receiver&lt;T&gt;,
-    _io_task: JoinHandle&lt;()&gt;,
 }
 
 <span class="doccomment">/// Specifies the network configuration for federation-internal communication
@@ -779,7 +822,11 @@
     /// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for
     /// requirements on the `Connector`.
     </span><span class="attribute">#[instrument(skip_all)]
-    </span><span class="kw">pub async fn </span>new(cfg: NetworkConfig, connect: PeerConnector&lt;T&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub async fn </span>new(
+        cfg: NetworkConfig,
+        connect: PeerConnector&lt;T&gt;,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>shared_connector: SharedAnyConnector&lt;PeerMessage&lt;T&gt;&gt; = connect.into();
 
         <span class="kw">let </span>(connection_senders, connections) = cfg
@@ -798,36 +845,42 @@
                             cfg.clone(),
                             shared_connector.clone(),
                             connection_receiver,
+                            task_group,
                         ),
                     ),
                 )
             })
             .unzip();
 
-        <span class="kw">let </span>listen_task = tokio::spawn(<span class="self">Self</span>::run_listen_task(
-            cfg,
-            shared_connector,
-            connection_senders,
-        ));
+        task_group
+            .spawn(<span class="string">&quot;listen task&quot;</span>, <span class="kw">move </span>|handle| {
+                <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
+            })
+            .<span class="kw">await</span>;
 
-        ReconnectPeerConnections {
-            connections,
-            _listen_task: listen_task,
-        }
+        ReconnectPeerConnections { connections }
     }
 
     <span class="kw">async fn </span>run_listen_task(
         cfg: NetworkConfig,
         connect: SharedAnyConnector&lt;PeerMessage&lt;T&gt;&gt;,
         <span class="kw-2">mut </span>connection_senders: HashMap&lt;PeerId, Sender&lt;AnyFramedTransport&lt;PeerMessage&lt;T&gt;&gt;&gt;&gt;,
+        task_handle: TaskHandle,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>listener = connect
             .listen(cfg.bind_addr.clone())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Could not bind port&quot;</span>);
 
-        <span class="kw">loop </span>{
-            <span class="kw">let </span>(peer, connection) = <span class="kw">match </span>listener.next().<span class="kw">await</span>.expect(<span class="string">&quot;Listener closed&quot;</span>) {
+        <span class="kw">let </span><span class="kw-2">mut </span>shutdown_rx = task_handle.make_shutdown_rx().<span class="kw">await</span>;
+
+        <span class="kw">while </span>!task_handle.is_shutting_down() {
+            <span class="kw">let </span>new_connection = <span class="macro">tokio::select! </span>{
+                maybe_msg = listener.next() =&gt; { maybe_msg },
+                <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>shutdown_rx =&gt; { <span class="kw">break</span>; },
+            };
+
+            <span class="kw">let </span>(peer, connection) = <span class="kw">match </span>new_connection.expect(<span class="string">&quot;Listener closed&quot;</span>) {
                 <span class="prelude-val">Ok</span>(connection) =&gt; connection,
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(mint = <span class="question-mark">?</span>cfg.identity, err = %e, <span class="string">&quot;Error while opening incoming connection&quot;</span>);
@@ -872,18 +925,20 @@
 <span class="kw">where
     </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) {
+    <span class="attribute">#[must_use]
+    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
         <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
             <span class="macro">trace!</span>(<span class="question-mark">?</span>peer_id, <span class="string">&quot;Sending message to&quot;</span>);
             <span class="kw">if let </span><span class="prelude-val">Some</span>(peer) = <span class="self">self</span>.connections.get_mut(peer_id) {
-                peer.send(msg.clone()).<span class="kw">await</span>;
+                peer.send(msg.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
             } <span class="kw">else </span>{
                 <span class="macro">trace!</span>(peer = <span class="question-mark">?</span>peer_id, <span class="string">&quot;Not sending message to unknown peer (maybe banned)&quot;</span>);
             }
         }
+        <span class="prelude-val">Some</span>(())
     }
 
-    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; (PeerId, T) {
+    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, T)&gt; {
         <span class="comment">// TODO: optimize, don&#39;t throw away remaining futures
 
         </span><span class="kw">let </span>futures_non_banned = <span class="self">self</span>.connections.iter_mut().map(|(<span class="kw-2">&amp;</span>peer, connection)| {
@@ -894,8 +949,10 @@
             Box::pin(receive_future)
         });
 
-        select_all(futures_non_banned).<span class="kw">await</span>.<span class="number">0
-    </span>}
+        <span class="kw">let </span>first_response = select_all(futures_non_banned).<span class="kw">await</span>;
+
+        first_response.<span class="number">0 </span>.<span class="number">1</span>.map(|v| (first_response.<span class="number">0 </span>.<span class="number">0</span>, v))
+    }
 
     <span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId) {
         <span class="self">self</span>.connections.remove(<span class="kw-2">&amp;</span>peer);
@@ -907,9 +964,13 @@
 <span class="kw">where
     </span>M: Debug + Clone,
 {
-    <span class="kw">async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>) {
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition().<span class="kw">await </span>{
-            <span class="self">self </span>= new_self;
+    <span class="kw">async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: <span class="kw-2">&amp;</span>TaskHandle) {
+        <span class="kw">while </span>!task_handle.is_shutting_down() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition().<span class="kw">await </span>{
+                <span class="self">self </span>= new_self;
+            } <span class="kw">else </span>{
+                <span class="kw">break</span>;
+            }
         }
     }
 
@@ -952,10 +1013,17 @@
                 }
             },
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
-                <span class="kw">let </span>new_connection = new_connection_res.expect(<span class="string">&quot;Listener task died&quot;</span>);
-                <span class="macro">warn!</span>(<span class="string">&quot;Replacing existing connection&quot;</span>);
-                <span class="self">self</span>.connect(new_connection, <span class="number">0</span>).<span class="kw">await
-            </span>},
+                <span class="kw">match </span>new_connection_res {
+                    <span class="prelude-val">Some</span>(new_connection) =&gt; {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Replacing existing connection&quot;</span>);
+                        <span class="self">self</span>.connect(new_connection, <span class="number">0</span>).<span class="kw">await
+                    </span>},
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">None</span>;
+                    },
+                }
+            },
             <span class="prelude-val">Some</span>(msg_res) = connected.connection.next() =&gt; {
                 <span class="self">self</span>.receive_message(connected, msg_res).<span class="kw">await
             </span>},
@@ -1100,9 +1168,16 @@
                 }
             },
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
-                <span class="kw">let </span>new_connection = new_connection_res.expect(<span class="string">&quot;Listener task died&quot;</span>);
-                <span class="self">self</span>.receive_connection(disconnected, new_connection).<span class="kw">await
-            </span>},
+                <span class="kw">match </span>new_connection_res {
+                    <span class="prelude-val">Some</span>(new_connection) =&gt; {
+                        <span class="self">self</span>.receive_connection(disconnected, new_connection).<span class="kw">await
+                    </span>},
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">None</span>;
+                    },
+                }
+            },
             () = tokio::time::sleep_until(disconnected.reconnect_at) =&gt; {
                 <span class="self">self</span>.reconnect(disconnected).<span class="kw">await
             </span>}
@@ -1166,33 +1241,40 @@
         cfg: ConnectionConfig,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; PeerConnection&lt;M&gt; {
         <span class="kw">let </span>(outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
         <span class="kw">let </span>(incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
 
-        <span class="kw">let </span>io_thread = tokio::spawn(<span class="self">Self</span>::run_io_thread(
-            incoming_sender,
-            outgoing_receiver,
-            id,
-            cfg,
-            connect,
-            incoming_connections,
+        futures::executor::block_on(task_group.spawn(
+            <span class="macro">format!</span>(<span class="string">&quot;io-thread-peer-{}&quot;</span>, id),
+            <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+                <span class="self">Self</span>::run_io_thread(
+                    incoming_sender,
+                    outgoing_receiver,
+                    id,
+                    cfg,
+                    connect,
+                    incoming_connections,
+                    <span class="kw-2">&amp;</span>handle,
+                )
+                .<span class="kw">await
+            </span>},
         ));
 
         PeerConnection {
             outgoing: outgoing_sender,
             incoming: incoming_receiver,
-            _io_task: io_thread,
         }
     }
 
-    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, msg: M) {
-        <span class="self">self</span>.outgoing.send(msg).<span class="kw">await</span>.expect(<span class="string">&quot;io task died&quot;</span>);
+    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, msg: M) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
+        <span class="self">self</span>.outgoing.send(msg).<span class="kw">await</span>.ok()
     }
 
-    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; M {
-        <span class="self">self</span>.incoming.recv().<span class="kw">await</span>.expect(<span class="string">&quot;io task died&quot;</span>)
-    }
+    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;M&gt; {
+        <span class="self">self</span>.incoming.recv().<span class="kw">await
+    </span>}
 
     <span class="attribute">#[instrument(skip_all, fields(peer))]
     </span><span class="kw">async fn </span>run_io_thread(
@@ -1202,6 +1284,7 @@
         cfg: ConnectionConfig,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
+        task_handle: <span class="kw-2">&amp;</span>TaskHandle,
     ) {
         <span class="kw">let </span>common = CommonPeerConnectionState {
             resend_queue: Default::default(),
@@ -1220,8 +1303,8 @@
             state: initial_state,
         };
 
-        state_machine.run().<span class="kw">await
-    </span>}
+        state_machine.run(task_handle).<span class="kw">await</span>;
+    }
 }
 
 <span class="attribute">#[cfg(test)]
@@ -1229,6 +1312,7 @@
     <span class="kw">use </span>std::collections::HashMap;
     <span class="kw">use </span>std::time::Duration;
 
+    <span class="kw">use </span>fedimint_api::task::TaskGroup;
     <span class="kw">use </span>fedimint_api::PeerId;
     <span class="kw">use </span>futures::Future;
     <span class="kw">use </span>tracing_subscriber::EnvFilter;
@@ -1254,47 +1338,53 @@
                     .unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info,fedimint::net=trace&quot;</span>)),
             )
             .init();
+        <span class="kw">let </span>task_group = TaskGroup::new();
 
-        <span class="kw">let </span>net = MockNetwork::new();
+        {
+            <span class="kw">let </span>net = MockNetwork::new();
 
-        <span class="kw">let </span>peers = [<span class="string">&quot;a&quot;</span>, <span class="string">&quot;b&quot;</span>, <span class="string">&quot;c&quot;</span>]
-            .iter()
-            .enumerate()
-            .map(|(idx, <span class="kw-2">&amp;</span>peer)| {
-                <span class="kw">let </span>cfg = ConnectionConfig {
-                    address: peer.to_string(),
+            <span class="kw">let </span>peers = [<span class="string">&quot;a&quot;</span>, <span class="string">&quot;b&quot;</span>, <span class="string">&quot;c&quot;</span>]
+                .iter()
+                .enumerate()
+                .map(|(idx, <span class="kw-2">&amp;</span>peer)| {
+                    <span class="kw">let </span>cfg = ConnectionConfig {
+                        address: peer.to_string(),
+                    };
+                    (PeerId::from(idx <span class="kw">as </span>u16 + <span class="number">1</span>), cfg)
+                })
+                .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+            <span class="kw">let </span>peers_ref = <span class="kw-2">&amp;</span>peers;
+            <span class="kw">let </span>net_ref = <span class="kw-2">&amp;</span>net;
+            <span class="kw">let </span>build_peers = <span class="kw">move </span>|bind: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, id: u16, <span class="kw-2">mut </span>task_group: TaskGroup| <span class="kw">async move </span>{
+                <span class="kw">let </span>cfg = NetworkConfig {
+                    identity: PeerId::from(id),
+                    bind_addr: bind.to_string(),
+                    peers: peers_ref.clone(),
                 };
-                (PeerId::from(idx <span class="kw">as </span>u16 + <span class="number">1</span>), cfg)
-            })
-            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+                <span class="kw">let </span>connect = net_ref.connector(cfg.identity).into_dyn();
+                ReconnectPeerConnections::&lt;u64&gt;::new(cfg, connect, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await
+            </span>};
 
-        <span class="kw">let </span>peers_ref = <span class="kw-2">&amp;</span>peers;
-        <span class="kw">let </span>net_ref = <span class="kw-2">&amp;</span>net;
-        <span class="kw">let </span>build_peers = |bind: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, id: u16| <span class="kw">async move </span>{
-            <span class="kw">let </span>cfg = NetworkConfig {
-                identity: PeerId::from(id),
-                bind_addr: bind.to_string(),
-                peers: peers_ref.clone(),
-            };
-            <span class="kw">let </span>connect = net_ref.connector(cfg.identity).into_dyn();
-            ReconnectPeerConnections::&lt;u64&gt;::new(cfg, connect).<span class="kw">await
-        </span>};
+            <span class="kw">let </span><span class="kw-2">mut </span>peers_a = build_peers(<span class="string">&quot;a&quot;</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>peers_b = build_peers(<span class="string">&quot;b&quot;</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>peers_a = build_peers(<span class="string">&quot;a&quot;</span>, <span class="number">1</span>).<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>peers_b = build_peers(<span class="string">&quot;b&quot;</span>, <span class="number">2</span>).<span class="kw">await</span>;
+            peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>;
+            <span class="kw">let </span>recv = timeout(peers_b.receive()).<span class="kw">await</span>.unwrap().unwrap();
+            <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
+            <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">42</span>);
 
-        peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>;
-        <span class="kw">let </span>recv = timeout(peers_b.receive()).<span class="kw">await</span>.unwrap();
-        <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
-        <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">42</span>);
+            peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>;
 
-        peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>peers_c = build_peers(<span class="string">&quot;c&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span>recv = timeout(peers_c.receive()).<span class="kw">await</span>.unwrap().unwrap();
+            <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
+            <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">21</span>);
+        }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>peers_c = build_peers(<span class="string">&quot;c&quot;</span>, <span class="number">3</span>).<span class="kw">await</span>;
-        <span class="kw">let </span>recv = timeout(peers_c.receive()).<span class="kw">await</span>.unwrap();
-        <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
-        <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">21</span>);
+        task_group.shutdown().<span class="kw">await</span>;
+        task_group.join_all().<span class="kw">await</span>.unwrap();
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>

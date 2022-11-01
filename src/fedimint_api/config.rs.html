@@ -529,6 +529,9 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
@@ -552,6 +555,7 @@
 <span class="kw">use </span>tbs::Scalar;
 
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::AnyPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::task::TaskGroup;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="doccomment">/// Part of a config that needs to be generated to bootstrap a new federation.
@@ -581,7 +585,8 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         rng: <span class="kw">impl </span>RngCore + CryptoRng,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig), <span class="self">Self</span>::ConfigError&gt;;
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt;;
 }
 
 <span class="kw">struct </span>Dkg&lt;G&gt; {
@@ -824,7 +829,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;(T, DkgMessage&lt;G2Projective&gt;)&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(G2Projective::generator(), connections, rng).<span class="kw">await
     </span>}
 
@@ -833,7 +838,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;(T, DkgMessage&lt;G1Projective&gt;)&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(G1Projective::generator(), connections, rng).<span class="kw">await
     </span>}
 
@@ -843,7 +848,7 @@
         group: G,
         connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;(T, DkgMessage&lt;G&gt;)&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; HashMap&lt;T, DkgKeys&lt;G&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;HashMap&lt;T, DkgKeys&lt;G&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dkgs: HashMap&lt;T, Dkg&lt;G&gt;&gt; = HashMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>results: HashMap&lt;T, DkgKeys&lt;G&gt;&gt; = HashMap::new();
 
@@ -854,15 +859,14 @@
             <span class="kw">let </span>(dkg, step) = Dkg::new(group, our_id, peers, <span class="kw-2">*</span>threshold, rng);
             <span class="kw">if let </span>DkgStep::Messages(messages) = step {
                 <span class="kw">for </span>(peer, msg) <span class="kw">in </span>messages {
-                    connections.send(<span class="kw-2">&amp;</span>[peer], (key.clone(), msg)).<span class="kw">await</span>;
+                    connections.send(<span class="kw-2">&amp;</span>[peer], (key.clone(), msg)).<span class="kw">await</span><span class="question-mark">?</span>;
                 }
             }
             dkgs.insert(key.clone(), dkg);
         }
 
         <span class="comment">// process steps for each key
-        </span><span class="kw">loop </span>{
-            <span class="kw">let </span>(peer, (key, message)) = connections.receive().<span class="kw">await</span>;
+        </span><span class="kw">while let </span><span class="prelude-val">Some</span>((peer, (key, message))) = connections.receive().<span class="kw">await </span>{
             <span class="kw">let </span>step = dkgs.get_mut(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;exists&quot;</span>).step(peer, message);
 
             <span class="kw">match </span>step {
@@ -877,10 +881,12 @@
             }
 
             <span class="kw">if </span>results.len() == dkgs.len() {
-                <span class="kw">return </span>results;
+                <span class="kw">return </span><span class="prelude-val">Some</span>(results);
             }
         }
-    }
+
+        <span class="prelude-val">None
+    </span>}
 }
 
 <span class="attribute">#[derive(Debug, Clone)]
@@ -1061,4 +1067,4 @@
     <span class="kw">pub </span>btc_rpc_pass: String,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>

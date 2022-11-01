@@ -206,12 +206,33 @@
 <span id="206">206</span>
 <span id="207">207</span>
 <span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
@@ -220,6 +241,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>ring::aead::LessSafeKey;
 <span class="kw">use </span>tokio_rustls::rustls;
+<span class="kw">use </span>tracing::info;
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 
 <span class="attribute">#[derive(Parser)]
@@ -296,6 +318,8 @@
         )
         .init();
 
+    <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
+
     <span class="kw">let </span>command: Command = Cli::parse().command;
     <span class="kw">match </span>command {
         Command::CreateCert {
@@ -321,15 +345,22 @@
         } =&gt; {
             <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
             <span class="kw">let </span>(pk_bytes, nonce) = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK));
-            <span class="kw">let </span>(server, client) = run_dkg(
+            <span class="kw">let </span>(server, client) = <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = run_dkg(
                 <span class="kw-2">&amp;</span>dir_out_path,
                 denominations,
                 federation_name,
                 certs,
                 bitcoind_rpc,
                 rustls::PrivateKey(pk_bytes),
+                <span class="kw-2">&amp;mut </span>task_group,
             )
-            .<span class="kw">await</span>;
+            .<span class="kw">await
+            </span>{
+                v
+            } <span class="kw">else </span>{
+                <span class="macro">info!</span>(<span class="string">&quot;Canceled&quot;</span>);
+                <span class="kw">return</span>;
+            };
 
             <span class="kw">let </span>server_path = dir_out_path.join(CONFIG_FILE);
             <span class="kw">let </span>config_bytes = serde_json::to_string(<span class="kw-2">&amp;</span>server).unwrap().into_bytes();
@@ -352,7 +383,8 @@
     certs: Vec&lt;String&gt;,
     bitcoind_rpc: String,
     pk: rustls::PrivateKey,
-) -&gt; (ServerConfig, ClientConfig) {
+    task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+) -&gt; <span class="prelude-ty">Option</span>&lt;(ServerConfig, ClientConfig)&gt; {
     <span class="kw">let </span>peers: BTreeMap&lt;PeerId, PeerServerParams&gt; = certs
         .into_iter()
         .sorted()
@@ -378,11 +410,19 @@
     );
     <span class="kw">let </span>param_map = HashMap::from([(our_id, params.clone())]);
     <span class="kw">let </span>peer_ids: Vec&lt;PeerId&gt; = peers.keys().cloned().collect();
-    <span class="kw">let </span><span class="kw-2">mut </span>server_conn = fedimint_server::config::connect(params.server_dkg, params.tls).<span class="kw">await</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>server_conn =
+        fedimint_server::config::connect(params.server_dkg, params.tls, task_group).<span class="kw">await</span>;
     <span class="kw">let </span>rng = OsRng;
-    ServerConfig::distributed_gen(<span class="kw-2">&amp;mut </span>server_conn, <span class="kw-2">&amp;</span>our_id, <span class="kw-2">&amp;</span>peer_ids, <span class="kw-2">&amp;</span>param_map, rng)
-        .<span class="kw">await
-        </span>.expect(<span class="string">&quot;failed to run DKG to generate configs&quot;</span>)
+    ServerConfig::distributed_gen(
+        <span class="kw-2">&amp;mut </span>server_conn,
+        <span class="kw-2">&amp;</span>our_id,
+        <span class="kw-2">&amp;</span>peer_ids,
+        <span class="kw-2">&amp;</span>param_map,
+        rng,
+        task_group,
+    )
+    .<span class="kw">await
+    </span>.expect(<span class="string">&quot;failed to run DKG to generate configs&quot;</span>)
 }
 
 <span class="kw">fn </span>parse_peer_params(url: String) -&gt; PeerServerParams {
@@ -415,4 +455,4 @@
     cert_url
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="distributedgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="distributedgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>

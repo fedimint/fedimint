@@ -210,6 +210,21 @@
 <span id="210">210</span>
 <span id="211">211</span>
 <span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -218,6 +233,7 @@
 <span class="kw">use </span>fedimint_api::{
     config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
+    task::TaskHandle,
     FederationModule, TransactionId,
 };
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
@@ -293,7 +309,11 @@
     }
 }
 
-<span class="kw">pub async fn </span>run_server(cfg: ServerConfig, fedimint: Arc&lt;FedimintConsensus&gt;) {
+<span class="kw">pub async fn </span>run_server(
+    cfg: ServerConfig,
+    fedimint: Arc&lt;FedimintConsensus&gt;,
+    task_handle: TaskHandle,
+) {
     <span class="kw">let </span>state = RpcHandlerCtx {
         fedimint: fedimint.clone(),
     };
@@ -323,11 +343,21 @@
         .<span class="kw">await
         </span>.expect(<span class="string">&quot;Could not start API server&quot;</span>);
 
-    server
+    <span class="kw">let </span>server_handle = server
         .start(rpc_module)
-        .expect(<span class="string">&quot;Could not start API server&quot;</span>)
+        .expect(<span class="string">&quot;Could not start API server&quot;</span>);
+
+    <span class="kw">let </span>stop_handle = server_handle.clone();
+
+    task_handle
+        .on_shutdown(|| {
+            <span class="comment">// ignore errors: we don&#39;t care if already stopped
+            </span><span class="kw">let _ </span>= stop_handle.stop();
+        })
         .<span class="kw">await</span>;
-}
+
+    server_handle.<span class="kw">await
+</span>}
 
 <span class="kw">fn </span>attach_endpoints&lt;M&gt;(
     rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&gt;,
@@ -423,4 +453,4 @@
     ENDPOINTS
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>

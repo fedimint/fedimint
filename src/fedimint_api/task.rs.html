@@ -229,6 +229,128 @@
 <span id="229">229</span>
 <span id="230">230</span>
 <span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
@@ -240,7 +362,10 @@
 <span class="kw">pub use </span>imp::<span class="kw-2">*</span>;
 <span class="kw">use </span>thiserror::Error;
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+</span><span class="kw">use </span>tokio::sync::oneshot;
+<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>tokio::task::JoinHandle;
+<span class="kw">use </span>tracing::debug;
 <span class="kw">use </span>tracing::info;
 <span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">type </span>JoinHandle&lt;T&gt; = futures::future::Ready&lt;anyhow::Result&lt;T&gt;&gt;;
@@ -253,9 +378,24 @@
 </span><span class="kw">struct </span>TaskGroupInner {
     <span class="doccomment">/// Was the shutdown requested, either externally or due to any task failure?
     </span>is_shutting_down: AtomicBool,
+    on_shutdown: Mutex&lt;Vec&lt;Box&lt;<span class="kw">dyn </span>FnOnce() + Send&gt;&gt;&gt;,
     join: Mutex&lt;Vec&lt;(String, JoinHandle&lt;()&gt;)&gt;&gt;,
 }
 
+<span class="kw">impl </span>TaskGroupInner {
+    <span class="kw">pub async fn </span>shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>f_opt = <span class="self">self</span>.on_shutdown.lock().<span class="kw">await</span>.pop();
+
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(f) = f_opt {
+                f();
+            } <span class="kw">else </span>{
+                <span class="kw">break</span>;
+            }
+        }
+        <span class="self">self</span>.is_shutting_down.store(<span class="bool-val">true</span>, SeqCst);
+    }
+}
 <span class="doccomment">/// A group of task working together
 ///
 /// Using this struct it is possible to spawn one or more
@@ -282,6 +422,52 @@
         }
     }
 
+    <span class="kw">pub async fn </span>shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.inner.shutdown().<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>shutdown_join_all(<span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.shutdown().<span class="kw">await</span>;
+        <span class="self">self</span>.join_all().<span class="kw">await
+    </span>}
+
+    <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+    </span><span class="kw">pub fn </span>install_kill_handler(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">use </span>tokio::signal;
+
+        <span class="kw">async fn </span>wait_for_shutdown_signal() {
+            <span class="kw">let </span>ctrl_c = <span class="kw">async </span>{
+                signal::ctrl_c()
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;failed to install Ctrl+C handler&quot;</span>);
+            };
+
+            <span class="attribute">#[cfg(unix)]
+            </span><span class="kw">let </span>terminate = <span class="kw">async </span>{
+                signal::unix::signal(signal::unix::SignalKind::terminate())
+                    .expect(<span class="string">&quot;failed to install signal handler&quot;</span>)
+                    .recv()
+                    .<span class="kw">await</span>;
+            };
+
+            <span class="attribute">#[cfg(not(unix))]
+            </span><span class="kw">let </span>terminate = std::future::pending::&lt;()&gt;();
+
+            <span class="macro">tokio::select! </span>{
+                <span class="kw">_ </span>= ctrl_c =&gt; {},
+                <span class="kw">_ </span>= terminate =&gt; {},
+            }
+        }
+        tokio::spawn({
+            <span class="kw">let </span>task_group = <span class="self">self</span>.clone();
+            <span class="kw">async move </span>{
+                wait_for_shutdown_signal().<span class="kw">await</span>;
+                <span class="macro">info!</span>(<span class="string">&quot;signal received, starting graceful shutdown&quot;</span>);
+                task_group.shutdown().<span class="kw">await</span>;
+            }
+        });
+    }
+
     <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
     </span><span class="kw">pub async fn </span>spawn&lt;Fut&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
@@ -306,6 +492,29 @@
         guard.completed = <span class="bool-val">true</span>;
     }
 
+    <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+    </span><span class="kw">pub async fn </span>spawn_local&lt;Fut&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        name: <span class="kw">impl </span>Into&lt;String&gt;,
+        f: <span class="kw">impl </span>FnOnce(TaskHandle) -&gt; Fut + <span class="lifetime">&#39;static</span>,
+    ) <span class="kw">where
+        </span>Fut: Future&lt;Output = ()&gt; + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="kw">let </span>name = name.into();
+        <span class="kw">let </span><span class="kw-2">mut </span>guard = TaskPanicGuard {
+            name: name.clone(),
+            inner: <span class="self">self</span>.inner.clone(),
+            completed: <span class="bool-val">false</span>,
+        };
+        <span class="kw">let </span>handle = <span class="self">self</span>.make_handle();
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn_local(<span class="kw">async move </span>{
+            f(handle).<span class="kw">await</span>;
+        }) {
+            <span class="self">self</span>.inner.join.lock().<span class="kw">await</span>.push((name, handle));
+        }
+        guard.completed = <span class="bool-val">true</span>;
+    }
     <span class="comment">// TODO: Send vs lack of Send bound; do something about it
     </span><span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
     </span><span class="kw">pub async fn </span>spawn&lt;Fut&gt;(
@@ -331,15 +540,13 @@
         guard.completed = <span class="bool-val">true</span>;
     }
 
-    <span class="kw">pub fn </span>shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="self">self</span>.inner.is_shutting_down.store(<span class="bool-val">true</span>, SeqCst);
-    }
-
     <span class="kw">pub async fn </span>join_all(<span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">for </span>(name, join) <span class="kw">in </span><span class="self">self</span>.inner.join.lock().<span class="kw">await</span>.drain(..) {
+            <span class="macro">debug!</span>(<span class="string">&quot;Waiting for {name} task to finish&quot;</span>);
             join.<span class="kw">await
-                </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Thread {name} panicked with: {e}&quot;</span>))<span class="question-mark">?
-        </span>}
+                </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Thread {name} panicked with: {e}&quot;</span>))<span class="question-mark">?</span>;
+            <span class="macro">debug!</span>(<span class="string">&quot;{name} task finished.&quot;</span>);
+        }
         <span class="prelude-val">Ok</span>(())
     }
 }
@@ -374,8 +581,30 @@
 }
 
 <span class="kw">impl </span>TaskHandle {
-    <span class="kw">pub fn </span>is_shutting_down(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+    <span class="doccomment">/// Is task group shutting down?
+    ///
+    /// Every task in a task group should detect and stop if `true`.
+    </span><span class="kw">pub fn </span>is_shutting_down(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.inner.is_shutting_down.load(SeqCst)
+    }
+
+    <span class="kw">pub async fn </span>on_shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw">impl </span>FnOnce() + Send + <span class="lifetime">&#39;static</span>) {
+        <span class="self">self</span>.inner.on_shutdown.lock().<span class="kw">await</span>.push(Box::new(f))
+    }
+
+    <span class="doccomment">/// Make a [`oneshot::Receiver`] that will fire on shutdown
+    ///
+    /// Tasks can use `select` on the return value to handle shutdown
+    /// signal during otherwise blocking operation.
+    </span><span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+    </span><span class="kw">pub async fn </span>make_shutdown_rx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; oneshot::Receiver&lt;()&gt; {
+        <span class="kw">let </span>(shutdown_tx, shutdown_rx) = oneshot::channel();
+        <span class="self">self</span>.on_shutdown(|| {
+            <span class="kw">let _ </span>= shutdown_tx.send(());
+        })
+        .<span class="kw">await</span>;
+
+        shutdown_rx
     }
 }
 
@@ -390,6 +619,13 @@
         </span>F: Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;static</span>,
     {
         <span class="prelude-val">Some</span>(tokio::spawn(future))
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn_local&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">where
+        </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="prelude-val">Some</span>(tokio::task::spawn_local(future))
     }
 
     <span class="kw">pub fn </span>block_in_place&lt;F, R&gt;(f: F) -&gt; R
@@ -433,6 +669,14 @@
         <span class="prelude-val">None
     </span>}
 
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn_local&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">where
+        </span><span class="comment">// No Send needed on wasm
+        </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="self">self</span>::spawn(future)
+    }
+
     <span class="kw">pub fn </span>block_in_place&lt;F, R&gt;(f: F) -&gt; R
     <span class="kw">where
         </span>F: FnOnce() -&gt; R,
@@ -461,4 +705,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>

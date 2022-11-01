@@ -179,6 +179,11 @@
 <span id="179">179</span>
 <span id="180">180</span>
 <span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -186,6 +191,7 @@
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Feerate, NumPeers, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
@@ -301,7 +307,8 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig), <span class="self">Self</span>::ConfigError&gt; {
+        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
@@ -311,14 +318,17 @@
 
         peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
         <span class="kw">while </span>peer_peg_in_keys.len() &lt; peers.len() {
-            <span class="kw">let </span>(peer, msg) = connections.receive().<span class="kw">await</span>;
-            peer_peg_in_keys.insert(peer, msg);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>((peer, msg)) = connections.receive().<span class="kw">await </span>{
+                peer_peg_in_keys.insert(peer, msg);
+            } <span class="kw">else </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            }
         }
 
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
         <span class="kw">let </span>client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
 
-        <span class="prelude-val">Ok</span>((wallet_cfg, client_cfg))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((wallet_cfg, client_cfg)))
     }
 }
 
@@ -361,4 +371,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (77e57db38 2022-10-30)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
