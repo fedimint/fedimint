@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -89,12 +90,12 @@ impl GenerateConfig for LightningModuleConfig {
         _params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
         _task_group: &mut TaskGroup,
-    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
+    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let g1 = if let Some(g1) = dkg.run_g1(connections, &mut rng).await {
+        let g1 = if let Ok(g1) = dkg.run_g1(connections, &mut rng).await {
             g1
         } else {
-            return Ok(None);
+            return Ok(Err(Cancelled));
         };
 
         let (pks, sks) = g1[&()].threshold_crypto();
@@ -111,7 +112,7 @@ impl GenerateConfig for LightningModuleConfig {
             fee_consensus: Default::default(),
         };
 
-        Ok(Some((server, client)))
+        Ok(Ok((server, client)))
     }
 }
 

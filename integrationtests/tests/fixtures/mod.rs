@@ -16,6 +16,7 @@ use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use fake::{FakeBitcoinTest, FakeLightningTest};
+use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
@@ -237,8 +238,8 @@ async fn distributed_config(
     params: HashMap<PeerId, ServerConfigParams>,
     _max_evil: usize,
     task_group: &mut TaskGroup,
-) -> Option<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
-    let configs: Option<Vec<(PeerId, (ServerConfig, ClientConfig))>> =
+) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
+    let configs: Cancellable<Vec<(PeerId, (ServerConfig, ClientConfig))>> =
         join_all(peers.iter().map(|peer| {
             let params = params.clone();
             let peers = peers.to_vec();
@@ -264,7 +265,7 @@ async fn distributed_config(
         }))
         .await
         .into_iter()
-        .map(|(peer_id, opt)| opt.map(|v| (peer_id, v)))
+        .map(|(peer_id, maybe_cancelled)| maybe_cancelled.map(|v| (peer_id, v)))
         .collect();
 
     let configs = configs?;
@@ -275,7 +276,7 @@ async fn distributed_config(
         .map(|(peer, (server, _))| (peer, server))
         .collect();
 
-    Some((server_configs, client_config))
+    Ok((server_configs, client_config))
 }
 
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
@@ -694,23 +695,27 @@ impl FederationTest {
                 panic!("Empty proposals, fed might wait forever");
             }
 
-            self.await_consensus_epochs(1).await;
+            self.await_consensus_epochs(1).await.unwrap();
         }
     }
 
     /// Runs a consensus epoch
     /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
     /// it will wait forever
-    pub async fn await_consensus_epochs(&self, epochs: usize) {
+    pub async fn await_consensus_epochs(&self, epochs: usize) -> Cancellable<()> {
         for _ in 0..(epochs) {
-            let consensus = join_all(
+            for maybe_cancelled in join_all(
                 self.servers
                     .iter()
                     .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
-            );
-            consensus.await;
+            )
+            .await
+            {
+                maybe_cancelled?;
+            }
             self.update_last_consensus();
         }
+        Ok(())
     }
 
     /// Returns true if the fed would produce an empty epoch proposal (no new information)
@@ -735,35 +740,42 @@ impl FederationTest {
 
     /// Runs consensus, but delay peers and only wait for one to complete.
     /// Useful for testing if a peer has become disconnected.
-    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) {
+    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) -> Cancellable<()> {
         assert_eq!(durations.len(), self.servers.len());
-        select_all(
-            self.servers
-                .iter()
-                .zip(durations)
-                .map(|(server, duration)| {
-                    Box::pin(Self::consensus_epoch(server.clone(), duration))
-                }),
-        )
-        .await;
+        // must drop `res` before calling `update_last_consensus`
+        {
+            let res = select_all(
+                self.servers
+                    .iter()
+                    .zip(durations)
+                    .map(|(server, duration)| {
+                        Box::pin(Self::consensus_epoch(server.clone(), duration))
+                    }),
+            )
+            .await;
+
+            res.0?;
+        }
         self.update_last_consensus();
+        Ok(())
     }
 
     /// Force these peers to rejoin consensus, simulating what happens upon node restart
     #[allow(clippy::await_holding_refcell_ref)]
-    pub async fn rejoin_consensus(&self) {
+    pub async fn rejoin_consensus(&self) -> Cancellable<()> {
         for server in &self.servers {
             let mut s = server.borrow_mut();
             s.fedimint
                 .rejoin_consensus(Duration::from_secs(1), &mut rng())
-                .await;
+                .await?;
         }
+        Ok(())
     }
 
     // Necessary to allow servers to progress concurrently, should be fine since the same server
     // will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
-    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) -> Option<()> {
+    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) -> Cancellable<()> {
         tokio::time::sleep(delay).await;
         let mut s = server.borrow_mut();
         let consensus = s.fedimint.consensus.clone();
@@ -779,7 +791,7 @@ impl FederationTest {
             consensus.process_consensus_outcome(outcome.clone()).await;
         }
 
-        Some(())
+        Ok(())
     }
 
     fn update_last_consensus(&self) {

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 
 use async_trait::async_trait;
+use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{scalar, DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -119,12 +120,12 @@ impl GenerateConfig for MintConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
         _task_group: &mut TaskGroup,
-    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
+    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError> {
         let mut dkg = DkgRunner::multi(params.to_vec(), peers.threshold(), our_id, peers);
-        let g2 = if let Some(g2) = dkg.run_g2(connections, &mut rng).await {
+        let g2 = if let Ok(g2) = dkg.run_g2(connections, &mut rng).await {
             g2
         } else {
-            return Ok(None);
+            return Ok(Err(Cancelled));
         };
 
         let amounts_keys = g2
@@ -165,7 +166,7 @@ impl GenerateConfig for MintConfig {
             fee_consensus: Default::default(),
         };
 
-        Ok(Some((server, client)))
+        Ok(Ok((server, client)))
     }
 }
 

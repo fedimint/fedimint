@@ -10,6 +10,7 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
@@ -232,7 +233,7 @@ where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
     #[must_use]
-    async fn send(&mut self, peers: &[PeerId], msg: T) -> Option<()> {
+    async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()> {
         for peer_id in peers {
             trace!(?peer_id, "Sending message to");
             if let Some(peer) = self.connections.get_mut(peer_id) {
@@ -241,10 +242,10 @@ where
                 trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
             }
         }
-        Some(())
+        Ok(())
     }
 
-    async fn receive(&mut self) -> Option<(PeerId, T)> {
+    async fn receive(&mut self) -> Cancellable<(PeerId, T)> {
         // TODO: optimize, don't throw away remaining futures
 
         let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
@@ -574,12 +575,12 @@ where
         }
     }
 
-    async fn send(&mut self, msg: M) -> Option<()> {
-        self.outgoing.send(msg).await.ok()
+    async fn send(&mut self, msg: M) -> Cancellable<()> {
+        self.outgoing.send(msg).await.map_err(|_e| Cancelled)
     }
 
-    async fn receive(&mut self) -> Option<M> {
-        self.incoming.recv().await
+    async fn receive(&mut self) -> Cancellable<M> {
+        self.incoming.recv().await.ok_or(Cancelled)
     }
 
     #[instrument(skip_all, fields(peer))]
@@ -675,12 +676,12 @@ mod tests {
             let mut peers_a = build_peers("a", 1, task_group.clone()).await;
             let mut peers_b = build_peers("b", 2, task_group.clone()).await;
 
-            peers_a.send(&[PeerId::from(2)], 42).await;
+            peers_a.send(&[PeerId::from(2)], 42).await.unwrap();
             let recv = timeout(peers_b.receive()).await.unwrap().unwrap();
             assert_eq!(recv.0, PeerId::from(1));
             assert_eq!(recv.1, 42);
 
-            peers_a.send(&[PeerId::from(3)], 21).await;
+            peers_a.send(&[PeerId::from(3)], 21).await.unwrap();
 
             let mut peers_c = build_peers("c", 3, task_group.clone()).await;
             let recv = timeout(peers_c.receive()).await.unwrap().unwrap();

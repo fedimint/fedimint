@@ -3,6 +3,8 @@ use fedimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::cancellable::Cancellable;
+
 /// Owned [`PeerConnections`] trait object type
 pub type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'static>;
 
@@ -26,14 +28,10 @@ where
     ///
     /// The message is sent immediately and cached if the peer is reachable and only cached
     /// otherwise.
-    ///
-    /// Returns `None` during process shutdown
-    async fn send(&mut self, peers: &[PeerId], msg: T) -> Option<()>;
+    async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()>;
 
     /// Await receipt of a message from any connected peer.
-    ///
-    /// Returns `None` during process shutdown
-    async fn receive(&mut self) -> Option<(PeerId, T)>;
+    async fn receive(&mut self) -> Cancellable<(PeerId, T)>;
 
     /// Removes a peer connection in case of misbehavior
     async fn ban_peer(&mut self, peer: PeerId);
