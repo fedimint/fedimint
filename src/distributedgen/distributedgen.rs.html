@@ -226,11 +226,13 @@
 <span id="226">226</span>
 <span id="227">227</span>
 <span id="228">228</span>
+<span id="229">229</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>fedimint_api::cancellable::Cancellable;
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
@@ -345,7 +347,7 @@
         } =&gt; {
             <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
             <span class="kw">let </span>(pk_bytes, nonce) = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK));
-            <span class="kw">let </span>(server, client) = <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = run_dkg(
+            <span class="kw">let </span>(server, client) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = run_dkg(
                 <span class="kw-2">&amp;</span>dir_out_path,
                 denominations,
                 federation_name,
@@ -384,7 +386,7 @@
     bitcoind_rpc: String,
     pk: rustls::PrivateKey,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-) -&gt; <span class="prelude-ty">Option</span>&lt;(ServerConfig, ClientConfig)&gt; {
+) -&gt; Cancellable&lt;(ServerConfig, ClientConfig)&gt; {
     <span class="kw">let </span>peers: BTreeMap&lt;PeerId, PeerServerParams&gt; = certs
         .into_iter()
         .sorted()

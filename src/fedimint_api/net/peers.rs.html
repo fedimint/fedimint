@@ -44,12 +44,12 @@
 <span id="44">44</span>
 <span id="45">45</span>
 <span id="46">46</span>
-<span id="47">47</span>
-<span id="48">48</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
+
+<span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 
 <span class="doccomment">/// Owned [`PeerConnections`] trait object type
 </span><span class="kw">pub type </span>AnyPeerConnections&lt;M&gt; = Box&lt;<span class="kw">dyn </span>PeerConnections&lt;M&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;;
@@ -74,14 +74,10 @@
     ///
     /// The message is sent immediately and cached if the peer is reachable and only cached
     /// otherwise.
-    ///
-    /// Returns `None` during process shutdown
-    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt;;
+    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) -&gt; Cancellable&lt;()&gt;;
 
     <span class="doccomment">/// Await receipt of a message from any connected peer.
-    ///
-    /// Returns `None` during process shutdown
-    </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, T)&gt;;
+    </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;(PeerId, T)&gt;;
 
     <span class="doccomment">/// Removes a peer connection in case of misbehavior
     </span><span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId);

@@ -183,10 +183,12 @@
 <span id="183">183</span>
 <span id="184">184</span>
 <span id="185">185</span>
+<span id="186">186</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{scalar, DkgMessage, DkgRunner, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
@@ -304,12 +306,12 @@
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::multi(params.to_vec(), peers.threshold(), our_id, peers);
-        <span class="kw">let </span>g2 = <span class="kw">if let </span><span class="prelude-val">Some</span>(g2) = dkg.run_g2(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
+        <span class="kw">let </span>g2 = <span class="kw">if let </span><span class="prelude-val">Ok</span>(g2) = dkg.run_g2(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
             g2
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
         };
 
         <span class="kw">let </span>amounts_keys = g2
@@ -350,7 +352,7 @@
             fee_consensus: Default::default(),
         };
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((server, client)))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server, client)))
     }
 }
 

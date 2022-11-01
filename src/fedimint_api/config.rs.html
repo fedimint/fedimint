@@ -554,6 +554,7 @@
 <span class="kw">use </span>tbs::serde_impl;
 <span class="kw">use </span>tbs::Scalar;
 
+<span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::AnyPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::task::TaskGroup;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
@@ -586,7 +587,7 @@
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         rng: <span class="kw">impl </span>RngCore + CryptoRng,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt;;
 }
 
 <span class="kw">struct </span>Dkg&lt;G&gt; {
@@ -829,7 +830,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;(T, DkgMessage&lt;G2Projective&gt;)&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt; {
+    ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(G2Projective::generator(), connections, rng).<span class="kw">await
     </span>}
 
@@ -838,7 +839,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;(T, DkgMessage&lt;G1Projective&gt;)&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt; {
+    ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(G1Projective::generator(), connections, rng).<span class="kw">await
     </span>}
 
@@ -848,7 +849,7 @@
         group: G,
         connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;(T, DkgMessage&lt;G&gt;)&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;HashMap&lt;T, DkgKeys&lt;G&gt;&gt;&gt; {
+    ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dkgs: HashMap&lt;T, Dkg&lt;G&gt;&gt; = HashMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>results: HashMap&lt;T, DkgKeys&lt;G&gt;&gt; = HashMap::new();
 
@@ -866,13 +867,14 @@
         }
 
         <span class="comment">// process steps for each key
-        </span><span class="kw">while let </span><span class="prelude-val">Some</span>((peer, (key, message))) = connections.receive().<span class="kw">await </span>{
+        </span><span class="kw">loop </span>{
+            <span class="kw">let </span>(peer, (key, message)) = connections.receive().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>step = dkgs.get_mut(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;exists&quot;</span>).step(peer, message);
 
             <span class="kw">match </span>step {
                 DkgStep::Messages(messages) =&gt; {
                     <span class="kw">for </span>(peer, msg) <span class="kw">in </span>messages {
-                        connections.send(<span class="kw-2">&amp;</span>[peer], (key.clone(), msg)).<span class="kw">await</span>;
+                        connections.send(<span class="kw-2">&amp;</span>[peer], (key.clone(), msg)).<span class="kw">await</span><span class="question-mark">?</span>;
                     }
                 }
                 DkgStep::Result(result) =&gt; {
@@ -881,12 +883,10 @@
             }
 
             <span class="kw">if </span>results.len() == dkgs.len() {
-                <span class="kw">return </span><span class="prelude-val">Some</span>(results);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(results);
             }
         }
-
-        <span class="prelude-val">None
-    </span>}
+    }
 }
 
 <span class="attribute">#[derive(Debug, Clone)]

@@ -129,9 +129,11 @@
 <span id="129">129</span>
 <span id="130">130</span>
 <span id="131">131</span>
+<span id="132">132</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
@@ -220,12 +222,12 @@
         _params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        <span class="kw">let </span>g1 = <span class="kw">if let </span><span class="prelude-val">Some</span>(g1) = dkg.run_g1(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
+        <span class="kw">let </span>g1 = <span class="kw">if let </span><span class="prelude-val">Ok</span>(g1) = dkg.run_g1(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
             g1
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
         };
 
         <span class="kw">let </span>(pks, sks) = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
@@ -242,7 +244,7 @@
             fee_consensus: Default::default(),
         };
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((server, client)))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server, client)))
     }
 }
 

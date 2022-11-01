@@ -692,6 +692,7 @@
 <span id="692">692</span>
 <span id="693">693</span>
 <span id="694">694</span>
+<span id="695">695</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -704,6 +705,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::PeerId;
@@ -926,7 +928,7 @@
     </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
     <span class="attribute">#[must_use]
-    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
+    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) -&gt; Cancellable&lt;()&gt; {
         <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
             <span class="macro">trace!</span>(<span class="question-mark">?</span>peer_id, <span class="string">&quot;Sending message to&quot;</span>);
             <span class="kw">if let </span><span class="prelude-val">Some</span>(peer) = <span class="self">self</span>.connections.get_mut(peer_id) {
@@ -935,10 +937,10 @@
                 <span class="macro">trace!</span>(peer = <span class="question-mark">?</span>peer_id, <span class="string">&quot;Not sending message to unknown peer (maybe banned)&quot;</span>);
             }
         }
-        <span class="prelude-val">Some</span>(())
+        <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, T)&gt; {
+    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;(PeerId, T)&gt; {
         <span class="comment">// TODO: optimize, don&#39;t throw away remaining futures
 
         </span><span class="kw">let </span>futures_non_banned = <span class="self">self</span>.connections.iter_mut().map(|(<span class="kw-2">&amp;</span>peer, connection)| {
@@ -1268,13 +1270,13 @@
         }
     }
 
-    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, msg: M) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
-        <span class="self">self</span>.outgoing.send(msg).<span class="kw">await</span>.ok()
+    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, msg: M) -&gt; Cancellable&lt;()&gt; {
+        <span class="self">self</span>.outgoing.send(msg).<span class="kw">await</span>.map_err(|_e| Cancelled)
     }
 
-    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;M&gt; {
-        <span class="self">self</span>.incoming.recv().<span class="kw">await
-    </span>}
+    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;M&gt; {
+        <span class="self">self</span>.incoming.recv().<span class="kw">await</span>.ok_or(Cancelled)
+    }
 
     <span class="attribute">#[instrument(skip_all, fields(peer))]
     </span><span class="kw">async fn </span>run_io_thread(
@@ -1369,12 +1371,12 @@
             <span class="kw">let </span><span class="kw-2">mut </span>peers_a = build_peers(<span class="string">&quot;a&quot;</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>peers_b = build_peers(<span class="string">&quot;b&quot;</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
 
-            peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>;
+            peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>.unwrap();
             <span class="kw">let </span>recv = timeout(peers_b.receive()).<span class="kw">await</span>.unwrap().unwrap();
             <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">42</span>);
 
-            peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>;
+            peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>.unwrap();
 
             <span class="kw">let </span><span class="kw-2">mut </span>peers_c = build_peers(<span class="string">&quot;c&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
             <span class="kw">let </span>recv = timeout(peers_c.receive()).<span class="kw">await</span>.unwrap().unwrap();

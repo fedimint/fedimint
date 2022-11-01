@@ -562,6 +562,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
 <span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
@@ -763,11 +764,11 @@
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
         <span class="comment">// in case we are running by ourselves, avoid DKG
         </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
             <span class="kw">let </span>(server, client) = <span class="self">Self</span>::trusted_dealer_gen(peers, params, rng);
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((server[our_id].clone(), client)));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server[our_id].clone(), client)));
         }
         <span class="macro">info!</span>(<span class="string">&quot;Peer {} running distributed key generation...&quot;</span>, our_id);
 
@@ -777,10 +778,10 @@
         dkg.add(KeyType::Epoch, peers.threshold());
 
         <span class="comment">// run DKG for epoch and hbbft keys
-        </span><span class="kw">let </span>keys = <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = dkg.run_g1(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
+        </span><span class="kw">let </span>keys = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = dkg.run_g1(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
             v
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
         };
         <span class="kw">let </span>(hbbft_pks, hbbft_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
         <span class="kw">let </span>(epoch_pks, epoch_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
@@ -791,42 +792,41 @@
             btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
             btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
         };
-        <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Some</span>(v) =
+        <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) =
             WalletConfig::distributed_gen(<span class="kw-2">&amp;mut </span>wallet, our_id, peers, bitcoin, <span class="kw-2">&amp;mut </span>rng, task_group)
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;wallet error&quot;</span>)
         {
             v
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
         };
 
         <span class="kw">let </span><span class="kw-2">mut </span>ln = connect(params.lightning_dkg.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
-        <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Some</span>(v) =
-            LightningModuleConfig::distributed_gen(
-                <span class="kw-2">&amp;mut </span>ln,
-                our_id,
-                peers,
-                <span class="kw-2">&amp;</span>(),
-                <span class="kw-2">&amp;mut </span>rng,
-                task_group,
-            )
-            .<span class="kw">await</span><span class="question-mark">?
+        <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = LightningModuleConfig::distributed_gen(
+            <span class="kw-2">&amp;mut </span>ln,
+            our_id,
+            peers,
+            <span class="kw-2">&amp;</span>(),
+            <span class="kw-2">&amp;mut </span>rng,
+            task_group,
+        )
+        .<span class="kw">await</span><span class="question-mark">?
         </span>{
             v
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
         };
 
         <span class="kw">let </span><span class="kw-2">mut </span>mint = connect(params.mint_dkg.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
         <span class="kw">let </span>param = <span class="kw-2">&amp;</span>params.amount_tiers;
-        <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Some</span>(v) =
+        <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) =
             MintConfig::distributed_gen(<span class="kw-2">&amp;mut </span>mint, our_id, peers, param, <span class="kw-2">&amp;mut </span>rng, task_group)
                 .<span class="kw">await</span><span class="question-mark">?
         </span>{
             v
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
         };
 
         <span class="kw">let </span>server = ServerConfig {
@@ -854,7 +854,7 @@
             ln: ln_client_cfg,
         };
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((server, client)))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server, client)))
     }
 }
 

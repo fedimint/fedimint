@@ -378,6 +378,7 @@
 <span id="378">378</span>
 <span id="379">379</span>
 <span id="380">380</span>
+<span id="381">381</span>
 </pre><pre class="rust"><code><span class="doccomment">//! This crate implements the [RFC5869] hash based key derivation function using [`bitcoin_hashes`].
 //!
 //! [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
@@ -490,8 +491,9 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::Hkdf;
     <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
+
+    <span class="kw">use </span><span class="kw">crate</span>::Hkdf;
 
     <span class="attribute">#[test]
     #[should_panic(expected = <span class="string">&quot;RFC5869 only supports output length of up to 255*HashLength&quot;</span>)]

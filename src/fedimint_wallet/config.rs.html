@@ -184,11 +184,15 @@
 <span id="184">184</span>
 <span id="185">185</span>
 <span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
@@ -308,27 +312,29 @@
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
         <span class="kw">let </span><span class="kw-2">mut </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = BTreeMap::new();
 
-        connections.send(peers, our_key.clone()).<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(Cancelled) = connections.send(peers, our_key.clone()).<span class="kw">await </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
+        }
 
         peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
         <span class="kw">while </span>peer_peg_in_keys.len() &lt; peers.len() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>((peer, msg)) = connections.receive().<span class="kw">await </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>((peer, msg)) = connections.receive().<span class="kw">await </span>{
                 peer_peg_in_keys.insert(peer, msg);
             } <span class="kw">else </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
             }
         }
 
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
         <span class="kw">let </span>client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((wallet_cfg, client_cfg)))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((wallet_cfg, client_cfg)))
     }
 }
 
