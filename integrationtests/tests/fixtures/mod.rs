@@ -364,7 +364,14 @@ impl GatewayTest {
             default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };
 
-        let mut gateway = LnGateway::new(gw_cfg, ln_client, sender, receiver, bind_addr);
+        let mut gateway = LnGateway::new(
+            gw_cfg,
+            ln_client,
+            sender,
+            receiver,
+            bind_addr,
+            client_builder.clone(),
+        );
 
         let client = Arc::new(
             client_builder

@@ -35,7 +35,10 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error};
 use webserver::run_webserver;
 
-use crate::ln::{LightningError, LnRpc};
+use crate::{
+    client::GatewayClientBuilder,
+    ln::{LightningError, LnRpc},
+};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
@@ -164,6 +167,7 @@ pub struct LnGateway {
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
+    client_builder: GatewayClientBuilder,
 }
 
 impl LnGateway {
@@ -173,6 +177,7 @@ impl LnGateway {
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
         bind_addr: SocketAddr,
+        client_builder: GatewayClientBuilder,
     ) -> Self {
         // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(config.password.clone(), bind_addr, sender));
@@ -183,6 +188,7 @@ impl LnGateway {
             ln_client,
             webserver,
             receiver,
+            client_builder,
         }
     }
 
