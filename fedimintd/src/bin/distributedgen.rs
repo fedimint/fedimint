@@ -53,7 +53,7 @@ enum Command {
         dir_out_path: PathBuf,
 
         /// Federation name, same for all peers
-        #[arg(long = "federation-name", default_value = "Hal's trusty mint")]
+        #[arg(long = "federation-name", default_value = "Hals_trusty_mint")]
         federation_name: String,
 
         /// Comma-separated list of connection certs from all peers (including ours)
