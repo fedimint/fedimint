@@ -14,7 +14,7 @@ mine_blocks 101 > /dev/null 2>&1
 
 # Wait for the lightning clients to start (ln1 and ln2 are started with a 5s delay after bitcoind and deferation start)
 # FIXME: After tackling https://github.com/fedimint/fedimint/issues/699, this can be removed
-sleep 10
+await_block_sync
 
 echo Setting up lightning channel ...
 open_channel > /dev/null 2>&1
