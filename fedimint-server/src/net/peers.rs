@@ -272,6 +272,9 @@ where
     M: Debug + Clone,
 {
     async fn run(mut self, task_handle: &TaskHandle) {
+        // Note: `state_transition` internally uses channel operations (`send` and `recv`)
+        // which will disconnect when other tasks are shutting down returning here,
+        // so we probably don't need any `timeout` here.
         while !task_handle.is_shutting_down() {
             if let Some(new_self) = self.state_transition().await {
                 self = new_self;
