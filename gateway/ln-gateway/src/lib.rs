@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::{
     io::Cursor,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -164,7 +164,7 @@ where
 
 pub struct LnGateway {
     config: GatewayConfig,
-    actors: HashMap<FederationId, Arc<GatewayActor>>,
+    actors: Mutex<HashMap<FederationId, Arc<GatewayActor>>>,
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
@@ -185,7 +185,7 @@ impl LnGateway {
 
         Self {
             config,
-            actors: HashMap::new(),
+            actors: Mutex::new(HashMap::new()),
             ln_client,
             webserver,
             receiver,
@@ -194,10 +194,15 @@ impl LnGateway {
     }
 
     fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
-        self.actors
-            .get(&federation_id)
-            .cloned()
-            .ok_or(LnGatewayError::UnknownFederation)
+        if let Ok(actors) = self.actors.lock() {
+            return actors
+                .get(&federation_id)
+                .cloned()
+                .ok_or(LnGatewayError::UnknownFederation);
+        }
+        Err(LnGatewayError::Other(anyhow::anyhow!(
+            "Failed to select an actor"
+        )))
     }
 
     /// Register a federation to the gateway.
@@ -206,7 +211,7 @@ impl LnGateway {
     ///
     /// A `GatewayActor` that can be used to execute gateway functions for the federation
     pub async fn register_federation(
-        &mut self,
+        &self,
         client: Arc<GatewayClient>,
     ) -> Result<Arc<GatewayActor>> {
         let actor = Arc::new(
@@ -216,21 +221,32 @@ impl LnGateway {
         );
 
         let federation_id = FederationId(client.config().client_config.federation_name);
-        self.actors.insert(federation_id, actor.clone());
+        if let Ok(mut actors) = self.actors.lock() {
+            actors.insert(federation_id, actor.clone());
+        }
         Ok(actor)
     }
 
     // Webserver handler for requests to register a federation
-    async fn handle_register_federation(&self, _payload: RegisterFedPayload) -> Result<()> {
-        // TODO: Implement register federation
+    async fn handle_register_federation(&self, payload: RegisterFedPayload) -> Result<()> {
+        let client = self.client_builder.build(*payload.config)?;
+
+        if let Err(e) = self.register_federation(Arc::new(client)).await {
+            error!("Failed to register federation: {}", e);
+        }
         Ok(())
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        Ok(GatewayInfo {
-            version_hash: env!("GIT_HASH").to_string(),
-            federations: self.actors.keys().cloned().collect(),
-        })
+        if let Ok(actors) = self.actors.lock() {
+            return Ok(GatewayInfo {
+                version_hash: env!("GIT_HASH").to_string(),
+                federations: actors.keys().cloned().collect(),
+            });
+        }
+        Err(LnGatewayError::Other(anyhow::anyhow!(
+            "Failed to fetch gateway get info"
+        )))
     }
 
     async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
