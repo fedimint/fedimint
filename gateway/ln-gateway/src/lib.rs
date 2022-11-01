@@ -27,6 +27,7 @@ use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::{
     ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
+    GatewayClientConfig,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
@@ -37,6 +38,11 @@ use webserver::run_webserver;
 use crate::ln::{LightningError, LnRpc};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RegisterFedPayload {
+    pub config: Box<GatewayClientConfig>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReceivePaymentPayload {
@@ -86,7 +92,8 @@ pub struct GatewayInfo {
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
-    ReceiveInvoice(GatewayRequestInner<ReceivePaymentPayload>),
+    RegisterFederation(GatewayRequestInner<RegisterFedPayload>),
+    ReceivePayment(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
@@ -121,10 +128,11 @@ macro_rules! impl_gateway_request_trait {
 }
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
+impl_gateway_request_trait!(RegisterFedPayload, (), GatewayRequest::RegisterFederation);
 impl_gateway_request_trait!(
     ReceivePaymentPayload,
     Preimage,
-    GatewayRequest::ReceiveInvoice
+    GatewayRequest::ReceivePayment
 );
 impl_gateway_request_trait!(PayInvoicePayload, (), GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
@@ -178,6 +186,13 @@ impl LnGateway {
         }
     }
 
+    fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+        self.actors
+            .get(&federation_id)
+            .cloned()
+            .ok_or(LnGatewayError::UnknownFederation)
+    }
+
     /// Register a federation to the gateway.
     ///
     /// # Returns
@@ -198,11 +213,10 @@ impl LnGateway {
         Ok(actor)
     }
 
-    fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
-        self.actors
-            .get(&federation_id)
-            .cloned()
-            .ok_or(LnGatewayError::UnknownFederation)
+    // Webserver handler for requests to register a federation
+    async fn handle_register_federation(&self, _payload: RegisterFedPayload) -> Result<()> {
+        // TODO: Implement register federation
+        Ok(())
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
@@ -293,12 +307,15 @@ impl LnGateway {
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
-                    GatewayRequest::Info(payload) => {
-                        payload
-                            .handle(|payload| self.handle_get_info(payload))
+                    GatewayRequest::Info(inner) => {
+                        inner.handle(|payload| self.handle_get_info(payload)).await;
+                    }
+                    GatewayRequest::RegisterFederation(inner) => {
+                        inner
+                            .handle(|payload| self.handle_register_federation(payload))
                             .await;
                     }
-                    GatewayRequest::ReceiveInvoice(inner) => {
+                    GatewayRequest::ReceivePayment(inner) => {
                         inner
                             .handle(|payload| self.handle_receive_invoice_msg(payload))
                             .await;
