@@ -364,7 +364,7 @@ impl GatewayTest {
             default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };
 
-        let mut gateway = LnGateway::new(
+        let gateway = LnGateway::new(
             gw_cfg,
             ln_client,
             sender,
