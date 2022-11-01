@@ -139,8 +139,8 @@ where
 }
 
 pub struct LnGateway {
+    config: GatewayConfig,
     actors: HashMap<FederationId, Arc<GatewayActor>>,
-    federation_client: Arc<GatewayClient>,
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
@@ -148,19 +148,18 @@ pub struct LnGateway {
 
 impl LnGateway {
     pub fn new(
-        cfg: GatewayConfig,
-        federation_client: Arc<GatewayClient>,
+        config: GatewayConfig,
         ln_client: Arc<dyn LnRpc>,
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
         bind_addr: SocketAddr,
     ) -> Self {
         // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(cfg.password, bind_addr, sender));
+        let webserver = tokio::spawn(run_webserver(config.password.clone(), bind_addr, sender));
 
         Self {
+            config,
             actors: HashMap::new(),
-            federation_client,
             ln_client,
             webserver,
             receiver,
@@ -319,15 +318,6 @@ impl LnGateway {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        // Regster gateway with federation
-        // FIXME: This call is critically dependent on the federation being up and running.
-        // We should either use a retry strategy, OR register federations on the gateway at runtime
-        // as proposed in https://github.com/fedimint/fedimint/issues/699
-        self.federation_client
-            .register_with_federation(self.federation_client.config().into())
-            .await
-            .expect("Failed to register with federation");
-
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
