@@ -47,7 +47,7 @@ enum Command {
         denominations: Vec<Amount>,
 
         /// Federation name
-        #[arg(long = "federation-name", default_value = "Hal's trusty mint")]
+        #[arg(long = "federation-name", default_value = "Hals_trusty_mint")]
         federation_name: String,
     },
 }

@@ -40,7 +40,8 @@ await_cln_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
-LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance 'mock_federation_id' | jq -r '.balance_msat')"
+FED_NAME="$(get_federation_name)"
+LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_NAME | jq -r '.balance_msat')"
 [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
 INVOICE_RESULT="$($FM_LN2 waitinvoice test)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
