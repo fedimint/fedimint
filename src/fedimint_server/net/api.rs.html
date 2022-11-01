@@ -225,11 +225,15 @@
 <span id="225">225</span>
 <span id="226">226</span>
 <span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_api::{
     config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
@@ -338,10 +342,12 @@
         <span class="prelude-val">Some</span>(fedimint.ln.api_base_name()),
     );
 
+    <span class="macro">debug!</span>(addr = cfg.api_bind_addr, <span class="string">&quot;Starting WSServer&quot;</span>);
     <span class="kw">let </span>server = WsServerBuilder::new()
         .build(<span class="kw-2">&amp;</span>cfg.api_bind_addr)
         .<span class="kw">await
-        </span>.expect(<span class="string">&quot;Could not start API server&quot;</span>);
+        </span>.context(<span class="macro">format!</span>(<span class="string">&quot;Bind address: {}&quot;</span>, cfg.api_bind_addr))
+        .expect(<span class="string">&quot;Could not start API server&quot;</span>);
 
     <span class="kw">let </span>server_handle = server
         .start(rpc_module)
