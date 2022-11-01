@@ -46,7 +46,7 @@ async fn main() -> Result<(), Error> {
         RocksDbGatewayClientBuilder::new(work_dir.clone()).into();
 
     // Create gateway instance
-    let mut gateway = LnGateway::new(gw_cfg, ln_rpc, tx, rx, bind_addr);
+    let mut gateway = LnGateway::new(gw_cfg, ln_rpc, tx, rx, bind_addr, client_builder.clone());
 
     // Build and register the default federation
     // TODO: Register default federation through gateway webserver api
