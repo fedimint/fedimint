@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
+use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -122,27 +123,29 @@ impl GenerateConfig for WalletConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
         _task_group: &mut TaskGroup,
-    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError> {
+    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError> {
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut rng);
         let our_key = CompressedPublicKey { key: pk };
         let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
 
-        connections.send(peers, our_key.clone()).await;
+        if let Err(Cancelled) = connections.send(peers, our_key.clone()).await {
+            return Ok(Err(Cancelled));
+        }
 
         peer_peg_in_keys.insert(*our_id, our_key);
         while peer_peg_in_keys.len() < peers.len() {
-            if let Some((peer, msg)) = connections.receive().await {
+            if let Ok((peer, msg)) = connections.receive().await {
                 peer_peg_in_keys.insert(peer, msg);
             } else {
-                return Ok(None);
+                return Ok(Err(Cancelled));
             }
         }
 
         let wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
         let client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
 
-        Ok(Some((wallet_cfg, client_cfg)))
+        Ok(Ok((wallet_cfg, client_cfg)))
     }
 }
 

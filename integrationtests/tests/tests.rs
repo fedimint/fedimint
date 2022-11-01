@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
+use fedimint_api::cancellable::Cancellable;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::DecryptionShareCI;
@@ -256,20 +257,24 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     task_group.shutdown_join_all().await
 }
 
-async fn drop_peer_3_during_epoch(fed: &FederationTest) {
+async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Cancellable<()> {
     // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad proposal
     fed.subset_peers(&[1, 2, 3]).run_consensus_epochs(1).await;
     fed.subset_peers(&[0]).run_consensus_epochs(1).await;
 
     // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
-    join_all(vec![
+    for maybe_cancelled in join_all(vec![
         Either::Left(fed.subset_peers(&[1, 2]).await_consensus_epochs(1)),
         Either::Right(
             fed.subset_peers(&[0, 3])
                 .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
         ),
     ])
-    .await;
+    .await
+    {
+        maybe_cancelled?;
+    }
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -287,10 +292,13 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
     user.peg_out(1000, &peg_out_address).await;
     // Ensure peer 0 who received the peg out request is in the next epoch
     fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
-    fed.subset_peers(&[3]).await_consensus_epochs(1).await;
+    fed.subset_peers(&[3])
+        .await_consensus_epochs(1)
+        .await
+        .unwrap();
 
     fed.subset_peers(&[3]).override_proposal(vec![]);
-    drop_peer_3_during_epoch(&fed).await;
+    drop_peer_3_during_epoch(&fed).await.unwrap();
 
     fed.broadcast_transactions().await;
     assert_eq!(
@@ -342,7 +350,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             contract_id,
             share: PreimageDecryptionShare(share),
         })]);
-    drop_peer_3_during_epoch(&fed).await; // preimage decryption
+    drop_peer_3_during_epoch(&fed).await.unwrap(); // preimage decryption
 
     user.client
         .claim_incoming_contract(contract_id, rng())
@@ -370,7 +378,7 @@ async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
     fed.database_add_coins_for_user(&user, sats(2000));
 
     fed.subset_peers(&[3]).override_proposal(vec![]);
-    drop_peer_3_during_epoch(&fed).await;
+    drop_peer_3_during_epoch(&fed).await.unwrap();
 
     user.assert_total_coins(sats(2000)).await;
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
@@ -395,7 +403,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
     })];
 
     fed.subset_peers(&[3]).override_proposal(bad_proposal);
-    drop_peer_3_during_epoch(&fed).await;
+    drop_peer_3_during_epoch(&fed).await.unwrap();
 
     user.assert_total_coins(sats(2000)).await;
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
@@ -463,7 +471,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
 
     let claim_outpoint = tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
         // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
-        fed.await_consensus_epochs(4).await;
+        fed.await_consensus_epochs(4).await.unwrap();
     })
     .0
     .unwrap();
@@ -615,7 +623,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         // we should run 4 epocks to buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
         // but we only run 1 epoch to simulate timeout in preimage decryption
         // This results in an error and the gateway reclaims funds used to buy preimage
-        fed.await_consensus_epochs(1).await;
+        fed.await_consensus_epochs(1).await.unwrap();
     })
     .0;
     assert!(response.is_err());
@@ -911,7 +919,7 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
             user_receive.client.reissue(ecash, rng()).await.unwrap();
         }),
         Either::Right(async {
-            fed.await_consensus_epochs(2).await;
+            fed.await_consensus_epochs(2).await.unwrap();
         }),
     ])
     .await;
@@ -942,7 +950,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
             tokio::time::sleep(Duration::from_millis(500)).await;
             bitcoin.mine_blocks(fed.wallet.finality_delay as u64);
         }),
-        Either::Right(async { fed.await_consensus_epochs(1).await }),
+        Either::Right(async { fed.await_consensus_epochs(1).await.unwrap() }),
     ])
     .await;
 
@@ -1053,10 +1061,13 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
 
     join_all(vec![
         Either::Left(async {
-            fed.subset_peers(&[0, 1, 2]).await_consensus_epochs(1).await;
+            fed.subset_peers(&[0, 1, 2])
+                .await_consensus_epochs(1)
+                .await
+                .unwrap();
         }),
         Either::Right(async {
-            fed.subset_peers(&[3]).rejoin_consensus().await;
+            fed.subset_peers(&[3]).rejoin_consensus().await.unwrap();
         }),
     ])
     .await;
@@ -1087,10 +1098,10 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
 
     let rejoin = join_all(vec![
         Either::Left(async {
-            peer0.rejoin_consensus().await;
+            peer0.rejoin_consensus().await.unwrap();
         }),
         Either::Right(async {
-            peer1.rejoin_consensus().await;
+            peer1.rejoin_consensus().await.unwrap();
         }),
     ]);
 

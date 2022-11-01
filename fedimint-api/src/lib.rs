@@ -20,6 +20,7 @@ pub use crate::core::{client, server};
 use crate::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
 pub mod bitcoin_rpc;
+pub mod cancellable;
 pub mod config;
 pub mod core;
 pub mod db;

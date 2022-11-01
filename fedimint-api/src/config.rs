@@ -20,6 +20,7 @@ use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
 
+use crate::cancellable::Cancellable;
 use crate::net::peers::AnyPeerConnections;
 use crate::task::TaskGroup;
 use crate::PeerId;
@@ -52,7 +53,7 @@ pub trait GenerateConfig: Sized {
         params: &Self::Params,
         rng: impl RngCore + CryptoRng,
         task_group: &mut TaskGroup,
-    ) -> Result<Option<(Self, Self::ClientConfig)>, Self::ConfigError>;
+    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError>;
 }
 
 struct Dkg<G> {
@@ -295,7 +296,7 @@ where
         &mut self,
         connections: &mut AnyPeerConnections<(T, DkgMessage<G2Projective>)>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Option<HashMap<T, DkgKeys<G2Projective>>> {
+    ) -> Cancellable<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(G2Projective::generator(), connections, rng).await
     }
 
@@ -304,7 +305,7 @@ where
         &mut self,
         connections: &mut AnyPeerConnections<(T, DkgMessage<G1Projective>)>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Option<HashMap<T, DkgKeys<G1Projective>>> {
+    ) -> Cancellable<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(G1Projective::generator(), connections, rng).await
     }
 
@@ -314,7 +315,7 @@ where
         group: G,
         connections: &mut AnyPeerConnections<(T, DkgMessage<G>)>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Option<HashMap<T, DkgKeys<G>>> {
+    ) -> Cancellable<HashMap<T, DkgKeys<G>>> {
         let mut dkgs: HashMap<T, Dkg<G>> = HashMap::new();
         let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
 
@@ -332,13 +333,14 @@ where
         }
 
         // process steps for each key
-        while let Some((peer, (key, message))) = connections.receive().await {
+        loop {
+            let (peer, (key, message)) = connections.receive().await?;
             let step = dkgs.get_mut(&key).expect("exists").step(peer, message);
 
             match step {
                 DkgStep::Messages(messages) => {
                     for (peer, msg) in messages {
-                        connections.send(&[peer], (key.clone(), msg)).await;
+                        connections.send(&[peer], (key.clone(), msg)).await?;
                     }
                 }
                 DkgStep::Result(result) => {
@@ -347,11 +349,9 @@ where
             }
 
             if results.len() == dkgs.len() {
-                return Some(results);
+                return Ok(results);
             }
         }
-
-        None
     }
 }
 

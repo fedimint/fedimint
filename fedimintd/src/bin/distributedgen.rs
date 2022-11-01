@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
+use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -117,7 +118,7 @@ async fn main() {
         } => {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
             let (pk_bytes, nonce) = encrypted_read(&key, dir_out_path.join(TLS_PK));
-            let (server, client) = if let Some(v) = run_dkg(
+            let (server, client) = if let Ok(v) = run_dkg(
                 &dir_out_path,
                 denominations,
                 federation_name,
@@ -156,7 +157,7 @@ async fn run_dkg(
     bitcoind_rpc: String,
     pk: rustls::PrivateKey,
     task_group: &mut TaskGroup,
-) -> Option<(ServerConfig, ClientConfig)> {
+) -> Cancellable<(ServerConfig, ClientConfig)> {
     let peers: BTreeMap<PeerId, PeerServerParams> = certs
         .into_iter()
         .sorted()
