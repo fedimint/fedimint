@@ -10,7 +10,7 @@ use tracing::instrument;
 
 use crate::{
     rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    InfoPayload, LnGatewayError, WithdrawPayload,
+    InfoPayload, LnGatewayError, RegisterFedPayload, WithdrawPayload,
 };
 
 pub async fn run_webserver(
@@ -30,6 +30,7 @@ pub async fn run_webserver(
         .route("/address", post(address))
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
+        .route("/register", post(register))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -105,6 +106,16 @@ async fn withdraw(
 async fn pay_invoice(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<PayInvoicePayload>,
+) -> Result<impl IntoResponse, LnGatewayError> {
+    rpc.send(payload).await?;
+    Ok(())
+}
+
+/// Register a new federation
+#[instrument(skip_all, err)]
+async fn register(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<RegisterFedPayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     rpc.send(payload).await?;
     Ok(())
