@@ -3,6 +3,7 @@ use std::fmt::Formatter;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
+use anyhow::Context;
 use fedimint_api::{
     config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
@@ -111,9 +112,11 @@ pub async fn run_server(
         Some(fedimint.ln.api_base_name()),
     );
 
+    debug!(addr = cfg.api_bind_addr, "Starting WSServer");
     let server = WsServerBuilder::new()
         .build(&cfg.api_bind_addr)
         .await
+        .context(format!("Bind address: {}", cfg.api_bind_addr))
         .expect("Could not start API server");
 
     let server_handle = server
