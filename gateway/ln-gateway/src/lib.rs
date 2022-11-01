@@ -18,21 +18,19 @@ use actor::GatewayActor;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
-use bitcoin_hashes::sha256;
 use cln::HtlcAccepted;
 use config::GatewayConfig;
-use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
+use fedimint_api::{Amount, TransactionId};
+use fedimint_server::modules::ln::contracts::Preimage;
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::{
     ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
 };
-use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 use webserver::run_webserver;
 
 use crate::ln::{LightningError, LnRpc};
@@ -193,67 +191,19 @@ impl LnGateway {
             .ok_or(LnGatewayError::UnknownFederation)
     }
 
-    pub async fn buy_preimage_offer(
-        &self,
-        payment_hash: &sha256::Hash,
-        amount: &Amount,
-        rng: impl RngCore + CryptoRng,
-    ) -> Result<(OutPoint, ContractId)> {
-        let (outpoint, contract_id) = self
-            .federation_client
-            .buy_preimage_offer(payment_hash, amount, rng)
-            .await?;
-        Ok((outpoint, contract_id))
-    }
+    async fn handle_receive_invoice_msg(&self, payload: ReceiveInvoicePayload) -> Result<Preimage> {
+        let ReceiveInvoicePayload { htlc_accepted } = payload;
 
-    pub async fn await_preimage_decryption(&self, outpoint: OutPoint) -> Result<Preimage> {
-        let preimage = self
-            .federation_client
-            .await_preimage_decryption(outpoint)
-            .await?;
-        Ok(preimage)
-    }
+        let invoice_amount = htlc_accepted.htlc.amount;
+        let payment_hash = htlc_accepted.htlc.payment_hash;
+        debug!("Incoming htlc for payment hash {}", payment_hash);
 
-    async fn buy_preimage_internal(
-        &self,
-        payment_hash: &sha256::Hash,
-        invoice_amount: &Amount,
-        mut rng: impl RngCore + CryptoRng,
-    ) -> Result<Preimage> {
-        let (out_point, contract_id) = self
-            .federation_client
-            .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
-            .await?;
-
-        debug!("Awaiting decryption of preimage of hash {}", payment_hash);
-        match self
-            .federation_client
-            .await_preimage_decryption(out_point)
+        // FIXME: Issue 664: We should avoid having a special reference to a federation
+        // all requests, including `ReceiveInvoicePayload`, should contain the federation id
+        // TODO: Parse federation id from routing hint in htlc_accepted message
+        self.select_actor(self.config.default_federation.clone())?
+            .buy_preimage_internal(&payment_hash, &invoice_amount)
             .await
-        {
-            Ok(preimage) => {
-                debug!("Decrypted preimage {:?}", preimage);
-                Ok(preimage)
-            }
-            Err(e) => {
-                warn!("Failed to decrypt preimage. Now requesting a refund: {}", e);
-                self.federation_client
-                    .refund_incoming_contract(contract_id, rng)
-                    .await?;
-                Err(LnGatewayError::ClientError(e))
-            }
-        }
-    }
-
-    pub async fn await_outgoing_contract_claimed(
-        &self,
-        contract_id: ContractId,
-        outpoint: OutPoint,
-    ) -> Result<()> {
-        Ok(self
-            .federation_client
-            .await_outgoing_contract_claimed(contract_id, outpoint)
-            .await?)
     }
 
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
@@ -270,16 +220,6 @@ impl LnGateway {
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
         Ok(())
-    }
-
-    async fn handle_htlc_incoming_msg(&self, htlc_accepted: HtlcAccepted) -> Result<Preimage> {
-        let invoice_amount = htlc_accepted.htlc.amount;
-        let payment_hash = htlc_accepted.htlc.payment_hash;
-        let mut rng = rand::rngs::OsRng;
-
-        debug!("Incoming htlc for payment hash {}", payment_hash);
-        self.buy_preimage_internal(&payment_hash, &invoice_amount, &mut rng)
-            .await
     }
 
     async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
@@ -333,7 +273,7 @@ impl LnGateway {
                 match msg {
                     GatewayRequest::ReceiveInvoice(inner) => {
                         inner
-                            .handle(|inner| self.handle_htlc_incoming_msg(inner.htlc_accepted))
+                            .handle(|payload| self.handle_receive_invoice_msg(payload))
                             .await;
                     }
                     GatewayRequest::PayInvoice(inner) => {
