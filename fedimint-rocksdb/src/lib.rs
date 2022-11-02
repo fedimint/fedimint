@@ -72,7 +72,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         let mut options = rocksdb::ReadOptions::default();
         options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
         let iter = self.0.snapshot().iterator_opt(
-            rocksdb::IteratorMode::From(&prefix.clone(), rocksdb::Direction::Forward),
+            rocksdb::IteratorMode::From(&prefix, rocksdb::Direction::Forward),
             options,
         );
         Box::new(
