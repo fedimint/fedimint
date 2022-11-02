@@ -52,7 +52,12 @@ use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
-use ln_gateway::{actor::GatewayActor, config::GatewayConfig, GatewayRequest, LnGateway};
+use ln_gateway::{
+    actor::GatewayActor,
+    client::{GatewayClientBuilder, MemoryDbGatewayClientBuilder},
+    config::GatewayConfig,
+    GatewayRequest, LnGateway,
+};
 use mint_client::{
     api::WsFederationApi, mint::SpendableNote, FederationId, GatewayClient, GatewayClientConfig,
     UserClient, UserClientConfig,
@@ -337,16 +342,8 @@ impl GatewayTest {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
         };
 
-        let database: Database = MemDatabase::new().into();
-        let user_cfg = UserClientConfig(client_config.clone());
-        let user_client = UserClient::new(user_cfg.clone(), database.clone(), Default::default());
-        let user = UserTest {
-            client: user_client,
-            config: user_cfg,
-        };
-
         let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
-        let gw_cfg = GatewayClientConfig {
+        let gw_client_cfg = GatewayClientConfig {
             client_config: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,
@@ -355,11 +352,8 @@ impl GatewayTest {
             node_pub_key,
         };
 
-        let client = Arc::new(GatewayClient::new(
-            gw_cfg,
-            database.clone(),
-            Default::default(),
-        ));
+        // Create federation client builder for the gateway
+        let client_builder: GatewayClientBuilder = MemoryDbGatewayClientBuilder {}.into();
 
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let adapter = Arc::new(ln_client_adapter);
@@ -367,10 +361,28 @@ impl GatewayTest {
 
         let gw_cfg = GatewayConfig {
             password: "abc".into(),
-            default_federation: FederationId(client.config().client_config.federation_name.clone()),
+            default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };
 
         let mut gateway = LnGateway::new(gw_cfg, ln_client, sender, receiver, bind_addr);
+
+        let client = Arc::new(
+            client_builder
+                .build(gw_client_cfg)
+                .expect("Could not build gateway client"),
+        );
+
+        // The UserTest returned as part of GatewayTest
+        // needs to share a database with the gateway client built above
+
+        // WIP: BLOCKING: Adapt the gateway client into user_client for creating UserTest instance
+        let user_cfg = UserClientConfig(client_config.clone());
+        let database: Database = MemDatabase::new().into();
+        let user_client = UserClient::new(user_cfg.clone(), database.clone(), Default::default());
+        let user = UserTest {
+            client: user_client,
+            config: user_cfg,
+        };
 
         let actor = gateway
             .register_federation(client.clone())
