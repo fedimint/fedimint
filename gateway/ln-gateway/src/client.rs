@@ -4,7 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use fedimint_api::{db::Database, dyn_newtype_define};
+use fedimint_api::{
+    db::{mem_impl::MemDatabase, Database},
+    dyn_newtype_define,
+};
 use mint_client::{Client, FederationId, GatewayClientConfig};
 use tracing::debug;
 
@@ -78,5 +81,30 @@ impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
         }
 
         Ok(())
+    }
+}
+
+// Builds a new federation client with MemoryDb
+#[derive(Default, Debug, Clone)]
+pub struct MemoryDbGatewayClientBuilder {}
+
+impl IGatewayClientBuilder for MemoryDbGatewayClientBuilder {
+    fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
+        let federation_id = FederationId(config.client_config.federation_name.clone());
+
+        let db = self.create_database(federation_id)?;
+        let ctx = secp256k1::Secp256k1::new();
+
+        Ok(Client::new(config, db, ctx))
+    }
+
+    /// Create a client database
+    fn create_database(&self, _federation_id: FederationId) -> Result<Database> {
+        Ok(MemDatabase::new().into())
+    }
+
+    /// Persist gateway federation client cfg
+    fn save_config(&self, _config: GatewayClientConfig) -> Result<()> {
+        unimplemented!()
     }
 }
