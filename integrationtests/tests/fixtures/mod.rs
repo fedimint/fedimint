@@ -354,18 +354,20 @@ impl GatewayTest {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             node_pub_key,
         };
+
         let client = Arc::new(GatewayClient::new(
             gw_cfg,
             database.clone(),
             Default::default(),
         ));
+
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let adapter = Arc::new(ln_client_adapter);
         let ln_client = Arc::clone(&adapter);
 
         let gw_cfg = GatewayConfig {
             password: "abc".into(),
-            default_federation: FederationId(client.config().client_config.federation_name),
+            default_federation: FederationId(client.config().client_config.federation_name.clone()),
         };
 
         let mut gateway = LnGateway::new(gw_cfg, ln_client, sender, receiver, bind_addr);
