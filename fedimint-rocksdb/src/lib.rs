@@ -58,7 +58,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     }
 
     fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(self.0.get(key)?)
+        Ok(self.0.snapshot().get(key)?)
     }
 
     fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -69,17 +69,21 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let prefix = key_prefix.to_vec();
+        let mut options = rocksdb::ReadOptions::default();
+        options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+        let iter = self.0.snapshot().iterator_opt(
+            rocksdb::IteratorMode::From(&prefix.clone(), rocksdb::Direction::Forward),
+            options,
+        );
         Box::new(
-            self.0
-                .prefix_iterator(prefix.clone())
-                .map_while(move |res| {
-                    let (key_bytes, value_bytes) = res.expect("DB error");
-                    key_bytes
-                        .starts_with(&prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map(Ok),
+            iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("DB error");
+                key_bytes
+                    .starts_with(&prefix)
+                    .then_some((key_bytes, value_bytes))
+            })
+            .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+            .map(Ok),
         )
     }
 
@@ -103,17 +107,127 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
 }
 
 #[cfg(test)]
-mod tests {
+mod fedimint_rocksdb_tests {
     use crate::RocksDb;
 
     #[test_log::test]
-    fn test_basic_dbtx_rw() {
+    fn test_dbtx_insert_elements() {
         let path = tempfile::Builder::new()
-            .prefix("fcb-rocksdb-test")
+            .prefix("fcb-rocksdb-test-insert-elements")
             .tempdir()
             .unwrap();
 
         let db = RocksDb::open(path).unwrap();
-        fedimint_api::db::test_dbtx_impl(db.into());
+        fedimint_api::db::verify_insert_elements(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_remove_nonexisting() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-remove-nonexisting")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_remove_nonexisting(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_remove_existing() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-remove-existing")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_remove_nonexisting(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_read_own_writes() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-read-own-writes")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_read_own_writes(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_prevent_dirty_reads() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-prevent-dirty-reads")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_prevent_dirty_reads(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_find_by_prefix() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-find-by-prefix")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_find_by_prefix(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_commit() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-commit")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_commit(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_prevent_nonrepeatable_reads() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-prevent-nonrepeatable-reads")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_rollback_to_savepoint() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-rollback-to-savepoint")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_rollback_to_savepoint(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_phantom_entry() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-phantom-entry")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::verify_phantom_entry(db.into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_write_conflict() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-write-conflict")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+        fedimint_api::db::expect_write_conflict(db.into());
     }
 }

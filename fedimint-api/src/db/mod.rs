@@ -13,7 +13,7 @@ use crate::encoding::{Decodable, Encodable, ModuleRegistry};
 
 pub mod mem_impl;
 
-pub use tests::test_dbtx_impl;
+pub use tests::*;
 
 #[derive(Debug, Default)]
 pub struct DatabaseInsertOperation {
@@ -68,6 +68,33 @@ dyn_newtype_define! {
     pub Database(Arc<IDatabase>)
 }
 
+/// Fedimint requires that the database implementation implement Snapshot Isolation.
+/// Snapshot Isolation is a database isolation level that guarantees consistent reads
+/// from the time that the snapshot was created (at transaction creation time). Transactions
+/// with Snapshot Isolation level will only commit if there has been no write to the modified
+/// keys since the snapshot (i.e. write-write conflicts are prevented).
+///
+/// Specifically, Fedimint expects the database implementation to prevent the following
+/// anamolies:
+///
+/// Non-Readable Write: TX1 writes (K1, V1) at time t but cannot read (K1, V1) at time (t + i)
+///
+/// Dirty Read: TX1 is able to read TX2's uncommitted writes.
+///
+/// Non-Repeatable Read: TX1 reads (K1, V1) at time t and retrieves (K1, V2) at time (t + i) where
+/// V1 != V2.
+///
+/// Phantom Record: TX1 retrieves X number of records for a prefix at time t and retrieves Y number
+/// of records for the same prefix at time (t + i).
+///
+/// Lost Writes: TX1 writes (K1, V1) at the same time as TX2 writes (K1, V2). V2 overwrites V1 as the
+/// value for K1 (write-write conflict).
+///
+/// Table for anamolies that are prevented in each DB implementation:
+///          | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes
+/// MemoryDB |          X         |     X      |          X          |       X        |
+/// SledDB   |          X         |     X      |                     |                |
+/// RocksDB  |          X         |     X      |          X          |       X        |      X
 pub trait IDatabaseTransaction<'a>: 'a {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
@@ -81,8 +108,8 @@ pub trait IDatabaseTransaction<'a>: 'a {
 
     fn rollback_tx_to_savepoint(&mut self);
 
-    // Ideally, avoid using this in fedimint client code as not all database transaction
-    // implementations will support setting a savepoint during a transaction.
+    /// Ideally, avoid using this in fedimint client code as not all database transaction
+    /// implementations will support setting a savepoint during a transaction.
     fn set_tx_savepoint(&mut self);
 }
 
@@ -329,50 +356,79 @@ mod tests {
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
 
-    pub fn test_dbtx_impl(db: Database) {
+    pub fn verify_insert_elements(db: Database) {
+        let mut dbtx = db.begin_transaction();
+        assert!(dbtx
+            .insert_entry(&TestKey(1), &TestVal(2))
+            .unwrap()
+            .is_none());
+
+        assert!(dbtx
+            .insert_entry(&TestKey(2), &TestVal(3))
+            .unwrap()
+            .is_none());
+
+        dbtx.commit_tx().expect("DB Error");
+    }
+
+    pub fn verify_remove_nonexisting(db: Database) {
+        let mut dbtx = db.begin_transaction();
+        assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), None);
+        let removed = dbtx.remove_entry(&TestKey(1));
+        assert!(removed.is_ok());
+    }
+
+    pub fn verify_remove_existing(db: Database) {
         let mut dbtx = db.begin_transaction();
 
         assert!(dbtx
-            .insert_entry(&TestKey(42), &TestVal(1337))
-            .unwrap()
-            .is_none());
-        assert!(dbtx
-            .insert_entry(&TestKey(123), &TestVal(456))
+            .insert_entry(&TestKey(1), &TestVal(2))
             .unwrap()
             .is_none());
 
-        // Remove an element that doesn't exist still returns Ok
-        let removed = dbtx.remove_entry(&TestKey(41));
+        assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), Some(TestVal(2)));
+
+        let removed = dbtx.remove_entry(&TestKey(1));
         assert!(removed.is_ok());
+        assert_eq!(removed.unwrap(), Some(TestVal(2)));
+        assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), None);
+    }
 
-        // Verify that we can read our own writes before committing
-        assert_eq!(dbtx.get_value(&TestKey(42)).unwrap(), Some(TestVal(1337)));
-        assert_eq!(dbtx.get_value(&TestKey(123)).unwrap(), Some(TestVal(456)));
-        assert_eq!(dbtx.get_value(&TestKey(43)).unwrap(), None);
+    pub fn verify_read_own_writes(db: Database) {
+        let mut dbtx = db.begin_transaction();
 
-        // Verify that new transactions cannot read writes of other transactions
+        assert!(dbtx
+            .insert_entry(&TestKey(1), &TestVal(2))
+            .unwrap()
+            .is_none());
+
+        assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), Some(TestVal(2)));
+    }
+
+    pub fn verify_prevent_dirty_reads(db: Database) {
+        let mut dbtx = db.begin_transaction();
+
+        assert!(dbtx
+            .insert_entry(&TestKey(1), &TestVal(2))
+            .unwrap()
+            .is_none());
+
+        // dbtx2 should not be able to see uncommitted changes
         let dbtx2 = db.begin_transaction();
-        assert_eq!(dbtx2.get_value(&TestKey(42)).unwrap(), None);
-        assert_eq!(dbtx2.get_value(&TestKey(123)).unwrap(), None);
-        assert_eq!(dbtx2.get_value(&TestKey(43)).unwrap(), None);
+        assert_eq!(dbtx2.get_value(&TestKey(1)).unwrap(), None);
+    }
 
-        let removed = dbtx.remove_entry(&TestKey(42));
-        assert!(removed.is_ok());
-        assert_eq!(removed.unwrap(), Some(TestVal(1337)));
-        assert_eq!(dbtx.get_value(&TestKey(42)).unwrap(), None);
-
-        assert!(dbtx
-            .insert_entry(&TestKey(42), &TestVal(0))
-            .unwrap()
-            .is_none());
-        assert!(dbtx.get_value(&TestKey(42)).is_ok());
-
+    pub fn verify_find_by_prefix(db: Database) {
+        let mut dbtx = db.begin_transaction();
         assert!(dbtx.insert_entry(&TestKey(55), &TestVal(9999)).is_ok());
         assert!(dbtx.insert_entry(&TestKey(54), &TestVal(8888)).is_ok());
 
         assert!(dbtx.insert_entry(&AltTestKey(55), &TestVal(7777)).is_ok());
         assert!(dbtx.insert_entry(&AltTestKey(54), &TestVal(6666)).is_ok());
+        dbtx.commit_tx().expect("DB Error");
 
+        // Verify finding by prefix returns the correct set of key pairs
+        let dbtx = db.begin_transaction();
         let mut returned_keys = 0;
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix) {
@@ -385,7 +441,9 @@ mod tests {
                     assert!(res.unwrap().1.eq(&TestVal(8888)));
                     returned_keys += 1;
                 }
-                _ => {}
+                _ => {
+                    returned_keys += 1;
+                }
             }
         }
 
@@ -403,20 +461,30 @@ mod tests {
                     assert!(res.unwrap().1.eq(&TestVal(6666)));
                     returned_keys += 1;
                 }
-                _ => {}
+                _ => {
+                    returned_keys += 1;
+                }
             }
         }
 
         assert_eq!(returned_keys, expected_keys);
+    }
 
-        // Verify that other transactions can read committed transactions
+    pub fn verify_commit(db: Database) {
+        let mut dbtx = db.begin_transaction();
+
+        assert!(dbtx
+            .insert_entry(&TestKey(1), &TestVal(2))
+            .unwrap()
+            .is_none());
         dbtx.commit_tx().expect("DB Error");
-        let dbtx3 = db.begin_transaction();
-        assert_eq!(dbtx3.get_value(&TestKey(42)).unwrap(), Some(TestVal(0)));
-        assert_eq!(dbtx3.get_value(&TestKey(55)).unwrap(), Some(TestVal(9999)));
-        assert_eq!(dbtx3.get_value(&TestKey(54)).unwrap(), Some(TestVal(8888)));
 
-        // Verify that setting a savepoint and rolling back a transaction erases a write
+        // Verify dbtx2 can see committed transactions
+        let dbtx2 = db.begin_transaction();
+        assert_eq!(dbtx2.get_value(&TestKey(1)).unwrap(), Some(TestVal(2)));
+    }
+
+    pub fn verify_rollback_to_savepoint(db: Database) {
         let mut dbtx_rollback = db.begin_transaction();
 
         assert!(dbtx_rollback
@@ -446,5 +514,110 @@ mod tests {
         );
 
         assert_eq!(dbtx_rollback.get_value(&TestKey(21)).unwrap(), None);
+    }
+
+    pub fn verify_prevent_nonrepeatable_reads(db: Database) {
+        let dbtx = db.begin_transaction();
+        assert_eq!(dbtx.get_value(&TestKey(100)).unwrap(), None);
+
+        let mut dbtx2 = db.begin_transaction();
+
+        assert!(dbtx2.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
+
+        assert_eq!(dbtx.get_value(&TestKey(100)).unwrap(), None);
+
+        dbtx2.commit_tx().expect("DB Error");
+
+        // dbtx should still read None because it is operating over a snapshot
+        // of the data when the transaction started
+        assert_eq!(dbtx.get_value(&TestKey(100)).unwrap(), None);
+
+        let mut returned_keys = 0;
+        let expected_keys = 0;
+        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix) {
+            match res.as_ref().unwrap().0 {
+                TestKey(100) => {
+                    assert!(res.unwrap().1.eq(&TestVal(101)));
+                    returned_keys += 1;
+                }
+                _ => {
+                    returned_keys += 1;
+                }
+            }
+        }
+
+        assert_eq!(returned_keys, expected_keys);
+    }
+
+    pub fn verify_phantom_entry(db: Database) {
+        let mut dbtx = db.begin_transaction();
+
+        assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
+
+        assert!(dbtx.insert_entry(&TestKey(101), &TestVal(102)).is_ok());
+
+        dbtx.commit_tx().expect("DB Error");
+
+        let dbtx = db.begin_transaction();
+        let mut returned_keys = 0;
+        let expected_keys = 2;
+        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix) {
+            match res.as_ref().unwrap().0 {
+                TestKey(100) => {
+                    assert!(res.unwrap().1.eq(&TestVal(101)));
+                    returned_keys += 1;
+                }
+                TestKey(101) => {
+                    assert!(res.unwrap().1.eq(&TestVal(102)));
+                    returned_keys += 1;
+                }
+                _ => {
+                    returned_keys += 1;
+                }
+            }
+        }
+
+        assert_eq!(returned_keys, expected_keys);
+
+        let mut dbtx2 = db.begin_transaction();
+
+        assert!(dbtx2.insert_entry(&TestKey(102), &TestVal(103)).is_ok());
+
+        dbtx2.commit_tx().expect("DB Error");
+
+        let mut returned_keys = 0;
+        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix) {
+            match res.as_ref().unwrap().0 {
+                TestKey(100) => {
+                    assert!(res.unwrap().1.eq(&TestVal(101)));
+                    returned_keys += 1;
+                }
+                TestKey(101) => {
+                    assert!(res.unwrap().1.eq(&TestVal(102)));
+                    returned_keys += 1;
+                }
+                _ => {
+                    returned_keys += 1;
+                }
+            }
+        }
+
+        assert_eq!(returned_keys, expected_keys);
+    }
+
+    pub fn expect_write_conflict(db: Database) {
+        let mut dbtx = db.begin_transaction();
+        assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
+        dbtx.commit_tx().expect("DB Error");
+
+        let mut dbtx2 = db.begin_transaction();
+        let mut dbtx3 = db.begin_transaction();
+
+        assert!(dbtx2.insert_entry(&TestKey(100), &TestVal(102)).is_ok());
+
+        assert!(dbtx3.insert_entry(&TestKey(100), &TestVal(103)).is_ok());
+
+        dbtx2.commit_tx().expect("DB Error");
+        dbtx3.commit_tx().expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
     }
 }
