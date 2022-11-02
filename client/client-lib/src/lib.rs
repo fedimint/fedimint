@@ -1,6 +1,7 @@
 pub mod api;
 mod db;
 pub mod ln;
+pub mod mcsm;
 pub mod mint;
 pub mod query;
 pub mod secrets;
@@ -128,6 +129,7 @@ pub struct GatewayClientConfig {
 #[async_trait]
 pub trait ModuleClient {
     type Module: FederationModule;
+    type OperationStates;
 
     /// Returns the amount represented by the input and the fee its processing requires
     fn input_amount(

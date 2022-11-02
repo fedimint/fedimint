@@ -26,6 +26,7 @@ pub struct WalletClient<'c> {
 
 impl<'a> ModuleClient for WalletClient<'a> {
     type Module = Wallet;
+    type OperationStates = ();
 
     fn input_amount(
         &self,

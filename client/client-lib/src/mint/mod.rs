@@ -70,6 +70,7 @@ pub struct SpendableNote {
 
 impl<'a> ModuleClient for MintClient<'a> {
     type Module = Mint;
+    type OperationStates = ();
 
     fn input_amount(
         &self,

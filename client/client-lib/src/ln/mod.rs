@@ -41,6 +41,7 @@ pub struct LnClient<'c> {
 
 impl<'a> ModuleClient for LnClient<'a> {
     type Module = LightningModule;
+    type OperationStates = ();
 
     fn input_amount(
         &self,
