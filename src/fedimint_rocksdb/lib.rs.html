@@ -117,6 +117,83 @@
 <span id="117">117</span>
 <span id="118">118</span>
 <span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
@@ -177,7 +254,7 @@
     }
 
     <span class="kw">fn </span>raw_get_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.get(key)<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.snapshot().get(key)<span class="question-mark">?</span>)
     }
 
     <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
@@ -188,17 +265,21 @@
 
     <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span>prefix = key_prefix.to_vec();
+        <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
+        options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+        <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(
+            rocksdb::IteratorMode::From(<span class="kw-2">&amp;</span>prefix, rocksdb::Direction::Forward),
+            options,
+        );
         Box::new(
-            <span class="self">self</span>.<span class="number">0
-                </span>.prefix_iterator(prefix.clone())
-                .map_while(<span class="kw">move </span>|res| {
-                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                    key_bytes
-                        .starts_with(<span class="kw-2">&amp;</span>prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map(<span class="prelude-val">Ok</span>),
+            iter.map_while(<span class="kw">move </span>|res| {
+                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                key_bytes
+                    .starts_with(<span class="kw-2">&amp;</span>prefix)
+                    .then_some((key_bytes, value_bytes))
+            })
+            .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+            .map(<span class="prelude-val">Ok</span>),
         )
     }
 
@@ -222,18 +303,91 @@
 }
 
 <span class="attr">#[cfg(test)]
-</span><span class="kw">mod </span>tests {
+</span><span class="kw">mod </span>fedimint_rocksdb_tests {
     <span class="kw">use </span><span class="kw">crate</span>::RocksDb;
 
-    <span class="attr">#[test_log::test]
-    </span><span class="kw">fn </span>test_basic_dbtx_rw() {
+    <span class="kw">fn </span>open_temp_db(temp_path: <span class="kw-2">&amp;</span>str) -&gt; RocksDb {
         <span class="kw">let </span>path = tempfile::Builder::new()
-            .prefix(<span class="string">&quot;fcb-rocksdb-test&quot;</span>)
+            .prefix(temp_path)
             .tempdir()
             .unwrap();
 
-        <span class="kw">let </span>db = RocksDb::open(path).unwrap();
-        fedimint_api::db::test_dbtx_impl(db.into());
+        RocksDb::open(path).unwrap()
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_insert_elements() {
+        fedimint_api::db::verify_insert_elements(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-insert-elements&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_remove_nonexisting() {
+        fedimint_api::db::verify_remove_nonexisting(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-remove-nonexisting&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_remove_existing() {
+        fedimint_api::db::verify_remove_existing(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-remove-existing&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_read_own_writes() {
+        fedimint_api::db::verify_read_own_writes(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-read-own-writes&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_prevent_dirty_reads() {
+        fedimint_api::db::verify_prevent_dirty_reads(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-prevent-dirty-reads&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_find_by_prefix() {
+        fedimint_api::db::verify_find_by_prefix(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-find-by-prefix&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_commit() {
+        fedimint_api::db::verify_commit(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-commit&quot;</span>).into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_prevent_nonrepeatable_reads() {
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-prevent-nonrepeatable-reads&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_rollback_to_savepoint() {
+        fedimint_api::db::verify_rollback_to_savepoint(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-rollback-to-savepoint&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_phantom_entry() {
+        fedimint_api::db::verify_phantom_entry(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-phantom-entry&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_write_conflict() {
+        fedimint_api::db::expect_write_conflict(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-write-conflict&quot;</span>).into(),
+        );
     }
 }
 </code></pre></div>

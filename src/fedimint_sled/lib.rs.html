@@ -205,6 +205,58 @@
 <span id="205">205</span>
 <span id="206">206</span>
 <span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
@@ -399,17 +451,69 @@
 }
 
 <span class="attr">#[cfg(test)]
-</span><span class="kw">mod </span>tests {
+</span><span class="kw">mod </span>fedimint_sled_tests {
     <span class="kw">use </span><span class="kw">crate</span>::SledDb;
 
-    <span class="attr">#[test_log::test]
-    </span><span class="kw">fn </span>test_basic_dbtx_rw() {
+    <span class="kw">fn </span>open_temp_db(temp_path: <span class="kw-2">&amp;</span>str) -&gt; SledDb {
         <span class="kw">let </span>path = tempfile::Builder::new()
-            .prefix(<span class="string">&quot;fcb-sled-test&quot;</span>)
+            .prefix(temp_path)
             .tempdir()
             .unwrap();
-        <span class="kw">let </span>db = SledDb::open(path, <span class="string">&quot;default&quot;</span>).unwrap();
-        fedimint_api::db::test_dbtx_impl(db.into());
+        SledDb::open(path, <span class="string">&quot;default&quot;</span>).unwrap()
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_insert_elements() {
+        fedimint_api::db::verify_insert_elements(
+            open_temp_db(<span class="string">&quot;fcb-sled-test-insert-elements&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_remove_nonexisting() {
+        fedimint_api::db::verify_remove_nonexisting(
+            open_temp_db(<span class="string">&quot;fcb-sled-test-remove-nonexisting&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_remove_existing() {
+        fedimint_api::db::verify_remove_existing(
+            open_temp_db(<span class="string">&quot;fcb-sled-test-remove-existing&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_read_own_writes() {
+        fedimint_api::db::verify_read_own_writes(
+            open_temp_db(<span class="string">&quot;fcb-sled-test-read-own-writes&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_prevent_dirty_reads() {
+        fedimint_api::db::verify_prevent_dirty_reads(
+            open_temp_db(<span class="string">&quot;fcb-sled-test-prevent-dirty-reads&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_find_by_prefix() {
+        fedimint_api::db::verify_find_by_prefix(
+            open_temp_db(<span class="string">&quot;fcb-sled-test-find-by-prefix&quot;</span>).into(),
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_commit() {
+        fedimint_api::db::verify_commit(open_temp_db(<span class="string">&quot;fcb-sled-test-commit&quot;</span>).into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_rollback_to_savepoint() {
+        fedimint_api::db::verify_rollback_to_savepoint(
+            open_temp_db(<span class="string">&quot;fcb-sled-test-rollback-to-savepoint&quot;</span>).into(),
+        );
     }
 }
 </code></pre></div>

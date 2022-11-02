@@ -159,6 +159,50 @@
 <span id="159">159</span>
 <span id="160">160</span>
 <span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
@@ -315,9 +359,53 @@
     <span class="kw">use </span><span class="kw">super</span>::MemDatabase;
 
     <span class="attr">#[test_log::test]
-    </span><span class="kw">fn </span>test_basic_dbtx_rw() {
-        <span class="kw">let </span>mem_db = MemDatabase::new();
-        <span class="kw">crate</span>::db::tests::test_dbtx_impl(mem_db.into());
+    </span><span class="kw">fn </span>test_dbtx_insert_elements() {
+        fedimint_api::db::verify_insert_elements(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_remove_nonexisting() {
+        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_remove_existing() {
+        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_read_own_writes() {
+        fedimint_api::db::verify_read_own_writes(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_prevent_dirty_reads() {
+        fedimint_api::db::verify_prevent_dirty_reads(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_find_by_prefix() {
+        fedimint_api::db::verify_find_by_prefix(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_commit() {
+        fedimint_api::db::verify_commit(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_prevent_nonrepeatable_reads() {
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_rollback_to_savepoint() {
+        fedimint_api::db::verify_rollback_to_savepoint(MemDatabase::new().into());
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_dbtx_phantom_entry() {
+        fedimint_api::db::verify_phantom_entry(MemDatabase::new().into());
     }
 }
 </code></pre></div>
