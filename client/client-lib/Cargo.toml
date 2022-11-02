@@ -22,8 +22,8 @@ bitcoin_hashes = "0.11.0"
 futures = "0.3.24"
 hex = "0.4.3"
 hkdf = { path = "../../crypto/hkdf" }
-lightning-invoice = "0.19.0"
-lightning = "0.0.111"
+lightning-invoice = "0.20.0"
+lightning = "0.0.112"
 miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-api = { path = "../../fedimint-api" }
