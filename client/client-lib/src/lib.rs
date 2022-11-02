@@ -357,11 +357,11 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
-    pub fn receive_coins(
-        &self,
-        amount: Amount,
-        create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
-    ) {
+    pub async fn receive_coins<F, Fut>(&self, amount: Amount, create_tx: F)
+    where
+        F: FnMut(TieredMulti<BlindNonce>) -> Fut,
+        Fut: futures::Future<Output = OutPoint>,
+    {
         let mut dbtx = self.context.db.begin_transaction();
         self.mint_client().receive_coins(
             amount,
@@ -369,7 +369,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             |tx| self.mint_client().new_ecash_note(&self.context.secp, tx),
             create_tx,
         );
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn new_peg_out_with_fees(
@@ -419,10 +419,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// - this function will write to the clients DB
     ///
     /// read more on fedimints address derivation: <https://fedimint.org/Fedimint/wallet/>
-    pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, rng: R) -> Address {
+    pub async fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, rng: R) -> Address {
         let mut dbtx = self.context.db.begin_transaction();
         let address = self.wallet_client().get_new_pegin_address(&mut dbtx, rng);
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
         address
     }
 
@@ -471,7 +471,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             })
             .expect("DB Error");
         });
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         Ok(final_coins)
     }
@@ -482,7 +482,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub async fn fetch_coins<'a>(&self, outpoint: OutPoint) -> Result<()> {
         let mut dbtx = self.context.db.begin_transaction();
         self.mint_client().fetch_coins(&mut dbtx, outpoint).await?;
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
         Ok(())
     }
 
@@ -513,7 +513,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             all_coins.extend(coins);
             dbtx.remove_entry(&key).expect("DB Error");
         }
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         self.reissue(all_coins, rng).await
     }
@@ -614,7 +614,7 @@ impl Client<UserClientConfig> {
         let mut dbtx = self.context.db.begin_transaction();
         dbtx.insert_entry(&LightningGatewayKey, &gateway)
             .expect("DB error");
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
         Ok(gateway)
     }
 
@@ -638,7 +638,7 @@ impl Client<UserClientConfig> {
             &mut rng,
         )?;
 
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         let (contract_id, amount) = match &contract {
             ContractOrOfferOutput::Contract(c) => {
@@ -692,7 +692,7 @@ impl Client<UserClientConfig> {
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
             .expect("DB error")
             .ok_or(ClientError::DeleteUnknownOutgoingContract)?;
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         Ok(OutPoint { txid, out_idx: 0 })
     }
@@ -787,7 +787,7 @@ impl Client<UserClientConfig> {
             invoice,
             keypair: payment_keypair,
         };
-        self.ln_client().save_confirmed_invoice(&confirmed);
+        self.ln_client().save_confirmed_invoice(&confirmed).await;
 
         Ok(confirmed)
     }
@@ -928,14 +928,14 @@ impl Client<GatewayClientConfig> {
     ///
     /// Note though that extended periods of staying offline will result in loss of funds anyway if
     /// the client can not claim the respective contract in time.
-    pub fn save_outgoing_payment(&self, contract: OutgoingContractAccount) {
+    pub async fn save_outgoing_payment(&self, contract: OutgoingContractAccount) {
         let mut dbtx = self.context.db.begin_transaction();
         dbtx.insert_entry(
             &OutgoingContractAccountKey(contract.contract.contract_id()),
             &contract,
         )
         .expect("DB error");
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     /// Lists all previously saved transactions that have not been driven to completion so far
@@ -955,7 +955,7 @@ impl Client<GatewayClientConfig> {
             .remove_entry(&OutgoingContractAccountKey(contract_id))
             .expect("DB error")
             .ok_or(ClientError::CancelUnknownOutgoingContract)?;
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         let cancel_signature = self.context.secp.sign_schnorr(
             &contract_account.contract.cancellation_message().into(),
@@ -998,7 +998,7 @@ impl Client<GatewayClientConfig> {
             .expect("DB Error");
         dbtx.insert_entry(&OutgoingPaymentClaimKey(contract_id), &())
             .expect("DB Error");
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         tx.input(&mut vec![self.config.redeem_key], input);
         let txid = self.submit_tx_with_change(tx, rng).await?;
@@ -1118,7 +1118,7 @@ impl Client<GatewayClientConfig> {
         let mut dbtx = self.context.db.begin_transaction();
         dbtx.remove_entry(&OutgoingPaymentClaimKey(contract_id))
             .expect("DB error");
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
         Ok(())
     }
 

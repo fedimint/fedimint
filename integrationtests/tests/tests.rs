@@ -16,8 +16,7 @@ use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::Output;
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
-use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
-use futures::executor::block_on;
+use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::future::{join_all, Either};
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
@@ -39,7 +38,7 @@ async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {
         ..
     } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
 
-    let peg_in_address = user.client.get_new_pegin_address(rng());
+    let peg_in_address = user.client.get_new_pegin_address(rng()).await;
     let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(peg_in_amount));
     bitcoin.mine_blocks(fed.wallet.finality_delay as u64);
     fed.run_consensus_epochs(1).await;
@@ -265,8 +264,13 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     );
 
     user_receive.client.receive_coins(sats(400), |coins| {
-        block_on(user_send.client.pay_to_blind_nonces(coins, rng())).unwrap()
+        user_send
+            .client
+            .pay_to_blind_nonces(coins, rng())
+            .await
+            .unwrap()
     });
+
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
     user_receive
@@ -397,8 +401,9 @@ async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
         task_group,
         ..
     } = fixtures(4, &[sats(100), sats(1000)]).await?;
-    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000));
-    fed.database_add_coins_for_user(&user, sats(2000));
+    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
+        .await;
+    fed.database_add_coins_for_user(&user, sats(2000)).await;
 
     fed.subset_peers(&[3]).override_proposal(vec![]);
     drop_peer_3_during_epoch(&fed).await.unwrap();
@@ -418,8 +423,9 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
         task_group,
         ..
     } = fixtures(4, &[sats(100), sats(1000)]).await?;
-    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000));
-    let out_point = fed.database_add_coins_for_user(&user, sats(2000));
+    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
+        .await;
+    let out_point = fed.database_add_coins_for_user(&user, sats(2000)).await;
     let bad_proposal = vec![ConsensusItem::Mint(PartiallySignedRequest {
         out_point,
         partial_signature: PartialSigResponse(TieredMulti::default()),
@@ -908,14 +914,17 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()
         .unwrap();
     fed.run_consensus_epochs(1).await; // send coins to LN contract
 
-    gateway.client.save_outgoing_payment(
-        gateway
-            .client
-            .ln_client()
-            .get_outgoing_contract(contract_id)
-            .await
-            .unwrap(),
-    );
+    gateway
+        .client
+        .save_outgoing_payment(
+            gateway
+                .client
+                .ln_client()
+                .get_outgoing_contract(contract_id)
+                .await
+                .unwrap(),
+        )
+        .await;
 
     // Gateway fails to acquire preimage, so it cancels the contract so the user can try another one
     gateway
@@ -983,7 +992,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
         task_group,
         ..
     } = fixtures(2, &[sats(100), sats(1000)]).await?;
-    let peg_in_address = user.client.get_new_pegin_address(rng());
+    let peg_in_address = user.client.get_new_pegin_address(rng()).await;
     bitcoin.mine_blocks(100);
     let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(1000));
     fed.run_consensus_epochs(1).await;

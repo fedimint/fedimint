@@ -201,15 +201,17 @@ impl FedimintConsensus {
 
         funding_verifier.verify_funding()?;
 
-        let mut dbtx = self.db.begin_transaction();
-        let new = dbtx
-            .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
-            .expect("DB error");
-        dbtx.commit_tx().expect("DB Error");
+        futures::executor::block_on(async {
+            let mut dbtx = self.db.begin_transaction();
+            let new = dbtx
+                .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
+                .expect("DB error");
+            dbtx.commit_tx().await.expect("DB Error");
 
-        if new.is_some() {
-            warn!("Added consensus item was already in consensus queue");
-        }
+            if new.is_some() {
+                warn!("Added consensus item was already in consensus queue");
+            }
+        });
 
         self.transaction_notify.notify_one();
         Ok(())
@@ -243,7 +245,7 @@ impl FedimintConsensus {
                 .await;
             self.mint.begin_consensus_epoch(&mut dbtx, mint_cis).await;
             self.ln.begin_consensus_epoch(&mut dbtx, ln_cis).await;
-            dbtx.commit_tx().expect("DB Error");
+            dbtx.commit_tx().await.expect("DB Error");
         }
 
         // Process transactions
@@ -302,7 +304,7 @@ impl FedimintConsensus {
                     }
                 });
             }
-            dbtx.commit_tx().expect("DB Error");
+            dbtx.commit_tx().await.expect("DB Error");
         }
 
         // End consensus epoch
@@ -330,7 +332,7 @@ impl FedimintConsensus {
                     .expect("DB Error");
             }
 
-            dbtx.commit_tx().expect("DB Error");
+            dbtx.commit_tx().await.expect("DB Error");
         }
 
         let audit = self.audit();

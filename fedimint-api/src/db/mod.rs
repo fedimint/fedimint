@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use thiserror::Error;
 use tracing::{trace, warn};
 
@@ -95,7 +96,9 @@ dyn_newtype_define! {
 /// | MemoryDB | Prevented          | Prevented  | Prevented           | Prevented      | Possible    |
 /// | SledDB   | Prevented          | Prevented  | Possible            | Possible       | Possible    |
 /// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
-pub trait IDatabaseTransaction<'a>: 'a {
+#[async_trait(?Send)]
+pub trait IDatabaseTransaction<'a>: 'a + Send {
+>>>>>>> 5c08a23fe (Rebase onto master)
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
     fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
@@ -104,7 +107,7 @@ pub trait IDatabaseTransaction<'a>: 'a {
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
 
-    fn commit_tx(self: Box<Self>) -> Result<()>;
+    async fn commit_tx(self: Box<Self>) -> Result<()>;
 
     fn rollback_tx_to_savepoint(&mut self);
 
@@ -123,8 +126,8 @@ dyn_newtype_define! {
 }
 
 impl<'a> DatabaseTransaction<'a> {
-    pub fn commit_tx(self) -> Result<()> {
-        self.0.commit_tx()
+    pub async fn commit_tx(self) -> Result<()> {
+        self.0.commit_tx().await
     }
 }
 
@@ -360,7 +363,7 @@ mod tests {
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
 
-    pub fn verify_insert_elements(db: Database) {
+    pub async fn verify_insert_elements(db: Database) {
         let mut dbtx = db.begin_transaction();
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -372,7 +375,7 @@ mod tests {
             .unwrap()
             .is_none());
 
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub fn verify_remove_nonexisting(db: Database) {
@@ -422,14 +425,14 @@ mod tests {
         assert_eq!(dbtx2.get_value(&TestKey(1)).unwrap(), None);
     }
 
-    pub fn verify_find_by_prefix(db: Database) {
+    pub async fn verify_find_by_prefix(db: Database) {
         let mut dbtx = db.begin_transaction();
         assert!(dbtx.insert_entry(&TestKey(55), &TestVal(9999)).is_ok());
         assert!(dbtx.insert_entry(&TestKey(54), &TestVal(8888)).is_ok());
 
         assert!(dbtx.insert_entry(&AltTestKey(55), &TestVal(7777)).is_ok());
         assert!(dbtx.insert_entry(&AltTestKey(54), &TestVal(6666)).is_ok());
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         // Verify finding by prefix returns the correct set of key pairs
         let dbtx = db.begin_transaction();
@@ -474,14 +477,14 @@ mod tests {
         assert_eq!(returned_keys, expected_keys);
     }
 
-    pub fn verify_commit(db: Database) {
+    pub async fn verify_commit(db: Database) {
         let mut dbtx = db.begin_transaction();
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
             .unwrap()
             .is_none());
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         // Verify dbtx2 can see committed transactions
         let dbtx2 = db.begin_transaction();
@@ -520,7 +523,7 @@ mod tests {
         assert_eq!(dbtx_rollback.get_value(&TestKey(21)).unwrap(), None);
     }
 
-    pub fn verify_prevent_nonrepeatable_reads(db: Database) {
+    pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
         let dbtx = db.begin_transaction();
         assert_eq!(dbtx.get_value(&TestKey(100)).unwrap(), None);
 
@@ -530,7 +533,7 @@ mod tests {
 
         assert_eq!(dbtx.get_value(&TestKey(100)).unwrap(), None);
 
-        dbtx2.commit_tx().expect("DB Error");
+        dbtx2.commit_tx().await.expect("DB Error");
 
         // dbtx should still read None because it is operating over a snapshot
         // of the data when the transaction started
@@ -553,14 +556,14 @@ mod tests {
         assert_eq!(returned_keys, expected_keys);
     }
 
-    pub fn verify_phantom_entry(db: Database) {
+    pub async fn verify_phantom_entry(db: Database) {
         let mut dbtx = db.begin_transaction();
 
         assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
 
         assert!(dbtx.insert_entry(&TestKey(101), &TestVal(102)).is_ok());
 
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         let dbtx = db.begin_transaction();
         let mut returned_keys = 0;
@@ -587,7 +590,7 @@ mod tests {
 
         assert!(dbtx2.insert_entry(&TestKey(102), &TestVal(103)).is_ok());
 
-        dbtx2.commit_tx().expect("DB Error");
+        dbtx2.commit_tx().await.expect("DB Error");
 
         let mut returned_keys = 0;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix) {
@@ -609,10 +612,10 @@ mod tests {
         assert_eq!(returned_keys, expected_keys);
     }
 
-    pub fn expect_write_conflict(db: Database) {
+    pub async fn expect_write_conflict(db: Database) {
         let mut dbtx = db.begin_transaction();
         assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         let mut dbtx2 = db.begin_transaction();
         let mut dbtx3 = db.begin_transaction();
@@ -621,7 +624,7 @@ mod tests {
 
         assert!(dbtx3.insert_entry(&TestKey(100), &TestVal(103)).is_ok());
 
-        dbtx2.commit_tx().expect("DB Error");
-        dbtx3.commit_tx().expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
+        dbtx2.commit_tx().await.expect("DB Error");
+        dbtx3.commit_tx().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
     }
 }

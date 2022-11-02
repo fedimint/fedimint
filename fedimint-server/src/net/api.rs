@@ -193,9 +193,7 @@ fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus>] {
                 let transaction: Transaction = serde_json::from_str(&string).map_err(|e| ApiError::bad_request(e.to_string()))?;
                 let tx_id = transaction.tx_hash();
 
-                fedimint
-                    .submit_transaction(transaction)
-                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                fedimint.submit_transaction(transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 Ok(tx_id)
             }

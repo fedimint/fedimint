@@ -679,7 +679,9 @@ impl FederationModule for LightningModule {
             api_endpoint! {
                 "/register_gateway",
                 async |module: &LightningModule, gateway: LightningGateway| -> () {
-                    module.register_gateway(gateway);
+                    futures::executor::block_on( async {
+                       module.register_gateway(gateway).await;
+                    });
                     Ok(())
                 }
             },
@@ -738,11 +740,11 @@ impl LightningModule {
             .collect()
     }
 
-    pub fn register_gateway(&self, gateway: LightningGateway) {
+    pub async fn register_gateway(&self, gateway: LightningGateway) {
         let mut dbtx = self.db.begin_transaction();
         dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
             .expect("DB error");
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
     }
 }
 

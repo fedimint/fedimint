@@ -524,6 +524,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-rocksdb",
+ "futures",
  "mint-client",
  "rand",
  "reqwest",
@@ -951,6 +952,7 @@ dependencies = [
  "bincode",
  "counter",
  "fedimint-api",
+ "futures",
  "itertools",
  "rand",
  "rayon",
@@ -996,10 +998,12 @@ name = "fedimint-rocksdb"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fedimint-api",
  "rocksdb",
  "tempfile",
  "test-log",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1046,10 +1050,12 @@ name = "fedimint-sled"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fedimint-api",
  "sled",
  "tempfile",
  "test-log",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1062,6 +1068,7 @@ dependencies = [
  "bitcoin",
  "fedimint-api",
  "fedimint-bitcoind",
+ "futures",
  "rand",
  "secp256k1-zkp",
  "serde_json",

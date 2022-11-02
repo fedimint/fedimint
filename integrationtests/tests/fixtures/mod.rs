@@ -595,7 +595,7 @@ impl FederationTest {
     ) {
         assert_eq!(amount.milli_sat % 1000, 0);
         let sats = bitcoin::Amount::from_sat(amount.milli_sat / 1000);
-        self.mine_spendable_utxo(user, bitcoin, sats);
+        self.mine_spendable_utxo(user, bitcoin, sats).await;
         self.mint_coins_for_user(user, amount).await;
     }
 
@@ -606,19 +606,19 @@ impl FederationTest {
         user: &UserTest<C>,
         amount: Amount,
     ) {
-        self.database_add_coins_for_user(user, amount);
+        self.database_add_coins_for_user(user, amount).await;
         self.run_consensus_epochs(1).await;
         user.client.fetch_all_coins().await;
     }
 
     /// Mines a UTXO owned by the federation.
-    pub fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone>(
+    pub async fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone>(
         &self,
         user: &UserTest<C>,
         bitcoin: &dyn BitcoinTest,
         amount: bitcoin::Amount,
     ) {
-        let address = user.client.get_new_pegin_address(rng());
+        let address = user.client.get_new_pegin_address(rng()).await;
         let (txout_proof, btc_transaction) = bitcoin.send_and_mine_block(&address, amount);
         let (_, input) = user
             .client
@@ -639,7 +639,7 @@ impl FederationTest {
             )
             .expect("DB Error");
 
-            dbtx.commit_tx().expect("DB Error");
+            dbtx.commit_tx().await.expect("DB Error");
         }
     }
 
@@ -663,7 +663,7 @@ impl FederationTest {
     }
 
     /// Inserts coins directly into the databases of federation nodes
-    pub fn database_add_coins_for_user<C: AsRef<ClientConfig> + Clone>(
+    pub async fn database_add_coins_for_user<C: AsRef<ClientConfig> + Clone>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
@@ -674,34 +674,36 @@ impl FederationTest {
             out_idx: 0,
         };
 
-        user.client.receive_coins(amount, |tokens| {
-            for server in &self.servers {
-                let svr = server.borrow_mut();
-                let mut dbtx = svr.database.begin_transaction();
-                let transaction = fedimint_server::transaction::Transaction {
-                    inputs: vec![],
-                    outputs: vec![Output::Mint(tokens.clone())],
-                    signature: None,
-                };
+        user.client
+            .receive_coins(amount, |tokens| async move {
+                for server in &self.servers {
+                    let svr = server.borrow_mut();
+                    let mut dbtx = svr.database.begin_transaction();
+                    let transaction = fedimint_server::transaction::Transaction {
+                        inputs: vec![],
+                        outputs: vec![Output::Mint(tokens.clone())],
+                        signature: None,
+                    };
 
-                dbtx.insert_entry(
-                    &fedimint_server::db::AcceptedTransactionKey(out_point.txid),
-                    &fedimint_server::consensus::AcceptedTransaction {
-                        epoch: 0,
-                        transaction,
-                    },
-                )
-                .expect("DB Error");
+                    dbtx.insert_entry(
+                        &fedimint_server::db::AcceptedTransactionKey(out_point.txid),
+                        &fedimint_server::consensus::AcceptedTransaction {
+                            epoch: 0,
+                            transaction,
+                        },
+                    )
+                    .expect("DB Error");
 
-                svr.fedimint
-                    .consensus
-                    .mint
-                    .apply_output(&mut dbtx, &tokens, out_point)
-                    .unwrap();
-                dbtx.commit_tx().expect("DB Error");
-            }
-            out_point
-        });
+                    svr.fedimint
+                        .consensus
+                        .mint
+                        .apply_output(&mut dbtx, &tokens, out_point)
+                        .unwrap();
+                    dbtx.commit_tx().await.expect("DB Error");
+                }
+                out_point
+            })
+            .await;
         out_point
     }
 
