@@ -261,11 +261,12 @@ impl LnGateway {
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
-            for fetch_result in self.federation_client.fetch_all_coins().await {
-                if let Err(e) = fetch_result {
-                    debug!(error = %e, "Fetching coins failed")
-                };
-            }
+
+            // Sync wallet for the default federation
+            // TODO: We should sync wallets for all the federation clients
+            self.select_actor(self.config.default_federation.clone())?
+                .fetch_all_coins()
+                .await;
 
             // Handle messages from webserver and plugin
             while let Ok(msg) = self.receiver.try_recv() {
