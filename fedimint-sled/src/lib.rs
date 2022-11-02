@@ -192,16 +192,68 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
 }
 
 #[cfg(test)]
-mod tests {
+mod fedimint_sled_tests {
     use crate::SledDb;
 
-    #[test_log::test]
-    fn test_basic_dbtx_rw() {
+    fn open_temp_db(temp_path: &str) -> SledDb {
         let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test")
+            .prefix(temp_path)
             .tempdir()
             .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::test_dbtx_impl(db.into());
+        SledDb::open(path, "default").unwrap()
+    }
+
+    #[test_log::test]
+    fn test_dbtx_insert_elements() {
+        fedimint_api::db::verify_insert_elements(
+            open_temp_db("fcb-sled-test-insert-elements").into(),
+        );
+    }
+
+    #[test_log::test]
+    fn test_dbtx_remove_nonexisting() {
+        fedimint_api::db::verify_remove_nonexisting(
+            open_temp_db("fcb-sled-test-remove-nonexisting").into(),
+        );
+    }
+
+    #[test_log::test]
+    fn test_dbtx_remove_existing() {
+        fedimint_api::db::verify_remove_existing(
+            open_temp_db("fcb-sled-test-remove-existing").into(),
+        );
+    }
+
+    #[test_log::test]
+    fn test_dbtx_read_own_writes() {
+        fedimint_api::db::verify_read_own_writes(
+            open_temp_db("fcb-sled-test-read-own-writes").into(),
+        );
+    }
+
+    #[test_log::test]
+    fn test_dbtx_prevent_dirty_reads() {
+        fedimint_api::db::verify_prevent_dirty_reads(
+            open_temp_db("fcb-sled-test-prevent-dirty-reads").into(),
+        );
+    }
+
+    #[test_log::test]
+    fn test_dbtx_find_by_prefix() {
+        fedimint_api::db::verify_find_by_prefix(
+            open_temp_db("fcb-sled-test-find-by-prefix").into(),
+        );
+    }
+
+    #[test_log::test]
+    fn test_dbtx_commit() {
+        fedimint_api::db::verify_commit(open_temp_db("fcb-sled-test-commit").into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_rollback_to_savepoint() {
+        fedimint_api::db::verify_rollback_to_savepoint(
+            open_temp_db("fcb-sled-test-rollback-to-savepoint").into(),
+        );
     }
 }

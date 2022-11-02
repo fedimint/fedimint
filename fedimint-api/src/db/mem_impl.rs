@@ -154,8 +154,52 @@ mod tests {
     use super::MemDatabase;
 
     #[test_log::test]
-    fn test_basic_dbtx_rw() {
-        let mem_db = MemDatabase::new();
-        crate::db::tests::test_dbtx_impl(mem_db.into());
+    fn test_dbtx_insert_elements() {
+        fedimint_api::db::verify_insert_elements(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_remove_nonexisting() {
+        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_remove_existing() {
+        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_read_own_writes() {
+        fedimint_api::db::verify_read_own_writes(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_prevent_dirty_reads() {
+        fedimint_api::db::verify_prevent_dirty_reads(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_find_by_prefix() {
+        fedimint_api::db::verify_find_by_prefix(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_commit() {
+        fedimint_api::db::verify_commit(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_prevent_nonrepeatable_reads() {
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_rollback_to_savepoint() {
+        fedimint_api::db::verify_rollback_to_savepoint(MemDatabase::new().into());
+    }
+
+    #[test_log::test]
+    fn test_dbtx_phantom_entry() {
+        fedimint_api::db::verify_phantom_entry(MemDatabase::new().into());
     }
 }
