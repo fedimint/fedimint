@@ -52,12 +52,11 @@ use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
-use ln_gateway::config::GatewayConfig;
-use ln_gateway::GatewayRequest;
-use ln_gateway::LnGateway;
-use mint_client::api::WsFederationApi;
-use mint_client::mint::SpendableNote;
-use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
+use ln_gateway::{actor::GatewayActor, config::GatewayConfig, GatewayRequest, LnGateway};
+use mint_client::{
+    api::WsFederationApi, mint::SpendableNote, GatewayClient, GatewayClientConfig, UserClient,
+    UserClientConfig,
+};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
@@ -313,7 +312,7 @@ pub trait LightningTest {
 }
 
 pub struct GatewayTest {
-    pub server: LnGateway,
+    pub actor: Arc<GatewayActor>,
     pub adapter: Arc<LnRpcAdapter>,
     pub keys: LightningGateway,
     pub user: UserTest,
@@ -363,7 +362,7 @@ impl GatewayTest {
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let adapter = Arc::new(ln_client_adapter);
         let ln_client = Arc::clone(&adapter);
-        let gateway = LnGateway::new(
+        let mut gateway = LnGateway::new(
             GatewayConfig {
                 password: "abc".into(),
             },
@@ -373,15 +372,15 @@ impl GatewayTest {
             receiver,
             bind_addr,
         );
-        // Normally, this client registration with the federation is automated as part of running the gateway
-        // In test cases, we want to register without running a gateway
-        client
-            .register_with_federation(client.config().into())
+
+        let actor = gateway
+            .register_federation(client.clone())
             .await
-            .expect("Failed to register client with federation");
+            .expect("Could not register federation");
+        // Note: We don't run the gateway in test scenarios
 
         GatewayTest {
-            server: gateway,
+            actor,
             adapter,
             keys,
             user,

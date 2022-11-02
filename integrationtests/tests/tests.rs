@@ -336,7 +336,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
 
     // Gateway buys offer, triggering preimage decryption
     let (_, contract_id) = gateway
-        .server
+        .actor
         .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
         .await
         .unwrap();
@@ -469,16 +469,21 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         .unwrap();
     debug!("Outgoing contract accepted");
 
-    let claim_outpoint = tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
-        // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
-        fed.await_consensus_epochs(4).await.unwrap();
-    })
+    let claim_outpoint = tokio::join!(
+        gateway
+            .actor
+            .pay_invoice(gateway.adapter.clone(), contract_id),
+        async {
+            // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
+            fed.await_consensus_epochs(4).await.unwrap();
+        }
+    )
     .0
     .unwrap();
     debug!("Gateway paid invoice on behalf of Sending User");
 
     gateway
-        .server
+        .actor
         .await_outgoing_contract_claimed(contract_id, claim_outpoint)
         .await
         .unwrap();
@@ -541,14 +546,14 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
         .unwrap();
 
     let claim_outpoint = gateway
-        .server
-        .pay_invoice(contract_id, rng())
+        .actor
+        .pay_invoice(gateway.adapter.clone(), contract_id)
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // contract to mint coins, sign coins
 
     gateway
-        .server
+        .actor
         .await_outgoing_contract_claimed(contract_id, claim_outpoint)
         .await
         .unwrap();
@@ -619,12 +624,17 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         .unwrap();
     debug!("Outgoing contract accepted");
 
-    let response = tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
-        // we should run 4 epocks to buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
-        // but we only run 1 epoch to simulate timeout in preimage decryption
-        // This results in an error and the gateway reclaims funds used to buy preimage
-        fed.await_consensus_epochs(1).await.unwrap();
-    })
+    let response = tokio::join!(
+        gateway
+            .actor
+            .pay_invoice(gateway.adapter.clone(), contract_id),
+        async {
+            // we should run 4 epocks to buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
+            // but we only run 1 epoch to simulate timeout in preimage decryption
+            // This results in an error and the gateway reclaims funds used to buy preimage
+            fed.await_consensus_epochs(1).await.unwrap();
+        }
+    )
     .0;
     assert!(response.is_err());
 
@@ -682,7 +692,7 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
     // we never overspend when buying the preimage!
     let invoice_amount = preimage_price + sats(50);
     let (outpoint, contract_id) = gateway
-        .server
+        .actor
         .buy_preimage_offer(invoice.invoice.payment_hash(), &invoice_amount, rng())
         .await
         .unwrap();
@@ -697,7 +707,7 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
 
     // Gateway receives decrypted preimage
     let preimage = gateway
-        .server
+        .actor
         .await_preimage_decryption(outpoint)
         .await
         .unwrap();
@@ -768,7 +778,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
 
     // Gateway escrows ecash to trigger preimage decryption by the federation
     let (_, contract_id) = gateway
-        .server
+        .actor
         .buy_preimage_offer(&payment_hash, &payment_amount, rng())
         .await
         .unwrap();

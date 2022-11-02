@@ -1,3 +1,4 @@
+pub mod actor;
 pub mod cln;
 pub mod config;
 pub mod ln;
@@ -5,6 +6,7 @@ pub mod rpc;
 pub mod webserver;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::{
     io::Cursor,
@@ -12,6 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use actor::GatewayActor;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
@@ -24,13 +27,12 @@ use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::{
     ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
-    PaymentParameters,
 };
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, warn};
 use webserver::run_webserver;
 
 use crate::ln::{LightningError, LnRpc};
@@ -137,6 +139,7 @@ where
 }
 
 pub struct LnGateway {
+    actors: HashMap<FederationId, Arc<GatewayActor>>,
     federation_client: Arc<GatewayClient>,
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
@@ -156,11 +159,39 @@ impl LnGateway {
         let webserver = tokio::spawn(run_webserver(cfg.password, bind_addr, sender));
 
         Self {
+            actors: HashMap::new(),
             federation_client,
             ln_client,
             webserver,
             receiver,
         }
+    }
+
+    /// Register a federation to the gateway.
+    ///
+    /// # Returns
+    ///
+    /// A `GatewayActor` that can be used to execute gateway functions for the federation
+    pub async fn register_federation(
+        &mut self,
+        client: Arc<GatewayClient>,
+    ) -> Result<Arc<GatewayActor>> {
+        let actor = Arc::new(
+            GatewayActor::new(client.clone())
+                .await
+                .expect("Failed to create actor"),
+        );
+
+        let federation_id = FederationId(client.config().client_config.federation_name);
+        self.actors.insert(federation_id, actor.clone());
+        Ok(actor)
+    }
+
+    fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+        self.actors
+            .get(&federation_id)
+            .cloned()
+            .ok_or(LnGatewayError::UnknownFederation)
     }
 
     pub async fn buy_preimage_offer(
@@ -182,71 +213,6 @@ impl LnGateway {
             .await_preimage_decryption(outpoint)
             .await?;
         Ok(preimage)
-    }
-
-    #[instrument(skip_all, fields(%contract_id))]
-    pub async fn pay_invoice(
-        &self,
-        contract_id: ContractId,
-        mut rng: impl RngCore + CryptoRng,
-    ) -> Result<OutPoint> {
-        debug!("Fetching contract");
-        let contract_account = self
-            .federation_client
-            .fetch_outgoing_contract(contract_id)
-            .await?;
-
-        let payment_params = self
-            .federation_client
-            .validate_outgoing_account(&contract_account)
-            .await?;
-
-        debug!(
-            account = ?contract_account,
-            "Fetched and validated contract account"
-        );
-
-        self.federation_client
-            .save_outgoing_payment(contract_account.clone());
-
-        let is_internal_payment = payment_params.maybe_internal
-            && self
-                .federation_client
-                .ln_client()
-                .offer_exists(payment_params.payment_hash)
-                .await
-                .unwrap_or(false);
-
-        let preimage_res = if is_internal_payment {
-            self.buy_preimage_internal(
-                &payment_params.payment_hash,
-                &payment_params.invoice_amount,
-                &mut rng,
-            )
-            .await
-        } else {
-            self.buy_preimage_external(&contract_account.contract.invoice, &payment_params)
-                .await
-        };
-
-        match preimage_res {
-            Ok(preimage) => {
-                let outpoint = self
-                    .federation_client
-                    .claim_outgoing_contract(contract_id, preimage, rng)
-                    .await?;
-
-                Ok(outpoint)
-            }
-            Err(e) => {
-                warn!("Invoice payment failed: {}. Aborting", e);
-                // FIXME: combine both errors?
-                self.federation_client
-                    .abort_outgoing_payment(contract_id)
-                    .await?;
-                Err(e)
-            }
-        }
     }
 
     async fn buy_preimage_internal(
@@ -280,31 +246,6 @@ impl LnGateway {
         }
     }
 
-    async fn buy_preimage_external(
-        &self,
-        invoice: &str,
-        payment_params: &PaymentParameters,
-    ) -> Result<Preimage> {
-        match self
-            .ln_client
-            .pay(
-                invoice,
-                payment_params.max_delay,
-                payment_params.max_fee_percent(),
-            )
-            .await
-        {
-            Ok(preimage) => {
-                debug!(?preimage, "Successfully paid LN invoice");
-                Ok(preimage)
-            }
-            Err(e) => {
-                warn!("LN payment failed, aborting");
-                Err(LnGatewayError::CouldNotRoute(e))
-            }
-        }
-    }
-
     pub async fn await_outgoing_contract_claimed(
         &self,
         contract_id: ContractId,
@@ -316,10 +257,18 @@ impl LnGateway {
             .await?)
     }
 
-    async fn handle_pay_invoice_msg(&self, contract_id: ContractId) -> Result<()> {
-        let rng = rand::rngs::OsRng;
-        let outpoint = self.pay_invoice(contract_id, rng).await?;
-        self.await_outgoing_contract_claimed(contract_id, outpoint)
+    async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
+        let PayInvoicePayload {
+            federation_id,
+            contract_id,
+        } = payload;
+
+        let actor = self.select_actor(federation_id)?;
+        let outpoint = actor
+            .pay_invoice(self.ln_client.clone(), contract_id)
+            .await?;
+        actor
+            .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
         Ok(())
     }
@@ -334,38 +283,39 @@ impl LnGateway {
             .await
     }
 
-    async fn handle_balance_msg(&self) -> Result<Amount> {
-        let fetch_results = self.federation_client.fetch_all_coins().await;
-        fetch_results
-            .into_iter()
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(self.federation_client.coins().total_amount())
-    }
-    async fn handle_address_msg(&self) -> Result<Address> {
-        let mut rng = rand::rngs::OsRng;
-        Ok(self.federation_client.get_new_pegin_address(&mut rng))
+    async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
+        self.select_actor(payload.federation_id)?
+            .get_balance()
+            .await
     }
 
-    async fn handle_deposit_msg(&self, deposit: DepositPayload) -> Result<TransactionId> {
-        let rng = rand::rngs::OsRng;
-        self.federation_client
-            .peg_in(deposit.txout_proof, deposit.transaction, rng)
-            .await
-            .map_err(LnGatewayError::ClientError)
+    async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
+        self.select_actor(payload.federation_id)?
+            .get_deposit_address()
     }
 
-    async fn handle_withdraw_msg(&self, withdraw: WithdrawPayload) -> Result<TransactionId> {
-        let rng = rand::rngs::OsRng;
-        let peg_out = self
-            .federation_client
-            .new_peg_out_with_fees(withdraw.amount, withdraw.address)
+    async fn handle_deposit_msg(&self, payload: DepositPayload) -> Result<TransactionId> {
+        let DepositPayload {
+            txout_proof,
+            transaction,
+            federation_id,
+        } = payload;
+
+        self.select_actor(federation_id)?
+            .deposit(txout_proof, transaction)
             .await
-            .unwrap();
-        self.federation_client
-            .peg_out(peg_out, rng)
+    }
+
+    async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> Result<TransactionId> {
+        let WithdrawPayload {
+            amount,
+            address,
+            federation_id,
+        } = payload;
+
+        self.select_actor(federation_id)?
+            .withdraw(amount, address)
             .await
-            .map_err(LnGatewayError::ClientError)
-            .map(|out_point| out_point.txid)
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -398,23 +348,27 @@ impl LnGateway {
                     }
                     GatewayRequest::PayInvoice(inner) => {
                         inner
-                            .handle(|inner| self.handle_pay_invoice_msg(inner.contract_id))
+                            .handle(|payload| self.handle_pay_invoice_msg(payload))
                             .await;
                     }
                     GatewayRequest::Balance(inner) => {
-                        inner.handle(|_| self.handle_balance_msg()).await;
+                        inner
+                            .handle(|payload| self.handle_balance_msg(payload))
+                            .await;
                     }
                     GatewayRequest::DepositAddress(inner) => {
-                        inner.handle(|_| self.handle_address_msg()).await;
+                        inner
+                            .handle(|payload| self.handle_address_msg(payload))
+                            .await;
                     }
                     GatewayRequest::Deposit(inner) => {
                         inner
-                            .handle(|deposit| self.handle_deposit_msg(deposit))
+                            .handle(|payload| self.handle_deposit_msg(payload))
                             .await;
                     }
                     GatewayRequest::Withdraw(inner) => {
                         inner
-                            .handle(|withdraw| self.handle_withdraw_msg(withdraw))
+                            .handle(|payload| self.handle_withdraw_msg(payload))
                             .await;
                     }
                 }
@@ -440,6 +394,8 @@ pub enum LnGatewayError {
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
+    #[error("Actor not found")]
+    UnknownFederation,
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }
