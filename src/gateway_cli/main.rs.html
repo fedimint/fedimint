@@ -185,6 +185,9 @@
 <span id="185">185</span>
 <span id="186">186</span>
 <span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
@@ -263,7 +266,10 @@
             serde_json::to_writer_pretty(
                 cfg_file,
                 <span class="kw-2">&amp;</span>GatewayConfig {
-                    password: source_password(cli.rpcpassword),
+                    <span class="comment">// TODO: Generate a strong random password
+                    </span>password: source_password(cli.rpcpassword),
+                    <span class="comment">// TODO: Remove this field with hardcoded value once we have fixed Issue 664:
+                    </span>default_federation: FederationId(<span class="string">&quot;Hals_trusty_mint&quot;</span>.into()),
                 },
             )
             .expect(<span class="string">&quot;Failed to write gateway configs to file&quot;</span>);

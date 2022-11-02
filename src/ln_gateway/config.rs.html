@@ -4,11 +4,19 @@
 <span id="4">4</span>
 <span id="5">5</span>
 <span id="6">6</span>
-</pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+</pre><pre class="rust"><code><span class="kw">use </span>mint_client::FederationId;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayConfig {
     <span class="kw">pub </span>password: String,
+    <span class="comment">// FIXME: Issue 664: We should avoid having a special reference to a federation
+    // all requests, including `ReceiveInvoicePayload`, should contain the federation id
+    </span><span class="kw">pub </span>default_federation: FederationId,
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>
