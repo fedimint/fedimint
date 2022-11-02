@@ -203,6 +203,13 @@ impl LnGateway {
             .ok_or(LnGatewayError::UnknownFederation)
     }
 
+    async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
+        Ok(GatewayInfo {
+            version_hash: env!("GIT_HASH").to_string(),
+            federations: self.actors.keys().cloned().collect(),
+        })
+    }
+
     async fn handle_receive_invoice_msg(&self, payload: ReceiveInvoicePayload) -> Result<Preimage> {
         let ReceiveInvoicePayload { htlc_accepted } = payload;
 
@@ -284,6 +291,11 @@ impl LnGateway {
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
+                    GatewayRequest::Info(payload) => {
+                        payload
+                            .handle(|payload| self.handle_get_info(payload))
+                            .await;
+                    }
                     GatewayRequest::ReceiveInvoice(inner) => {
                         inner
                             .handle(|payload| self.handle_receive_invoice_msg(payload))
