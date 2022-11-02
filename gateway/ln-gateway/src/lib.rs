@@ -44,6 +44,9 @@ pub struct ReceiveInvoicePayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct InfoPayload;
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
 }
@@ -72,8 +75,15 @@ pub struct WithdrawPayload {
     pub address: Address,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GatewayInfo {
+    pub version_hash: String,
+    pub federations: Vec<FederationId>,
+}
+
 #[derive(Debug)]
 pub enum GatewayRequest {
+    Info(GatewayRequestInner<InfoPayload>),
     ReceiveInvoice(GatewayRequestInner<ReceiveInvoicePayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
@@ -107,6 +117,8 @@ macro_rules! impl_gateway_request_trait {
         }
     };
 }
+
+impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
 impl_gateway_request_trait!(
     ReceiveInvoicePayload,
     Preimage,
