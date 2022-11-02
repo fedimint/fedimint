@@ -108,7 +108,11 @@ pub trait IDatabaseTransaction<'a>: 'a {
 
     fn rollback_tx_to_savepoint(&mut self);
 
-    /// Ideally, avoid using this in fedimint client code as not all database transaction
+    /// Create a savepoint during the transaction that can be rolled back to using
+    /// rollback_tx_to_savepoint. Rolling back to the savepoint will atomically remove the writes
+    /// that were applied since the savepoint was created.
+    ///
+    /// Warning: Avoid using this in fedimint client code as not all database transaction
     /// implementations will support setting a savepoint during a transaction.
     fn set_tx_savepoint(&mut self);
 }

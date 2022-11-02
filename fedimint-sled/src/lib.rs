@@ -195,83 +195,65 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
 mod fedimint_sled_tests {
     use crate::SledDb;
 
-    #[test_log::test]
-    fn test_dbtx_insert_elements() {
+    fn open_temp_db(temp_path: &str) -> SledDb {
         let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-insert-elements")
+            .prefix(temp_path)
             .tempdir()
             .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_insert_elements(db.into());
+        SledDb::open(path, "default").unwrap()
+    }
+
+    #[test_log::test]
+    fn test_dbtx_insert_elements() {
+        fedimint_api::db::verify_insert_elements(
+            open_temp_db("fcb-sled-test-insert-elements").into(),
+        );
     }
 
     #[test_log::test]
     fn test_dbtx_remove_nonexisting() {
-        let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-remove-nonexisting")
-            .tempdir()
-            .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_remove_nonexisting(db.into());
+        fedimint_api::db::verify_remove_nonexisting(
+            open_temp_db("fcb-sled-test-remove-nonexisting").into(),
+        );
     }
 
     #[test_log::test]
     fn test_dbtx_remove_existing() {
-        let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-remove-existing")
-            .tempdir()
-            .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_remove_nonexisting(db.into());
+        fedimint_api::db::verify_remove_existing(
+            open_temp_db("fcb-sled-test-remove-existing").into(),
+        );
     }
 
     #[test_log::test]
     fn test_dbtx_read_own_writes() {
-        let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-read-own-writes")
-            .tempdir()
-            .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_read_own_writes(db.into());
+        fedimint_api::db::verify_read_own_writes(
+            open_temp_db("fcb-sled-test-read-own-writes").into(),
+        );
     }
 
     #[test_log::test]
     fn test_dbtx_prevent_dirty_reads() {
-        let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-prevent-dirty-reads")
-            .tempdir()
-            .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_prevent_dirty_reads(db.into());
+        fedimint_api::db::verify_prevent_dirty_reads(
+            open_temp_db("fcb-sled-test-prevent-dirty-reads").into(),
+        );
     }
 
     #[test_log::test]
     fn test_dbtx_find_by_prefix() {
-        let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-find-by-prefix")
-            .tempdir()
-            .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_find_by_prefix(db.into());
+        fedimint_api::db::verify_find_by_prefix(
+            open_temp_db("fcb-sled-test-find-by-prefix").into(),
+        );
     }
 
     #[test_log::test]
     fn test_dbtx_commit() {
-        let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-commit")
-            .tempdir()
-            .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_commit(db.into());
+        fedimint_api::db::verify_commit(open_temp_db("fcb-sled-test-commit").into());
     }
 
     #[test_log::test]
     fn test_dbtx_rollback_to_savepoint() {
-        let path = tempfile::Builder::new()
-            .prefix("fcb-sled-test-rollback-to-savepoint")
-            .tempdir()
-            .unwrap();
-        let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::verify_rollback_to_savepoint(db.into());
+        fedimint_api::db::verify_rollback_to_savepoint(
+            open_temp_db("fcb-sled-test-rollback-to-savepoint").into(),
+        );
     }
 }
