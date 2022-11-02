@@ -76,7 +76,10 @@ async fn main() {
             serde_json::to_writer_pretty(
                 cfg_file,
                 &GatewayConfig {
+                    // TODO: Generate a strong random password
                     password: source_password(cli.rpcpassword),
+                    // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
+                    default_federation: FederationId("Hals_trusty_mint".into()),
                 },
             )
             .expect("Failed to write gateway configs to file");
