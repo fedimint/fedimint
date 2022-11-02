@@ -618,7 +618,7 @@
     }
 }
 
-<span class="attribute">#[allow(dead_code)]
+<span class="attr">#[allow(dead_code)]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; LnClient&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="doccomment">/// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
     /// till the block height defined by `timelock`, after that we can claim our money back.
@@ -827,7 +827,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PayInvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract_id: ContractId,
@@ -844,19 +844,19 @@
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, LnClientError&gt;;
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>LnClientError {
-    <span class="attribute">#[error(<span class="string">&quot;We can&#39;t pay an amountless invoice&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;We can&#39;t pay an amountless invoice&quot;</span>)]
     </span>MissingInvoiceAmount,
-    <span class="attribute">#[error(<span class="string">&quot;Mint API error: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Mint API error: {0}&quot;</span>)]
     </span>ApiError(ApiError),
-    <span class="attribute">#[error(<span class="string">&quot;Mint returned unexpected account type&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Mint returned unexpected account type&quot;</span>)]
     </span>WrongAccountType,
-    <span class="attribute">#[error(<span class="string">&quot;No ConfirmedOffer found for contract ID {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;No ConfirmedOffer found for contract ID {0}&quot;</span>)]
     </span>NoConfirmedInvoice(ContractId),
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::sync::Arc;
 
@@ -889,7 +889,7 @@
         mint: Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
     }
 
-    <span class="attribute">#[async_trait]
+    <span class="attr">#[async_trait]
     </span><span class="kw">impl </span>IFederationApi <span class="kw">for </span>FakeApi {
         <span class="kw">async fn </span>fetch_tx_outcome(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -992,7 +992,7 @@
         (fed, client_config, client_context)
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]
+    <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_outgoing() {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
         <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
@@ -1093,4 +1093,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -361,20 +361,20 @@
 <span class="kw">use </span>futures::lock::Mutex;
 <span class="kw">pub use </span>imp::<span class="kw-2">*</span>;
 <span class="kw">use </span>thiserror::Error;
-<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>tokio::sync::oneshot;
-<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>tokio::task::JoinHandle;
 <span class="kw">use </span>tracing::debug;
 <span class="kw">use </span>tracing::info;
-<span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+<span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">type </span>JoinHandle&lt;T&gt; = futures::future::Ready&lt;anyhow::Result&lt;T&gt;&gt;;
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 #[error(<span class="string">&quot;deadline has elapsed&quot;</span>)]
 </span><span class="kw">pub struct </span>Elapsed;
 
-<span class="attribute">#[derive(Debug, Default)]
+<span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">struct </span>TaskGroupInner {
     <span class="doccomment">/// Was the shutdown requested, either externally or due to any task failure?
     </span>is_shutting_down: AtomicBool,
@@ -406,7 +406,7 @@
 /// Each thread should periodically check [`TaskHandle`] or rely
 /// on condition like channel disconnection to detect when it is time
 /// to finish.
-</span><span class="attribute">#[derive(Clone, Default, Debug)]
+</span><span class="attr">#[derive(Clone, Default, Debug)]
 </span><span class="kw">pub struct </span>TaskGroup {
     inner: Arc&lt;TaskGroupInner&gt;,
 }
@@ -431,7 +431,7 @@
         <span class="self">self</span>.join_all().<span class="kw">await
     </span>}
 
-    <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+    <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
     </span><span class="kw">pub fn </span>install_kill_handler(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">use </span>tokio::signal;
 
@@ -442,7 +442,7 @@
                     </span>.expect(<span class="string">&quot;failed to install Ctrl+C handler&quot;</span>);
             };
 
-            <span class="attribute">#[cfg(unix)]
+            <span class="attr">#[cfg(unix)]
             </span><span class="kw">let </span>terminate = <span class="kw">async </span>{
                 signal::unix::signal(signal::unix::SignalKind::terminate())
                     .expect(<span class="string">&quot;failed to install signal handler&quot;</span>)
@@ -450,7 +450,7 @@
                     .<span class="kw">await</span>;
             };
 
-            <span class="attribute">#[cfg(not(unix))]
+            <span class="attr">#[cfg(not(unix))]
             </span><span class="kw">let </span>terminate = std::future::pending::&lt;()&gt;();
 
             <span class="macro">tokio::select! </span>{
@@ -468,7 +468,7 @@
         });
     }
 
-    <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+    <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
     </span><span class="kw">pub async fn </span>spawn&lt;Fut&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         name: <span class="kw">impl </span>Into&lt;String&gt;,
@@ -492,7 +492,7 @@
         guard.completed = <span class="bool-val">true</span>;
     }
 
-    <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+    <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
     </span><span class="kw">pub async fn </span>spawn_local&lt;Fut&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         name: <span class="kw">impl </span>Into&lt;String&gt;,
@@ -516,7 +516,7 @@
         guard.completed = <span class="bool-val">true</span>;
     }
     <span class="comment">// TODO: Send vs lack of Send bound; do something about it
-    </span><span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+    </span><span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
     </span><span class="kw">pub async fn </span>spawn&lt;Fut&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         name: <span class="kw">impl </span>Into&lt;String&gt;,
@@ -596,7 +596,7 @@
     ///
     /// Tasks can use `select` on the return value to handle shutdown
     /// signal during otherwise blocking operation.
-    </span><span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+    </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
     </span><span class="kw">pub async fn </span>make_shutdown_rx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; oneshot::Receiver&lt;()&gt; {
         <span class="kw">let </span>(shutdown_tx, shutdown_rx) = oneshot::channel();
         <span class="self">self</span>.on_shutdown(|| {
@@ -608,7 +608,7 @@
     }
 }
 
-<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">mod </span>imp {
     <span class="kw">pub use </span>tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -653,7 +653,7 @@
     }
 }
 
-<span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+<span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">mod </span>imp {
     <span class="kw">pub use </span>async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
     <span class="kw">use </span>futures::FutureExt;
@@ -705,4 +705,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

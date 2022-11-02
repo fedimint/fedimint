@@ -291,14 +291,14 @@
 <span id="291">291</span>
 <span id="292">292</span>
 <span id="293">293</span>
-</pre><pre class="rust"><code><span class="attribute">#![cfg_attr(feature = <span class="string">&quot;diagnostics&quot;</span>, feature(proc_macro_diagnostic))]
+</pre><pre class="rust"><code><span class="attr">#![cfg_attr(feature = <span class="string">&quot;diagnostics&quot;</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>heck::ToSnakeCase;
 <span class="kw">use </span>proc_macro::{<span class="self">self</span>, TokenStream};
 <span class="kw">use </span>quote::{format_ident, quote};
 <span class="kw">use </span>syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Index};
 
-<span class="attribute">#[proc_macro_derive(UnzipConsensus)]
+<span class="attr">#[proc_macro_derive(UnzipConsensus)]
 </span><span class="kw">pub fn </span>derive_unzip_consensus(input: TokenStream) -&gt; TokenStream {
     <span class="kw">let </span>DeriveInput { ident, data, .. } = <span class="macro">parse_macro_input!</span>(input);
 
@@ -318,13 +318,13 @@
         <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="string">&quot;UnzipConsensus can only be derived for enums&quot;</span>),
     };
 
-    <span class="attribute">#[allow(unreachable_code)]
+    <span class="attr">#[allow(unreachable_code)]
     </span><span class="kw">let </span>variants = <span class="kw">match </span>variants {
         <span class="prelude-val">Ok</span>(variants) =&gt; variants,
         <span class="prelude-val">Err</span>(e) =&gt; {
-            <span class="attribute">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
             </span>ident.span().unstable().error(e).emit();
-            <span class="attribute">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
+            <span class="attr">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
             </span><span class="macro">panic!</span>(<span class="string">&quot;Error: {}&quot;</span>, e);
             <span class="kw">return </span>TokenStream::new();
         }
@@ -374,7 +374,7 @@
     output.into()
 }
 
-<span class="attribute">#[proc_macro_derive(Encodable)]
+<span class="attr">#[proc_macro_derive(Encodable)]
 </span><span class="kw">pub fn </span>derive_encodable(input: TokenStream) -&gt; TokenStream {
     <span class="kw">let </span>DeriveInput { ident, data, .. } = <span class="macro">parse_macro_input!</span>(input);
 
@@ -457,15 +457,15 @@
                 }
             }
         }
-        <span class="attribute">#[allow(unreachable_code)]
+        <span class="attr">#[allow(unreachable_code)]
         </span>syn::Data::Union(<span class="kw">_</span>) =&gt; {
-            <span class="attribute">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
             </span>ident
                 .span()
                 .unstable()
                 .error(<span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>)
                 .emit();
-            <span class="attribute">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
+            <span class="attr">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
             </span><span class="macro">panic!</span>(<span class="string">&quot;Error: Encodable can&#39;t be derived for unions&quot;</span>);
             <span class="kw">return </span>TokenStream::new();
         }
@@ -474,7 +474,7 @@
     output.into()
 }
 
-<span class="attribute">#[proc_macro_derive(Decodable)]
+<span class="attr">#[proc_macro_derive(Decodable)]
 </span><span class="kw">pub fn </span>derive_decodable(input: TokenStream) -&gt; TokenStream {
     <span class="kw">let </span>DeriveInput { ident, data, .. } = <span class="macro">parse_macro_input!</span>(input);
 
@@ -567,15 +567,15 @@
                 }
             }
         }
-        <span class="attribute">#[allow(unreachable_code)]
+        <span class="attr">#[allow(unreachable_code)]
         </span>syn::Data::Union(<span class="kw">_</span>) =&gt; {
-            <span class="attribute">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
             </span>ident
                 .span()
                 .unstable()
                 .error(<span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>)
                 .emit();
-            <span class="attribute">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
+            <span class="attr">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
             </span><span class="macro">panic!</span>(<span class="string">&quot;Error: Encodable can&#39;t be derived for unions&quot;</span>);
 
             <span class="kw">return </span>TokenStream::new();
@@ -585,4 +585,4 @@
     output.into()
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_derive" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_derive" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

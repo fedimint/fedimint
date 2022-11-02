@@ -778,7 +778,7 @@
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
 /// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
-</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequest {
     <span class="doccomment">/// Spend key from which the coin nonce (corresponding public key) is derived
     </span>spend_key: KeyPair,
@@ -790,17 +790,17 @@
 ///
 /// Keeps all the data to generate [`SpendableNote`]s once the
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-</span><span class="attribute">#[derive(Debug, Clone, Default, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Default, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequests {
     <span class="doccomment">/// Finalization data for all coin outputs in this request
     </span>coins: TieredMulti&lt;NoteIssuanceRequest&gt;,
 }
 
 <span class="doccomment">/// A [`Note`] with associated secret key that allows to proof ownership (spend it)
-</span><span class="attribute">#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableNote {
     <span class="kw">pub </span>note: Note,
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;deserialize_key_pair&quot;</span>)]
+    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;deserialize_key_pair&quot;</span>)]
     </span><span class="kw">pub </span>spend_key: KeyPair,
 }
 
@@ -1080,35 +1080,35 @@
 
 <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, MintClientError&gt;;
 
-<span class="attribute">#[derive(Error, Debug)]
+<span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>CoinFinalizationError {
-    <span class="attribute">#[error(<span class="string">&quot;The returned answer does not fit the request&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The returned answer does not fit the request&quot;</span>)]
     </span>WrongMintAnswer,
-    <span class="attribute">#[error(<span class="string">&quot;The blind signature at index {0} is invalid&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The blind signature at index {0} is invalid&quot;</span>)]
     </span>InvalidSignature(usize),
-    <span class="attribute">#[error(<span class="string">&quot;Expected signatures for issuance request {0}, got signatures for request {1}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Expected signatures for issuance request {0}, got signatures for request {1}&quot;</span>)]
     </span>InvalidIssuanceId(TransactionId, TransactionId),
-    <span class="attribute">#[error(<span class="string">&quot;Invalid amount tier {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid amount tier {0:?}&quot;</span>)]
     </span>InvalidAmountTier(Amount),
-    <span class="attribute">#[error(<span class="string">&quot;The client does not know this issuance&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The client does not know this issuance&quot;</span>)]
     </span>UnknownIssuance,
 }
 
-<span class="attribute">#[derive(Error, Debug)]
+<span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>MintClientError {
-    <span class="attribute">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
-    </span>ApiError(<span class="attribute">#[from] </span>ApiError),
-    <span class="attribute">#[error(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]
-    </span>FinalizationError(<span class="attribute">#[from] </span>CoinFinalizationError),
-    <span class="attribute">#[error(<span class="string">&quot;The client&#39;s wallet has not enough coins or they are not in the right denomination&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
+    </span>ApiError(<span class="attr">#[from] </span>ApiError),
+    <span class="attr">#[error(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]
+    </span>FinalizationError(<span class="attr">#[from] </span>CoinFinalizationError),
+    <span class="attr">#[error(<span class="string">&quot;The client&#39;s wallet has not enough coins or they are not in the right denomination&quot;</span>)]
     </span>NotEnoughCoins,
-    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome received from the mint did not contain a result for output {0} yet&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The transaction outcome received from the mint did not contain a result for output {0} yet&quot;</span>)]
     </span>OutputNotReadyYet(OutPoint),
-    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome returned by the mint contains too few outputs (output {0})&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The transaction outcome returned by the mint contains too few outputs (output {0})&quot;</span>)]
     </span>InvalidOutcomeWrongStructure(OutPoint),
-    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome returned by the mint has an invalid type (output {0})&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The transaction outcome returned by the mint has an invalid type (output {0})&quot;</span>)]
     </span>InvalidOutcomeType(OutPoint),
-    <span class="attribute">#[error(<span class="string">&quot;One of the coins meant to be spent is unspendable&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;One of the coins meant to be spent is unspendable&quot;</span>)]
     </span>ReceivedUspendableCoin,
 }
 
@@ -1145,7 +1145,7 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::HashSet;
     <span class="kw">use </span>std::sync::Arc;
@@ -1180,7 +1180,7 @@
         mint: Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
     }
 
-    <span class="attribute">#[async_trait]
+    <span class="attr">#[async_trait]
     </span><span class="kw">impl </span>IFederationApi <span class="kw">for </span>FakeApi {
         <span class="kw">async fn </span>fetch_tx_outcome(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1308,7 +1308,7 @@
         client.fetch_all_coins().<span class="kw">await</span>;
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]
+    <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_output() {
         <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
 
@@ -1324,7 +1324,7 @@
         <span class="macro">assert_eq!</span>(client.coins().total_amount(), ISSUE_AMOUNT)
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]
+    <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_input() {
         <span class="kw">const </span>SPEND_AMOUNT: Amount = Amount::from_sat(<span class="number">21</span>);
 
@@ -1408,7 +1408,7 @@
         </span><span class="macro">assert_eq!</span>(client.coins().total_amount(), Amount::ZERO);
     }
 
-    <span class="attribute">#[allow(clippy::needless_collect)]
+    <span class="attr">#[allow(clippy::needless_collect)]
     #[tokio::test]
     </span><span class="kw">async fn </span>test_parallel_issuance() {
         <span class="kw">const </span>ITERATIONS: usize = <span class="number">10_000</span>;
@@ -1471,4 +1471,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

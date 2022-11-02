@@ -436,57 +436,15 @@
 <span id="436">436</span>
 <span id="437">437</span>
 <span id="438">438</span>
-<span id="439">439</span>
-<span id="440">440</span>
-<span id="441">441</span>
-<span id="442">442</span>
-<span id="443">443</span>
-<span id="444">444</span>
-<span id="445">445</span>
-<span id="446">446</span>
-<span id="447">447</span>
-<span id="448">448</span>
-<span id="449">449</span>
-<span id="450">450</span>
-<span id="451">451</span>
-<span id="452">452</span>
-<span id="453">453</span>
-<span id="454">454</span>
-<span id="455">455</span>
-<span id="456">456</span>
-<span id="457">457</span>
-<span id="458">458</span>
-<span id="459">459</span>
-<span id="460">460</span>
-<span id="461">461</span>
-<span id="462">462</span>
-<span id="463">463</span>
-<span id="464">464</span>
-<span id="465">465</span>
-<span id="466">466</span>
-<span id="467">467</span>
-<span id="468">468</span>
-<span id="469">469</span>
-<span id="470">470</span>
-<span id="471">471</span>
-<span id="472">472</span>
-<span id="473">473</span>
-<span id="474">474</span>
-<span id="475">475</span>
-<span id="476">476</span>
-<span id="477">477</span>
-<span id="478">478</span>
-<span id="479">479</span>
-<span id="480">480</span>
-<span id="481">481</span>
-<span id="482">482</span>
-</pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
+</pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
+<span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>rpc;
 <span class="kw">pub mod </span>webserver;
 
 <span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::{
     io::Cursor,
@@ -494,6 +452,7 @@
     time::{Duration, Instant},
 };
 
+<span class="kw">use </span>actor::GatewayActor;
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::{Address, Transaction};
@@ -506,55 +465,54 @@
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>mint_client::{
     ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
-    PaymentParameters,
 };
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot};
-<span class="kw">use </span>tracing::{debug, error, instrument, warn};
+<span class="kw">use </span>tracing::{debug, error, warn};
 <span class="kw">use </span>webserver::run_webserver;
 
 <span class="kw">use </span><span class="kw">crate</span>::ln::{LightningError, LnRpc};
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, LnGatewayError&gt;;
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ReceiveInvoicePayload {
     <span class="comment">// NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
     </span><span class="kw">pub </span>htlc_accepted: HtlcAccepted,
 }
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BalancePayload {
     <span class="kw">pub </span>federation_id: FederationId,
 }
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DepositAddressPayload {
     <span class="kw">pub </span>federation_id: FederationId,
 }
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DepositPayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>txout_proof: TxOutProof,
-    <span class="attribute">#[serde(
+    <span class="attr">#[serde(
         deserialize_with = <span class="string">&quot;serde_hex_deserialize&quot;</span>,
         serialize_with = <span class="string">&quot;serde_hex_serialize&quot;
     </span>)]
     </span><span class="kw">pub </span>transaction: Transaction,
 }
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WithdrawPayload {
     <span class="kw">pub </span>federation_id: FederationId,
-    <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
     <span class="kw">pub </span>address: Address,
 }
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub enum </span>GatewayRequest {
     ReceiveInvoice(GatewayRequestInner&lt;ReceiveInvoicePayload&gt;),
     PayInvoice(GatewayRequestInner&lt;PayInvoicePayload&gt;),
@@ -564,7 +522,7 @@
     Withdraw(GatewayRequestInner&lt;WithdrawPayload&gt;),
 }
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GatewayRequestInner&lt;R: GatewayRequestTrait&gt; {
     request: R,
     sender: oneshot::Sender&lt;<span class="prelude-ty">Result</span>&lt;R::Response&gt;&gt;,
@@ -619,6 +577,7 @@
 }
 
 <span class="kw">pub struct </span>LnGateway {
+    actors: HashMap&lt;FederationId, Arc&lt;GatewayActor&gt;&gt;,
     federation_client: Arc&lt;GatewayClient&gt;,
     ln_client: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
     webserver: tokio::task::JoinHandle&lt;axum::response::Result&lt;()&gt;&gt;,
@@ -638,11 +597,39 @@
         </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(cfg.password, bind_addr, sender));
 
         <span class="self">Self </span>{
+            actors: HashMap::new(),
             federation_client,
             ln_client,
             webserver,
             receiver,
         }
+    }
+
+    <span class="doccomment">/// Register a federation to the gateway.
+    ///
+    /// # Returns
+    ///
+    /// A `GatewayActor` that can be used to execute gateway functions for the federation
+    </span><span class="kw">pub async fn </span>register_federation(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        client: Arc&lt;GatewayClient&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;GatewayActor&gt;&gt; {
+        <span class="kw">let </span>actor = Arc::new(
+            GatewayActor::new(client.clone())
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Failed to create actor&quot;</span>),
+        );
+
+        <span class="kw">let </span>federation_id = FederationId(client.config().client_config.federation_name);
+        <span class="self">self</span>.actors.insert(federation_id, actor.clone());
+        <span class="prelude-val">Ok</span>(actor)
+    }
+
+    <span class="kw">fn </span>select_actor(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;GatewayActor&gt;&gt; {
+        <span class="self">self</span>.actors
+            .get(<span class="kw-2">&amp;</span>federation_id)
+            .cloned()
+            .ok_or(LnGatewayError::UnknownFederation)
     }
 
     <span class="kw">pub async fn </span>buy_preimage_offer(
@@ -664,71 +651,6 @@
             .await_preimage_decryption(outpoint)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(preimage)
-    }
-
-    <span class="attribute">#[instrument(skip_all, fields(%contract_id))]
-    </span><span class="kw">pub async fn </span>pay_invoice(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        contract_id: ContractId,
-        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Fetching contract&quot;</span>);
-        <span class="kw">let </span>contract_account = <span class="self">self
-            </span>.federation_client
-            .fetch_outgoing_contract(contract_id)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>payment_params = <span class="self">self
-            </span>.federation_client
-            .validate_outgoing_account(<span class="kw-2">&amp;</span>contract_account)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="macro">debug!</span>(
-            account = <span class="question-mark">?</span>contract_account,
-            <span class="string">&quot;Fetched and validated contract account&quot;
-        </span>);
-
-        <span class="self">self</span>.federation_client
-            .save_outgoing_payment(contract_account.clone());
-
-        <span class="kw">let </span>is_internal_payment = payment_params.maybe_internal
-            &amp;&amp; <span class="self">self
-                </span>.federation_client
-                .ln_client()
-                .offer_exists(payment_params.payment_hash)
-                .<span class="kw">await
-                </span>.unwrap_or(<span class="bool-val">false</span>);
-
-        <span class="kw">let </span>preimage_res = <span class="kw">if </span>is_internal_payment {
-            <span class="self">self</span>.buy_preimage_internal(
-                <span class="kw-2">&amp;</span>payment_params.payment_hash,
-                <span class="kw-2">&amp;</span>payment_params.invoice_amount,
-                <span class="kw-2">&amp;mut </span>rng,
-            )
-            .<span class="kw">await
-        </span>} <span class="kw">else </span>{
-            <span class="self">self</span>.buy_preimage_external(<span class="kw-2">&amp;</span>contract_account.contract.invoice, <span class="kw-2">&amp;</span>payment_params)
-                .<span class="kw">await
-        </span>};
-
-        <span class="kw">match </span>preimage_res {
-            <span class="prelude-val">Ok</span>(preimage) =&gt; {
-                <span class="kw">let </span>outpoint = <span class="self">self
-                    </span>.federation_client
-                    .claim_outgoing_contract(contract_id, preimage, rng)
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-
-                <span class="prelude-val">Ok</span>(outpoint)
-            }
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Invoice payment failed: {}. Aborting&quot;</span>, e);
-                <span class="comment">// FIXME: combine both errors?
-                </span><span class="self">self</span>.federation_client
-                    .abort_outgoing_payment(contract_id)
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="prelude-val">Err</span>(e)
-            }
-        }
     }
 
     <span class="kw">async fn </span>buy_preimage_internal(
@@ -762,31 +684,6 @@
         }
     }
 
-    <span class="kw">async fn </span>buy_preimage_external(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice: <span class="kw-2">&amp;</span>str,
-        payment_params: <span class="kw-2">&amp;</span>PaymentParameters,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
-        <span class="kw">match </span><span class="self">self
-            </span>.ln_client
-            .pay(
-                invoice,
-                payment_params.max_delay,
-                payment_params.max_fee_percent(),
-            )
-            .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(preimage) =&gt; {
-                <span class="macro">debug!</span>(<span class="question-mark">?</span>preimage, <span class="string">&quot;Successfully paid LN invoice&quot;</span>);
-                <span class="prelude-val">Ok</span>(preimage)
-            }
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;LN payment failed, aborting&quot;</span>);
-                <span class="prelude-val">Err</span>(LnGatewayError::CouldNotRoute(e))
-            }
-        }
-    }
-
     <span class="kw">pub async fn </span>await_outgoing_contract_claimed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract_id: ContractId,
@@ -798,10 +695,18 @@
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="kw">async fn </span>handle_pay_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>outpoint = <span class="self">self</span>.pay_invoice(contract_id, rng).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.await_outgoing_contract_claimed(contract_id, outpoint)
+    <span class="kw">async fn </span>handle_pay_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: PayInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>PayInvoicePayload {
+            federation_id,
+            contract_id,
+        } = payload;
+
+        <span class="kw">let </span>actor = <span class="self">self</span>.select_actor(federation_id)<span class="question-mark">?</span>;
+        <span class="kw">let </span>outpoint = actor
+            .pay_invoice(<span class="self">self</span>.ln_client.clone(), contract_id)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        actor
+            .await_outgoing_contract_claimed(contract_id, outpoint)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
@@ -816,39 +721,40 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>handle_balance_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
-        <span class="kw">let </span>fetch_results = <span class="self">self</span>.federation_client.fetch_all_coins().<span class="kw">await</span>;
-        fetch_results
-            .into_iter()
-            .collect::&lt;std::result::Result&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.federation_client.coins().total_amount())
-    }
-    <span class="kw">async fn </span>handle_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.federation_client.get_new_pegin_address(<span class="kw-2">&amp;mut </span>rng))
+    <span class="kw">async fn </span>handle_balance_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BalancePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
+        <span class="self">self</span>.select_actor(payload.federation_id)<span class="question-mark">?
+            </span>.get_balance()
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>handle_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: DepositAddressPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
+        <span class="self">self</span>.select_actor(payload.federation_id)<span class="question-mark">?
+            </span>.get_deposit_address()
     }
 
-    <span class="kw">async fn </span>handle_deposit_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, deposit: DepositPayload) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
-        <span class="kw">let </span>rng = rand::rngs::OsRng;
-        <span class="self">self</span>.federation_client
-            .peg_in(deposit.txout_proof, deposit.transaction, rng)
-            .<span class="kw">await
-            </span>.map_err(LnGatewayError::ClientError)
-    }
+    <span class="kw">async fn </span>handle_deposit_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: DepositPayload) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="kw">let </span>DepositPayload {
+            txout_proof,
+            transaction,
+            federation_id,
+        } = payload;
 
-    <span class="kw">async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, withdraw: WithdrawPayload) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
-        <span class="kw">let </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>peg_out = <span class="self">self
-            </span>.federation_client
-            .new_peg_out_with_fees(withdraw.amount, withdraw.address)
+        <span class="self">self</span>.select_actor(federation_id)<span class="question-mark">?
+            </span>.deposit(txout_proof, transaction)
             .<span class="kw">await
-            </span>.unwrap();
-        <span class="self">self</span>.federation_client
-            .peg_out(peg_out, rng)
+    </span>}
+
+    <span class="kw">async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="kw">let </span>WithdrawPayload {
+            amount,
+            address,
+            federation_id,
+        } = payload;
+
+        <span class="self">self</span>.select_actor(federation_id)<span class="question-mark">?
+            </span>.withdraw(amount, address)
             .<span class="kw">await
-            </span>.map_err(LnGatewayError::ClientError)
-            .map(|out_point| out_point.txid)
-    }
+    </span>}
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// Regster gateway with federation
@@ -880,23 +786,27 @@
                     }
                     GatewayRequest::PayInvoice(inner) =&gt; {
                         inner
-                            .handle(|inner| <span class="self">self</span>.handle_pay_invoice_msg(inner.contract_id))
+                            .handle(|payload| <span class="self">self</span>.handle_pay_invoice_msg(payload))
                             .<span class="kw">await</span>;
                     }
                     GatewayRequest::Balance(inner) =&gt; {
-                        inner.handle(|<span class="kw">_</span>| <span class="self">self</span>.handle_balance_msg()).<span class="kw">await</span>;
+                        inner
+                            .handle(|payload| <span class="self">self</span>.handle_balance_msg(payload))
+                            .<span class="kw">await</span>;
                     }
                     GatewayRequest::DepositAddress(inner) =&gt; {
-                        inner.handle(|<span class="kw">_</span>| <span class="self">self</span>.handle_address_msg()).<span class="kw">await</span>;
+                        inner
+                            .handle(|payload| <span class="self">self</span>.handle_address_msg(payload))
+                            .<span class="kw">await</span>;
                     }
                     GatewayRequest::Deposit(inner) =&gt; {
                         inner
-                            .handle(|deposit| <span class="self">self</span>.handle_deposit_msg(deposit))
+                            .handle(|payload| <span class="self">self</span>.handle_deposit_msg(payload))
                             .<span class="kw">await</span>;
                     }
                     GatewayRequest::Withdraw(inner) =&gt; {
                         inner
-                            .handle(|withdraw| <span class="self">self</span>.handle_withdraw_msg(withdraw))
+                            .handle(|payload| <span class="self">self</span>.handle_withdraw_msg(payload))
                             .<span class="kw">await</span>;
                     }
                 }
@@ -914,16 +824,18 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>LnGatewayError {
-    <span class="attribute">#[error(<span class="string">&quot;Federation client operation error: {0:?}&quot;</span>)]
-    </span>ClientError(<span class="attribute">#[from] </span>ClientError),
-    <span class="attribute">#[error(<span class="string">&quot;Our LN node could not route the payment: {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Federation client operation error: {0:?}&quot;</span>)]
+    </span>ClientError(<span class="attr">#[from] </span>ClientError),
+    <span class="attr">#[error(<span class="string">&quot;Our LN node could not route the payment: {0:?}&quot;</span>)]
     </span>CouldNotRoute(LightningError),
-    <span class="attribute">#[error(<span class="string">&quot;Mint client error: {0:?}&quot;</span>)]
-    </span>MintClientE(<span class="attribute">#[from] </span>MintClientError),
-    <span class="attribute">#[error(<span class="string">&quot;Other: {0:?}&quot;</span>)]
-    </span>Other(<span class="attribute">#[from] </span>anyhow::Error),
+    <span class="attr">#[error(<span class="string">&quot;Mint client error: {0:?}&quot;</span>)]
+    </span>MintClientE(<span class="attr">#[from] </span>MintClientError),
+    <span class="attr">#[error(<span class="string">&quot;Actor not found&quot;</span>)]
+    </span>UnknownFederation,
+    <span class="attr">#[error(<span class="string">&quot;Other: {0:?}&quot;</span>)]
+    </span>Other(<span class="attr">#[from] </span>anyhow::Error),
 }
 
 <span class="kw">pub fn </span>serde_hex_deserialize&lt;<span class="lifetime">&#39;d</span>, T: bitcoin::consensus::Decodable, D: Deserializer&lt;<span class="lifetime">&#39;d</span>&gt;&gt;(
@@ -963,4 +875,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

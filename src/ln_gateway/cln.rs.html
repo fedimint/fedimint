@@ -240,37 +240,37 @@
 }
 
 <span class="comment">// TODO: upstream these structs to cln-plugin
-</span><span class="attribute">#[derive(Clone, Serialize, Deserialize, Debug)]
+</span><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Htlc {
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
+    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
     </span><span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>cltv_expiry: u32,
     <span class="kw">pub </span>cltv_expiry_relative: u32,
     <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
 }
 
-<span class="attribute">#[derive(Clone, Serialize, Deserialize, Debug)]
+<span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Onion {
     <span class="kw">pub </span>payload: String,
-    <span class="attribute">#[serde(rename = <span class="string">&quot;type&quot;</span>)]
+    <span class="attr">#[serde(rename = <span class="string">&quot;type&quot;</span>)]
     </span><span class="kw">pub </span>type_: String,
     <span class="kw">pub </span>short_channel_id: String,
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
+    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
     </span><span class="kw">pub </span>forward_amount: Amount,
     <span class="kw">pub </span>outgoing_cltv_value: u32,
     <span class="kw">pub </span>shared_secret: bitcoin_hashes::sha256::Hash,
     <span class="kw">pub </span>next_onion: String,
 }
 
-<span class="attribute">#[derive(Clone, Serialize, Deserialize, Debug)]
+<span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>HtlcAccepted {
     <span class="kw">pub </span>htlc: Htlc,
     <span class="kw">pub </span>onion: Onion,
 }
 
-<span class="attribute">#[async_trait]
+<span class="attr">#[async_trait]
 </span><span class="kw">impl </span>LnRpc <span class="kw">for </span>Mutex&lt;cln_rpc::ClnRpc&gt; {
-    <span class="attribute">#[instrument(name = <span class="string">&quot;LnRpc::pay&quot;</span>, skip(<span class="self">self</span>))]
+    <span class="attr">#[instrument(name = <span class="string">&quot;LnRpc::pay&quot;</span>, skip(<span class="self">self</span>))]
     </span><span class="kw">async fn </span>pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: <span class="kw-2">&amp;</span>str,
@@ -419,4 +419,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

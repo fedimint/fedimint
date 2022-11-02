@@ -49,14 +49,14 @@
 <span class="kw">use </span>mint_client::query::TrustAllPeers;
 <span class="kw">use </span>url::Url;
 
-<span class="attribute">#[derive(Parser)]
+<span class="attr">#[derive(Parser)]
 #[command(version)]
 </span><span class="kw">struct </span>Cli {
-    <span class="attribute">#[command(subcommand)]
+    <span class="attr">#[command(subcommand)]
     </span>command: Commands,
 }
 
-<span class="attribute">#[derive(Subcommand)]
+<span class="attr">#[derive(Subcommand)]
 </span><span class="kw">enum </span>Commands {
     <span class="doccomment">/// Print the latest git commit hash this bin. was build with
     </span>VersionHash,
@@ -66,12 +66,12 @@
         <span class="doccomment">/// The rpc method
         </span>method: String,
         <span class="doccomment">/// Args that will be serialized and send with the request
-        </span><span class="attribute">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
+        </span><span class="attr">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
         </span>arg: String,
     },
 }
 
-<span class="attribute">#[tokio::main]
+<span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>cli = Cli::parse();
     <span class="kw">match </span>cli.command {
@@ -89,4 +89,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -424,7 +424,7 @@
 ///
 /// &quot;Module dyn newtype&quot; is just a &quot;dyn newtype&quot; used by general purpose
 /// Fedimint code to abstract away details of mint modules.
-</span><span class="attribute">#[macro_export]
+</span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>module_dyn_newtype_impl_encode_decode {
     (
         <span class="macro-nonterminal">$name</span>:ident, <span class="macro-nonterminal">$decode_fn</span>:ident
@@ -465,9 +465,9 @@
 /// incompatible with `dyn Trait` into &quot;module types&quot; and corresponding
 /// &quot;module dyn newtypes&quot;, erasing the exact type and used in a common
 /// Fedimint code.
-</span><span class="attribute">#[macro_export]
+</span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>module_plugin_trait_define {
-    (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+    (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$newtype_ty</span>:ident, <span class="macro-nonterminal">$plugin_ty</span>:ident, <span class="macro-nonterminal">$module_ty</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)*  } { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }
     ) =&gt; {
         <span class="kw">pub trait </span><span class="macro-nonterminal">$plugin_ty</span>:
@@ -758,11 +758,11 @@
 }
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(ConsensusItem);
 
-<span class="attribute">#[derive(Encodable, Decodable)]
+<span class="attr">#[derive(Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Signature;
 
 <span class="doccomment">/// Transaction that was already signed
-</span><span class="attribute">#[derive(Encodable)]
+</span><span class="attr">#[derive(Encodable)]
 </span><span class="kw">pub struct </span>Transaction {
     inputs: Vec&lt;Input&gt;,
     outputs: Vec&lt;Output&gt;,
@@ -789,4 +789,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

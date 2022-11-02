@@ -167,7 +167,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::CoreError;
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub enum </span>TransactionStatus {
     <span class="doccomment">/// The rejected state is only recorded if the error happens after consensus is achieved on the
     /// transaction. This should happen only rarely, e.g. on double spends since a basic validity
@@ -180,7 +180,7 @@
     },
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub enum </span>OutputOutcome {
     Mint(<span class="prelude-ty">Option</span>&lt;SigResponse&gt;),
     Wallet(&lt;Wallet <span class="kw">as </span>FederationModule&gt;::TxOutputOutcome),
@@ -315,4 +315,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

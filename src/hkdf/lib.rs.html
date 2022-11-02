@@ -489,26 +489,26 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 
     <span class="kw">use </span><span class="kw">crate</span>::Hkdf;
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     #[should_panic(expected = <span class="string">&quot;RFC5869 only supports output length of up to 255*HashLength&quot;</span>)]
     </span><span class="kw">fn </span>test_too_long_output_key() {
         <span class="kw">let </span>hkdf = Hkdf::&lt;<span class="kw">crate</span>::hashes::Sha512&gt;::new(<span class="string">&quot;foo&quot;</span>.as_bytes(), <span class="prelude-val">None</span>);
         hkdf.derive::&lt;<span class="number">16321</span>&gt;(<span class="kw-2">&amp;</span>[]);
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>test_long_output_key_ok() {
         <span class="kw">let </span>hkdf = Hkdf::&lt;<span class="kw">crate</span>::hashes::Sha512&gt;::new(<span class="string">&quot;foo&quot;</span>.as_bytes(), <span class="prelude-val">None</span>);
         hkdf.derive::&lt;<span class="number">16320</span>&gt;(<span class="kw-2">&amp;</span>[]);
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>rfc5896_test_vector_1() {
         <span class="kw">let </span>input_key = [
             <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>,
@@ -547,7 +547,7 @@
         )
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>rfc5896_test_vector_2() {
         <span class="kw">let </span>input_key = [
             <span class="number">0x00</span>, <span class="number">0x01</span>, <span class="number">0x02</span>, <span class="number">0x03</span>, <span class="number">0x04</span>, <span class="number">0x05</span>, <span class="number">0x06</span>, <span class="number">0x07</span>, <span class="number">0x08</span>, <span class="number">0x09</span>, <span class="number">0x0a</span>, <span class="number">0x0b</span>, <span class="number">0x0c</span>, <span class="number">0x0d</span>,
@@ -598,7 +598,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>rfc5896_test_vector_3() {
         <span class="kw">let </span>input_key = [
             <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>,
@@ -626,7 +626,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>rfc5896_test_vector_4() {
         <span class="kw">let </span>input_key = [
             <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>,
@@ -656,7 +656,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>rfc5896_test_vector_5() {
         <span class="kw">let </span>input_key = [
             <span class="number">0x00</span>, <span class="number">0x01</span>, <span class="number">0x02</span>, <span class="number">0x03</span>, <span class="number">0x04</span>, <span class="number">0x05</span>, <span class="number">0x06</span>, <span class="number">0x07</span>, <span class="number">0x08</span>, <span class="number">0x09</span>, <span class="number">0x0a</span>, <span class="number">0x0b</span>, <span class="number">0x0c</span>, <span class="number">0x0d</span>,
@@ -706,7 +706,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>rfc5896_test_vector_6() {
         <span class="kw">let </span>input_key = [
             <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>, <span class="number">0x0b</span>,
@@ -733,7 +733,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>rfc5896_test_vector_7() {
         <span class="kw">let </span>input_key = [
             <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>, <span class="number">0x0c</span>,
@@ -761,4 +761,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="hkdf" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="hkdf" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

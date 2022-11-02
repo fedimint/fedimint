@@ -560,7 +560,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="doccomment">/// Part of a config that needs to be generated to bootstrap a new federation.
-</span><span class="attribute">#[async_trait(<span class="question-mark">? </span>Send)]
+</span><span class="attr">#[async_trait(<span class="question-mark">? </span>Send)]
 </span><span class="kw">pub trait </span>GenerateConfig: Sized {
     <span class="kw">type </span>Params: <span class="question-mark">?</span>Sized;
     <span class="kw">type </span>ClientConfig;
@@ -889,13 +889,13 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub enum </span>DkgStep&lt;G: DkgGroup&gt; {
     Messages(Vec&lt;(PeerId, DkgMessage&lt;G&gt;)&gt;),
     <span class="prelude-ty">Result</span>(DkgKeys&lt;G&gt;),
 }
 
-<span class="attribute">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>DkgKeys&lt;G&gt; {
     <span class="kw">pub </span>public_key_set: Vec&lt;G&gt;,
     <span class="kw">pub </span>secret_key_share: Scalar,
@@ -919,15 +919,15 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>DkgMessage&lt;G: DkgGroup&gt; {
     HashedCommit(Sha256),
-    Commit(<span class="attribute">#[serde(with = <span class="string">&quot;serde_commit&quot;</span>)] </span>Vec&lt;G&gt;),
+    Commit(<span class="attr">#[serde(with = <span class="string">&quot;serde_commit&quot;</span>)] </span>Vec&lt;G&gt;),
     Share(
-        <span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span>Scalar,
-        <span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span>Scalar,
+        <span class="attr">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span>Scalar,
+        <span class="attr">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span>Scalar,
     ),
-    Extract(<span class="attribute">#[serde(with = <span class="string">&quot;serde_commit&quot;</span>)] </span>Vec&lt;G&gt;),
+    Extract(<span class="attr">#[serde(with = <span class="string">&quot;serde_commit&quot;</span>)] </span>Vec&lt;G&gt;),
 }
 
 <span class="doccomment">/// Defines a group (e.g. G1 or G2) that we can generate keys for
@@ -994,7 +994,7 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::{HashMap, VecDeque};
 
@@ -1006,7 +1006,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::config::{scalar, Dkg, DkgGroup, DkgKeys};
     <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_dkg() {
         <span class="kw">for </span>(peer, keys) <span class="kw">in </span>run(G1Projective::generator()) {
             <span class="kw">let </span>(pk, sk) = keys.threshold_crypto();
@@ -1060,11 +1060,11 @@
     }
 }
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BitcoindRpcCfg {
     <span class="kw">pub </span>btc_rpc_address: String,
     <span class="kw">pub </span>btc_rpc_user: String,
     <span class="kw">pub </span>btc_rpc_pass: String,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

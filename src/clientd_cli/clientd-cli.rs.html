@@ -105,17 +105,17 @@
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>mint_client::utils::{from_hex, parse_fedimint_amount};
 
-<span class="attribute">#[derive(Parser)]
+<span class="attr">#[derive(Parser)]
 #[command(author, version, about = <span class="string">&quot;a json-rpc cli application&quot;</span>)]
 </span><span class="kw">struct </span>Cli {
     <span class="doccomment">/// print unformatted json
-    </span><span class="attribute">#[arg(long = <span class="string">&quot;raw&quot;</span>, short = <span class="string">&#39;r&#39;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;raw&quot;</span>, short = <span class="string">&#39;r&#39;</span>)]
     </span>raw_json: bool,
     <span class="doccomment">/// call JSON-2.0 RPC method
-    </span><span class="attribute">#[command(subcommand)]
+    </span><span class="attr">#[command(subcommand)]
     </span>command: Commands,
 }
-<span class="attribute">#[derive(Subcommand)]
+<span class="attr">#[derive(Subcommand)]
 </span><span class="kw">enum </span>Commands {
     <span class="doccomment">/// Print the latest git commit hash this bin. was build with
     </span>VersionHash,
@@ -126,26 +126,26 @@
     <span class="doccomment">/// rpc-method: pegin_address()
     </span>NewPegInAddress,
     <span class="doccomment">/// rpc-method: wait_block_height()
-    </span><span class="attribute">#[clap(arg_required_else_help = <span class="bool-val">true</span>)]
+    </span><span class="attr">#[clap(arg_required_else_help = <span class="bool-val">true</span>)]
     </span>WaitBlockHeight { height: u64 },
     <span class="doccomment">/// rpc-method peg_in()
     </span>PegIn {
         <span class="doccomment">/// The TxOutProof which was created from sending BTC to the pegin-address
-        </span><span class="attribute">#[arg(value_parser = from_hex::&lt;TxOutProof&gt;)]
+        </span><span class="attr">#[arg(value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
         <span class="doccomment">/// The Bitcoin Transaction
-        </span><span class="attribute">#[arg(value_parser = from_hex::&lt;Transaction&gt;)]
+        </span><span class="attr">#[arg(value_parser = from_hex::&lt;Transaction&gt;)]
         </span>transaction: Transaction,
     },
     <span class="comment">//TODO: Encode coins and/or give option (flag) to get them raw
     </span><span class="doccomment">/// rpc-method_ spend()
     </span>Spend {
         <span class="doccomment">/// A minimint (ecash) amount
-        </span><span class="attribute">#[arg(value_parser = parse_fedimint_amount)]
+        </span><span class="attr">#[arg(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
     },
 }
-<span class="attribute">#[tokio::main]
+<span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>args = Cli::parse();
 
@@ -197,4 +197,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

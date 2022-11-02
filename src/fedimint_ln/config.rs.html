@@ -143,7 +143,7 @@
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>threshold_crypto::G1Projective;
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningModuleConfig {
     <span class="kw">pub </span>threshold_pub_keys: threshold_crypto::PublicKeySet,
     <span class="comment">// TODO: propose serde(with = &quot;…&quot;) based protection upstream instead
@@ -153,13 +153,13 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningModuleClientConfig {
     <span class="kw">pub </span>threshold_pub_key: threshold_crypto::PublicKey,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>GenerateConfig <span class="kw">for </span>LightningModuleConfig {
     <span class="kw">type </span>Params = ();
     <span class="kw">type </span>ClientConfig = LightningModuleClientConfig;
@@ -248,7 +248,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>contract_input: fedimint_api::Amount,
     <span class="kw">pub </span>contract_output: fedimint_api::Amount,
@@ -263,4 +263,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

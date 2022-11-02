@@ -1275,7 +1275,7 @@
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
-<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>api::FederationApi;
@@ -1355,7 +1355,7 @@
 <span class="kw">pub type </span>GatewayClient = Client&lt;GatewayClientConfig&gt;;
 <span class="kw">pub type </span>UserClient = Client&lt;UserClientConfig&gt;;
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>PaymentParameters {
     <span class="kw">pub </span>max_delay: u64,
     <span class="kw">pub </span>invoice_amount: Amount,
@@ -1365,7 +1365,7 @@
 }
 
 <span class="comment">// Placeholder struct for identifying federations across clients
-</span><span class="attribute">#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
 </span><span class="kw">pub struct </span>FederationId(<span class="kw">pub </span>String);
 
 <span class="kw">impl </span>FromStr <span class="kw">for </span>FederationId {
@@ -1376,20 +1376,20 @@
     }
 }
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>UserClientConfig(<span class="kw">pub </span>ClientConfig);
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayClientConfig {
     <span class="kw">pub </span>client_config: ClientConfig,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_keypair&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_keypair&quot;</span>)]
     </span><span class="kw">pub </span>redeem_key: bitcoin::KeyPair,
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>api: Url,
     <span class="kw">pub </span>node_pub_key: bitcoin::secp256k1::PublicKey,
 }
 
-<span class="attribute">#[async_trait]
+<span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ModuleClient {
     <span class="kw">type </span>Module: FederationModule;
 
@@ -1419,11 +1419,11 @@
 <span class="kw">pub struct </span>Client&lt;C&gt; {
     config: C,
     context: ClientContext,
-    <span class="attribute">#[allow(unused)]
+    <span class="attr">#[allow(unused)]
     </span>root_secret: DerivableSecret,
 }
 
-<span class="attribute">#[derive(Encodable, Decodable)]
+<span class="attr">#[derive(Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ClientSecret([u8; <span class="number">64</span>]);
 
 <span class="kw">impl </span>AsRef&lt;ClientConfig&gt; <span class="kw">for </span>GatewayClientConfig {
@@ -1993,12 +1993,12 @@
             htlc_maximum_msat: <span class="prelude-val">None</span>,
         }]);
 
-        <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">let </span>duration_since_epoch = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
-        <span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
         </span><span class="kw">let </span>duration_since_epoch =
             Duration::from_secs_f64(js_sys::Date::new_0().get_time() / <span class="number">1000.</span>);
 
@@ -2429,7 +2429,7 @@
     <span class="kw">use </span>secp256k1_zkp::SecretKey;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    <span class="attribute">#[allow(missing_docs)]
+    <span class="attr">#[allow(missing_docs)]
     </span><span class="kw">pub fn </span>serialize&lt;S&gt;(key: <span class="kw-2">&amp;</span>KeyPair, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
     <span class="kw">where
         </span>S: Serializer,
@@ -2437,7 +2437,7 @@
         SecretKey::from_keypair(key).serialize(serializer)
     }
 
-    <span class="attribute">#[allow(missing_docs)]
+    <span class="attr">#[allow(missing_docs)]
     </span><span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;KeyPair, D::Error&gt;
     <span class="kw">where
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
@@ -2451,73 +2451,73 @@
     }
 }
 
-<span class="attribute">#[derive(Error, Debug)]
+<span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>ClientError {
-    <span class="attribute">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
-    </span>MintApiError(<span class="attribute">#[from] </span>ApiError),
-    <span class="attribute">#[error(<span class="string">&quot;Wallet client error: {0}&quot;</span>)]
-    </span>WalletClientError(<span class="attribute">#[from] </span>WalletClientError),
-    <span class="attribute">#[error(<span class="string">&quot;Mint client error: {0}&quot;</span>)]
-    </span>MintClientError(<span class="attribute">#[from] </span>MintClientError),
-    <span class="attribute">#[error(<span class="string">&quot;Lightning client error: {0}&quot;</span>)]
-    </span>LnClientError(<span class="attribute">#[from] </span>LnClientError),
-    <span class="attribute">#[error(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
+    </span>MintApiError(<span class="attr">#[from] </span>ApiError),
+    <span class="attr">#[error(<span class="string">&quot;Wallet client error: {0}&quot;</span>)]
+    </span>WalletClientError(<span class="attr">#[from] </span>WalletClientError),
+    <span class="attr">#[error(<span class="string">&quot;Mint client error: {0}&quot;</span>)]
+    </span>MintClientError(<span class="attr">#[from] </span>MintClientError),
+    <span class="attr">#[error(<span class="string">&quot;Lightning client error: {0}&quot;</span>)]
+    </span>LnClientError(<span class="attr">#[from] </span>LnClientError),
+    <span class="attr">#[error(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]
     </span>PegInAmountTooSmall,
-    <span class="attribute">#[error(<span class="string">&quot;Peg-out waiting for UTXOs&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Peg-out waiting for UTXOs&quot;</span>)]
     </span>PegOutWaitingForUTXOs,
-    <span class="attribute">#[error(<span class="string">&quot;Timed out while waiting for contract to be accepted&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Timed out while waiting for contract to be accepted&quot;</span>)]
     </span>WaitContractTimeout,
-    <span class="attribute">#[error(<span class="string">&quot;Error fetching offer&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Error fetching offer&quot;</span>)]
     </span>FetchOfferError,
-    <span class="attribute">#[error(<span class="string">&quot;Failed to create lightning invoice: {0}&quot;</span>)]
-    </span>InvoiceError(<span class="attribute">#[from] </span>CreationError),
-    <span class="attribute">#[error(<span class="string">&quot;The Account or offer is keyed to another gateway&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Failed to create lightning invoice: {0}&quot;</span>)]
+    </span>InvoiceError(<span class="attr">#[from] </span>CreationError),
+    <span class="attr">#[error(<span class="string">&quot;The Account or offer is keyed to another gateway&quot;</span>)]
     </span>NotOurKey,
-    <span class="attribute">#[error(<span class="string">&quot;Can&#39;t parse contract&#39;s invoice: {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Can&#39;t parse contract&#39;s invoice: {0:?}&quot;</span>)]
     </span>InvalidInvoice(lightning_invoice::ParseOrSemanticError),
-    <span class="attribute">#[error(<span class="string">&quot;Invoice is missing amount&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invoice is missing amount&quot;</span>)]
     </span>InvoiceMissingAmount,
-    <span class="attribute">#[error(<span class="string">&quot;Outgoing contract is underfunded, wants us to pay {0}, but only contains {1}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Outgoing contract is underfunded, wants us to pay {0}, but only contains {1}&quot;</span>)]
     </span>Underfunded(Amount, Amount),
-    <span class="attribute">#[error(<span class="string">&quot;The contract&#39;s timeout is in the past or does not allow for a safety margin&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The contract&#39;s timeout is in the past or does not allow for a safety margin&quot;</span>)]
     </span>TimeoutTooClose,
-    <span class="attribute">#[error(<span class="string">&quot;No offer&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;No offer&quot;</span>)]
     </span>NoOffer,
-    <span class="attribute">#[error(<span class="string">&quot;Invalid offer&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid offer&quot;</span>)]
     </span>InvalidOffer,
-    <span class="attribute">#[error(<span class="string">&quot;Wrong contract type&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Wrong contract type&quot;</span>)]
     </span>WrongContractType,
-    <span class="attribute">#[error(<span class="string">&quot;Wrong transaction type&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Wrong transaction type&quot;</span>)]
     </span>WrongTransactionType,
-    <span class="attribute">#[error(<span class="string">&quot;Invalid transaction {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid transaction {0}&quot;</span>)]
     </span>InvalidTransaction(String),
-    <span class="attribute">#[error(<span class="string">&quot;Invalid preimage&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid preimage&quot;</span>)]
     </span>InvalidPreimage,
-    <span class="attribute">#[error(<span class="string">&quot;Federation has no lightning gateways&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Federation has no lightning gateways&quot;</span>)]
     </span>NoGateways,
-    <span class="attribute">#[error(<span class="string">&quot;Federation has no registered lightning gateway with the given node public key&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Federation has no registered lightning gateway with the given node public key&quot;</span>)]
     </span>GatewayNotFound,
-    <span class="attribute">#[error(<span class="string">&quot;HTTP Error {0}&quot;</span>)]
-    </span>HttpError(<span class="attribute">#[from] </span>reqwest::Error),
-    <span class="attribute">#[error(<span class="string">&quot;Outgoing payment timeout&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;HTTP Error {0}&quot;</span>)]
+    </span>HttpError(<span class="attr">#[from] </span>reqwest::Error),
+    <span class="attr">#[error(<span class="string">&quot;Outgoing payment timeout&quot;</span>)]
     </span>OutgoingPaymentTimeout,
-    <span class="attribute">#[error(<span class="string">&quot;Invalid amount tier {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid amount tier {0:?}&quot;</span>)]
     </span>InvalidAmountTier(Amount),
-    <span class="attribute">#[error(<span class="string">&quot;Invalid signature&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid signature&quot;</span>)]
     </span>InvalidSignature,
-    <span class="attribute">#[error(<span class="string">&quot;Violated fee policy&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Violated fee policy&quot;</span>)]
     </span>ViolatedFeePolicy,
-    <span class="attribute">#[error(<span class="string">&quot;Tried to cancel outgoing contract that we don&#39;t know about&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Tried to cancel outgoing contract that we don&#39;t know about&quot;</span>)]
     </span>CancelUnknownOutgoingContract,
-    <span class="attribute">#[error(<span class="string">&quot;Tried to refund outgoing contract that we don&#39;t know about&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Tried to refund outgoing contract that we don&#39;t know about&quot;</span>)]
     </span>RefundUnknownOutgoingContract,
-    <span class="attribute">#[error(<span class="string">&quot;Routing outgoing payment failed but we got a refund&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Routing outgoing payment failed but we got a refund&quot;</span>)]
     </span>RefundedFailedPayment,
-    <span class="attribute">#[error(<span class="string">&quot;Routing outgoing payment failed, we didn&#39;t get a refund (yet)&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Routing outgoing payment failed, we didn&#39;t get a refund (yet)&quot;</span>)]
     </span>FailedPaymentNoRefund,
-    <span class="attribute">#[error(<span class="string">&quot;Failed to delete unknown outgoing contract&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Failed to delete unknown outgoing contract&quot;</span>)]
     </span>DeleteUnknownOutgoingContract,
-    <span class="attribute">#[error(<span class="string">&quot;Timeout&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Timeout&quot;</span>)]
     </span>Timeout,
 }
 
@@ -2527,4 +2527,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

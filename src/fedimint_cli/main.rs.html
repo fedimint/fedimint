@@ -652,7 +652,7 @@
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 
-<span class="attribute">#[derive(Serialize)]
+<span class="attr">#[derive(Serialize)]
 #[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
 #[serde(untagged)]
 </span><span class="kw">enum </span>CliOutput {
@@ -734,7 +734,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">enum </span>CliErrorKind {
     NetworkError,
     IOError,
@@ -748,12 +748,12 @@
     GeneralFailure,
 }
 
-<span class="attribute">#[derive(Serialize)]
+<span class="attr">#[derive(Serialize)]
 #[serde(tag = <span class="string">&quot;error&quot;</span>, rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
 </span><span class="kw">struct </span>CliError {
     kind: CliErrorKind,
     message: String,
-    <span class="attribute">#[serde(skip_serializing)]
+    <span class="attr">#[serde(skip_serializing)]
     </span>raw_error: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Error&gt;&gt;,
 }
 
@@ -789,29 +789,29 @@
 
 <span class="kw">impl </span>Error <span class="kw">for </span>CliError {}
 
-<span class="attribute">#[derive(Parser)]
+<span class="attr">#[derive(Parser)]
 #[command(version)]
 </span><span class="kw">struct </span>Cli {
     <span class="doccomment">/// The working directory of the client containing the config and db
-    </span><span class="attribute">#[arg(long = <span class="string">&quot;workdir&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;workdir&quot;</span>)]
     </span>workdir: PathBuf,
-    <span class="attribute">#[clap(subcommand)]
+    <span class="attr">#[clap(subcommand)]
     </span>command: Command,
 }
 
-<span class="attribute">#[derive(Parser)]
+<span class="attr">#[derive(Parser)]
 #[command(version)]
 </span><span class="kw">struct </span>CliNoWorkdir {
-    <span class="attribute">#[clap(subcommand)]
+    <span class="attr">#[clap(subcommand)]
     </span>command: CommandNoWorkdir,
 }
 
-<span class="attribute">#[derive(Subcommand)]
+<span class="attr">#[derive(Subcommand)]
 </span><span class="kw">enum </span>CommandNoWorkdir {
     <span class="doccomment">/// Print the latest git commit hash this bin. was build with
     </span>VersionHash,
 }
-<span class="attribute">#[derive(Subcommand)]
+<span class="attr">#[derive(Subcommand)]
 </span><span class="kw">enum </span>Command {
     <span class="doccomment">/// Print the latest git commit hash this bin. was build with
     </span>VersionHash,
@@ -820,34 +820,34 @@
 
     <span class="doccomment">/// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
     </span>PegIn {
-        <span class="attribute">#[clap(value_parser = from_hex::&lt;TxOutProof&gt;)]
+        <span class="attr">#[clap(value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
-        <span class="attribute">#[clap(value_parser = from_hex::&lt;Transaction&gt;)]
+        <span class="attr">#[clap(value_parser = from_hex::&lt;Transaction&gt;)]
         </span>transaction: Transaction,
     },
 
     <span class="doccomment">/// Reissue tokens received from a third party to avoid double spends
     </span>Reissue {
-        <span class="attribute">#[clap(value_parser = parse_coins)]
+        <span class="attr">#[clap(value_parser = parse_coins)]
         </span>coins: TieredMulti&lt;SpendableNote&gt;,
     },
 
     <span class="doccomment">/// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     </span>Validate {
-        <span class="attribute">#[clap(value_parser = parse_coins)]
+        <span class="attr">#[clap(value_parser = parse_coins)]
         </span>coins: TieredMulti&lt;SpendableNote&gt;,
     },
 
     <span class="doccomment">/// Prepare notes to send to a third party as a payment
     </span>Spend {
-        <span class="attribute">#[clap(value_parser = parse_fedimint_amount)]
+        <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
     },
 
     <span class="doccomment">/// Withdraw funds from the federation
     </span>PegOut {
         address: Address,
-        <span class="attribute">#[clap(value_parser = parse_bitcoin_amount)]
+        <span class="attr">#[clap(value_parser = parse_bitcoin_amount)]
         </span>satoshis: bitcoin::Amount,
     },
 
@@ -862,7 +862,7 @@
 
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
-        <span class="attribute">#[clap(value_parser = parse_fedimint_amount)]
+        <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
         description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
@@ -886,7 +886,7 @@
     <span class="doccomment">/// Switch active gateway
     </span>SwitchGateway {
         <span class="doccomment">/// node public key for a gateway
-        </span><span class="attribute">#[clap(value_parser = parse_node_pub_key)]
+        </span><span class="attr">#[clap(value_parser = parse_node_pub_key)]
         </span>pubkey: secp256k1::PublicKey,
     },
 }
@@ -922,13 +922,13 @@
 
 <span class="kw">type </span>CliResult = <span class="prelude-ty">Result</span>&lt;CliOutput, CliError&gt;;
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">struct </span>PayRequest {
     coins: TieredMulti&lt;SpendableNote&gt;,
     invoice: String,
 }
 
-<span class="attribute">#[tokio::main]
+<span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -941,7 +941,7 @@
     <span class="kw">if let </span><span class="prelude-val">Ok</span>(cli) = CliNoWorkdir::try_parse() {
         <span class="comment">// Only commands that don&#39;t need the workdir can be used here
         //TODO: remove allow when there are more commands
-        </span><span class="attribute">#[allow(irrefutable_let_patterns)]
+        </span><span class="attr">#[allow(irrefutable_let_patterns)]
         </span><span class="kw">if let </span>CommandNoWorkdir::VersionHash = cli.command {
             <span class="macro">println!</span>(
                 <span class="string">&quot;{}&quot;</span>,
@@ -1257,4 +1257,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

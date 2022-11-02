@@ -391,7 +391,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
 
 <span class="doccomment">/// A proof about a script owning a certain output. Verifyable using headers only.
-</span><span class="attribute">#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
+</span><span class="attr">#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
 #[validate(schema(function = <span class="string">&quot;validate_peg_in_proof&quot;</span>))]
 </span><span class="kw">pub struct </span>PegInProof {
     txout_proof: TxOutProof,
@@ -404,7 +404,7 @@
     tweak_contract_key: secp256k1::XOnlyPublicKey,
 }
 
-<span class="attribute">#[derive(Clone, Debug)]
+<span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>TxOutProof {
     <span class="kw">pub </span>block_header: BlockHeader,
     <span class="kw">pub </span>merkle_proof: PartialMerkleTree,
@@ -686,19 +686,19 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>PegInProofError {
-    <span class="attribute">#[error(<span class="string">&quot;Supplied transaction is not included in proof&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Supplied transaction is not included in proof&quot;</span>)]
     </span>TransactionNotInProof,
-    <span class="attribute">#[error(<span class="string">&quot;Supplied transaction has too many outputs&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Supplied transaction has too many outputs&quot;</span>)]
     </span>TooManyTransactionOutputs,
-    <span class="attribute">#[error(<span class="string">&quot;The output with index {0} referred to does not exist (tx has {1} outputs)&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The output with index {0} referred to does not exist (tx has {1} outputs)&quot;</span>)]
     </span>OutputIndexOutOfRange(usize, usize),
-    <span class="attribute">#[error(<span class="string">&quot;The expected script given the tweak did not match the actual script&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The expected script given the tweak did not match the actual script&quot;</span>)]
     </span>ScriptDoesNotMatch,
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::{collections::BTreeMap, io::Cursor};
 
@@ -706,7 +706,7 @@
 
     <span class="kw">use </span><span class="kw">super</span>::TxOutProof;
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_txoutproof_happy_path() {
         <span class="kw">let </span>txoutproof_hex = <span class="string">&quot;0000a020c7f74cb7d4cbf90a40f38b8194d17996d29ad8cb8d42030000000000000\
         0000045e274cbfff8fe34e6df61079ae8c8cf5af6d53ff158488e26df5a072363693be15a6760482a0c1731b169\
@@ -743,4 +743,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

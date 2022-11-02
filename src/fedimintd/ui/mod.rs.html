@@ -363,14 +363,14 @@
     state.running = <span class="bool-val">true</span>;
 }
 
-<span class="attribute">#[derive(Deserialize, Debug, Clone)]
+<span class="attr">#[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
 </span><span class="kw">pub struct </span>Guardian {
     name: String,
     connection_string: String,
 }
 
-<span class="attribute">#[derive(Template)]
+<span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;home.html&quot;</span>)]
 </span><span class="kw">struct </span>HomeTemplate {
     federation_name: String,
@@ -395,7 +395,7 @@
     }
 }
 
-<span class="attribute">#[derive(Template)]
+<span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;choose.html&quot;</span>)]
 </span><span class="kw">struct </span>ChooseTemplate {}
 
@@ -403,7 +403,7 @@
     ChooseTemplate {}
 }
 
-<span class="attribute">#[derive(Template)]
+<span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;dealer.html&quot;</span>)]
 </span><span class="kw">struct </span>DealerTemplate {
     guardians: Vec&lt;Guardian&gt;,
@@ -427,7 +427,7 @@
     <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/dealer&quot;</span>.parse().unwrap()))
 }
 
-<span class="attribute">#[derive(Deserialize, Debug)]
+<span class="attr">#[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 </span><span class="kw">struct </span>FedName {
     federation_name: String,
@@ -470,7 +470,7 @@
     <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/configs&quot;</span>.parse().unwrap()))
 }
 
-<span class="attribute">#[derive(Template)]
+<span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;url_connection.html&quot;</span>)]
 </span><span class="kw">struct </span>UrlConnection {}
 
@@ -478,7 +478,7 @@
     UrlConnection {}
 }
 
-<span class="attribute">#[derive(Deserialize, Debug, Clone)]
+<span class="attr">#[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
 </span><span class="kw">pub struct </span>UrlForm {
     ipaddr: String,
@@ -496,7 +496,7 @@
     <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/choose&quot;</span>.parse().unwrap()))
 }
 
-<span class="attribute">#[derive(Template)]
+<span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;player.html&quot;</span>)]
 </span><span class="kw">struct </span>PlayerTemplate {
     connection_string: String,
@@ -508,7 +508,7 @@
     }
 }
 
-<span class="attribute">#[derive(Deserialize, Debug, Clone)]
+<span class="attr">#[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
 </span><span class="kw">pub struct </span>ReceiveConfigsForm {
     server_config: String,
@@ -548,7 +548,7 @@
     serde_json::to_writer_pretty(client_cfg_file, <span class="kw-2">&amp;</span>client_config).unwrap();
 }
 
-<span class="attribute">#[derive(Template)]
+<span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;configs.html&quot;</span>)]
 </span><span class="kw">struct </span>DisplayConfigsTemplate {
     federation_name: String,
@@ -592,7 +592,7 @@
     )
 }
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>State {
     federation_name: String,
     guardians: Vec&lt;Guardian&gt;,
@@ -606,7 +606,7 @@
 }
 <span class="kw">type </span>MutableState = Arc&lt;RwLock&lt;State&gt;&gt;;
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub enum </span>UiMessage {
     SetupComplete,
 }
@@ -657,4 +657,4 @@
         </span>.unwrap();
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

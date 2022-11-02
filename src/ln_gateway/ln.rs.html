@@ -31,7 +31,7 @@
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
 <span class="kw">use </span>secp256k1::PublicKey;
 
-<span class="attribute">#[async_trait]
+<span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>LnRpc: Send + Sync + <span class="lifetime">&#39;static </span>{
     <span class="doccomment">/// Attempt to pay an invoice and block till it succeeds, fails or times out
     </span><span class="kw">async fn </span>pay(
@@ -42,7 +42,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningError&gt;;
 }
 
-<span class="attribute">#[derive(Clone)]
+<span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>LnRpcRef {
     <span class="kw">pub </span>ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
     <span class="kw">pub </span>bind_addr: SocketAddr,
@@ -50,7 +50,7 @@
     <span class="kw">pub </span>work_dir: PathBuf,
 }
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LightningError(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;i32&gt;);
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

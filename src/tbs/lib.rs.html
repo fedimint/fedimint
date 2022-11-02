@@ -333,32 +333,32 @@
 <span class="kw">pub mod </span>poly;
 <span class="kw">pub mod </span>serde_impl;
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>PublicKeyShare(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PublicKeyShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>SecretKeyShare(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span><span class="kw">pub </span>Scalar);
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>SecretKeyShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span><span class="kw">pub </span>Scalar);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>AggregatePublicKey(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>AggregatePublicKey(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>BlindingKey(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span><span class="kw">pub </span>Scalar);
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>BlindingKey(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span><span class="kw">pub </span>Scalar);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>BlindedMessage(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
+<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>BlindedMessage(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>BlindedSignatureShare(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
+<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>BlindedSignatureShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>BlindedSignature(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
+<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>BlindedSignature(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>Signature(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
+<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>Signature(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attribute">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>Message(<span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
+<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>Message(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
 <span class="kw">pub trait </span>FromRandom {
     <span class="kw">fn </span>from_random(rng: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>RngCore) -&gt; <span class="self">Self</span>;
@@ -381,7 +381,7 @@
     }
 }
 
-<span class="attribute">#[allow(clippy::derive_hash_xor_eq)]
+<span class="attr">#[allow(clippy::derive_hash_xor_eq)]
 </span><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>AggregatePublicKey {
     <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
         <span class="kw">let </span>serialized = <span class="self">self</span>.<span class="number">0</span>.to_compressed();
@@ -544,14 +544,14 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use crate</span>::{
         blind_message, combine_valid_shares, dealer_keygen, sign_blinded_msg, unblind_signature,
         verify, Aggregatable, BlindingKey, Message,
     };
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>test_keygen() {
         <span class="kw">let </span>(pk, pks, _sks) = dealer_keygen(<span class="number">5</span>, <span class="number">15</span>);
         <span class="macro">assert_eq!</span>(pks.len(), <span class="number">15</span>);
@@ -560,7 +560,7 @@
         <span class="macro">assert_eq!</span>(pka, pk);
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>test_roundtrip() {
         <span class="kw">let </span>msg = Message::from_bytes(<span class="string">b&quot;Hello World!&quot;</span>);
         <span class="kw">let </span>threshold = <span class="number">5</span>;
@@ -597,7 +597,7 @@
         <span class="macro">assert!</span>(verify(msg, sig, pk));
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     #[should_panic(expected = <span class="string">&quot;Not enough signature shares&quot;</span>)]
     </span><span class="kw">fn </span>test_insufficient_shares() {
         <span class="kw">let </span>msg = Message::from_bytes(<span class="string">b&quot;Hello World!&quot;</span>);
@@ -617,4 +617,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -616,7 +616,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub struct </span>DecodeError(<span class="kw">pub</span>(<span class="kw">crate</span>) anyhow::Error);
 
 <span class="kw">impl </span>DecodeError {
@@ -658,7 +658,7 @@
 
 <span class="macro">macro_rules! </span>impl_encode_decode_tuple {
     ($(<span class="macro-nonterminal">$x</span>:ident),<span class="kw-2">*</span>) =&gt; (
-        <span class="attribute">#[allow(non_snake_case)]
+        <span class="attr">#[allow(non_snake_case)]
         </span><span class="kw">impl </span>&lt;$(<span class="macro-nonterminal">$x</span>: Encodable),<span class="kw-2">*</span>&gt; Encodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, s: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
                 <span class="kw">let </span><span class="kw-2">&amp;</span>($(<span class="kw-2">ref </span><span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) = <span class="self">self</span>;
@@ -668,7 +668,7 @@
             }
         }
 
-        <span class="attribute">#[allow(non_snake_case)]
+        <span class="attr">#[allow(non_snake_case)]
         </span><span class="kw">impl</span>&lt;$(<span class="macro-nonterminal">$x</span>: Decodable),<span class="kw-2">*</span>&gt; Decodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
             <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; <span class="kw">where </span>M : <span class="macro-nonterminal">$crate::core::ModuleDecode </span>{
                 <span class="prelude-val">Ok</span>(($({<span class="kw">let </span><span class="macro-nonterminal">$x </span>= Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>; <span class="macro-nonterminal">$x </span>}),<span class="kw-2">*</span>))
@@ -903,9 +903,9 @@
 
 <span class="kw">impl </span>DecodeError {
     <span class="comment">// TODO: think about better name
-    </span><span class="attribute">#[allow(clippy::should_implement_trait)]
+    </span><span class="attr">#[allow(clippy::should_implement_trait)]
     </span><span class="kw">pub fn </span>from_str(s: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
-        <span class="attribute">#[derive(Debug)]
+        <span class="attr">#[derive(Debug)]
         </span><span class="kw">struct </span>StrError(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str);
 
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>StrError {
@@ -930,7 +930,7 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::io::Cursor;
     <span class="kw">use </span>std::{collections::BTreeMap, fmt::Debug};
@@ -966,9 +966,9 @@
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_derive_struct() {
-        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         </span><span class="kw">struct </span>TestStruct {
             vec: Vec&lt;u8&gt;,
             num: u32,
@@ -983,9 +983,9 @@
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_derive_tuple_struct() {
-        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         </span><span class="kw">struct </span>TestStruct(Vec&lt;u8&gt;, u32);
 
         <span class="kw">let </span>reference = TestStruct(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], <span class="number">42</span>);
@@ -994,9 +994,9 @@
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_derive_enum() {
-        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         </span><span class="kw">enum </span>TestEnum {
             Foo(<span class="prelude-ty">Option</span>&lt;u64&gt;),
             Bar { bazz: Vec&lt;u8&gt; },
@@ -1021,7 +1021,7 @@
         }
     }
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_invoice() {
         <span class="kw">let </span>invoice_str = <span class="string">&quot;lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
 			h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
@@ -1039,4 +1039,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

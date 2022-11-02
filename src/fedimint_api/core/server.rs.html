@@ -592,7 +592,7 @@
     <span class="kw">pub </span>handler: ApiHandler,
 }
 
-<span class="attribute">#[async_trait]
+<span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ModuleApiHandler {
     <span class="kw">async fn </span>handle(<span class="kw-2">&amp;</span><span class="self">self</span>, params: <span class="kw-2">&amp;</span>serde_json::Value) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;;
 }
@@ -618,9 +618,9 @@
     {} {}
 );
 
-<span class="attribute">#[derive(Error, Debug)]
+<span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>Error {
-    <span class="attribute">#[error(<span class="string">&quot;oops&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;oops&quot;</span>)]
     </span>SomethingWentWrong,
 }
 
@@ -648,7 +648,7 @@
 <span class="doccomment">/// Backend side module interface
 ///
 /// Server side Fedimint mondule needs to implement this trait.
-</span><span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+</span><span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">pub trait </span>IServerModule {
     <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
 
@@ -763,7 +763,7 @@
 }
 
 <span class="macro">dyn_newtype_define!</span>(
-    <span class="attribute">#[derive(Clone)]
+    <span class="attr">#[derive(Clone)]
     </span><span class="kw">pub </span>ServerModule(Arc&lt;IServerModule&gt;)
 );
 
@@ -796,7 +796,7 @@
     }
 }
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">pub trait </span>ServerModulePlugin: Sized {
     <span class="kw">type </span>Decoder: PluginDecode;
     <span class="kw">type </span>Input: PluginInput;
@@ -907,7 +907,7 @@
     </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit);
 }
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl</span>&lt;T&gt; IServerModule <span class="kw">for </span>T
 <span class="kw">where
     </span>T: ServerModulePlugin,
@@ -1131,4 +1131,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

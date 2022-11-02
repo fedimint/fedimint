@@ -350,7 +350,7 @@
 /// **Attention:** care has to be taken when constructing this to avoid overflow when calculating
 /// the total amount represented. As it is prudent to limit both the maximum coin amount and maximum
 /// coin count per transaction this shouldn&#39;t be a problem in practice though.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub struct </span>TieredMulti&lt;T&gt;(BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;);
 
 <span class="kw">impl</span>&lt;T&gt; TieredMulti&lt;T&gt; {
@@ -621,13 +621,13 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span>fedimint_api::Amount;
 
     <span class="kw">use </span><span class="kw">crate</span>::TieredMulti;
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>select_coins_returns_exact_amount() {
         <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[
             (Amount::from_sat(<span class="number">1</span>), <span class="number">5</span>),
@@ -644,7 +644,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>select_coins_uses_smaller_denominations() {
         <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[(Amount::from_sat(<span class="number">5</span>), <span class="number">5</span>), (Amount::from_sat(<span class="number">20</span>), <span class="number">5</span>)]);
 
@@ -654,7 +654,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>select_coins_returns_none_if_amount_is_too_large() {
         <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[(Amount::from_sat(<span class="number">10</span>), <span class="number">1</span>)]);
 
@@ -669,4 +669,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

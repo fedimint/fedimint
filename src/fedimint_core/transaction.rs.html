@@ -195,7 +195,7 @@
 <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
 ///
 /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Transaction {
     <span class="doccomment">/// [`Input`]s consumed by the transaction
     </span><span class="kw">pub </span>inputs: Vec&lt;Input&gt;,
@@ -211,7 +211,7 @@
 ///
 /// Each input has an associated secret/public key pair.
 /// Inputs can not have keys if the transaction value is 0. This is useful for non-monetary transactions to announce information to the mint like incoming LN contract offers.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>Input {
     <span class="comment">// TODO: maybe treat every coin as a seperate input?
     </span>Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>FederationModule&gt;::TxInput),
@@ -220,7 +220,7 @@
 }
 
 <span class="comment">// TODO: check if clippy is right
-</span><span class="attribute">#[allow(clippy::large_enum_variant)]
+</span><span class="attr">#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>Output {
     Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>FederationModule&gt;::TxOutput),
@@ -355,18 +355,18 @@
     session.partial_sig_agg(<span class="kw-2">&amp;</span>partial_sigs)
 }
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>TransactionError {
-    <span class="attribute">#[error(<span class="string">&quot;The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})&quot;</span>)]
     </span>UnbalancedTransaction {
         inputs: Amount,
         outputs: Amount,
         fee: Amount,
     },
-    <span class="attribute">#[error(<span class="string">&quot;The transaction&#39;s signature is invalid&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The transaction&#39;s signature is invalid&quot;</span>)]
     </span>InvalidSignature,
-    <span class="attribute">#[error(<span class="string">&quot;The transaction did not have a signature although there were inputs to be signed&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The transaction did not have a signature although there were inputs to be signed&quot;</span>)]
     </span>MissingSignature,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

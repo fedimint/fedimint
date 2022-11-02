@@ -246,59 +246,59 @@
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 
-<span class="attribute">#[derive(Parser)]
+<span class="attr">#[derive(Parser)]
 </span><span class="kw">struct </span>Cli {
-    <span class="attribute">#[clap(subcommand)]
+    <span class="attr">#[clap(subcommand)]
     </span>command: Command,
 }
 
-<span class="attribute">#[derive(Subcommand)]
+<span class="attr">#[derive(Subcommand)]
 </span><span class="kw">enum </span>Command {
     <span class="doccomment">/// Print the latest git commit hash this bin. was build with
     </span>VersionHash,
     <span class="doccomment">/// Creates a connection cert string that must be shared with all other peers
     </span>CreateCert {
         <span class="doccomment">/// Directory to output all the generated config files
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
         </span>dir_out_path: PathBuf,
 
         <span class="doccomment">/// Our external address
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;address&quot;</span>, default_value = <span class="string">&quot;127.0.0.1&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;address&quot;</span>, default_value = <span class="string">&quot;127.0.0.1&quot;</span>)]
         </span>address: String,
 
         <span class="doccomment">/// Our base port, ports may be used from base_port to base_port+10
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;base-port&quot;</span>, default_value = <span class="string">&quot;4000&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;base-port&quot;</span>, default_value = <span class="string">&quot;4000&quot;</span>)]
         </span>base_port: u16,
 
         <span class="doccomment">/// Our node name, must be unique among peers
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;name&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;name&quot;</span>)]
         </span>name: String,
 
         <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;password&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>)]
         </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
     <span class="doccomment">/// All peers must run distributed key gen at the same time to create configs
     </span>Run {
         <span class="doccomment">/// Directory to output all the generated config files
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
         </span>dir_out_path: PathBuf,
 
         <span class="doccomment">/// Federation name, same for all peers
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hals_trusty_mint&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hals_trusty_mint&quot;</span>)]
         </span>federation_name: String,
 
         <span class="doccomment">/// Comma-separated list of connection certs from all peers (including ours)
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;certs&quot;</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;certs&quot;</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
         </span>certs: Vec&lt;String&gt;,
 
         <span class="doccomment">/// `bitcoind` json rpc endpoint
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:18443&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:18443&quot;</span>)]
         </span>bitcoind_rpc: String,
 
         <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
         /// default = 1 msat - 1M sats by powers of 10
-        </span><span class="attribute">#[arg(
+        </span><span class="attr">#[arg(
         long = <span class="string">&quot;denominations&quot;</span>,
         value_delimiter = <span class="string">&#39;,&#39;</span>,
         num_args = <span class="number">1</span>..,
@@ -307,12 +307,12 @@
         </span>denominations: Vec&lt;Amount&gt;,
 
         <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
-        </span><span class="attribute">#[arg(long = <span class="string">&quot;password&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>)]
         </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
 }
 
-<span class="attribute">#[tokio::main]
+<span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -457,4 +457,4 @@
     cert_url
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="distributedgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="distributedgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

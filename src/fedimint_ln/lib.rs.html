@@ -859,7 +859,7 @@
     db: Database,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractInput {
     <span class="kw">pub </span>contract_id: contracts::ContractId,
     <span class="doccomment">/// While for now we only support spending the entire contract we need to avoid
@@ -881,7 +881,7 @@
 /// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
 /// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
 /// to receive their fist tokens via LN without already having tokens.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>ContractOrOfferOutput {
     <span class="doccomment">/// Fund contract
     </span>Contract(ContractOutput),
@@ -896,19 +896,19 @@
     },
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractOutput {
     <span class="kw">pub </span>amount: fedimint_api::Amount,
     <span class="kw">pub </span>contract: contracts::Contract,
 }
 
-<span class="attribute">#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize, Clone)]
+<span class="attr">#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ContractAccount {
     <span class="kw">pub </span>amount: fedimint_api::Amount,
     <span class="kw">pub </span>contract: contracts::FundedContract,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>OutputOutcome {
     Contract {
         id: ContractId,
@@ -919,20 +919,20 @@
     },
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>LightningGateway {
     <span class="kw">pub </span>mint_pub_key: secp256k1::XOnlyPublicKey,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
     <span class="kw">pub </span>api: Url,
 }
 
-<span class="attribute">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DecryptionShareCI {
     <span class="kw">pub </span>contract_id: ContractId,
     <span class="kw">pub </span>share: PreimageDecryptionShare,
 }
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>LightningModule {
     <span class="kw">type </span>TxInput = ContractInput;
     <span class="kw">type </span>TxOutput = ContractOrOfferOutput;
@@ -1249,7 +1249,7 @@
         <span class="prelude-val">Ok</span>(amount)
     }
 
-    <span class="attribute">#[instrument(skip_all)]
+    <span class="attr">#[instrument(skip_all)]
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
@@ -1547,32 +1547,32 @@
     serde_json::from_value(body).expect(<span class="string">&quot;Malformed block height response from wallet module!&quot;</span>)
 }
 
-<span class="attribute">#[derive(Debug, Error, Eq, PartialEq)]
+<span class="attr">#[derive(Debug, Error, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>LightningModuleError {
-    <span class="attribute">#[error(<span class="string">&quot;The the input contract {0} does not exist&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The the input contract {0} does not exist&quot;</span>)]
     </span>UnknownContract(ContractId),
-    <span class="attribute">#[error(<span class="string">&quot;The input contract has too little funds, got {0}, input spends {1}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;The input contract has too little funds, got {0}, input spends {1}&quot;</span>)]
     </span>InsufficientFunds(Amount, Amount),
-    <span class="attribute">#[error(<span class="string">&quot;An outgoing LN contract spend did not provide a preimage&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;An outgoing LN contract spend did not provide a preimage&quot;</span>)]
     </span>MissingPreimage,
-    <span class="attribute">#[error(<span class="string">&quot;An outgoing LN contract spend provided a wrong preimage&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;An outgoing LN contract spend provided a wrong preimage&quot;</span>)]
     </span>InvalidPreimage,
-    <span class="attribute">#[error(<span class="string">&quot;Incoming contract not ready to be spent yet, decryption in progress&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Incoming contract not ready to be spent yet, decryption in progress&quot;</span>)]
     </span>ContractNotReady,
-    <span class="attribute">#[error(<span class="string">&quot;Output contract value may not be zero unless it&#39;s an offer output&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Output contract value may not be zero unless it&#39;s an offer output&quot;</span>)]
     </span>ZeroOutput,
-    <span class="attribute">#[error(<span class="string">&quot;Offer contains invalid threshold-encrypted data&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Offer contains invalid threshold-encrypted data&quot;</span>)]
     </span>InvalidEncryptedPreimage,
-    <span class="attribute">#[error(
+    <span class="attr">#[error(
         <span class="string">&quot;The incoming LN account requires more funding according to the offer (need {0} got {1})&quot;
     </span>)]
     </span>InsufficientIncomingFunding(Amount, Amount),
-    <span class="attribute">#[error(<span class="string">&quot;No offer found for payment hash {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;No offer found for payment hash {0}&quot;</span>)]
     </span>NoOffer(secp256k1::hashes::sha256::Hash),
-    <span class="attribute">#[error(<span class="string">&quot;Only outgoing contracts support cancellation&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Only outgoing contracts support cancellation&quot;</span>)]
     </span>NotOutgoingContract,
-    <span class="attribute">#[error(<span class="string">&quot;Cancellation request wasn&#39;t properly signed&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Cancellation request wasn&#39;t properly signed&quot;</span>)]
     </span>InvalidCancellationSignature,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

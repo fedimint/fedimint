@@ -67,7 +67,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{PublicKeyShare, SecretKeyShare};
 
-<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+<span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub struct </span>InvalidAmountTierError(<span class="kw">pub </span>Amount);
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>InvalidAmountTierError {
@@ -76,7 +76,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 #[serde(transparent)]
 </span><span class="kw">pub struct </span>Tiered&lt;T&gt;(BTreeMap&lt;Amount, T&gt;);
 
@@ -123,4 +123,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

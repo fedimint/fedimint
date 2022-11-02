@@ -1334,7 +1334,7 @@
 
 <span class="kw">pub type </span>PegInDescriptor = Descriptor&lt;CompressedPublicKey&gt;;
 
-<span class="attribute">#[derive(
+<span class="attr">#[derive(
     Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
 )]
 </span><span class="kw">pub enum </span>WalletConsensusItem {
@@ -1342,20 +1342,20 @@
     PegOutSignature(PegOutSignatureItem),
 }
 
-<span class="attribute">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>RoundConsensusItem {
     <span class="kw">pub </span>block_height: u32, <span class="comment">// FIXME: use block hash instead, but needs more complicated verification logic
     </span><span class="kw">pub </span>fee_rate: Feerate,
     <span class="kw">pub </span>randomness: [u8; <span class="number">32</span>],
 }
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutSignatureItem {
     <span class="kw">pub </span>txid: Txid,
     <span class="kw">pub </span>signature: Vec&lt;secp256k1::ecdsa::Signature&gt;,
 }
 
-<span class="attribute">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>RoundConsensus {
     <span class="kw">pub </span>block_height: u32,
     <span class="kw">pub </span>fee_rate: Feerate,
@@ -1369,15 +1369,15 @@
     db: Database,
 }
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableUTXO {
     <span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
-    <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
 }
 
 <span class="doccomment">/// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO
-</span><span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PendingTransaction {
     <span class="kw">pub </span>tx: Transaction,
     <span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
@@ -1385,7 +1385,7 @@
 }
 
 <span class="doccomment">/// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`
-</span><span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UnsignedTransaction {
     <span class="kw">pub </span>psbt: PartiallySignedTransaction,
     <span class="kw">pub </span>signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
@@ -1399,7 +1399,7 @@
     secp: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>secp256k1::Secp256k1&lt;secp256k1::All&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutFees {
     <span class="kw">pub </span>fee_rate: Feerate,
     <span class="kw">pub </span>total_weight: u64,
@@ -1411,19 +1411,19 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOut {
     <span class="kw">pub </span>recipient: bitcoin::Address,
-    <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
     <span class="kw">pub </span>fees: PegOutFees,
 }
 
 <span class="doccomment">/// Contains the Bitcoin transaction id of the transaction created by the withdraw request
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutOutcome(<span class="kw">pub </span>bitcoin::Txid);
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Wallet {
     <span class="kw">type </span>TxInput = Box&lt;PegInProof&gt;;
     <span class="kw">type </span>TxOutput = PegOut;
@@ -2463,7 +2463,7 @@
     }
 }
 
-<span class="attribute">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all)]
+<span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all)]
 </span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc, tg_handle: <span class="kw-2">&amp;</span>TaskHandle) {
     <span class="kw">while </span>!tg_handle.is_shutting_down() {
         broadcast_pending_tx(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
@@ -2506,43 +2506,43 @@
 
 <span class="kw">impl </span>Eq <span class="kw">for </span>PegOutSignatureItem {}
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>WalletError {
-    <span class="attribute">#[error(<span class="string">&quot;Connected bitcoind is on wrong network, expected {0}, got {1}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Connected bitcoind is on wrong network, expected {0}, got {1}&quot;</span>)]
     </span>WrongNetwork(Network, Network),
-    <span class="attribute">#[error(<span class="string">&quot;Error querying bitcoind: {0}&quot;</span>)]
-    </span>RpcError(<span class="attribute">#[from] </span>anyhow::Error),
-    <span class="attribute">#[error(<span class="string">&quot;Unknown bitcoin network: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Error querying bitcoind: {0}&quot;</span>)]
+    </span>RpcError(<span class="attr">#[from] </span>anyhow::Error),
+    <span class="attr">#[error(<span class="string">&quot;Unknown bitcoin network: {0}&quot;</span>)]
     </span>UnknownNetwork(String),
-    <span class="attribute">#[error(<span class="string">&quot;Unknown block hash in peg-in proof: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Unknown block hash in peg-in proof: {0}&quot;</span>)]
     </span>UnknownPegInProofBlock(BlockHash),
-    <span class="attribute">#[error(<span class="string">&quot;Invalid peg-in proof: {0}&quot;</span>)]
-    </span>PegInProofError(<span class="attribute">#[from] </span>PegInProofError),
-    <span class="attribute">#[error(<span class="string">&quot;The peg-in was already claimed&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid peg-in proof: {0}&quot;</span>)]
+    </span>PegInProofError(<span class="attr">#[from] </span>PegInProofError),
+    <span class="attr">#[error(<span class="string">&quot;The peg-in was already claimed&quot;</span>)]
     </span>PegInAlreadyClaimed,
-    <span class="attribute">#[error(<span class="string">&quot;Peg-out fee rate {0:?} is set below consensus {1:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Peg-out fee rate {0:?} is set below consensus {1:?}&quot;</span>)]
     </span>PegOutFeeRate(Feerate, Feerate),
-    <span class="attribute">#[error(<span class="string">&quot;Not enough SpendableUTXO&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Not enough SpendableUTXO&quot;</span>)]
     </span>NotEnoughSpendableUTXO,
 }
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>ProcessPegOutSigError {
-    <span class="attribute">#[error(<span class="string">&quot;No unsigned transaction with id {0} exists&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;No unsigned transaction with id {0} exists&quot;</span>)]
     </span>UnknownTransaction(Txid),
-    <span class="attribute">#[error(<span class="string">&quot;Expected {0} signatures, got {1}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Expected {0} signatures, got {1}&quot;</span>)]
     </span>WrongSignatureCount(usize, usize),
-    <span class="attribute">#[error(<span class="string">&quot;Bad Sighash&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Bad Sighash&quot;</span>)]
     </span>SighashError,
-    <span class="attribute">#[error(<span class="string">&quot;Malformed signature: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Malformed signature: {0}&quot;</span>)]
     </span>MalformedSignature(secp256k1::Error),
-    <span class="attribute">#[error(<span class="string">&quot;Invalid signature&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid signature&quot;</span>)]
     </span>InvalidSignature,
-    <span class="attribute">#[error(<span class="string">&quot;Duplicate signature&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Duplicate signature&quot;</span>)]
     </span>DuplicateSignature,
-    <span class="attribute">#[error(<span class="string">&quot;Missing change tweak&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Missing change tweak&quot;</span>)]
     </span>MissingOrMalformedChangeTweak,
-    <span class="attribute">#[error(<span class="string">&quot;Error finalizing PSBT {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Error finalizing PSBT {0:?}&quot;</span>)]
     </span>ErrorFinalizingPsbt(Vec&lt;miniscript::psbt::Error&gt;),
 }
 
@@ -2557,4 +2557,4 @@
 <span class="doccomment">/// **WARNING**: this is only intended to be used for testing
 </span><span class="kw">impl </span>Eq <span class="kw">for </span>WalletError {}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

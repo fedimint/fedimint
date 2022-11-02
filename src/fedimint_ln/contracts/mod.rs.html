@@ -236,7 +236,7 @@
 
 <span class="doccomment">/// A contract before execution as found in transaction outputs
 </span><span class="comment">// TODO: investigate if this is actually a problem
-</span><span class="attribute">#[allow(clippy::large_enum_variant)]
+</span><span class="attr">#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>Contract {
     Account(account::AccountContract),
@@ -245,7 +245,7 @@
 }
 
 <span class="doccomment">/// A contract after execution as saved in the database
-</span><span class="attribute">#[allow(clippy::large_enum_variant)]
+</span><span class="attr">#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>FundedContract {
     Account(account::AccountContract),
@@ -255,17 +255,17 @@
 
 <span class="doccomment">/// Outcome of a contract. Only incoming contracts currently need to communicate anything back to
 /// the user (the decrypted preimage).
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>ContractOutcome {
     Account(AccountContractOutcome),
     Incoming(DecryptedPreimage),
     Outgoing(OutgoingContractOutcome),
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>AccountContractOutcome {}
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingContractOutcome {}
 
 <span class="kw">impl </span>IdentifyableContract <span class="kw">for </span>Contract {
@@ -334,7 +334,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
 
 <span class="kw">impl </span>Preimage {
@@ -349,7 +349,7 @@
 }
 
 <span class="doccomment">/// Possible outcomes of preimage decryption
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>DecryptedPreimage {
     <span class="doccomment">/// There aren&#39;t enough decryption shares yet
     </span>Pending,
@@ -360,11 +360,11 @@
 }
 
 <span class="doccomment">/// Threshold-encrypted [`Preimage`]
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub struct </span>EncryptedPreimage(<span class="kw">pub </span>threshold_crypto::Ciphertext);
 
 <span class="doccomment">/// Share to decrypt an [`EncryptedPreimage`]
-</span><span class="attribute">#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PreimageDecryptionShare(<span class="kw">pub </span>threshold_crypto::DecryptionShare);
 
 <span class="kw">impl </span>EncryptedPreimage {
@@ -419,4 +419,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

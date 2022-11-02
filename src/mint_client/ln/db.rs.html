@@ -106,7 +106,7 @@
 <span class="kw">use </span><span class="kw">super</span>::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractData;
 
-<span class="attribute">#[repr(u8)]
+<span class="attr">#[repr(u8)]
 #[derive(Clone)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     OutgoingPayment = <span class="number">0x23</span>,
@@ -116,7 +116,7 @@
     LightningGateway = <span class="number">0x28</span>,
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingPaymentKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKey {
@@ -125,7 +125,7 @@
     <span class="kw">type </span>Value = OutgoingContractData;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingPaymentKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKeyPrefix {
@@ -134,7 +134,7 @@
     <span class="kw">type </span>Value = OutgoingContractData;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingPaymentClaimKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKey {
@@ -143,7 +143,7 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingPaymentClaimKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKeyPrefix {
@@ -152,7 +152,7 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingContractAccountKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKey {
@@ -161,7 +161,7 @@
     <span class="kw">type </span>Value = OutgoingContractAccount;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingContractAccountKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKeyPrefix {
@@ -170,7 +170,7 @@
     <span class="kw">type </span>Value = OutgoingContractAccount;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ConfirmedInvoiceKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKey {
@@ -179,7 +179,7 @@
     <span class="kw">type </span>Value = ConfirmedInvoice;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ConfirmedInvoiceKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKeyPrefix {
@@ -188,7 +188,7 @@
     <span class="kw">type </span>Value = ConfirmedInvoice;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>LightningGatewayKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
@@ -197,4 +197,4 @@
     <span class="kw">type </span>Value = LightningGateway;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

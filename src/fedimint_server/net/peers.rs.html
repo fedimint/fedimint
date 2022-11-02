@@ -748,7 +748,7 @@
 }
 
 <span class="doccomment">/// Specifies the network configuration for federation-internal communication
-</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>NetworkConfig {
     <span class="doccomment">/// Our federation member&#39;s identity
     </span><span class="kw">pub </span>identity: PeerId,
@@ -759,7 +759,7 @@
 }
 
 <span class="doccomment">/// Information needed to connect to one other federation member
-</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ConnectionConfig {
     <span class="doccomment">/// The peer&#39;s network address and port (e.g. `10.42.0.10:4000`)
     </span><span class="kw">pub </span>address: String,
@@ -767,7 +767,7 @@
 
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
 /// public interface.
-</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PeerMessage&lt;M&gt; {
     msg: UniqueMessage&lt;M&gt;,
     ack: <span class="prelude-ty">Option</span>&lt;MessageId&gt;,
@@ -823,7 +823,7 @@
     <span class="doccomment">/// Creates a new `ReconnectPeerConnections` connection manager from a network config and a
     /// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for
     /// requirements on the `Connector`.
-    </span><span class="attribute">#[instrument(skip_all)]
+    </span><span class="attr">#[instrument(skip_all)]
     </span><span class="kw">pub async fn </span>new(
         cfg: NetworkConfig,
         connect: PeerConnector&lt;T&gt;,
@@ -922,12 +922,12 @@
     }
 }
 
-<span class="attribute">#[async_trait]
+<span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;T&gt; PeerConnections&lt;T&gt; <span class="kw">for </span>ReconnectPeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="attribute">#[must_use]
+    <span class="attr">#[must_use]
     </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) -&gt; Cancellable&lt;()&gt; {
         <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
             <span class="macro">trace!</span>(<span class="question-mark">?</span>peer_id, <span class="string">&quot;Sending message to&quot;</span>);
@@ -1278,7 +1278,7 @@
         <span class="self">self</span>.incoming.recv().<span class="kw">await</span>.ok_or(Cancelled)
     }
 
-    <span class="attribute">#[instrument(skip_all, fields(peer))]
+    <span class="attr">#[instrument(skip_all, fields(peer))]
     </span><span class="kw">async fn </span>run_io_thread(
         incoming: Sender&lt;M&gt;,
         outgoing: Receiver&lt;M&gt;,
@@ -1309,7 +1309,7 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::HashMap;
     <span class="kw">use </span>std::time::Duration;
@@ -1332,7 +1332,7 @@
         tokio::time::timeout(Duration::from_secs(<span class="number">100</span>), f).<span class="kw">await</span>.ok()
     }
 
-    <span class="attribute">#[tokio::test]
+    <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_connect() {
         tracing_subscriber::fmt()
             .with_env_filter(
@@ -1389,4 +1389,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

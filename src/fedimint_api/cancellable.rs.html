@@ -10,11 +10,11 @@
 </pre><pre class="rust"><code><span class="kw">use </span>thiserror::Error;
 
 <span class="doccomment">/// An error used as a &quot;cancelled&quot; marker in [`Cancellable`].
-</span><span class="attribute">#[derive(Error, Debug)]
+</span><span class="attr">#[derive(Error, Debug)]
 #[error(<span class="string">&quot;Operation cancelled&quot;</span>)]
 </span><span class="kw">pub struct </span>Cancelled;
 
 <span class="doccomment">/// Operation that can potentially get cancelled returning no result (e.g. program shutdown).
 </span><span class="kw">pub type </span>Cancellable&lt;T&gt; = std::result::Result&lt;T, Cancelled&gt;;
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -587,26 +587,26 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfig {
     <span class="kw">pub </span>federation_name: String,
     <span class="kw">pub </span>identity: PeerId,
     <span class="kw">pub </span>hbbft_bind_addr: String,
     <span class="kw">pub </span>api_bind_addr: String,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
     </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
 
     <span class="kw">pub </span>peers: BTreeMap&lt;PeerId, Peer&gt;,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>hbbft_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>hbbft_pk_set: hbbft::crypto::PublicKeySet,
 
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>epoch_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
 
     <span class="kw">pub </span>wallet: WalletConfig,
@@ -614,10 +614,10 @@
     <span class="kw">pub </span>ln: LightningModuleConfig,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Peer {
     <span class="kw">pub </span>hbbft: ConnectionConfig,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
     <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     </span><span class="kw">pub </span>api_addr: Url,
@@ -625,7 +625,7 @@
     </span><span class="kw">pub </span>name: String,
 }
 
-<span class="attribute">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone)]
 </span><span class="doccomment">/// network config for a server
 </span><span class="kw">pub struct </span>ServerConfigParams {
     <span class="kw">pub </span>tls: TlsConfig,
@@ -640,7 +640,7 @@
     <span class="kw">pub </span>bitcoind_rpc: String,
 }
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>GenerateConfig <span class="kw">for </span>ServerConfig {
     <span class="kw">type </span>Params = HashMap&lt;PeerId, ServerConfigParams&gt;;
     <span class="kw">type </span>ClientConfig = ClientConfig;
@@ -858,7 +858,7 @@
     }
 }
 
-<span class="attribute">#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>KeyType {
     Hbbft,
     Epoch,
@@ -1121,4 +1121,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

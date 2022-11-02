@@ -157,7 +157,7 @@
 }
 
 <span class="doccomment">/// Display gateway ecash token balance
-</span><span class="attribute">#[debug_handler]
+</span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>info(<span class="kw">_</span>: Extension&lt;GatewayRpcSender&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, LnGatewayError&gt; {
     <span class="comment">// TODO: source actual gateway info
@@ -167,7 +167,7 @@
 }
 
 <span class="doccomment">/// Display gateway ecash token balance
-</span><span class="attribute">#[debug_handler]
+</span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>balance(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
@@ -178,7 +178,7 @@
 }
 
 <span class="doccomment">/// Generate deposit address
-</span><span class="attribute">#[debug_handler]
+</span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>address(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
@@ -189,7 +189,7 @@
 }
 
 <span class="doccomment">/// Deposit into a gateway federation.
-</span><span class="attribute">#[debug_handler]
+</span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>deposit(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
@@ -200,7 +200,7 @@
 }
 
 <span class="doccomment">/// Withdraw from a gateway federation.
-</span><span class="attribute">#[debug_handler]
+</span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>withdraw(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
@@ -210,7 +210,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>({ <span class="string">&quot;fedimint_txid&quot;</span>: txid.to_string() })))
 }
 
-<span class="attribute">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>pay_invoice(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
     Json(payload): Json&lt;PayInvoicePayload&gt;,
@@ -219,4 +219,4 @@
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

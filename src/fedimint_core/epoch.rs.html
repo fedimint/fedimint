@@ -357,7 +357,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 
-<span class="attribute">#[derive(
+<span class="attr">#[derive(
     Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
 )]
 </span><span class="kw">pub enum </span>ConsensusItem {
@@ -368,20 +368,20 @@
     LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>FederationModule&gt;::ConsensusItem),
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>EpochSignatureShare(<span class="kw">pub </span>SignatureShare);
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>EpochSignature(<span class="kw">pub </span>Signature);
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>EpochHistory {
     <span class="kw">pub </span>outcome: OutcomeHistory,
     <span class="kw">pub </span>hash: Sha256,
     <span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;EpochSignature&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutcomeHistory {
     <span class="kw">pub </span>epoch: u64,
     <span class="kw">pub </span>last_hash: <span class="prelude-ty">Option</span>&lt;Sha256&gt;,
@@ -488,7 +488,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, PartialEq, Eq)]
+<span class="attr">#[derive(Debug, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>EpochVerifyError {
     MissingSignature,
     InvalidSignature,
@@ -540,7 +540,7 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::HashSet;
 
@@ -581,7 +581,7 @@
         }
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>adds_sig_to_prev_epoch() {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="kw">let </span>sk_set = SecretKeySet::random(<span class="number">2</span>, <span class="kw-2">&amp;mut </span>rng);
@@ -623,7 +623,7 @@
         <span class="macro">assert_eq!</span>(epoch0.verify_sig(<span class="kw-2">&amp;</span>pk_set.public_key()), <span class="prelude-val">Ok</span>(()));
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>verifies_hash() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>_pk = sk.public_key();
@@ -643,7 +643,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>verifies_merkle_tree() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>_pk = sk.public_key();
@@ -666,7 +666,7 @@
         );
     }
 
-    <span class="attribute">#[test]
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>verifies_sigs() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>pk = sk.public_key();
@@ -691,4 +691,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

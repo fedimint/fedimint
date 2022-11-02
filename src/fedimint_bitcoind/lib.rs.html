@@ -152,13 +152,13 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::info;
 
-<span class="attribute">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
+<span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
 </span><span class="kw">pub mod </span>bitcoincore_rpc;
 
-<span class="attribute">#[derive(Error, Debug)]
+<span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>Error {
-    <span class="attribute">#[error(<span class="string">&quot;Rpc error&quot;</span>)]
-    </span>Rpc(<span class="attribute">#[from] </span>anyhow::Error),
+    <span class="attr">#[error(<span class="string">&quot;Rpc error&quot;</span>)]
+    </span>Rpc(<span class="attr">#[from] </span>anyhow::Error),
 }
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
@@ -166,7 +166,7 @@
 <span class="doccomment">/// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if if the bitcoind node is not reachable.
-</span><span class="attribute">#[async_trait]
+</span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IBitcoindRpc: Send + Sync {
     <span class="doccomment">/// Returns the Bitcoin network the node is connected to
     </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Network&gt;;
@@ -201,12 +201,12 @@
 }
 
 <span class="macro">dyn_newtype_define! </span>{
-    <span class="attribute">#[derive(Clone)]
+    <span class="attr">#[derive(Clone)]
     </span><span class="kw">pub </span>BitcoindRpc(Arc&lt;IBitcoindRpc&gt;)
 }
 
 <span class="doccomment">/// Wrapper around [`IBitcoindRpc`] that will retry failed calls
-</span><span class="attribute">#[derive(Debug)]
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RetryClient&lt;C&gt; {
     inner: C,
     max_retries: u16,
@@ -251,7 +251,7 @@
     }
 }
 
-<span class="attribute">#[async_trait]
+<span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;C&gt; IBitcoindRpc <span class="kw">for </span>RetryClient&lt;C&gt;
 <span class="kw">where
     </span>C: IBitcoindRpc,
@@ -287,4 +287,4 @@
     </span>}
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_bitcoind" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_bitcoind" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -156,23 +156,23 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>tbs::{BlindedMessage, BlindingKey};
 
     <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip;
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_message_macro() {
         <span class="kw">let </span>bmsg = BlindedMessage(tbs::MessagePoint::generator());
         test_roundtrip(bmsg);
     }
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_bkey() {
         <span class="kw">let </span>bkey = BlindingKey::random();
         test_roundtrip(bkey);
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

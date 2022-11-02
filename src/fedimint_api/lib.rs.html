@@ -377,7 +377,7 @@
     doc = <span class="string">&quot;A transaction id for peg-ins, peg-outs and reissuances&quot;
 </span>);
 
-<span class="attribute">#[derive(
+<span class="attr">#[derive(
     Debug,
     Clone,
     Copy,
@@ -395,7 +395,7 @@
 
 <span class="doccomment">/// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
 /// this is also why the amount type from rust-bitcoin isn&#39;t used instead.
-</span><span class="attribute">#[derive(
+</span><span class="attr">#[derive(
     Debug,
     Clone,
     Copy,
@@ -414,18 +414,18 @@
     <span class="kw">pub </span>milli_sat: u64,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutPoint {
     <span class="kw">pub </span>txid: TransactionId,
     <span class="kw">pub </span>out_idx: u64,
 }
 
-<span class="attribute">#[derive(Error, Debug)]
+<span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>ParseAmountError {
-    <span class="attribute">#[error(<span class="string">&quot;Error parsing string as integer: {0}&quot;</span>)]
-    </span>NotANumber(<span class="attribute">#[from] </span>ParseIntError),
-    <span class="attribute">#[error(<span class="string">&quot;Error parsing string as a bitcoin amount: {0}&quot;</span>)]
-    </span>WrongBitcoinAmount(<span class="attribute">#[from] </span>bitcoin::util::amount::ParseAmountError),
+    <span class="attr">#[error(<span class="string">&quot;Error parsing string as integer: {0}&quot;</span>)]
+    </span>NotANumber(<span class="attr">#[from] </span>ParseIntError),
+    <span class="attr">#[error(<span class="string">&quot;Error parsing string as a bitcoin amount: {0}&quot;</span>)]
+    </span>WrongBitcoinAmount(<span class="attr">#[from] </span>bitcoin::util::amount::ParseAmountError),
 }
 
 <span class="kw">impl</span>&lt;T&gt; NumPeers <span class="kw">for </span>BTreeMap&lt;PeerId, T&gt; {
@@ -650,7 +650,7 @@
     }
 }
 
-<span class="attribute">#[derive(
+<span class="attr">#[derive(
     Copy,
     Clone,
     Debug,
@@ -675,4 +675,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -144,50 +144,50 @@
 /// A &quot;dyn newtype&quot; `Deref`s to the underlying`&amp;dyn Trait`, making
 /// it easy to access the encapsulated operations, while hiding
 /// the boxing details.
-</span><span class="attribute">#[macro_export]
+</span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>dyn_newtype_define {
-    (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+    (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(Box&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         <span class="macro-nonterminal">$</span><span class="macro">crate::_dyn_newtype_define_inner!</span>{
-            $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+            $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
             <span class="macro-nonterminal">$vis $name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;(Box&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>&gt;)
         }
         <span class="macro-nonterminal">$</span><span class="macro">crate::_dyn_newtype_impl_deref_mut!</span>(<span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;);
     };
-    (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+    (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(Box&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         <span class="macro-nonterminal">$</span><span class="macro">crate::_dyn_newtype_define_inner!</span>{
-            $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+            $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
             <span class="macro-nonterminal">$vis $name</span>(Box&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>&gt;)
         }
         <span class="macro-nonterminal">$</span><span class="macro">crate::_dyn_newtype_impl_deref_mut!</span>(<span class="macro-nonterminal">$name</span>);
     };
-    (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+    (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(Arc&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         <span class="macro-nonterminal">$</span><span class="macro">crate::_dyn_newtype_define_inner!</span>{
-            $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+            $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
             <span class="macro-nonterminal">$vis $name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;(Arc&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>&gt;)
         }
     };
-    (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+    (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(Arc&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         <span class="macro-nonterminal">$</span><span class="macro">crate::_dyn_newtype_define_inner!</span>{
-            $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+            $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
             <span class="macro-nonterminal">$vis $name</span>(Arc&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>&gt;)
         }
     };
 }
 
-<span class="attribute">#[<span class="macro-nonterminal">macro_export</span>]
+<span class="attr">#[<span class="macro-nonterminal">macro_export</span>]
 </span><span class="macro">macro_rules! </span>_dyn_newtype_define_inner {
-    (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+    (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
-        $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+        $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
         <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>(<span class="macro-nonterminal">$container</span>&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">Send </span>+ Sync + <span class="lifetime">&#39;static</span>&gt;);
 
         <span class="kw">impl </span>std::ops::Deref <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
@@ -207,10 +207,10 @@
             }
         }
     };
-    (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
+    (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
-        $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>]</span>)*
+        $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
         <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;(<span class="macro-nonterminal">$container</span>&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; + Send + <span class="macro-nonterminal">$lifetime</span>&gt;);
 
         <span class="kw">impl</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; std::ops::Deref <span class="kw">for </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; {
@@ -232,7 +232,7 @@
     };
 }
 
-<span class="attribute">#[macro_export]
+<span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>_dyn_newtype_impl_deref_mut {
     (<span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;) =&gt; {
         <span class="kw">impl</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; std::ops::DerefMut <span class="kw">for </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; {
@@ -264,7 +264,7 @@
 /// If the newtype is using `Arc` you probably want
 /// to just use standard `#[derive(Clone)]` to clone
 /// the `Arc` itself.
-</span><span class="attribute">#[macro_export]
+</span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>dyn_newtype_impl_dyn_clone_passhthrough {
     (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
         <span class="kw">impl </span>Clone <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
@@ -275,4 +275,4 @@
     };
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -171,12 +171,12 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::PrefixIter;
 
-<span class="attribute">#[derive(Debug, Default)]
+<span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>MemDatabase {
     data: Mutex&lt;BTreeMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;&gt;,
 }
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>MemTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     operations: Vec&lt;DatabaseOperation&gt;,
     tx_data: BTreeMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;,
@@ -186,7 +186,7 @@
     num_savepoint_operations: usize,
 }
 
-<span class="attribute">#[derive(Debug, Eq, PartialEq)]
+<span class="attr">#[derive(Debug, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>DummyError;
 
 <span class="kw">impl </span>MemDatabase {
@@ -310,15 +310,15 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::MemDatabase;
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_basic_dbtx_rw() {
         <span class="kw">let </span>mem_db = MemDatabase::new();
         <span class="kw">crate</span>::db::tests::test_dbtx_impl(mem_db.into());
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -312,7 +312,7 @@
 ///
 /// * For **inputs** the amount is funding the transaction while the fee is consuming funding
 /// * For **outputs** the amount and the fee consume funding
-</span><span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+</span><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 </span><span class="kw">pub struct </span>TransactionItemAmount {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>fee: Amount,
@@ -325,7 +325,7 @@
     };
 }
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ApiError {
     <span class="kw">pub </span>code: i32,
     <span class="kw">pub </span>message: String,
@@ -345,7 +345,7 @@
     }
 }
 
-<span class="attribute">#[async_trait]
+<span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>TypedApiEndpoint {
     <span class="kw">type </span>State: Sync;
 
@@ -358,7 +358,7 @@
     <span class="kw">async fn </span>handle(state: <span class="kw-2">&amp;</span><span class="self">Self</span>::State, params: <span class="self">Self</span>::Param) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Response, ApiError&gt;;
 }
 
-<span class="attribute">#[doc(hidden)]
+<span class="attr">#[doc(hidden)]
 </span><span class="kw">pub mod </span>__reexports {
     <span class="kw">pub use </span>serde_json;
 }
@@ -376,7 +376,7 @@
 ///     }
 /// };
 /// ```
-</span><span class="attribute">#[macro_export]
+</span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>__api_endpoint {
     (
         <span class="macro-nonterminal">$path</span>:expr,
@@ -384,7 +384,7 @@
     ) =&gt; {{
         <span class="kw">struct </span>Endpoint;
 
-        <span class="attribute">#[async_trait::async_trait]
+        <span class="attr">#[async_trait::async_trait]
         </span><span class="kw">impl </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint </span><span class="kw">for </span>Endpoint {
             <span class="kw">const </span>PATH: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="macro-nonterminal">$path</span>;
             <span class="kw">type </span>State = <span class="macro-nonterminal">$state_ty</span>;
@@ -431,10 +431,10 @@
         <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M, serde_json::Value) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;,
 }
 
-<span class="attribute">#[derive(Error, Debug)]
+<span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>ModuleError {
-    <span class="attribute">#[error(transparent)]
-    </span>Other(<span class="attribute">#[from] </span>anyhow::Error),
+    <span class="attr">#[error(transparent)]
+    </span>Other(<span class="attr">#[from] </span>anyhow::Error),
 }
 
 <span class="doccomment">/// Extension trait with a function to map `Result`s used by modules to `ModuleError`
@@ -460,7 +460,7 @@
     }
 }
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">pub trait </span>FederationModule: Sized {
     <span class="kw">type </span>TxInput: Send + Sync;
     <span class="kw">type </span>TxOutput;
@@ -579,4 +579,4 @@
     </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;<span class="self">Self</span>&gt;];
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

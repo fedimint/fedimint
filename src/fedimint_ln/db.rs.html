@@ -127,7 +127,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
 <span class="kw">use crate</span>::{ContractAccount, LightningGateway, OutputOutcome};
 
-<span class="attribute">#[repr(u8)]
+<span class="attr">#[repr(u8)]
 #[derive(Clone)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     Contract = <span class="number">0x40</span>,
@@ -138,7 +138,7 @@
     LightningGateway = <span class="number">0x45</span>,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractKey {
@@ -147,7 +147,7 @@
     <span class="kw">type </span>Value = ContractAccount;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractKeyPrefix {
@@ -156,7 +156,7 @@
     <span class="kw">type </span>Value = ContractAccount;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractUpdateKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractUpdateKey {
@@ -165,7 +165,7 @@
     <span class="kw">type </span>Value = OutputOutcome;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OfferKey(<span class="kw">pub </span>bitcoin_hashes::sha256::Hash);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OfferKey {
@@ -174,7 +174,7 @@
     <span class="kw">type </span>Value = IncomingContractOffer;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OfferKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OfferKeyPrefix {
@@ -184,7 +184,7 @@
 }
 
 <span class="comment">// TODO: remove redundancy
-</span><span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ProposeDecryptionShareKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposeDecryptionShareKey {
@@ -194,7 +194,7 @@
 }
 
 <span class="doccomment">/// Our preimage decryption shares that still need to be broadcasted
-</span><span class="attribute">#[derive(Debug, Encodable)]
+</span><span class="attr">#[derive(Debug, Encodable)]
 </span><span class="kw">pub struct </span>ProposeDecryptionShareKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposeDecryptionShareKeyPrefix {
@@ -204,7 +204,7 @@
 }
 
 <span class="doccomment">/// Preimage decryption shares we received
-</span><span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>AgreedDecryptionShareKey(<span class="kw">pub </span>ContractId, <span class="kw">pub </span>PeerId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AgreedDecryptionShareKey {
@@ -214,7 +214,7 @@
 }
 
 <span class="doccomment">/// Preimage decryption shares we received
-</span><span class="attribute">#[derive(Debug, Encodable)]
+</span><span class="attr">#[derive(Debug, Encodable)]
 </span><span class="kw">pub struct </span>AgreedDecryptionShareKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AgreedDecryptionShareKeyPrefix {
@@ -223,7 +223,7 @@
     <span class="kw">type </span>Value = PreimageDecryptionShare;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>LightningGatewayKey(<span class="kw">pub </span>PublicKey);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
@@ -232,7 +232,7 @@
     <span class="kw">type </span>Value = LightningGateway;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>LightningGatewayKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKeyPrefix {
@@ -241,4 +241,4 @@
     <span class="kw">type </span>Value = LightningGateway;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -86,7 +86,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::{NoteIssuanceRequests, SpendableNote};
 
-<span class="attribute">#[repr(u8)]
+<span class="attr">#[repr(u8)]
 #[derive(Clone)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     Coin = <span class="number">0x20</span>,
@@ -95,7 +95,7 @@
     LastECashNoteIndex = <span class="number">0x2a</span>,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>CoinKey {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>nonce: Nonce,
@@ -107,7 +107,7 @@
     <span class="kw">type </span>Value = SpendableNote;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>CoinKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>CoinKeyPrefix {
@@ -116,7 +116,7 @@
     <span class="kw">type </span>Value = SpendableNote;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PendingCoinsKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingCoinsKey {
@@ -125,7 +125,7 @@
     <span class="kw">type </span>Value = TieredMulti&lt;SpendableNote&gt;;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PendingCoinsKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingCoinsKeyPrefix {
@@ -134,7 +134,7 @@
     <span class="kw">type </span>Value = TieredMulti&lt;SpendableNote&gt;;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutputFinalizationKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputFinalizationKey {
@@ -143,7 +143,7 @@
     <span class="kw">type </span>Value = NoteIssuanceRequests;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutputFinalizationKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputFinalizationKeyPrefix {
@@ -152,7 +152,7 @@
     <span class="kw">type </span>Value = NoteIssuanceRequests;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>LastECashNoteIndexKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LastECashNoteIndexKey {
@@ -161,4 +161,4 @@
     <span class="kw">type </span>Value = u64;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

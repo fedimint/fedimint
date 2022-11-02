@@ -126,7 +126,7 @@
     PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
 };
 
-<span class="attribute">#[repr(u8)]
+<span class="attr">#[repr(u8)]
 #[derive(Clone)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     BlockHash = <span class="number">0x30</span>,
@@ -138,7 +138,7 @@
     PegOutBitcoinOutPoint = <span class="number">0x37</span>,
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BlockHashKey(<span class="kw">pub </span>BlockHash);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>BlockHashKey {
@@ -147,7 +147,7 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UTXOKey(<span class="kw">pub </span>bitcoin::OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOKey {
@@ -156,7 +156,7 @@
     <span class="kw">type </span>Value = SpendableUTXO;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UTXOPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOPrefixKey {
@@ -165,7 +165,7 @@
     <span class="kw">type </span>Value = SpendableUTXO;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>RoundConsensusKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RoundConsensusKey {
@@ -174,7 +174,7 @@
     <span class="kw">type </span>Value = RoundConsensus;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UnsignedTransactionKey(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionKey {
@@ -183,7 +183,7 @@
     <span class="kw">type </span>Value = UnsignedTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UnsignedTransactionPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionPrefixKey {
@@ -192,7 +192,7 @@
     <span class="kw">type </span>Value = UnsignedTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PendingTransactionKey(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionKey {
@@ -201,7 +201,7 @@
     <span class="kw">type </span>Value = PendingTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PendingTransactionPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionPrefixKey {
@@ -210,7 +210,7 @@
     <span class="kw">type </span>Value = PendingTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutTxSignatureCI(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCI {
@@ -219,7 +219,7 @@
     <span class="kw">type </span>Value = Vec&lt;Signature&gt;; <span class="comment">// TODO: define newtype
 </span>}
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutTxSignatureCIPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCIPrefix {
@@ -228,7 +228,7 @@
     <span class="kw">type </span>Value = Vec&lt;Signature&gt;;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutBitcoinTransaction(<span class="kw">pub </span>fedimint_api::OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutBitcoinTransaction {
@@ -237,4 +237,4 @@
     <span class="kw">type </span>Value = PegOutOutcome;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

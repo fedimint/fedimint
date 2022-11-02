@@ -84,20 +84,20 @@
     MintSpendableOutput, MINT_MODULE_KEY,
 };
 
-<span class="attribute">#[derive(Clone)]
+<span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>MintModuleClientConfig {
-    <span class="attribute">#[allow(unused)]
+    <span class="attr">#[allow(unused)]
     </span><span class="kw">pub </span>some_number: u32,
 }
 
-<span class="attribute">#[derive(Clone)]
+<span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>MintClientModule {
-    <span class="attribute">#[allow(unused)]
+    <span class="attr">#[allow(unused)]
     </span>config: MintModuleClientConfig,
 }
 
 <span class="kw">impl </span>MintClientModule {
-    <span class="attribute">#[allow(clippy::new_ret_no_self)]
+    <span class="attr">#[allow(clippy::new_ret_no_self)]
     </span><span class="kw">pub fn </span>from_config(config: MintModuleClientConfig) -&gt; MintClientModule {
         <span class="self">Self </span>{ config }
     }
@@ -155,4 +155,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -114,7 +114,7 @@
 
 <span class="kw">use crate</span>::{Nonce, PartialSigResponse, SigResponse};
 
-<span class="attribute">#[repr(u8)]
+<span class="attr">#[repr(u8)]
 #[derive(Clone)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     CoinNonce = <span class="number">0x10</span>,
@@ -124,7 +124,7 @@
     MintAuditItem = <span class="number">0x14</span>,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
 </span><span class="kw">pub struct </span>NonceKey(<span class="kw">pub </span>Nonce);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>NonceKey {
@@ -133,7 +133,7 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ProposedPartialSignatureKey {
     <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
 </span>}
@@ -144,7 +144,7 @@
     <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ProposedPartialSignaturesKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedPartialSignaturesKeyPrefix {
@@ -153,7 +153,7 @@
     <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ReceivedPartialSignatureKey {
     <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
     </span><span class="kw">pub </span>peer_id: PeerId,
@@ -165,7 +165,7 @@
     <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ReceivedPartialSignatureKeyOutputPrefix {
     <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
 </span>}
@@ -176,7 +176,7 @@
     <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ReceivedPartialSignaturesKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ReceivedPartialSignaturesKeyPrefix {
@@ -186,7 +186,7 @@
 }
 
 <span class="doccomment">/// Transaction id and output index identifying an output outcome
-</span><span class="attribute">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutputOutcomeKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputOutcomeKey {
@@ -196,7 +196,7 @@
 }
 
 <span class="doccomment">/// Represents the amounts of issued (signed) and redeemed (verified) coins for auditing
-</span><span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>MintAuditItemKey {
     Issuance(OutPoint),
     IssuanceTotal,
@@ -210,7 +210,7 @@
     <span class="kw">type </span>Value = Amount;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>MintAuditItemKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>MintAuditItemKeyPrefix {
@@ -219,4 +219,4 @@
     <span class="kw">type </span>Value = Amount;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

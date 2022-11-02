@@ -100,9 +100,9 @@
     <span class="kw">pub </span>outputs: Vec&lt;Output&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>TransactionError {
-    <span class="attribute">#[error(<span class="string">&quot;your inputs are too low&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;your inputs are too low&quot;</span>)]
     </span>NotEnoughInputs,
 }
 
@@ -131,14 +131,14 @@
 /// Details to be flushed out.
 </span><span class="kw">pub struct </span>DeterministicRandomnessTracker;
 
-<span class="attribute">#[derive(Default)]
+<span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>Client {
     modules: BTreeMap&lt;ModuleKey, ClientModule&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>DBError {
-    <span class="attribute">#[error(<span class="string">&quot;not found&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;not found&quot;</span>)]
     </span>NotFound,
 }
 
@@ -169,4 +169,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

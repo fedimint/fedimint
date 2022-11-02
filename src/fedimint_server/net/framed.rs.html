@@ -354,14 +354,14 @@
 /// Wraps a stream `S` and allows sending packetized data of type `T` over it. Data items are
 /// encoded using [`bincode`] and the bytes are sent over the stream prepended with a length field.
 /// `BidiFramed` implements `Sink&lt;T&gt;` and `Stream&lt;Item=Result&lt;T, _&gt;&gt;`.
-</span><span class="attribute">#[derive(Debug)]
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>BidiFramed&lt;T, WH, RH&gt; {
     sink: FramedSink&lt;WH, T&gt;,
     stream: FramedStream&lt;RH, T&gt;,
 }
 
 <span class="doccomment">/// Framed codec that uses [`bincode`] to encode structs with [`serde`] support
-</span><span class="attribute">#[derive(Debug)]
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>BincodeCodec&lt;T&gt; {
     _pd: PhantomData&lt;T&gt;,
 }
@@ -530,7 +530,7 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::time::Duration;
 
@@ -540,9 +540,9 @@
 
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::BidiFramed;
 
-    <span class="attribute">#[tokio::test]
+    <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_roundtrip() {
-        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+        <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         </span><span class="kw">enum </span>TestEnum {
             Foo,
             Bar(u64),
@@ -570,9 +570,9 @@
         <span class="macro">assert!</span>(framed_recipient.next().<span class="kw">await</span>.is_none());
     }
 
-    <span class="attribute">#[tokio::test]
+    <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_not_try_parse_partial() {
-        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+        <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         </span><span class="kw">enum </span>TestEnum {
             Foo,
             Bar(u64),
@@ -607,4 +607,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -46,7 +46,7 @@
 <span class="kw">use </span>fedimint_core::modules::ln::ContractInput;
 <span class="kw">use </span>lightning_invoice::Invoice;
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>IncomingContractAccount {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>contract: IncomingContract,
@@ -64,7 +64,7 @@
 
 <span class="comment">// TODO: should this have some kind of &quot;state&quot; enum - e.g. pending, paid, expired
 </span><span class="doccomment">/// Invoice whose &quot;offer&quot; has been accepted by federation
-</span><span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ConfirmedInvoice {
     <span class="doccomment">/// The invoice itself
     </span><span class="kw">pub </span>invoice: Invoice,
@@ -79,4 +79,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>

@@ -126,7 +126,7 @@
 <span class="kw">use </span>rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 <span class="kw">use </span>tracing::warn;
 
-<span class="attribute">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDb(rocksdb::OptimisticTransactionDB);
 
 <span class="kw">pub struct </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(rocksdb::Transaction&lt;<span class="lifetime">&#39;a</span>, rocksdb::OptimisticTransactionDB&gt;);
@@ -221,11 +221,11 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
+<span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::RocksDb;
 
-    <span class="attribute">#[test_log::test]
+    <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_basic_dbtx_rw() {
         <span class="kw">let </span>path = tempfile::Builder::new()
             .prefix(<span class="string">&quot;fcb-rocksdb-test&quot;</span>)
@@ -237,4 +237,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_rocksdb" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (95a3a7277 2022-10-31)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_rocksdb" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>
