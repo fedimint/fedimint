@@ -1,4 +1,5 @@
 pub mod actor;
+pub mod client;
 pub mod cln;
 pub mod config;
 pub mod ln;
