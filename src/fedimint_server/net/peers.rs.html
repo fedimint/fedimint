@@ -693,6 +693,9 @@
 <span id="693">693</span>
 <span id="694">694</span>
 <span id="695">695</span>
+<span id="696">696</span>
+<span id="697">697</span>
+<span id="698">698</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -967,7 +970,10 @@
     </span>M: Debug + Clone,
 {
     <span class="kw">async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: <span class="kw-2">&amp;</span>TaskHandle) {
-        <span class="kw">while </span>!task_handle.is_shutting_down() {
+        <span class="comment">// Note: `state_transition` internally uses channel operations (`send` and `recv`)
+        // which will disconnect when other tasks are shutting down returning here,
+        // so we probably don&#39;t need any `timeout` here.
+        </span><span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition().<span class="kw">await </span>{
                 <span class="self">self </span>= new_self;
             } <span class="kw">else </span>{
