@@ -338,6 +338,7 @@ impl LnGateway {
     async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
         self.select_actor(payload.federation_id)?
             .get_deposit_address()
+            .await
     }
 
     async fn handle_deposit_msg(&self, payload: DepositPayload) -> Result<TransactionId> {

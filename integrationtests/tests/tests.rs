@@ -16,7 +16,7 @@ use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::Output;
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
-use fixtures::{fixtures, rng, sats, secp, sha256};
+use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
 use futures::future::{join_all, Either};
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
@@ -263,13 +263,16 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         vec![sats(100), sats(500), sats(500)]
     );
 
-    user_receive.client.receive_coins(sats(400), |coins| {
-        user_send
-            .client
-            .pay_to_blind_nonces(coins, rng())
-            .await
-            .unwrap()
-    });
+    user_receive
+        .client
+        .receive_coins(sats(400), |coins| async {
+            user_send
+                .client
+                .pay_to_blind_nonces(coins, rng())
+                .await
+                .unwrap()
+        })
+        .await;
 
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 

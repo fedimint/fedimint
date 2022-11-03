@@ -698,12 +698,30 @@ mod tests {
         };
 
         let client_ref: &'static MintClient<'static> = Box::leak(Box::new(client));
+
+        /*
+        let issuance_thread = || {
+            block_on(async {
+                let handles = (0..ITERATIONS).map(|_| async move {
+                    let mut tx = client_ref.context.db.begin_transaction();
+                    let (_, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, &mut tx);
+                    tx.commit_tx().await.map(|_| nonce).ok()
+                });
+
+                let res = futures::future::join_all(handles).await;
+                let filtered = res.into_iter().filter(|op| op.is_some());
+                filtered.map(|op| op.unwrap()).collect::<Vec<BlindNonce>>()
+            })
+        };
+        */
+
         let issuance_thread = || {
             (0..ITERATIONS)
                 .filter_map(|_| {
                     let mut tx = client_ref.context.db.begin_transaction();
                     let (_, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, &mut tx);
-                    tx.commit_tx().map(|_| nonce).ok()
+                    //tx.commit_tx().await.map(|_| nonce).ok()
+                    Some(nonce)
                 })
                 .collect::<Vec<BlindNonce>>()
         };

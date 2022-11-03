@@ -363,12 +363,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Fut: futures::Future<Output = OutPoint>,
     {
         let mut dbtx = self.context.db.begin_transaction();
-        self.mint_client().receive_coins(
-            amount,
-            &mut dbtx,
-            |tx| self.mint_client().new_ecash_note(&self.context.secp, tx),
-            create_tx,
-        );
+        self.mint_client()
+            .receive_coins(
+                amount,
+                &mut dbtx,
+                |tx| self.mint_client().new_ecash_note(&self.context.secp, tx),
+                create_tx,
+            )
+            .await;
         dbtx.commit_tx().await.expect("DB Error");
     }
 
@@ -452,7 +454,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 },
                 &self.mint_client().config.tbs_pks,
             );
-            dbtx.commit_tx().expect("committing tx failed"); // FIXME: retry?
+            dbtx.commit_tx().await.expect("committing tx failed"); // FIXME: retry?
             self.submit_tx_with_change(tx, rng).await?;
             self.fetch_all_coins().await;
             self.mint_client().select_coins(amount)?
