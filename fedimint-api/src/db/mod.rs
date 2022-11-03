@@ -90,11 +90,11 @@ dyn_newtype_define! {
 /// Lost Writes: TX1 writes (K1, V1) at the same time as TX2 writes (K1, V2). V2 overwrites V1 as the
 /// value for K1 (write-write conflict).
 ///
-/// Table for anamolies that are prevented in each DB implementation:
-///          | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes
-/// MemoryDB |          X         |     X      |          X          |       X        |
-/// SledDB   |          X         |     X      |                     |                |
-/// RocksDB  |          X         |     X      |          X          |       X        |      X
+/// | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes |
+/// | -------- | ------------------ | ---------- | ------------------- | -------------- | ----------- |
+/// | MemoryDB | Prevented          | Prevented  | Prevented           | Prevented      | Possible    |
+/// | SledDB   | Prevented          | Prevented  | Possible            | Possible       | Possible    |
+/// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
 pub trait IDatabaseTransaction<'a>: 'a {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
