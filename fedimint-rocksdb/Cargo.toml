@@ -13,7 +13,7 @@ path = "src/lib.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.64"
+anyhow = "1.0.66"
 fedimint-api = { path = "../fedimint-api" }
 rocksdb = { version = "0.19.0" }
 tracing = "0.1.37"

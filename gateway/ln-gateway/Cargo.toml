@@ -17,7 +17,7 @@ name = "ln_gateway"
 path = "src/bin/ln_gateway.rs"
 
 [dependencies]
-anyhow = "1.0.65"
+anyhow = "1.0.66"
 async-trait = "0.1.52"
 axum = "0.5.16"
 axum-macros = "0.2.3"
