@@ -367,6 +367,30 @@
 <span id="367">367</span>
 <span id="368">368</span>
 <span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>config;
@@ -413,6 +437,9 @@
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>InfoPayload;
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BalancePayload {
     <span class="kw">pub </span>federation_id: FederationId,
 }
@@ -441,8 +468,15 @@
     <span class="kw">pub </span>address: Address,
 }
 
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>GatewayInfo {
+    <span class="kw">pub </span>version_hash: String,
+    <span class="kw">pub </span>federations: Vec&lt;FederationId&gt;,
+}
+
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub enum </span>GatewayRequest {
+    Info(GatewayRequestInner&lt;InfoPayload&gt;),
     ReceiveInvoice(GatewayRequestInner&lt;ReceiveInvoicePayload&gt;),
     PayInvoice(GatewayRequestInner&lt;PayInvoicePayload&gt;),
     Balance(GatewayRequestInner&lt;BalancePayload&gt;),
@@ -476,6 +510,8 @@
         }
     };
 }
+
+<span class="macro">impl_gateway_request_trait!</span>(InfoPayload, GatewayInfo, GatewayRequest::Info);
 <span class="macro">impl_gateway_request_trait!</span>(
     ReceiveInvoicePayload,
     Preimage,
@@ -560,6 +596,13 @@
             .ok_or(LnGatewayError::UnknownFederation)
     }
 
+    <span class="kw">async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: InfoPayload) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayInfo&gt; {
+        <span class="prelude-val">Ok</span>(GatewayInfo {
+            version_hash: <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>).to_string(),
+            federations: <span class="self">self</span>.actors.keys().cloned().collect(),
+        })
+    }
+
     <span class="kw">async fn </span>handle_receive_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ReceiveInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">let </span>ReceiveInvoicePayload { htlc_accepted } = payload;
 
@@ -641,6 +684,11 @@
             </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(msg) = <span class="self">self</span>.receiver.try_recv() {
                 <span class="macro">tracing::trace!</span>(<span class="string">&quot;Gateway received message {:?}&quot;</span>, msg);
                 <span class="kw">match </span>msg {
+                    GatewayRequest::Info(payload) =&gt; {
+                        payload
+                            .handle(|payload| <span class="self">self</span>.handle_get_info(payload))
+                            .<span class="kw">await</span>;
+                    }
                     GatewayRequest::ReceiveInvoice(inner) =&gt; {
                         inner
                             .handle(|payload| <span class="self">self</span>.handle_receive_invoice_msg(payload))

@@ -108,6 +108,7 @@
 <span id="108">108</span>
 <span id="109">109</span>
 <span id="110">110</span>
+<span id="111">111</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::{response::IntoResponse, routing::post, Extension, Json, Router};
@@ -120,7 +121,7 @@
 
 <span class="kw">use crate</span>::{
     rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    LnGatewayError, WithdrawPayload,
+    InfoPayload, LnGatewayError, WithdrawPayload,
 };
 
 <span class="kw">pub async fn </span>run_webserver(
@@ -159,11 +160,12 @@
 <span class="doccomment">/// Display gateway ecash token balance
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>info(<span class="kw">_</span>: Extension&lt;GatewayRpcSender&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, LnGatewayError&gt; {
-    <span class="comment">// TODO: source actual gateway info
-    </span><span class="prelude-val">Ok</span>(Json(
-        <span class="macro">json!</span>({ <span class="string">&quot;url&quot;</span>: <span class="string">&quot;http://127.0.0.1:8080&quot;</span>, <span class="string">&quot;federations&quot;</span>: <span class="string">&quot;1&quot; </span>}),
-    ))
+</span><span class="kw">async fn </span>info(
+    Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
+    Json(payload): Json&lt;InfoPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, LnGatewayError&gt; {
+    <span class="kw">let </span>info = rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(info)))
 }
 
 <span class="doccomment">/// Display gateway ecash token balance
