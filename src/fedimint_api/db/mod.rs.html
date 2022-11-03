@@ -717,11 +717,11 @@
 /// Lost Writes: TX1 writes (K1, V1) at the same time as TX2 writes (K1, V2). V2 overwrites V1 as the
 /// value for K1 (write-write conflict).
 ///
-/// Table for anamolies that are prevented in each DB implementation:
-///          | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes
-/// MemoryDB |          X         |     X      |          X          |       X        |
-/// SledDB   |          X         |     X      |                     |                |
-/// RocksDB  |          X         |     X      |          X          |       X        |      X
+/// | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes |
+/// | -------- | ------------------ | ---------- | ------------------- | -------------- | ----------- |
+/// | MemoryDB | Prevented          | Prevented  | Prevented           | Prevented      | Possible    |
+/// | SledDB   | Prevented          | Prevented  | Possible            | Possible       | Possible    |
+/// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
 </span><span class="kw">pub trait </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;: <span class="lifetime">&#39;a </span>{
     <span class="kw">fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
@@ -1253,4 +1253,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (11ebe6512 2022-11-01)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (edf018221 2022-11-02)" ></div></body></html>
