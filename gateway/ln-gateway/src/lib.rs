@@ -3,6 +3,7 @@ pub mod cln;
 pub mod config;
 pub mod ln;
 pub mod rpc;
+pub mod utils;
 pub mod webserver;
 
 use std::borrow::Cow;

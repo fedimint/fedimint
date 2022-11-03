@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
@@ -9,9 +9,9 @@ use fedimint_server::modules::{
 };
 use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
-use tracing::{debug, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
-use crate::{ln::LnRpc, LnGatewayError, Result};
+use crate::{ln::LnRpc, utils::retry, LnGatewayError, Result};
 
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
@@ -19,14 +19,24 @@ pub struct GatewayActor {
 
 impl GatewayActor {
     pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
-        // Regster gateway actor with federation
-        // FIXME: This call is critically dependent on the federation being up and running.
-        // We should either use a retry strategy, OR register federations on the gateway at runtime
-        // as proposed in https://github.com/fedimint/fedimint/issues/699
-        client
-            .register_with_federation(client.config().into())
-            .await
-            .expect("Failed to register with federation");
+        // Retry regster gateway federation client with federation
+        match retry(
+            String::from("Register With Federation"),
+            #[allow(clippy::unit_arg)]
+            || async {
+                Ok(client
+                    .register_with_federation(client.config().into())
+                    .await
+                    .expect("Failed to register with federation"))
+            },
+            Duration::from_secs(1),
+            5,
+        )
+        .await
+        {
+            Ok(_) => info!("Registered with federation"),
+            Err(e) => warn!("Failed to register with federation: {}", e),
+        }
 
         Ok(Self { client })
     }
