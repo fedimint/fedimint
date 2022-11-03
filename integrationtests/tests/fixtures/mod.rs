@@ -59,8 +59,8 @@ use ln_gateway::{
     GatewayRequest, LnGateway,
 };
 use mint_client::{
-    api::WsFederationApi, mint::SpendableNote, FederationId, GatewayClient, GatewayClientConfig,
-    UserClient, UserClientConfig,
+    api::WsFederationApi, mint::SpendableNote, Client, FederationId, GatewayClient,
+    GatewayClientConfig, UserClient, UserClientConfig,
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -98,7 +98,7 @@ pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
 #[non_exhaustive]
 pub struct Fixtures {
     pub fed: FederationTest,
-    pub user: UserTest,
+    pub user: UserTest<UserClientConfig>,
     pub bitcoin: Box<dyn BitcoinTest>,
     pub gateway: GatewayTest,
     pub lightning: Box<dyn LightningTest>,
@@ -167,9 +167,9 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
             )
             .await;
 
-            let user_cfg = UserClientConfig(client_config.clone());
             let user_db = rocks(dir.clone()).into();
-            let user = UserTest::new(user_cfg.clone(), peers, user_db);
+            let user_cfg = UserClientConfig(client_config.clone());
+            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db)));
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
@@ -214,7 +214,7 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
 
             let user_db = MemDatabase::new().into();
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(user_cfg.clone(), peers, user_db);
+            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db)));
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
@@ -235,6 +235,34 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
             })
         }
     }
+}
+
+pub fn peers(peers: &[u16]) -> Vec<PeerId> {
+    peers
+        .iter()
+        .map(|i| PeerId::from(*i))
+        .collect::<Vec<PeerId>>()
+}
+
+/// Creates a new user client connected to the given peers
+pub fn create_user_client(
+    config: UserClientConfig,
+    peers: Vec<PeerId>,
+    db: Database,
+) -> UserClient {
+    let api = WsFederationApi::new(
+        config
+            .0
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
+            .map(|(id, node)| (PeerId::from(id as u16), node.url.clone()))
+            .collect(),
+    )
+    .into();
+
+    UserClient::new_with_api(config, db, api, Default::default())
 }
 
 async fn distributed_config(
@@ -320,7 +348,7 @@ pub struct GatewayTest {
     pub actor: Arc<GatewayActor>,
     pub adapter: Arc<LnRpcAdapter>,
     pub keys: LightningGateway,
-    pub user: UserTest,
+    pub user: UserTest<GatewayClientConfig>,
     pub client: Arc<GatewayClient>,
 }
 
@@ -375,27 +403,18 @@ impl GatewayTest {
 
         let client = Arc::new(
             client_builder
-                .build(gw_client_cfg)
+                .build(gw_client_cfg.clone())
                 .expect("Could not build gateway client"),
         );
-
-        // The UserTest returned as part of GatewayTest
-        // needs to share a database with the gateway client built above
-
-        // WIP: BLOCKING: Adapt the gateway client into user_client for creating UserTest instance
-        let user_cfg = UserClientConfig(client_config.clone());
-        let database: Database = MemDatabase::new().into();
-        let user_client = UserClient::new(user_cfg.clone(), database.clone(), Default::default());
-        let user = UserTest {
-            client: user_client,
-            config: user_cfg,
-        };
 
         let actor = gateway
             .register_federation(client.clone())
             .await
             .expect("Could not register federation");
         // Note: We don't run the gateway in test scenarios
+
+        // Create a user test from gateway federation client
+        let user = UserTest::new(client.clone());
 
         GatewayTest {
             actor,
@@ -407,19 +426,16 @@ impl GatewayTest {
     }
 }
 
-pub struct UserTest {
-    pub client: UserClient,
-    pub config: UserClientConfig,
+#[derive(Clone)]
+pub struct UserTest<C> {
+    pub client: Arc<Client<C>>,
+    pub config: C,
 }
 
-impl UserTest {
-    /// Returns a new user client connected to a subset of peers.
-    pub fn new_client(&self, peers: &[u16]) -> Self {
-        let peers = peers
-            .iter()
-            .map(|i| PeerId::from(*i))
-            .collect::<Vec<PeerId>>();
-        Self::new(self.config.clone(), peers, MemDatabase::new().into())
+impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
+    pub fn new(client: Arc<Client<T>>) -> Self {
+        let config = client.config();
+        UserTest { client, config }
     }
 
     /// Helper to simplify the peg_out method calls
@@ -446,24 +462,6 @@ impl UserTest {
     /// Returns sum total of all coins
     pub fn total_coins(&self) -> Amount {
         self.client.coins().total_amount()
-    }
-
-    fn new(config: UserClientConfig, peers: Vec<PeerId>, db: Database) -> Self {
-        let api = WsFederationApi::new(
-            config
-                .0
-                .nodes
-                .iter()
-                .enumerate()
-                .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
-                .map(|(id, node)| (PeerId::from(id as u16), node.url.clone()))
-                .collect(),
-        )
-        .into();
-
-        let client = UserClient::new_with_api(config.clone(), db, api, Default::default());
-
-        UserTest { client, config }
     }
 
     pub async fn assert_total_coins(&self, amount: Amount) {
@@ -568,7 +566,11 @@ impl FederationTest {
     }
 
     /// Helper to issue change for a user
-    pub async fn spend_ecash(&self, user: &UserTest, amount: Amount) -> TieredMulti<SpendableNote> {
+    pub async fn spend_ecash<C: AsRef<ClientConfig> + Clone>(
+        &self,
+        user: &UserTest<C>,
+        amount: Amount,
+    ) -> TieredMulti<SpendableNote> {
         let coins = user.client.mint_client().select_coins(amount).unwrap();
         if coins.total_amount() == amount {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
@@ -584,7 +586,12 @@ impl FederationTest {
 
     /// Mines a UTXO then mints coins for user, assuring that the balance sheet of the federation
     /// nets out to zero.
-    pub async fn mine_and_mint(&self, user: &UserTest, bitcoin: &dyn BitcoinTest, amount: Amount) {
+    pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone>(
+        &self,
+        user: &UserTest<C>,
+        bitcoin: &dyn BitcoinTest,
+        amount: Amount,
+    ) {
         assert_eq!(amount.milli_sat % 1000, 0);
         let sats = bitcoin::Amount::from_sat(amount.milli_sat / 1000);
         self.mine_spendable_utxo(user, bitcoin, sats);
@@ -593,16 +600,20 @@ impl FederationTest {
 
     /// Inserts coins directly into the databases of federation nodes, runs consensus to sign them
     /// then fetches the coins for the user client.
-    pub async fn mint_coins_for_user(&self, user: &UserTest, amount: Amount) {
+    pub async fn mint_coins_for_user<C: AsRef<ClientConfig> + Clone>(
+        &self,
+        user: &UserTest<C>,
+        amount: Amount,
+    ) {
         self.database_add_coins_for_user(user, amount);
         self.run_consensus_epochs(1).await;
         user.client.fetch_all_coins().await;
     }
 
     /// Mines a UTXO owned by the federation.
-    pub fn mine_spendable_utxo(
+    pub fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone>(
         &self,
-        user: &UserTest,
+        user: &UserTest<C>,
         bitcoin: &dyn BitcoinTest,
         amount: bitcoin::Amount,
     ) {
@@ -651,7 +662,11 @@ impl FederationTest {
     }
 
     /// Inserts coins directly into the databases of federation nodes
-    pub fn database_add_coins_for_user(&self, user: &UserTest, amount: Amount) -> OutPoint {
+    pub fn database_add_coins_for_user<C: AsRef<ClientConfig> + Clone>(
+        &self,
+        user: &UserTest<C>,
+        amount: Amount,
+    ) -> OutPoint {
         let bytes: [u8; 32] = rand::random();
         let out_point = OutPoint {
             txid: fedimint_api::TransactionId::from_inner(bytes),
