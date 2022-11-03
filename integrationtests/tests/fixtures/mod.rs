@@ -627,19 +627,20 @@ impl FederationTest {
             .unwrap();
 
         for server in &self.servers {
-            let svr = server.borrow_mut();
-            let mut dbtx = svr.database.begin_transaction();
+            block_on(async {
+                let svr = server.borrow_mut();
+                let mut dbtx = svr.database.begin_transaction();
 
-            dbtx.insert_new_entry(
-                &UTXOKey(input.outpoint()),
-                &SpendableUTXO {
-                    tweak: input.tweak_contract_key().serialize(),
-                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
-                },
-            )
-            .expect("DB Error");
-
-            dbtx.commit_tx().await.expect("DB Error");
+                dbtx.insert_new_entry(
+                    &UTXOKey(input.outpoint()),
+                    &SpendableUTXO {
+                        tweak: input.tweak_contract_key().serialize(),
+                        amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                    },
+                )
+                .expect("DB Error");
+                dbtx.commit_tx().await.expect("DB Error");
+            });
         }
     }
 
