@@ -17,7 +17,7 @@ use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::GenerateConfig;
+use fedimint_api::config::ClientConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::task::TaskGroup;
@@ -30,9 +30,8 @@ use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
 use fedimint_mint::Mint;
-use fedimint_server::config::connect;
 use fedimint_server::config::ServerConfigParams;
-use fedimint_server::config::{ClientConfig, ServerConfig};
+use fedimint_server::config::{connect, ServerConfig};
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::consensus::{ConsensusOutcome, ConsensusProposal};
 use fedimint_server::epoch::ConsensusItem;
@@ -140,7 +139,13 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
                     .expect("distributed config should not be canceled");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
+            let wallet_config: WalletConfig = server_config
+                .iter()
+                .last()
+                .unwrap()
+                .1
+                .get_module_config("wallet")
+                .unwrap();
             let bitcoin_rpc =
                 fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&wallet_config.btc_rpc)
                     .expect("Could not create bitcoinrpc");
@@ -281,15 +286,19 @@ async fn distributed_config(
 
             async move {
                 let our_params = params[peer].clone();
-                let mut server_conn =
-                    connect(our_params.server_dkg, our_params.tls, &mut task_group).await;
+                let mut server_conn = connect(
+                    our_params.server_dkg.clone(),
+                    our_params.tls.clone(),
+                    &mut task_group,
+                )
+                .await;
 
                 let rng = OsRng;
                 let cfg = ServerConfig::distributed_gen(
                     &mut server_conn,
                     peer,
                     &peers,
-                    &params,
+                    &our_params,
                     rng,
                     &mut task_group,
                 );
@@ -869,10 +878,10 @@ impl FederationTest {
             let db = database_gen();
             let mut task_group = task_group.clone();
 
-            let mint = Mint::new(cfg.mint.clone(), db.clone());
+            let mint = Mint::new(cfg.get_module_config("mint").unwrap(), db.clone());
 
             let wallet = Wallet::new_with_bitcoind(
-                cfg.wallet.clone(),
+                cfg.get_module_config("wallet").unwrap(),
                 db.clone(),
                 btc_rpc.clone(),
                 &mut task_group.clone(),
@@ -880,7 +889,7 @@ impl FederationTest {
             .await
             .expect("Couldn't create wallet");
 
-            let ln = LightningModule::new(cfg.ln.clone(), db.clone());
+            let ln = LightningModule::new(cfg.get_module_config("ln").unwrap(), db.clone());
 
             let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db.clone());
             let fedimint =
@@ -908,7 +917,7 @@ impl FederationTest {
 
         // Consumes the empty epoch 0 outcome from all servers
         let cfg = server_config.iter().last().unwrap().1.clone();
-        let wallet = cfg.wallet.clone();
+        let wallet = cfg.get_module_config("wallet").unwrap();
         let last_consensus = Rc::new(RefCell::new(Batch {
             epoch: 0,
             contributions: BTreeMap::new(),

@@ -181,19 +181,17 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
                 peer,
                 result: Ok(result),
             } => {
-                let mut found = false;
-                for (prev_result, peers) in &mut self.existing_results {
-                    if prev_result == &result {
-                        found = true;
-                        if peers.contains(&peer) {
-                            warn!(prev = ?prev_result, new = ?result, peer = %peer, "Ignoring duplicate response from peer");
-                        } else {
-                            peers.insert(peer);
-                        }
-                        break;
+                if let Some((prev_result, peers)) = self
+                    .existing_results
+                    .iter_mut()
+                    .find(|(prev_result, _)| prev_result == &result)
+                {
+                    if peers.contains(&peer) {
+                        warn!(prev = ?prev_result, new = ?result, peer = %peer, "Ignoring duplicate response from peer");
+                    } else {
+                        peers.insert(peer);
                     }
-                }
-                if !found {
+                } else {
                     self.existing_results.push((result, HashSet::from([peer])));
                 }
             }

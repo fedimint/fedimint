@@ -4,6 +4,7 @@ use std::hash::Hasher;
 use std::ops::Sub;
 use std::time::Duration;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -15,14 +16,24 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use bitcoin::{PackedLockTime, Sequence};
+use config::WalletClientConfig;
+use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::{
+    ClientModuleConfig, ConfigGenPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    TypedClientModuleConfig, TypedServerModuleConfig,
+};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
+use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{api_endpoint, IntoModuleError, TransactionItemAmount};
+use fedimint_api::module::{
+    api_endpoint, FederationModuleConfigGen, IntoModuleError, TransactionItemAmount,
+};
 use fedimint_api::module::{ApiEndpoint, ModuleError};
+use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
-use fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
+use fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
 use fedimint_bitcoind::BitcoindRpc;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
@@ -143,6 +154,114 @@ pub struct PegOut {
 /// Contains the Bitcoin transaction id of the transaction created by the withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOutOutcome(pub bitcoin::Txid);
+
+pub struct WalletConfigGenerator;
+
+#[async_trait]
+impl FederationModuleConfigGen for WalletConfigGenerator {
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        params: &ModuleConfigGenParams,
+    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+        let secp = secp256k1::Secp256k1::new();
+
+        let btc_pegin_keys = peers
+            .iter()
+            .map(|&id| (id, secp.generate_keypair(&mut OsRng)))
+            .collect::<Vec<_>>();
+
+        let wallet_cfg: BTreeMap<PeerId, WalletConfig> = btc_pegin_keys
+            .iter()
+            .map(|(id, (sk, _))| {
+                let cfg = WalletConfig::new(
+                    btc_pegin_keys
+                        .iter()
+                        .map(|(peer_id, (_, pk))| (*peer_id, CompressedPublicKey { key: *pk }))
+                        .collect(),
+                    *sk,
+                    peers.threshold(),
+                    params.bitcoin_rpc.clone(),
+                );
+                (*id, cfg)
+            })
+            .collect();
+
+        let descriptor = wallet_cfg[&PeerId::from(0)].peg_in_descriptor.clone();
+        let client_cfg = WalletClientConfig::new(descriptor);
+
+        (
+            wallet_cfg
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        serde_json::to_value(v)
+                            .expect("serialization can't fail")
+                            .into(),
+                    )
+                })
+                .collect(),
+            serde_json::to_value(client_cfg)
+                .expect("serialization can't fail")
+                .into(),
+        )
+    }
+
+    async fn distributed_gen(
+        &self,
+        connections: &mut AnyPeerConnections<ConfigGenPeerMsg>,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        params: &ModuleConfigGenParams,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>> {
+        let secp = secp256k1::Secp256k1::new();
+        let (sk, pk) = secp.generate_keypair(&mut OsRng);
+        let our_key = CompressedPublicKey { key: pk };
+        let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
+
+        if let Err(Cancelled) = connections
+            .send(peers, ConfigGenPeerMsg::PublicKey(our_key.key))
+            .await
+        {
+            return Ok(Err(Cancelled));
+        }
+
+        peer_peg_in_keys.insert(*our_id, our_key);
+        while peer_peg_in_keys.len() < peers.len() {
+            match connections.receive().await {
+                Ok((peer, ConfigGenPeerMsg::PublicKey(key))) => {
+                    peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
+                }
+                Ok((peer, msg)) => {
+                    bail!("Invalid message received from: {peer}: {msg:?}");
+                }
+                _ => {
+                    return Ok(Err(Cancelled));
+                }
+            }
+        }
+
+        let wallet_cfg = WalletConfig::new(
+            peer_peg_in_keys,
+            sk,
+            peers.threshold(),
+            params.bitcoin_rpc.clone(),
+        );
+        let client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
+
+        Ok(Ok((wallet_cfg.to_erased(), client_cfg.to_erased())))
+    }
+
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
+        Ok(config.to_typed::<WalletConfig>()?.to_client_config())
+    }
+
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
+        config.to_typed::<WalletConfig>()?.validate_config(identity)
+    }
+}
 
 #[async_trait(?Send)]
 impl FederationModule for Wallet {

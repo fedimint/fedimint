@@ -35,7 +35,7 @@ use crate::utils::ClientContext;
 use crate::{FederationId, ModuleClient};
 
 pub struct LnClient<'c> {
-    pub config: &'c LightningModuleClientConfig,
+    pub config: LightningModuleClientConfig,
     pub context: &'c ClientContext,
 }
 
@@ -316,13 +316,14 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
+    use fedimint_api::config::ModuleConfigGenParams;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use fedimint_core::modules::ln::{ContractAccount, LightningModule};
+    use fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
     use fedimint_core::modules::ln::{ContractOrOfferOutput, LightningGateway};
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
@@ -336,7 +337,7 @@ mod tests {
     use crate::ln::LnClient;
     use crate::ClientContext;
 
-    type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;
+    type Fed = FakeFed<LightningModule>;
 
     struct FakeApi {
         mint: Arc<tokio::sync::Mutex<Fed>>,
@@ -426,12 +427,14 @@ mod tests {
         ClientContext,
     ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::<LightningModule, LightningModuleClientConfig>::new(
+            FakeFed::<LightningModule>::new(
                 4,
-                |cfg, db| async { LightningModule::new(cfg, db) },
-                &(),
+                |cfg, db| async move { Ok(LightningModule::new(cfg.to_typed()?, db)) },
+                &ModuleConfigGenParams::fake_config_gen_params(),
+                &LightningModuleConfigGen,
             )
-            .await,
+            .await
+            .unwrap(),
         ));
         let api = FakeApi { mint: fed.clone() };
         let client_config = fed.lock().await.client_cfg().clone();
@@ -442,7 +445,7 @@ mod tests {
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_config, client_context)
+        (fed, client_config.cast().unwrap(), client_context)
     }
 
     #[test_log::test(tokio::test)]
@@ -451,7 +454,7 @@ mod tests {
         let (fed, client_config, client_context) = new_mint_and_client().await;
 
         let client = LnClient {
-            config: &client_config,
+            config: client_config,
             context: &client_context,
         };
 

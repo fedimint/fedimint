@@ -1,7 +1,8 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use cln_plugin::Error;
-use fedimint_server::config::{load_from_file, ClientConfig};
+use fedimint_api::config::ClientConfig;
+use fedimint_server::config::load_from_file;
 use ln_gateway::{
     client::{GatewayClientBuilder, RocksDbGatewayClientBuilder},
     cln::build_cln_rpc,

@@ -1,26 +1,6 @@
 use std::path::Path;
 
-use fedimint_ln::config::LightningModuleClientConfig;
-use fedimint_mint::config::MintClientConfig;
-use fedimint_wallet::config::WalletClientConfig;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use url::Url;
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct Node {
-    pub url: Url,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct ClientConfig {
-    pub federation_name: String,
-    pub nodes: Vec<Node>,
-    pub mint: MintClientConfig,
-    pub wallet: WalletClientConfig,
-    pub ln: LightningModuleClientConfig,
-}
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
     let file = std::fs::File::open(path).expect("Can't read cfg file.");

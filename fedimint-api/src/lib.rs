@@ -76,6 +76,12 @@ pub struct Amount {
     pub milli_sat: u64,
 }
 
+impl Amount {
+    pub fn from_milli_sats(v: u64) -> Self {
+        Amount { milli_sat: v }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutPoint {
     pub txid: TransactionId,

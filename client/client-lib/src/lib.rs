@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_api::config::ClientConfig;
 use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::TransactionItemAmount;
@@ -27,11 +28,13 @@ use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::TieredMulti;
 use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::EpochHistory;
+use fedimint_core::modules::ln::config::LightningModuleClientConfig;
+use fedimint_core::modules::mint::config::MintClientConfig;
+use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::PegOut;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{
-    config::ClientConfig,
     modules::{
         ln::{
             contracts::{
@@ -188,17 +191,26 @@ impl PaymentParameters {
     }
 }
 
+// TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
 impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn ln_client(&self) -> LnClient {
         LnClient {
-            config: &self.config.as_ref().ln,
+            config: self
+                .config
+                .as_ref()
+                .get_module::<LightningModuleClientConfig>("ln")
+                .expect("needs lightning module client config"),
             context: &self.context,
         }
     }
 
     pub fn mint_client(&self) -> MintClient {
         MintClient {
-            config: &self.config.as_ref().mint,
+            config: self
+                .config
+                .as_ref()
+                .get_module::<MintClientConfig>("mint")
+                .expect("needs mint module client config"),
             context: &self.context,
             secret: self.root_secret.child_key(MINT_SECRET_CHILD_ID),
         }
@@ -206,7 +218,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     pub fn wallet_client(&self) -> WalletClient {
         WalletClient {
-            config: &self.config.as_ref().wallet,
+            config: self
+                .config
+                .as_ref()
+                .get_module::<WalletClientConfig>("wallet")
+                .expect("needs wallet module client config"),
+
             context: &self.context,
         }
     }
@@ -399,7 +416,13 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
 
-        let funding_amount = self.config.as_ref().wallet.fee_consensus.peg_out_abs
+        let funding_amount = self
+            .config
+            .as_ref()
+            .get_module::<WalletClientConfig>("wallet")
+            .expect("missing wallet module config")
+            .fee_consensus
+            .peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
         tx.input_coins(coins)?;
@@ -759,23 +782,29 @@ impl Client<UserClientConfig> {
         let duration_since_epoch =
             Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
 
-        let invoice = InvoiceBuilder::new(network_to_currency(self.config.0.wallet.network))
-            .amount_milli_satoshis(amount.milli_sat)
-            .description(description)
-            .payment_hash(payment_hash)
-            .payment_secret(payment_secret)
-            .duration_since_epoch(duration_since_epoch)
-            .min_final_cltv_expiry(18)
-            .payee_pub_key(node_public_key)
-            .private_route(gateway_route_hint)
-            .expiry_time(Duration::from_secs(
-                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
-            ))
-            .build_signed(|hash| {
-                self.context
-                    .secp
-                    .sign_ecdsa_recoverable(hash, &node_secret_key)
-            })?;
+        let invoice = InvoiceBuilder::new(network_to_currency(
+            self.config
+                .0
+                .get_module::<WalletClientConfig>("wallet")
+                .expect("must have wallet config available")
+                .network,
+        ))
+        .amount_milli_satoshis(amount.milli_sat)
+        .description(description)
+        .payment_hash(payment_hash)
+        .payment_secret(payment_secret)
+        .duration_since_epoch(duration_since_epoch)
+        .min_final_cltv_expiry(18)
+        .payee_pub_key(node_public_key)
+        .private_route(gateway_route_hint)
+        .expiry_time(Duration::from_secs(
+            expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+        ))
+        .build_signed(|hash| {
+            self.context
+                .secp
+                .sign_ecdsa_recoverable(hash, &node_secret_key)
+        })?;
 
         let offer_output = self.ln_client().create_offer_output(
             amount,

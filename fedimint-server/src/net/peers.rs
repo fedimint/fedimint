@@ -11,10 +11,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::Node;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
-use fedimint_core::config::Node;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;

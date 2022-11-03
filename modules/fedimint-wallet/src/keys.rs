@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::tweakable::{Contract, Tweakable};
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct CompressedPublicKey {
     pub key: secp256k1::PublicKey,
 }
@@ -31,7 +31,7 @@ impl MiniscriptKey for CompressedPublicKey {
     type Hash160 = bitcoin::hashes::hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        (*self).clone()
+        *self
     }
 }
 

@@ -20,7 +20,7 @@ mod db;
 /// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
 pub struct WalletClient<'c> {
-    pub config: &'c WalletClientConfig,
+    pub config: WalletClientConfig,
     pub context: &'c ClientContext,
 }
 
@@ -175,7 +175,7 @@ mod tests {
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
-    use fedimint_api::config::BitcoindRpcCfg;
+    use fedimint_api::config::ModuleConfigGenParams;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::task::TaskGroup;
     use fedimint_api::{Feerate, OutPoint, TransactionId};
@@ -187,6 +187,7 @@ mod tests {
     use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     use fedimint_core::modules::wallet::{
         PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
+        WalletConfigGenerator,
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
@@ -198,7 +199,7 @@ mod tests {
     use crate::wallet::WalletClient;
     use crate::ClientContext;
 
-    type Fed = FakeFed<Wallet, WalletClientConfig>;
+    type Fed = FakeFed<Wallet>;
     type SharedFed = Arc<tokio::sync::Mutex<Fed>>;
 
     struct FakeApi {
@@ -286,29 +287,26 @@ mod tests {
         let btc_rpc_controller = btc_rpc.controller();
 
         let fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::<Wallet, WalletClientConfig>::new(
+            FakeFed::<Wallet>::new(
                 4,
                 move |cfg, db| {
                     let mut task_group = task_group.clone();
                     let btc_rpc_clone = btc_rpc.clone();
                     async move {
-                        Wallet::new_with_bitcoind(
-                            cfg,
+                        Ok(Wallet::new_with_bitcoind(
+                            cfg.to_typed().unwrap(),
                             db,
                             btc_rpc_clone.clone().into(),
                             &mut task_group,
                         )
-                        .await
-                        .unwrap()
+                        .await?)
                     }
                 },
-                &BitcoindRpcCfg {
-                    btc_rpc_address: "127.0.0.1".into(),
-                    btc_rpc_user: "bitcoin".into(),
-                    btc_rpc_pass: "bitcoin".into(),
-                },
+                &ModuleConfigGenParams::fake_config_gen_params(),
+                &WalletConfigGenerator,
             )
-            .await,
+            .await
+            .unwrap(),
         ));
 
         let api = FakeApi { _mint: fed.clone() }.into();
@@ -320,7 +318,12 @@ mod tests {
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_config, client, btc_rpc_controller)
+        (
+            fed,
+            client_config.cast().unwrap(),
+            client,
+            btc_rpc_controller,
+        )
     }
 
     #[test_log::test(tokio::test)]
@@ -329,7 +332,7 @@ mod tests {
         let (fed, client_config, client_context, btc_rpc) =
             new_mint_and_client(&mut task_group).await;
         let _client = WalletClient {
-            config: &client_config,
+            config: client_config,
             context: &client_context,
         };
 

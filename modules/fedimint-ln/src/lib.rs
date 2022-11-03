@@ -14,24 +14,35 @@ pub mod config;
 pub mod contracts;
 mod db;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Sub;
 
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
+use config::{FeeConsensus, LightningModuleClientConfig};
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
+use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::{
+    ClientModuleConfig, ConfigGenPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
+};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, IntoModuleError, ModuleError, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, IntoModuleError, ModuleError,
+    TransactionItemAmount,
 };
-use fedimint_api::{Amount, FederationModule, PeerId};
+use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::task::TaskGroup;
+use fedimint_api::{Amount, FederationModule, NumPeers, PeerId};
 use fedimint_api::{InputMeta, OutPoint};
 use itertools::Itertools;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use threshold_crypto::serde_impl::SerdeSecret;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
@@ -142,6 +153,99 @@ pub struct LightningGateway {
 pub struct DecryptionShareCI {
     pub contract_id: ContractId,
     pub share: PreimageDecryptionShare,
+}
+
+pub struct LightningModuleConfigGen;
+
+#[async_trait]
+impl FederationModuleConfigGen for LightningModuleConfigGen {
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        _params: &ModuleConfigGenParams,
+    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+        let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);
+        let pks = sks.public_keys();
+
+        let server_cfg = peers
+            .iter()
+            .map(|&peer| {
+                let sk = sks.secret_key_share(peer.to_usize());
+
+                (
+                    peer,
+                    serde_json::to_value(&LightningModuleConfig {
+                        threshold_pub_keys: pks.clone(),
+                        threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
+                        threshold: peers.threshold(),
+                        fee_consensus: FeeConsensus::default(),
+                    })
+                    .expect("serialization can't fail here")
+                    .into(),
+                )
+            })
+            .collect();
+
+        let client_cfg = serde_json::to_value(&LightningModuleClientConfig {
+            threshold_pub_key: pks.public_key(),
+            fee_consensus: FeeConsensus::default(),
+        })
+        .expect("serialization can't fail here")
+        .into();
+
+        (server_cfg, client_cfg)
+    }
+
+    async fn distributed_gen(
+        &self,
+        connections: &mut AnyPeerConnections<ConfigGenPeerMsg>,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        _params: &ModuleConfigGenParams,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>> {
+        let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
+        let g1 = if let Ok(g1) = dkg.run_g1(connections, &mut OsRng).await {
+            g1
+        } else {
+            return Ok(Err(Cancelled));
+        };
+
+        let (pks, sks) = g1[&()].threshold_crypto();
+
+        let server = LightningModuleConfig {
+            threshold_pub_keys: pks.clone(),
+            threshold_sec_key: SerdeSecret(sks),
+            threshold: peers.threshold(),
+            fee_consensus: Default::default(),
+        };
+
+        let client = LightningModuleClientConfig {
+            threshold_pub_key: pks.public_key(),
+            fee_consensus: Default::default(),
+        };
+
+        Ok(Ok((
+            serde_json::to_value(&server)
+                .expect("serialization can't fail")
+                .into(),
+            serde_json::to_value(&client)
+                .expect("serialization can't fail")
+                .into(),
+        )))
+    }
+
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
+        Ok(config
+            .to_typed::<LightningModuleConfig>()?
+            .to_client_config())
+    }
+
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
+        config
+            .to_typed::<LightningModuleConfig>()?
+            .validate_config(identity)
+    }
 }
 
 #[async_trait(?Send)]

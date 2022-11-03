@@ -1,8 +1,8 @@
 use bitcoin::KeyPair;
+use fedimint_api::config::ClientConfig;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
-use fedimint_core::config::ClientConfig;
 use fedimint_core::modules::mint::{BlindNonce, Note, SignRequest};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use rand::{CryptoRng, RngCore};

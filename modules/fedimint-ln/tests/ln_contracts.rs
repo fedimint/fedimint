@@ -1,5 +1,6 @@
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
+use fedimint_api::config::ModuleConfigGenParams;
 use fedimint_api::{Amount, OutPoint};
 use fedimint_ln::config::LightningModuleClientConfig;
 use fedimint_ln::contracts::account::AccountContract;
@@ -9,6 +10,7 @@ use fedimint_ln::contracts::{
     AccountContractOutcome, Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage,
     IdentifyableContract, OutgoingContractOutcome, Preimage,
 };
+use fedimint_ln::LightningModuleConfigGen;
 use fedimint_ln::{
     ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
     OutputOutcome,
@@ -20,12 +22,14 @@ use secp256k1::KeyPair;
 async fn test_account() {
     let mut rng = secp256k1::rand::rngs::OsRng;
 
-    let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
+    let mut fed = FakeFed::<LightningModule>::new(
         4,
-        |cfg, db| async { LightningModule::new(cfg, db) },
-        &(),
+        |cfg, db| async move { Ok(LightningModule::new(cfg.to_typed()?, db)) },
+        &ModuleConfigGenParams::fake_config_gen_params(),
+        &LightningModuleConfigGen,
     )
-    .await;
+    .await
+    .unwrap();
 
     let ctx = secp256k1::Secp256k1::new();
     let kp = KeyPair::new(&ctx, &mut rng);
@@ -68,12 +72,14 @@ async fn test_account() {
 async fn test_outgoing() {
     let mut rng = secp256k1::rand::rngs::OsRng;
 
-    let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
+    let mut fed = FakeFed::<LightningModule>::new(
         4,
-        |cfg, db| async { LightningModule::new(cfg, db) },
-        &(),
+        |cfg, db| async move { Ok(LightningModule::new(cfg.to_typed()?, db)) },
+        &ModuleConfigGenParams::fake_config_gen_params(),
+        &LightningModuleConfigGen,
     )
-    .await;
+    .await
+    .unwrap();
 
     let ctx = secp256k1::Secp256k1::new();
     let gw_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
@@ -162,12 +168,14 @@ j5r6drg6k6zcqj0fcwg"
 async fn test_incoming() {
     let mut rng = secp256k1::rand::rngs::OsRng;
 
-    let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
+    let mut fed = FakeFed::<LightningModule>::new(
         4,
-        |cfg, db| async { LightningModule::new(cfg, db) },
-        &(),
+        |cfg, db| async move { Ok(LightningModule::new(cfg.to_typed()?, db)) },
+        &ModuleConfigGenParams::fake_config_gen_params(),
+        &LightningModuleConfigGen,
     )
-    .await;
+    .await
+    .unwrap();
 
     let ctx = secp256k1::Secp256k1::new();
     let gw_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
@@ -181,7 +189,9 @@ async fn test_incoming() {
         hash,
         encrypted_preimage: EncryptedPreimage::new(
             preimage.clone(),
-            &fed.client_cfg().threshold_pub_key,
+            &fed.client_cfg_typed::<LightningModuleClientConfig>()
+                .unwrap()
+                .threshold_pub_key,
         ),
         expiry_time: None,
     };

@@ -19,8 +19,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use fedimint_api::config::ClientConfig;
 use fedimint_api::{Amount, NumPeers, TransactionId};
-use fedimint_server::{config::ClientConfig, modules::ln::contracts::Preimage};
+use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{
     api::{WsFederationApi, WsFederationConnect},
     ln::PayInvoicePayload,
