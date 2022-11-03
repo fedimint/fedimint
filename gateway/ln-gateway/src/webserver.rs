@@ -10,7 +10,7 @@ use tracing::instrument;
 
 use crate::{
     rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    LnGatewayError, WithdrawPayload,
+    InfoPayload, LnGatewayError, WithdrawPayload,
 };
 
 pub async fn run_webserver(
@@ -49,11 +49,12 @@ pub async fn run_webserver(
 /// Display gateway ecash token balance
 #[debug_handler]
 #[instrument(skip_all, err)]
-async fn info(_: Extension<GatewayRpcSender>) -> Result<impl IntoResponse, LnGatewayError> {
-    // TODO: source actual gateway info
-    Ok(Json(
-        json!({ "url": "http://127.0.0.1:8080", "federations": "1" }),
-    ))
+async fn info(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<InfoPayload>,
+) -> Result<impl IntoResponse, LnGatewayError> {
+    let info = rpc.send(payload).await?;
+    Ok(Json(json!(info)))
 }
 
 /// Display gateway ecash token balance
