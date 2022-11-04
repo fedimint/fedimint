@@ -45,6 +45,16 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 [profile.dev]
 split-debuginfo = "packed"
 
+[workspace.package]
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+documentation = "https://github.com/fedimint/fedimint/tree/master/docs"
+readme = "README.md"
+homepage = "https://fedimint.org"
+repository = "https://github.com/fedimint/fedimint"
+license = "MIT"
+
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
 secp256k1 = { opt-level = 2 }

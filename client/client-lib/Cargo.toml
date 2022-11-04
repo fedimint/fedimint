@@ -1,10 +1,14 @@
 [package]
 name = "mint-client"
-version = "0.1.0"
-authors = ["The Fedimint Developers"]
-edition = "2021"
 description = "mint-client provides a library for sending transactions to the federation."
-license = "MIT"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true 
+documentation.workspace = true
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]

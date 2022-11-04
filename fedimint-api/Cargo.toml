@@ -1,10 +1,14 @@
 [package]
 name = "fedimint-api"
-version = "0.1.0"
-authors = ["The Fedimint Developers"]
-edition = "2021"
 description = "fedimint-api provides the common serialization and database representations for communication between crates"
-license = "MIT"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true 
+documentation.workspace = true
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true 
 
 [lib]
 name = "fedimint_api"

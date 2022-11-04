@@ -1,10 +1,14 @@
 [package]
 name = "fedimint-tests"
-version = "0.1.0"
-authors = ["The Fedimint Developers"]
-edition = "2021"
 description = "integrationtests contains end-to-end testing with interactions between users, lightning gateways, the blockchain, and federations, under expected, edge-case, and adversarial environments. See README for detailed instructions and examples."
-license = "MIT"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true 
+documentation.workspace = true
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true 
 
 [[test]]
 name = "fedimint-tests"

@@ -1,10 +1,14 @@
 [package]
 name = "fedimint-wallet"
-version = "0.1.0"
-authors = ["The Fedimint Developers"]
-edition = "2021"
 description = "fedimint-wallet is a n on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet."
-license = "MIT"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true 
+documentation.workspace = true
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true 
 
 [lib]
 name = "fedimint_wallet"
