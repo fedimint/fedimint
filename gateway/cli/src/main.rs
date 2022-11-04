@@ -2,12 +2,12 @@ use std::path::PathBuf;
 
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_server::{config::load_from_file, modules::wallet::txoproof::TxOutProof};
+use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
     config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload,
     RegisterFedPayload, WithdrawPayload,
 };
-use mint_client::{utils::from_hex, FederationId, GatewayClientConfig};
+use mint_client::{utils::from_hex, FederationId};
 use serde::Serialize;
 
 #[derive(Parser)]
@@ -62,8 +62,8 @@ pub enum Commands {
     },
     /// Register federation with the gateway
     RegisterFed {
-        /// Path to file with gateway federation client configuration
-        config_file: PathBuf,
+        /// ConnectInfo code to connect to the federation
+        connect: String,
     },
 }
 
@@ -154,15 +154,12 @@ async fn main() {
             )
             .await;
         }
-        Commands::RegisterFed { config_file } => {
-            let config: GatewayClientConfig = load_from_file(&config_file);
+        Commands::RegisterFed { connect } => {
             call(
                 source_password(cli.rpcpassword),
                 cli.url,
                 String::from("/register"),
-                RegisterFedPayload {
-                    config: Box::new(config),
-                },
+                RegisterFedPayload { connect },
             )
             .await;
         }

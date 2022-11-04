@@ -395,10 +395,11 @@ impl GatewayTest {
         let gateway = LnGateway::new(
             gw_cfg,
             ln_client,
+            client_builder.clone(),
             sender,
             receiver,
             bind_addr,
-            client_builder.clone(),
+            node_pub_key,
         );
 
         let client = Arc::new(
