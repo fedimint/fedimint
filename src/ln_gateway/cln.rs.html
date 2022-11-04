@@ -222,7 +222,7 @@
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, instrument};
 
-<span class="kw">use </span><span class="kw">crate</span>::ReceiveInvoicePayload;
+<span class="kw">use </span><span class="kw">crate</span>::ReceivePaymentPayload;
 <span class="kw">use crate</span>::{
     ln::{LightningError, LnRpc, LnRpcRef},
     rpc::GatewayRpcSender,
@@ -326,7 +326,7 @@
     <span class="kw">let </span>htlc_accepted: HtlcAccepted = serde_json::from_value(value)<span class="question-mark">?</span>;
     <span class="kw">let </span>preimage = plugin
         .state()
-        .send(ReceiveInvoicePayload { htlc_accepted })
+        .send(ReceivePaymentPayload { htlc_accepted })
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pk = preimage.to_public_key()<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span>({

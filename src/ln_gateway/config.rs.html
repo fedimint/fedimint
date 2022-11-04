@@ -15,7 +15,7 @@
 </span><span class="kw">pub struct </span>GatewayConfig {
     <span class="kw">pub </span>password: String,
     <span class="comment">// FIXME: Issue 664: We should avoid having a special reference to a federation
-    // all requests, including `ReceiveInvoicePayload`, should contain the federation id
+    // all requests, including `ReceivePaymentPayload`, should contain the federation id
     </span><span class="kw">pub </span>default_federation: FederationId,
 }
 </code></pre></div>
