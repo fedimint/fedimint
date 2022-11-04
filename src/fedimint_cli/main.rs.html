@@ -699,7 +699,7 @@
     },
 
     LnInvoice {
-        invoice: String,
+        invoice: lightning_invoice::Invoice,
     },
 
     WaitInvoice {
@@ -925,7 +925,7 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">struct </span>PayRequest {
     coins: TieredMulti&lt;SpendableNote&gt;,
-    invoice: String,
+    invoice: lightning_invoice::Invoice,
 }
 
 <span class="attr">#[tokio::main]
@@ -1161,7 +1161,7 @@
             .<span class="kw">await
             </span>.transform(
                 |confirmed_invoice| CliOutput::LnInvoice {
-                    invoice: (confirmed_invoice.invoice.to_string()),
+                    invoice: (confirmed_invoice.invoice),
                 },
                 CliErrorKind::GeneralFederationError,
                 <span class="string">&quot;couldn&#39;t create invoice&quot;</span>,
@@ -1257,4 +1257,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (edf018221 2022-11-02)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

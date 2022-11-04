@@ -1258,10 +1258,6 @@
 <span id="1258">1258</span>
 <span id="1259">1259</span>
 <span id="1260">1260</span>
-<span id="1261">1261</span>
-<span id="1262">1262</span>
-<span id="1263">1263</span>
-<span id="1264">1264</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -2141,11 +2137,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NotOurKey);
         }
 
-        <span class="kw">let </span>invoice: Invoice = account
-            .contract
-            .invoice
-            .parse()
-            .map_err(ClientError::InvalidInvoice)<span class="question-mark">?</span>;
+        <span class="kw">let </span>invoice: Invoice = account.contract.invoice.clone();
         <span class="kw">let </span>invoice_amount = Amount::from_msat(
             invoice
                 .amount_milli_satoshis()
@@ -2527,4 +2519,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (edf018221 2022-11-02)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

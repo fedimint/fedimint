@@ -340,7 +340,7 @@
             <span class="self">self</span>.buy_preimage_internal(<span class="kw-2">&amp;</span>payment_params.payment_hash, <span class="kw-2">&amp;</span>payment_params.invoice_amount)
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
-            <span class="self">self</span>.buy_preimage_external(ln_rpc, <span class="kw-2">&amp;</span>contract_account.contract.invoice, <span class="kw-2">&amp;</span>payment_params)
+            <span class="self">self</span>.buy_preimage_external(ln_rpc, contract_account.contract.invoice, <span class="kw-2">&amp;</span>payment_params)
                 .<span class="kw">await
         </span>};
 
@@ -392,7 +392,7 @@
     <span class="kw">pub async fn </span>buy_preimage_external(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
-        invoice: <span class="kw-2">&amp;</span>str,
+        invoice: lightning_invoice::Invoice,
         payment_params: <span class="kw-2">&amp;</span>PaymentParameters,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">match </span>ln_rpc
@@ -473,4 +473,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (edf018221 2022-11-02)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

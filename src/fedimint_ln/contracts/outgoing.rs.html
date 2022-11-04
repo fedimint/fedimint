@@ -74,7 +74,7 @@
     </span><span class="kw">pub </span>user_key: secp256k1::XOnlyPublicKey,
     <span class="comment">// FIXME: use pruned, privacy friendly version without description etc.
     </span><span class="doccomment">/// Invoice containing metadata on how to obtain the preimage
-    </span><span class="kw">pub </span>invoice: String,
+    </span><span class="kw">pub </span>invoice: lightning_invoice::Invoice,
     <span class="doccomment">/// Flag that can be set by the gateway and allows the client to claim an early refund
     </span><span class="kw">pub </span>cancelled: bool,
 }
@@ -101,4 +101,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (edf018221 2022-11-02)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

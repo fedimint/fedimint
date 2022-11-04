@@ -647,7 +647,7 @@
             gateway_key: gateway.mint_pub_key,
             timelock,
             user_key: user_sk.x_only_public_key().<span class="number">0</span>,
-            invoice: invoice.to_string(),
+            invoice,
             cancelled: <span class="bool-val">false</span>,
         };
 
@@ -1052,7 +1052,7 @@
             </span>.unwrap();
 
         <span class="macro">assert_eq!</span>(contract_acc.contract.contract_id(), contract.contract_id());
-        <span class="macro">assert_eq!</span>(contract_acc.contract.invoice, invoice.to_string());
+        <span class="macro">assert_eq!</span>(contract_acc.contract.invoice, invoice);
         <span class="macro">assert_eq!</span>(contract_acc.contract.timelock, timelock);
         <span class="macro">assert_eq!</span>(contract_acc.contract.hash, <span class="kw-2">*</span>invoice.payment_hash());
         <span class="macro">assert_eq!</span>(contract_acc.contract.gateway_key, gateway.mint_pub_key);
@@ -1093,4 +1093,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (edf018221 2022-11-02)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
