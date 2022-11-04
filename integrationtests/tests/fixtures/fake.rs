@@ -74,11 +74,10 @@ impl LightningTest for FakeLightningTest {
 impl LnRpc for FakeLightningTest {
     async fn pay(
         &self,
-        invoice_str: &str,
+        invoice: lightning_invoice::Invoice,
         _max_delay: u64,
         _max_fee_percent: f64,
     ) -> Result<Preimage, LightningError> {
-        let invoice: Invoice = invoice_str.parse().unwrap();
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         Ok(self.preimage.clone())

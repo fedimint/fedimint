@@ -9,7 +9,7 @@ pub trait LnRpc: Send + Sync + 'static {
     /// Attempt to pay an invoice and block till it succeeds, fails or times out
     async fn pay(
         &self,
-        invoice: &str,
+        invoice: lightning_invoice::Invoice,
         max_delay: u64,
         max_fee_percent: f64,
     ) -> Result<Preimage, LightningError>;
