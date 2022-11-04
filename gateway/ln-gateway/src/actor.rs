@@ -189,8 +189,8 @@ impl GatewayActor {
     }
 
     pub fn get_deposit_address(&self) -> Result<Address> {
-        let mut rng = rand::rngs::OsRng;
-        Ok(self.client.get_new_pegin_address(&mut rng))
+        let rng = rand::rngs::OsRng;
+        Ok(self.client.get_new_pegin_address(rng))
     }
 
     pub async fn deposit(

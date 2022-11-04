@@ -356,7 +356,7 @@ impl Decodable for lightning_invoice::Invoice {
 
 impl Encodable for bool {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let bool_as_u8 = if *self { 1 } else { 0 };
+        let bool_as_u8 = u8::from(*self);
         writer.write_all(&[bool_as_u8])?;
         Ok(1)
     }

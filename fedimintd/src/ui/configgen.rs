@@ -23,7 +23,7 @@ pub fn configgen(
     let amount_tiers = (1..12)
         .map(|amount| Amount::from_sat(10 * amount))
         .collect();
-    let mut rng = OsRng;
+    let rng = OsRng;
     let num_peers = guardians.len() as u16;
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let params = SetupConfigParams {
@@ -32,7 +32,7 @@ pub fn configgen(
         amount_tiers,
         btc_rpc,
     };
-    let (config_map, client_config) = trusted_dealer_gen(&peers, &params, &mut rng);
+    let (config_map, client_config) = trusted_dealer_gen(&peers, &params, rng);
     let server_configs = guardians
         .into_iter()
         .enumerate()

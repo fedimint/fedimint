@@ -771,7 +771,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         |dbtx| user.client.mint_client().new_ecash_note(&secp(), dbtx),
         &secp(),
         tbs_pks,
-        &mut rng(),
+        rng(),
     );
     fed.submit_transaction(tx);
     fed.run_consensus_epochs(1).await; // process offer

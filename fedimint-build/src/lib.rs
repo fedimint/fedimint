@@ -6,7 +6,7 @@ pub fn print_git_hash() {
     if env::var_os("GIT_HASH").is_none() {
         let git_hash = if File::open("./../../.git/HEAD").is_ok() {
             let output = Command::new("git")
-                .args(&["rev-parse", "HEAD"])
+                .args(["rev-parse", "HEAD"])
                 .output()
                 .unwrap();
             String::from_utf8(output.stdout).unwrap()
