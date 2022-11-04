@@ -28,7 +28,6 @@ pub enum Commands {
     /// NOTE: This command can only be used on a local gateway
     GenerateConfig {
         /// The gateway configuration directory
-        #[clap(default_value = ".gateway")]
         out_dir: PathBuf,
     },
     /// Display CLI version hash
