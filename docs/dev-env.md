@@ -18,6 +18,10 @@ Clone this repository locally, with `git clone <repo-url>`, then `cd <repo-dir>`
 
 If you encounter problems with Nix on MacOS, refer to the [macOS Guide](./macos.md).
 
+If you want to use [zld](https://github.com/michaeleisel/zld) for faster linking, you can uncomment the relevant 
+lines in the `.cargo/config.toml`. Please put the `.cargo/config.toml` in your `.git/info/exclude` if you choose to use zld. In case you want
+to submit a PR changing this file, uncomment the zld configuration again.
+
 ## Set up Nix
 
 Fedimint uses [Nix](https://nixos.org/explore.html) for building, CI, and managing dev environment.
