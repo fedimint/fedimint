@@ -70,7 +70,7 @@ enum CliOutput {
     },
 
     LnInvoice {
-        invoice: String,
+        invoice: lightning_invoice::Invoice,
     },
 
     WaitInvoice {
@@ -296,7 +296,7 @@ type CliResult = Result<CliOutput, CliError>;
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
     coins: TieredMulti<SpendableNote>,
-    invoice: String,
+    invoice: lightning_invoice::Invoice,
 }
 
 #[tokio::main]
@@ -532,7 +532,7 @@ async fn handle_command(
             .await
             .transform(
                 |confirmed_invoice| CliOutput::LnInvoice {
-                    invoice: (confirmed_invoice.invoice.to_string()),
+                    invoice: (confirmed_invoice.invoice),
                 },
                 CliErrorKind::GeneralFederationError,
                 "couldn't create invoice",

@@ -877,11 +877,7 @@ impl Client<GatewayClientConfig> {
             return Err(ClientError::NotOurKey);
         }
 
-        let invoice: Invoice = account
-            .contract
-            .invoice
-            .parse()
-            .map_err(ClientError::InvalidInvoice)?;
+        let invoice: Invoice = account.contract.invoice.clone();
         let invoice_amount = Amount::from_msat(
             invoice
                 .amount_milli_satoshis()

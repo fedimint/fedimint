@@ -63,7 +63,7 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
     #[instrument(name = "LnRpc::pay", skip(self))]
     async fn pay(
         &self,
-        invoice: &str,
+        invoice: lightning_invoice::Invoice,
         max_delay: u64,
         max_fee_percent: f64,
     ) -> Result<Preimage, LightningError> {

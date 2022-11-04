@@ -20,7 +20,7 @@ bitcoin_hashes = "0.11.0"
 futures = "0.3.24"
 itertools = "0.10.5"
 lightning = "0.0.112"
-lightning-invoice = "0.20.0"
+lightning-invoice = { version = "0.20.0", features = [ "serde" ] }
 fedimint-api = { path = "../../fedimint-api" }
 secp256k1 = { version="0.24.1", default-features=false }
 serde = {version = "1.0.147", features = [ "derive" ] }

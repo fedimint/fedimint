@@ -23,7 +23,7 @@ pub struct OutgoingContract {
     pub user_key: secp256k1::XOnlyPublicKey,
     // FIXME: use pruned, privacy friendly version without description etc.
     /// Invoice containing metadata on how to obtain the preimage
-    pub invoice: String,
+    pub invoice: lightning_invoice::Invoice,
     /// Flag that can be set by the gateway and allows the client to claim an early refund
     pub cancelled: bool,
 }

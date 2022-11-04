@@ -103,7 +103,7 @@ impl GatewayActor {
             self.buy_preimage_internal(&payment_params.payment_hash, &payment_params.invoice_amount)
                 .await
         } else {
-            self.buy_preimage_external(ln_rpc, &contract_account.contract.invoice, &payment_params)
+            self.buy_preimage_external(ln_rpc, contract_account.contract.invoice, &payment_params)
                 .await
         };
 
@@ -155,7 +155,7 @@ impl GatewayActor {
     pub async fn buy_preimage_external(
         &self,
         ln_rpc: Arc<dyn LnRpc>,
-        invoice: &str,
+        invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
         match ln_rpc

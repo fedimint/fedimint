@@ -100,7 +100,7 @@ impl<'c> LnClient<'c> {
             gateway_key: gateway.mint_pub_key,
             timelock,
             user_key: user_sk.x_only_public_key().0,
-            invoice: invoice.to_string(),
+            invoice,
             cancelled: false,
         };
 
@@ -505,7 +505,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(contract_acc.contract.contract_id(), contract.contract_id());
-        assert_eq!(contract_acc.contract.invoice, invoice.to_string());
+        assert_eq!(contract_acc.contract.invoice, invoice);
         assert_eq!(contract_acc.contract.timelock, timelock);
         assert_eq!(contract_acc.contract.hash, *invoice.payment_hash());
         assert_eq!(contract_acc.contract.gateway_key, gateway.mint_pub_key);
