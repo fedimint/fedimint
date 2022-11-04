@@ -12,7 +12,7 @@ use tokio::io::{stdin, stdout};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
-use crate::ReceiveInvoicePayload;
+use crate::ReceivePaymentPayload;
 use crate::{
     ln::{LightningError, LnRpc, LnRpcRef},
     rpc::GatewayRpcSender,
@@ -116,7 +116,7 @@ async fn htlc_accepted_hook(
     let htlc_accepted: HtlcAccepted = serde_json::from_value(value)?;
     let preimage = plugin
         .state()
-        .send(ReceiveInvoicePayload { htlc_accepted })
+        .send(ReceivePaymentPayload { htlc_accepted })
         .await?;
     let pk = preimage.to_public_key()?;
     Ok(serde_json::json!({

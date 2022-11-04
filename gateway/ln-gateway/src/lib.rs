@@ -39,8 +39,9 @@ use crate::ln::{LightningError, LnRpc};
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ReceiveInvoicePayload {
-    // NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
+pub struct ReceivePaymentPayload {
+    // NOTE: On ReceivePayment signal from ln_rpc,
+    // we extract the relevant federation id from the accepted htlc
     pub htlc_accepted: HtlcAccepted,
 }
 
@@ -85,7 +86,7 @@ pub struct GatewayInfo {
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
-    ReceiveInvoice(GatewayRequestInner<ReceiveInvoicePayload>),
+    ReceiveInvoice(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
@@ -121,7 +122,7 @@ macro_rules! impl_gateway_request_trait {
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
 impl_gateway_request_trait!(
-    ReceiveInvoicePayload,
+    ReceivePaymentPayload,
     Preimage,
     GatewayRequest::ReceiveInvoice
 );
@@ -211,15 +212,15 @@ impl LnGateway {
         })
     }
 
-    async fn handle_receive_invoice_msg(&self, payload: ReceiveInvoicePayload) -> Result<Preimage> {
-        let ReceiveInvoicePayload { htlc_accepted } = payload;
+    async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
+        let ReceivePaymentPayload { htlc_accepted } = payload;
 
         let invoice_amount = htlc_accepted.htlc.amount;
         let payment_hash = htlc_accepted.htlc.payment_hash;
         debug!("Incoming htlc for payment hash {}", payment_hash);
 
         // FIXME: Issue 664: We should avoid having a special reference to a federation
-        // all requests, including `ReceiveInvoicePayload`, should contain the federation id
+        // all requests, including `ReceivePaymentPayload`, should contain the federation id
         // TODO: Parse federation id from routing hint in htlc_accepted message
         self.select_actor(self.config.default_federation.clone())?
             .buy_preimage_internal(&payment_hash, &invoice_amount)
