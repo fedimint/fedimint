@@ -249,12 +249,6 @@ impl LnGateway {
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
 
-            // Sync wallet for the default federation
-            // TODO: We should sync wallets for all the federation clients
-            self.select_actor(self.config.default_federation.clone())?
-                .fetch_all_coins()
-                .await;
-
             // Handle messages from webserver and plugin
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
