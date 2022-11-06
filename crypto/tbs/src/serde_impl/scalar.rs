@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serializer};
 pub fn serialize<S: Serializer>(x: &Scalar, s: S) -> Result<S::Ok, S::Error> {
     let bytes = x.to_bytes();
     if s.is_human_readable() {
-        s.serialize_str(&hex::encode(&bytes))
+        s.serialize_str(&hex::encode(bytes))
     } else {
         s.serialize_bytes(&bytes)
     }

@@ -42,6 +42,9 @@ license-file = "LICENSE"
 keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 
+[profile.dev]
+split-debuginfo = "packed"
+
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
 secp256k1 = { opt-level = 2 }

@@ -168,7 +168,7 @@ impl Decodable for EpochSignature {
     {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-        Ok(EpochSignature(Signature::from_bytes(&bytes).unwrap()))
+        Ok(EpochSignature(Signature::from_bytes(bytes).unwrap()))
     }
 }
 
@@ -189,7 +189,7 @@ impl Decodable for EpochSignatureShare {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(EpochSignatureShare(
-            SignatureShare::from_bytes(&bytes).unwrap(),
+            SignatureShare::from_bytes(bytes).unwrap(),
         ))
     }
 }
@@ -248,7 +248,7 @@ mod tests {
         let sigs: Vec<(PeerId, Vec<ConsensusItem>)> = peers
             .iter()
             .map(|&peer| {
-                let sig = sk_set.secret_key_share(peer.to_usize()).sign(&epoch0.hash);
+                let sig = sk_set.secret_key_share(peer.to_usize()).sign(epoch0.hash);
                 (
                     peer,
                     vec![ConsensusItem::EpochInfo(EpochSignatureShare(sig))],
@@ -282,7 +282,7 @@ mod tests {
         let sk: SecretKey = SecretKey::random();
         let _pk = sk.public_key();
         let wrong_hash: Sha256 = Hash::hash(b"wrong");
-        let sig = EpochSignature(sk.sign(&wrong_hash));
+        let sig = EpochSignature(sk.sign(wrong_hash));
 
         let epoch0 = history(0, &None, Some(sig));
         let epoch = EpochHistory {

@@ -387,7 +387,7 @@ async fn handle_command(
             hash: env!("GIT_HASH").to_string(),
         }),
         Command::PegInAddress => {
-            let peg_in_address = client.get_new_pegin_address(&mut rng);
+            let peg_in_address = client.get_new_pegin_address(rng);
             Ok(CliOutput::PegInAddress {
                 address: (peg_in_address),
             })

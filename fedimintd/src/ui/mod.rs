@@ -208,10 +208,10 @@ async fn receive_configs(
 fn save_configs(server_config: &ServerConfig, client_config: &ClientConfig, cfg_path: &PathBuf) {
     // Recursively create config directory if it doesn't exist
     let parent = cfg_path.parent().unwrap();
-    std::fs::create_dir_all(&parent).expect("Failed to create config directory");
+    std::fs::create_dir_all(parent).expect("Failed to create config directory");
 
     // Save the configs
-    let cfg_file = std::fs::File::create(&cfg_path).expect("Could not create cfg file");
+    let cfg_file = std::fs::File::create(cfg_path).expect("Could not create cfg file");
     serde_json::to_writer_pretty(cfg_file, &server_config).unwrap();
     let client_cfg_path = parent.join("client.json");
     let client_cfg_file =

@@ -116,9 +116,9 @@ async fn new_peg_in_address(
     Extension(state): Extension<Arc<State>>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    let mut rng = state.rng;
+    let rng = state.rng;
     json_success!(PegInAddressResponse {
-        peg_in_address: client.get_new_pegin_address(&mut rng)
+        peg_in_address: client.get_new_pegin_address(rng)
     })
 }
 

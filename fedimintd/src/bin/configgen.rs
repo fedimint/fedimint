@@ -66,7 +66,7 @@ fn main() {
             federation_name,
             bitcoind_rpc,
         } => {
-            let mut rng = OsRng;
+            let rng = OsRng;
             // Recursively create config directory if it doesn't exist
             std::fs::create_dir_all(&cfg_path).expect("Failed to create config directory");
 
@@ -83,8 +83,7 @@ fn main() {
                 &bitcoind_rpc,
             );
 
-            let (server_cfg, client_cfg) =
-                ServerConfig::trusted_dealer_gen(&peers, &params, &mut rng);
+            let (server_cfg, client_cfg) = ServerConfig::trusted_dealer_gen(&peers, &params, rng);
 
             for (id, cfg) in server_cfg {
                 let mut path: PathBuf = cfg_path.clone();
