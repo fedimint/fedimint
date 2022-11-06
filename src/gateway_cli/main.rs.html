@@ -187,7 +187,6 @@
 <span id="187">187</span>
 <span id="188">188</span>
 <span id="189">189</span>
-<span id="190">190</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
@@ -218,7 +217,6 @@
     /// NOTE: This command can only be used on a local gateway
     </span>GenerateConfig {
         <span class="doccomment">/// The gateway configuration directory
-        </span><span class="attr">#[clap(default_value = <span class="string">&quot;.gateway&quot;</span>)]
         </span>out_dir: PathBuf,
     },
     <span class="doccomment">/// Display CLI version hash
