@@ -228,13 +228,14 @@ impl LnGateway {
         &self,
         client: Arc<GatewayClient>,
     ) -> Result<Arc<GatewayActor>> {
+        let federation_id = FederationId(client.config().client_config.federation_name);
+
         let actor = Arc::new(
-            GatewayActor::new(client.clone())
+            GatewayActor::new(client.clone(), federation_id.clone())
                 .await
                 .expect("Failed to create actor"),
         );
 
-        let federation_id = FederationId(client.config().client_config.federation_name);
         if let Ok(mut actors) = self.actors.lock() {
             actors.insert(federation_id.hash(), actor.clone());
         }

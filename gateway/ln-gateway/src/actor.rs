@@ -7,7 +7,7 @@ use fedimint_server::modules::{
     ln::contracts::{ContractId, Preimage},
     wallet::txoproof::TxOutProof,
 };
-use mint_client::{GatewayClient, PaymentParameters};
+use mint_client::{FederationId, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
@@ -15,10 +15,11 @@ use crate::{ln::LnRpc, utils::retry, LnGatewayError, Result};
 
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
+    pub id: FederationId,
 }
 
 impl GatewayActor {
-    pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
+    pub async fn new(client: Arc<GatewayClient>, id: FederationId) -> Result<Self> {
         // Retry regster gateway federation client with federation
         match retry(
             String::from("Register With Federation"),
@@ -38,7 +39,7 @@ impl GatewayActor {
             Err(e) => warn!("Failed to register with federation: {}", e),
         }
 
-        Ok(Self { client })
+        Ok(Self { client, id })
     }
 
     /// Fetch all coins minted for this gateway by the federation
