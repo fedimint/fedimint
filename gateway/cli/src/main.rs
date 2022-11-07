@@ -4,7 +4,8 @@ use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
-    config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
+    config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload,
+    RegisterFedPayload, WithdrawPayload,
 };
 use mint_client::{utils::from_hex, FederationId};
 use serde::Serialize;
@@ -57,6 +58,11 @@ pub enum Commands {
         amount: Amount,
         /// The address to send the funds to
         address: Address,
+    },
+    /// Register federation with the gateway
+    RegisterFed {
+        /// ConnectInfo code to connect to the federation
+        connect: String,
     },
 }
 
@@ -144,6 +150,15 @@ async fn main() {
                     amount,
                     address,
                 },
+            )
+            .await;
+        }
+        Commands::RegisterFed { connect } => {
+            call(
+                source_password(cli.rpcpassword),
+                cli.url,
+                String::from("/register"),
+                RegisterFedPayload { connect },
             )
             .await;
         }

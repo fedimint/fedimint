@@ -1,16 +1,20 @@
-use std::{fs::File, net::SocketAddr, path::Path, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use cln_plugin::Error;
 use fedimint_server::config::{load_from_file, ClientConfig};
 use ln_gateway::{
-    cln::build_cln_rpc, config::GatewayConfig, ln::LnRpcRef, rpc::GatewayRpcSender, GatewayRequest,
-    LnGateway,
+    client::{GatewayClientBuilder, RocksDbGatewayClientBuilder},
+    cln::build_cln_rpc,
+    config::GatewayConfig,
+    ln::LnRpcRef,
+    rpc::GatewayRpcSender,
+    GatewayRequest, LnGateway,
 };
-use mint_client::{Client, GatewayClientConfig};
+use mint_client::GatewayClientConfig;
 use rand::thread_rng;
 use secp256k1::{KeyPair, PublicKey};
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::warn;
 use url::Url;
 
 #[tokio::main]
@@ -37,21 +41,43 @@ async fn main() -> Result<(), Error> {
     let gw_cfg_path = work_dir.clone().join("gateway.config");
     let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path);
 
-    let mut gateway = LnGateway::new(gw_cfg, ln_rpc, tx, rx, bind_addr);
+    // Create federation client builder
+    let client_builder: GatewayClientBuilder =
+        RocksDbGatewayClientBuilder::new(work_dir.clone()).into();
 
-    let default_fed = Arc::new(build_federation_client(pub_key, bind_addr, work_dir)?);
-    gateway.register_federation(default_fed).await?;
+    // Create gateway instance
+    let mut gateway = LnGateway::new(
+        gw_cfg,
+        ln_rpc,
+        client_builder.clone(),
+        tx,
+        rx,
+        bind_addr,
+        pub_key,
+    );
+
+    // Build and register the default federation
+    // TODO: Register default federation through gateway webserver api
+    let client_cfg = build_federation_client_cfg(pub_key, bind_addr, work_dir)?;
+    let default_fed = client_builder.build(client_cfg.clone())?;
+    gateway.register_federation(Arc::new(default_fed)).await?;
+    if let Err(e) = client_builder.save_config(client_cfg.clone()) {
+        warn!(
+            "Failed to save default federation client configuration: {}",
+            e
+        );
+    }
 
     gateway.run().await.expect("gateway failed to run");
     Ok(())
 }
 
 /// Build a new federation client with RocksDb and config at a given path
-fn build_federation_client(
+fn build_federation_client_cfg(
     node_pub_key: PublicKey,
     bind_addr: SocketAddr,
     work_dir: PathBuf,
-) -> Result<Client<GatewayClientConfig>, Error> {
+) -> Result<GatewayClientConfig, Error> {
     // Create a gateway client configuration
     let client_cfg_path = work_dir.join("client.json");
     let client_cfg: ClientConfig = load_from_file(&client_cfg_path);
@@ -60,41 +86,12 @@ fn build_federation_client(
     let ctx = secp256k1::Secp256k1::new();
     let kp_fed = KeyPair::new(&ctx, &mut rng);
 
-    let client_cfg = GatewayClientConfig {
+    Ok(GatewayClientConfig {
         client_config: client_cfg,
         redeem_key: kp_fed,
         timelock_delta: 10,
         node_pub_key,
         api: Url::parse(format!("http://{}", bind_addr).as_str())
             .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
-    };
-
-    // TODO: With support for multiple federations and federation registration through config code
-    // the gateway should be able back-up all registered federations in a snapshot or db.
-    save_federation_client_cfg(work_dir.clone(), &client_cfg);
-
-    // Create a database
-    let db_path = work_dir.join("gateway.db");
-    let db = fedimint_rocksdb::RocksDb::open(db_path)
-        .expect("Error opening DB")
-        .into();
-
-    // Create context
-    let ctx = secp256k1::Secp256k1::new();
-
-    Ok(Client::new(client_cfg, db, ctx))
-}
-
-/// Persist federation client cfg to [`gateway.json`] file
-fn save_federation_client_cfg(work_dir: PathBuf, client_cfg: &GatewayClientConfig) {
-    let path: PathBuf = work_dir.join("gateway.json");
-    if !Path::new(&path).is_file() {
-        debug!("Creating new gateway cfg file at {}", path.display());
-        let file = File::create(path).expect("Could not create gateway cfg file");
-        serde_json::to_writer_pretty(file, &client_cfg).expect("Could not write gateway cfg");
-    } else {
-        debug!("Gateway cfg file already exists at {}", path.display());
-        let file = File::open(path).expect("Could not load gateway cfg file");
-        serde_json::to_writer_pretty(file, &client_cfg).expect("Could not write gateway cfg");
-    }
+    })
 }

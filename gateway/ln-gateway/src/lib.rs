@@ -1,4 +1,5 @@
 pub mod actor;
+pub mod client;
 pub mod cln;
 pub mod config;
 pub mod ln;
@@ -11,32 +12,49 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::{
     io::Cursor,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
-use actor::GatewayActor;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
-use cln::HtlcAccepted;
-use config::GatewayConfig;
-use fedimint_api::{Amount, TransactionId};
-use fedimint_server::modules::ln::contracts::Preimage;
-use fedimint_server::modules::wallet::txoproof::TxOutProof;
+use fedimint_api::{Amount, NumPeers, TransactionId};
+use fedimint_server::{
+    config::ClientConfig,
+    modules::{ln::contracts::Preimage, wallet::txoproof::TxOutProof},
+};
 use futures::Future;
 use mint_client::{
-    ln::PayInvoicePayload, mint::MintClientError, ClientError, FederationId, GatewayClient,
+    api::{WsFederationApi, WsFederationConnect},
+    ln::PayInvoicePayload,
+    mint::MintClientError,
+    query::CurrentConsensus,
+    ClientError, FederationId, GatewayClient, GatewayClientConfig,
 };
+use rand::thread_rng;
+use secp256k1::{KeyPair, PublicKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error};
-use webserver::run_webserver;
+use tracing::{debug, error, warn};
+use url::Url;
 
-use crate::ln::{LightningError, LnRpc};
+use crate::{
+    actor::GatewayActor,
+    client::GatewayClientBuilder,
+    cln::HtlcAccepted,
+    config::GatewayConfig,
+    ln::{LightningError, LnRpc},
+    webserver::run_webserver,
+};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RegisterFedPayload {
+    pub connect: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReceivePaymentPayload {
@@ -86,7 +104,8 @@ pub struct GatewayInfo {
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
-    ReceiveInvoice(GatewayRequestInner<ReceivePaymentPayload>),
+    RegisterFederation(GatewayRequestInner<RegisterFedPayload>),
+    ReceivePayment(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
@@ -121,10 +140,11 @@ macro_rules! impl_gateway_request_trait {
 }
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
+impl_gateway_request_trait!(RegisterFedPayload, (), GatewayRequest::RegisterFederation);
 impl_gateway_request_trait!(
     ReceivePaymentPayload,
     Preimage,
-    GatewayRequest::ReceiveInvoice
+    GatewayRequest::ReceivePayment
 );
 impl_gateway_request_trait!(PayInvoicePayload, (), GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
@@ -152,30 +172,50 @@ where
 
 pub struct LnGateway {
     config: GatewayConfig,
-    actors: HashMap<FederationId, Arc<GatewayActor>>,
+    actors: Mutex<HashMap<FederationId, Arc<GatewayActor>>>,
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
+    client_builder: GatewayClientBuilder,
+    // TODO: consider wrapping bind_addr, and node_pubkey in GatewayConfig
+    bind_addr: SocketAddr,
+    pub_key: PublicKey,
 }
 
 impl LnGateway {
     pub fn new(
         config: GatewayConfig,
         ln_client: Arc<dyn LnRpc>,
+        client_builder: GatewayClientBuilder,
+        // TODO: consider encapsulating message channel within LnGateway
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
+        // TODO: consider wrapping bind_addr, and node_pubkey in GatewayConfig
         bind_addr: SocketAddr,
+        pub_key: PublicKey,
     ) -> Self {
         // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(config.password.clone(), bind_addr, sender));
 
         Self {
             config,
-            actors: HashMap::new(),
+            actors: Mutex::new(HashMap::new()),
             ln_client,
             webserver,
             receiver,
+            client_builder,
+            bind_addr,
+            pub_key,
         }
+    }
+
+    fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+        self.actors
+            .lock()
+            .map_err(|_| LnGatewayError::Other(anyhow::anyhow!("Failed to select an actor")))?
+            .get(&federation_id)
+            .cloned()
+            .ok_or(LnGatewayError::UnknownFederation)
     }
 
     /// Register a federation to the gateway.
@@ -184,7 +224,7 @@ impl LnGateway {
     ///
     /// A `GatewayActor` that can be used to execute gateway functions for the federation
     pub async fn register_federation(
-        &mut self,
+        &self,
         client: Arc<GatewayClient>,
     ) -> Result<Arc<GatewayActor>> {
         let actor = Arc::new(
@@ -194,22 +234,66 @@ impl LnGateway {
         );
 
         let federation_id = FederationId(client.config().client_config.federation_name);
-        self.actors.insert(federation_id, actor.clone());
+        if let Ok(mut actors) = self.actors.lock() {
+            actors.insert(federation_id, actor.clone());
+        }
         Ok(actor)
     }
 
-    fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
-        self.actors
-            .get(&federation_id)
-            .cloned()
-            .ok_or(LnGatewayError::UnknownFederation)
+    // Webserver handler for requests to register a federation
+    async fn handle_register_federation(&self, payload: RegisterFedPayload) -> Result<()> {
+        let connect: WsFederationConnect =
+            serde_json::from_str(&payload.connect).expect("Invalid federation connect info");
+        let api = WsFederationApi::new(connect.members);
+
+        let client_cfg: ClientConfig = api
+            .request(
+                "/config",
+                (),
+                CurrentConsensus::new(api.peers().one_honest()),
+            )
+            .await
+            .expect("Failed to get client config");
+
+        let mut rng = thread_rng();
+        let ctx = secp256k1::Secp256k1::new();
+        let kp_fed = KeyPair::new(&ctx, &mut rng);
+
+        let gw_client_cfg = GatewayClientConfig {
+            client_config: client_cfg,
+            redeem_key: kp_fed,
+            timelock_delta: 10,
+            node_pub_key: self.pub_key,
+            api: Url::parse(format!("http://{}", self.bind_addr).as_str())
+                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+        };
+
+        let client = self.client_builder.build(gw_client_cfg.clone())?;
+
+        if let Err(e) = self.register_federation(Arc::new(client)).await {
+            error!("Failed to register federation: {}", e);
+        }
+
+        if let Err(e) = self.client_builder.save_config(gw_client_cfg) {
+            warn!(
+                "Failed to save default federation client configuration: {}",
+                e
+            );
+        }
+
+        Ok(())
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        Ok(GatewayInfo {
-            version_hash: env!("GIT_HASH").to_string(),
-            federations: self.actors.keys().cloned().collect(),
-        })
+        if let Ok(actors) = self.actors.lock() {
+            return Ok(GatewayInfo {
+                version_hash: env!("GIT_HASH").to_string(),
+                federations: actors.keys().cloned().collect(),
+            });
+        }
+        Err(LnGatewayError::Other(anyhow::anyhow!(
+            "Failed to fetch gateway get info"
+        )))
     }
 
     async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
@@ -293,12 +377,15 @@ impl LnGateway {
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
-                    GatewayRequest::Info(payload) => {
-                        payload
-                            .handle(|payload| self.handle_get_info(payload))
+                    GatewayRequest::Info(inner) => {
+                        inner.handle(|payload| self.handle_get_info(payload)).await;
+                    }
+                    GatewayRequest::RegisterFederation(inner) => {
+                        inner
+                            .handle(|payload| self.handle_register_federation(payload))
                             .await;
                     }
-                    GatewayRequest::ReceiveInvoice(inner) => {
+                    GatewayRequest::ReceivePayment(inner) => {
                         inner
                             .handle(|payload| self.handle_receive_invoice_msg(payload))
                             .await;
