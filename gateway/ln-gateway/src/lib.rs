@@ -99,7 +99,7 @@ pub struct WithdrawPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GatewayInfo {
     pub version_hash: String,
-    pub federations: Vec<Sha256Hash>,
+    pub federations: Vec<FederationId>,
 }
 
 #[derive(Debug)]
@@ -290,7 +290,7 @@ impl LnGateway {
         if let Ok(actors) = self.actors.lock() {
             return Ok(GatewayInfo {
                 version_hash: env!("GIT_HASH").to_string(),
-                federations: actors.keys().cloned().collect(),
+                federations: actors.iter().map(|(_, actor)| actor.id.clone()).collect(),
             });
         }
         Err(LnGatewayError::Other(anyhow::anyhow!(
