@@ -104,6 +104,12 @@ pub struct PaymentParameters {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
 pub struct FederationId(pub String);
 
+impl FederationId {
+    pub fn hash(&self) -> sha256::Hash {
+        sha256::Hash::hash(self.0.as_bytes())
+    }
+}
+
 impl FromStr for FederationId {
     type Err = anyhow::Error;
 

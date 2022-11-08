@@ -19,6 +19,7 @@ use std::{
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::{Amount, NumPeers, TransactionId};
 use fedimint_server::{
     config::ClientConfig,
@@ -98,7 +99,7 @@ pub struct WithdrawPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GatewayInfo {
     pub version_hash: String,
-    pub federations: Vec<FederationId>,
+    pub federations: Vec<Sha256Hash>,
 }
 
 #[derive(Debug)]
@@ -172,7 +173,7 @@ where
 
 pub struct LnGateway {
     config: GatewayConfig,
-    actors: Mutex<HashMap<FederationId, Arc<GatewayActor>>>,
+    actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
@@ -213,7 +214,7 @@ impl LnGateway {
         self.actors
             .lock()
             .map_err(|_| LnGatewayError::Other(anyhow::anyhow!("Failed to select an actor")))?
-            .get(&federation_id)
+            .get(&federation_id.hash())
             .cloned()
             .ok_or(LnGatewayError::UnknownFederation)
     }
@@ -235,7 +236,7 @@ impl LnGateway {
 
         let federation_id = FederationId(client.config().client_config.federation_name);
         if let Ok(mut actors) = self.actors.lock() {
-            actors.insert(federation_id, actor.clone());
+            actors.insert(federation_id.hash(), actor.clone());
         }
         Ok(actor)
     }

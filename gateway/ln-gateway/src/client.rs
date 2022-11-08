@@ -58,7 +58,7 @@ impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
 
     /// Create a client database
     fn create_database(&self, federation_id: FederationId) -> Result<Database> {
-        let db_path = self.work_dir.join(format!("{}.db", federation_id.0));
+        let db_path = self.work_dir.join(format!("{}.db", federation_id.hash()));
         let db = fedimint_rocksdb::RocksDb::open(db_path)
             .expect("Error opening DB")
             .into();
@@ -68,7 +68,8 @@ impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
     /// Persist federation client cfg to [`<federation_id>.json`] file
     fn save_config(&self, config: GatewayClientConfig) -> Result<()> {
         let federation_id = FederationId(config.client_config.federation_name.clone());
-        let path: PathBuf = self.work_dir.join(format!("{}.json", federation_id.0));
+
+        let path: PathBuf = self.work_dir.join(format!("{}.json", federation_id.hash()));
 
         if !Path::new(&path).is_file() {
             debug!("Creating new gateway cfg file at {}", path.display());
