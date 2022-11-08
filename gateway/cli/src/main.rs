@@ -184,10 +184,14 @@ where
 
     match response.status() {
         reqwest::StatusCode::OK => {
-            let val: serde_json::Value = serde_json::from_str(&response.text().await.unwrap())
-                .expect("failed to parse response");
-            let formatted = serde_json::to_string_pretty(&val).expect("failed to format response");
-            println!("{}", formatted)
+            let text = response.text().await.expect("Failed to read response body");
+            if !text.is_empty() {
+                let val: serde_json::Value =
+                    serde_json::from_str(&text).expect("failed to parse response as json");
+                let formatted =
+                    serde_json::to_string_pretty(&val).expect("failed to format response");
+                println!("\n{}", formatted)
+            }
         }
         _ => {
             println!("\nError: {}", &response.text().await.unwrap());
