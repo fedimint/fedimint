@@ -19,6 +19,7 @@ use std::{
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::{Amount, NumPeers, TransactionId};
 use fedimint_server::{
     config::ClientConfig,
@@ -172,7 +173,7 @@ where
 
 pub struct LnGateway {
     config: GatewayConfig,
-    actors: Mutex<HashMap<FederationId, Arc<GatewayActor>>>,
+    actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
     ln_client: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
@@ -213,7 +214,7 @@ impl LnGateway {
         self.actors
             .lock()
             .map_err(|_| LnGatewayError::Other(anyhow::anyhow!("Failed to select an actor")))?
-            .get(&federation_id)
+            .get(&federation_id.hash())
             .cloned()
             .ok_or(LnGatewayError::UnknownFederation)
     }
@@ -227,15 +228,16 @@ impl LnGateway {
         &self,
         client: Arc<GatewayClient>,
     ) -> Result<Arc<GatewayActor>> {
+        let federation_id = FederationId(client.config().client_config.federation_name);
+
         let actor = Arc::new(
-            GatewayActor::new(client.clone())
+            GatewayActor::new(client.clone(), federation_id.clone())
                 .await
                 .expect("Failed to create actor"),
         );
 
-        let federation_id = FederationId(client.config().client_config.federation_name);
         if let Ok(mut actors) = self.actors.lock() {
-            actors.insert(federation_id, actor.clone());
+            actors.insert(federation_id.hash(), actor.clone());
         }
         Ok(actor)
     }
@@ -288,7 +290,7 @@ impl LnGateway {
         if let Ok(actors) = self.actors.lock() {
             return Ok(GatewayInfo {
                 version_hash: env!("GIT_HASH").to_string(),
-                federations: actors.keys().cloned().collect(),
+                federations: actors.iter().map(|(_, actor)| actor.id.clone()).collect(),
             });
         }
         Err(LnGatewayError::Other(anyhow::anyhow!(
