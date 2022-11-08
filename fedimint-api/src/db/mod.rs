@@ -98,7 +98,6 @@ dyn_newtype_define! {
 /// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
 #[async_trait(?Send)]
 pub trait IDatabaseTransaction<'a>: 'a + Send {
->>>>>>> 5c08a23fe (Rebase onto master)
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
     fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;

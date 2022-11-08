@@ -442,19 +442,32 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let final_coins = if coins.total_amount() == amount {
             coins
         } else {
-            let mut dbtx = self.context.db.begin_transaction();
-            let dbtx_mutref = &mut dbtx;
+            let mut failed_tx_attempts = 0;
             let mut tx = TransactionBuilder::default();
-            tx.input_coins(coins)?;
-            tx.output_coins(
-                amount,
-                move || {
-                    self.mint_client()
-                        .new_ecash_note(&self.context.secp, dbtx_mutref)
-                },
-                &self.mint_client().config.tbs_pks,
-            );
-            dbtx.commit_tx().await.expect("committing tx failed"); // FIXME: retry?
+            loop {
+                if failed_tx_attempts >= 5 {
+                    return Err(ClientError::SpendReusedNote);
+                }
+
+                let mut dbtx = self.context.db.begin_transaction();
+                let dbtx_mutref = &mut dbtx;
+                tx.input_coins(coins.clone())?;
+                tx.output_coins(
+                    amount,
+                    move || {
+                        self.mint_client()
+                            .new_ecash_note(&self.context.secp, dbtx_mutref)
+                    },
+                    &self.mint_client().config.tbs_pks,
+                );
+
+                if dbtx.commit_tx().await.is_err() {
+                    failed_tx_attempts += 1;
+                } else {
+                    break;
+                }
+            }
+
             self.submit_tx_with_change(tx, rng).await?;
             self.fetch_all_coins().await;
             self.mint_client().select_coins(amount)?
@@ -1259,6 +1272,8 @@ pub enum ClientError {
     DeleteUnknownOutgoingContract,
     #[error("Timeout")]
     Timeout,
+    #[error("Failed to spend ecash, all spend attempts re-used an ecash note")]
+    SpendReusedNote,
 }
 
 impl From<InvalidAmountTierError> for ClientError {
