@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
+use std::fmt::Debug;
+use std::mem;
 
 use fedimint_api::PeerId;
 use fedimint_core::epoch::EpochHistory;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use threshold_crypto::PublicKey;
+use tracing::warn;
 
 use crate::api::{FedResponse, Result};
 use crate::ApiError;
@@ -48,7 +50,7 @@ impl QueryStrategy<EpochHistory> for ValidHistory {
 /// Returns the deduplicated union of `required` responses
 pub struct UnionResponses<R> {
     responses: HashSet<PeerId>,
-    results: HashSet<R>,
+    existing_results: Vec<R>,
     current: CurrentConsensus<Vec<R>>,
     required: usize,
 }
@@ -57,25 +59,30 @@ impl<R> UnionResponses<R> {
     pub fn new(required: usize) -> Self {
         Self {
             responses: HashSet::new(),
-            results: HashSet::new(),
+            existing_results: vec![],
             current: CurrentConsensus::new(required),
             required,
         }
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
+impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
     fn process(&mut self, response: FedResponse<Vec<R>>) -> QueryStep<Vec<R>> {
         if let FedResponse {
             peer,
-            result: Ok(result),
+            result: Ok(results),
         } = response
         {
-            self.results.extend(result.into_iter());
+            for new_result in results {
+                if !self.existing_results.iter().any(|r| r == &new_result) {
+                    self.existing_results.push(new_result);
+                }
+            }
+
             self.responses.insert(peer);
 
             if self.responses.len() >= self.required {
-                QueryStep::Finished(Ok(self.results.drain().collect()))
+                QueryStep::Finished(Ok(mem::take(&mut self.existing_results)))
             } else {
                 QueryStep::Continue
             }
@@ -99,7 +106,7 @@ impl<R> Retry404<R> {
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<R> for Retry404<R> {
+impl<R: Debug + Eq + Clone> QueryStrategy<R> for Retry404<R> {
     fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
         let FedResponse { peer, result } = response;
         match result {
@@ -130,7 +137,7 @@ impl<R> EventuallyConsistent<R> {
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<R> for EventuallyConsistent<R> {
+impl<R: Eq + Clone + Debug> QueryStrategy<R> for EventuallyConsistent<R> {
     fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
         self.responses.insert(response.peer);
 
@@ -147,7 +154,12 @@ impl<R: Hash + Eq + Clone> QueryStrategy<R> for EventuallyConsistent<R> {
 
 /// Returns when `required` responses are equal
 pub struct CurrentConsensus<R> {
-    pub results: HashMap<R, HashSet<PeerId>>,
+    /// Previously received responses/results
+    ///
+    /// Since we don't expect a lot of different responses,
+    /// it's easier to store them in `Vec` and do a linear search
+    /// than required `R: Ord` or `R: Hash`.
+    pub existing_results: Vec<(R, HashSet<PeerId>)>,
     pub errors: HashMap<PeerId, JsonRpcError>,
     required: usize,
 }
@@ -155,22 +167,35 @@ pub struct CurrentConsensus<R> {
 impl<R> CurrentConsensus<R> {
     pub fn new(required: usize) -> Self {
         Self {
-            results: HashMap::new(),
+            existing_results: vec![],
             errors: HashMap::new(),
             required,
         }
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<R> for CurrentConsensus<R> {
+impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
     fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
         match response {
             FedResponse {
                 peer,
                 result: Ok(result),
             } => {
-                let peers = self.results.entry(result).or_insert_with(HashSet::new);
-                peers.insert(peer);
+                let mut found = false;
+                for (prev_result, peers) in &mut self.existing_results {
+                    if prev_result == &result {
+                        found = true;
+                        if peers.contains(&peer) {
+                            warn!(prev = ?prev_result, new = ?result, peer = %peer, "Ignoring duplicate response from peer");
+                        } else {
+                            peers.insert(peer);
+                        }
+                        break;
+                    }
+                }
+                if !found {
+                    self.existing_results.push((result, HashSet::from([peer])));
+                }
             }
             FedResponse {
                 peer,
@@ -180,7 +205,7 @@ impl<R: Hash + Eq + Clone> QueryStrategy<R> for CurrentConsensus<R> {
             }
         }
 
-        for (result, peers) in self.results.iter() {
+        for (result, peers) in &self.existing_results {
             if peers.len() >= self.required {
                 return QueryStep::Finished(Ok(result.clone()));
             }
