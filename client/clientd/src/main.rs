@@ -172,7 +172,7 @@ async fn spend(
 
 async fn fetch(client: Arc<Client<UserClientConfig>>) {
     //TODO: log txid or error (handle unwrap)
-    let batch = futures::executor::block_on(async { client.fetch_all_coins().await });
+    let batch = client.fetch_all_coins().await;
     for item in batch.iter() {
         match item {
             Ok(out_point) => {

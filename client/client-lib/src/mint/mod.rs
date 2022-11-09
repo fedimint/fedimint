@@ -251,7 +251,9 @@ impl<'c> MintClient<'c> {
                 loop {
                     match self.fetch_coins(&mut dbtx, out_point).await {
                         Ok(_) => {
-                            dbtx.commit_tx().await.expect("DB Error");
+                            futures::executor::block_on(async {
+                                dbtx.commit_tx().await.expect("DB Error");
+                            });
                             return Ok(out_point);
                         }
                         // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
