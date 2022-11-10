@@ -163,22 +163,25 @@ impl<'c> MintClient<'c> {
             "Federation is faulty, returned wrong tx id."
         );
 
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
         Ok(txid)
     }
 
-    pub fn receive_coins<'a>(
+    pub async fn receive_coins<'a, F, Fut>(
         &self,
         amount: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
         coin_gen: impl Fn(&mut DatabaseTransaction<'_>) -> (NoteIssuanceRequest, BlindNonce),
-        mut create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
-    ) {
+        mut create_tx: F,
+    ) where
+        F: FnMut(TieredMulti<BlindNonce>) -> Fut,
+        Fut: futures::Future<Output = OutPoint>,
+    {
         let mut builder = TransactionBuilder::default();
 
         let (finalization, coins) =
             builder.create_output_coins(amount, || coin_gen(dbtx), &self.config.tbs_pks);
-        let out_point = create_tx(coins);
+        let out_point = create_tx(coins).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .expect("DB Error");
     }
@@ -248,7 +251,9 @@ impl<'c> MintClient<'c> {
                 loop {
                     match self.fetch_coins(&mut dbtx, out_point).await {
                         Ok(_) => {
-                            dbtx.commit_tx().expect("DB Error");
+                            futures::executor::block_on(async {
+                                dbtx.commit_tx().await.expect("DB Error");
+                            });
                             return Ok(out_point);
                         }
                         // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
@@ -553,21 +558,23 @@ mod tests {
         let out_point = OutPoint { txid, out_idx: 0 };
 
         let mut dbtx = client_db.begin_transaction();
-        client.receive_coins(
-            amt,
-            &mut dbtx,
-            |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
-            |output| {
-                // Agree on output
-                let mut fed = block_on(fed.lock());
-                block_on(fed.consensus_round(&[], &[(out_point, output)]));
-                // Generate signatures
-                block_on(fed.consensus_round(&[], &[]));
+        client
+            .receive_coins(
+                amt,
+                &mut dbtx,
+                |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
+                |output| async {
+                    // Agree on output
+                    let mut fed = block_on(fed.lock());
+                    block_on(fed.consensus_round(&[], &[(out_point, output)]));
+                    // Generate signatures
+                    block_on(fed.consensus_round(&[], &[]));
 
-                out_point
-            },
-        );
-        dbtx.commit_tx().expect("DB Error");
+                    out_point
+                },
+            )
+            .await;
+        dbtx.commit_tx().await.expect("DB Error");
 
         client.fetch_all_coins().await;
     }
@@ -618,7 +625,7 @@ mod tests {
             tbs_pks,
             rng,
         );
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
@@ -656,7 +663,7 @@ mod tests {
             tbs_pks,
             rng,
         );
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
@@ -693,12 +700,16 @@ mod tests {
         };
 
         let client_ref: &'static MintClient<'static> = Box::leak(Box::new(client));
+
         let issuance_thread = || {
             (0..ITERATIONS)
                 .filter_map(|_| {
-                    let mut tx = client_ref.context.db.begin_transaction();
-                    let (_, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, &mut tx);
-                    tx.commit_tx().map(|_| nonce).ok()
+                    block_on(async {
+                        let mut tx = client_ref.context.db.begin_transaction();
+                        let (_, nonce) =
+                            client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, &mut tx);
+                        tx.commit_tx().await.map(|_| nonce).ok()
+                    })
                 })
                 .collect::<Vec<BlindNonce>>()
         };

@@ -14,7 +14,7 @@ use fedimint_api::{
     Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
 };
 use itertools::Itertools;
-use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use tbs::{
     combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
@@ -295,9 +295,9 @@ impl FederationModule for Mint {
             .into_group_map();
 
         // TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn't need consensus)
-        let par_batches = req_psigs
-            .into_par_iter()
-            .map(|(issuance_id, shares)| {
+        let par_map = req_psigs
+            .into_iter()
+            .map(|(issuance_id, shares)| async move {
                 let mut drop_peers = Vec::<PeerId>::new();
                 let mut dbtx = self.db.begin_transaction();
                 let proposal_key = ProposedPartialSignatureKey {
@@ -345,11 +345,12 @@ impl FederationModule for Mint {
                         warn!(%error, "Could not combine shares");
                     }
                 }
-                dbtx.commit_tx().expect("DB Error");
-                drop_peers
-            })
-            .collect::<Vec<_>>();
 
+                dbtx.commit_tx().await.expect("DB Error");
+                drop_peers
+            });
+
+        let par_batches = futures::future::join_all(par_map).await;
         let dropped_peers = par_batches.iter().flatten().copied().collect();
 
         let mut redemptions = Amount::from_sat(0);

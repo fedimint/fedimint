@@ -90,7 +90,9 @@ impl GatewayActor {
             "Fetched and validated contract account"
         );
 
-        self.client.save_outgoing_payment(contract_account.clone());
+        self.client
+            .save_outgoing_payment(contract_account.clone())
+            .await;
 
         let is_internal_payment = payment_params.maybe_internal
             && self
@@ -189,9 +191,9 @@ impl GatewayActor {
             .await?)
     }
 
-    pub fn get_deposit_address(&self) -> Result<Address> {
+    pub async fn get_deposit_address(&self) -> Result<Address> {
         let rng = rand::rngs::OsRng;
-        Ok(self.client.get_new_pegin_address(rng))
+        Ok(self.client.get_new_pegin_address(rng).await)
     }
 
     pub async fn deposit(

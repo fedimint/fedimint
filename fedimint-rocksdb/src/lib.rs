@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use fedimint_api::db::{DatabaseTransaction, PrefixIter};
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 pub use rocksdb;
@@ -50,6 +51,7 @@ impl IDatabase for RocksDb {
     }
 }
 
+#[async_trait(?Send)]
 impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.0.get(key).unwrap();
@@ -87,7 +89,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         )
     }
 
-    fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn commit_tx(self: Box<Self>) -> Result<()> {
         self.0.commit()?;
         Ok(())
     }
@@ -119,11 +121,12 @@ mod fedimint_rocksdb_tests {
         RocksDb::open(path).unwrap()
     }
 
-    #[test_log::test]
-    fn test_dbtx_insert_elements() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_insert_elements() {
         fedimint_api::db::verify_insert_elements(
             open_temp_db("fcb-rocksdb-test-insert-elements").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test]
@@ -154,23 +157,25 @@ mod fedimint_rocksdb_tests {
         );
     }
 
-    #[test_log::test]
-    fn test_dbtx_find_by_prefix() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_find_by_prefix() {
         fedimint_api::db::verify_find_by_prefix(
             open_temp_db("fcb-rocksdb-test-find-by-prefix").into(),
-        );
+        )
+        .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit").into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_commit() {
+        fedimint_api::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit").into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_prevent_nonrepeatable_reads() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_prevent_nonrepeatable_reads() {
         fedimint_api::db::verify_prevent_nonrepeatable_reads(
             open_temp_db("fcb-rocksdb-test-prevent-nonrepeatable-reads").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test]
@@ -180,17 +185,19 @@ mod fedimint_rocksdb_tests {
         );
     }
 
-    #[test_log::test]
-    fn test_dbtx_phantom_entry() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_phantom_entry() {
         fedimint_api::db::verify_phantom_entry(
             open_temp_db("fcb-rocksdb-test-phantom-entry").into(),
-        );
+        )
+        .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_write_conflict() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_write_conflict() {
         fedimint_api::db::expect_write_conflict(
             open_temp_db("fcb-rocksdb-test-write-conflict").into(),
-        );
+        )
+        .await;
     }
 }

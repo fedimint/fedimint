@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use fedimint_api::db::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     PrefixIter,
@@ -64,6 +65,7 @@ impl IDatabase for SledDb {
 
 // Sled database transaction should only be used for test code and never for production
 // as it doesn't properly implement MVCC
+#[async_trait(?Send)]
 impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key);
@@ -155,7 +157,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
         Box::new(dbscan.into_iter())
     }
 
-    fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn commit_tx(self: Box<Self>) -> Result<()> {
         let ret = self
             .db
             .inner()
@@ -203,11 +205,12 @@ mod fedimint_sled_tests {
         SledDb::open(path, "default").unwrap()
     }
 
-    #[test_log::test]
-    fn test_dbtx_insert_elements() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_insert_elements() {
         fedimint_api::db::verify_insert_elements(
             open_temp_db("fcb-sled-test-insert-elements").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test]
@@ -238,16 +241,17 @@ mod fedimint_sled_tests {
         );
     }
 
-    #[test_log::test]
-    fn test_dbtx_find_by_prefix() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_find_by_prefix() {
         fedimint_api::db::verify_find_by_prefix(
             open_temp_db("fcb-sled-test-find-by-prefix").into(),
-        );
+        )
+        .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db("fcb-sled-test-commit").into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_commit() {
+        fedimint_api::db::verify_commit(open_temp_db("fcb-sled-test-commit").into()).await;
     }
 
     #[test_log::test]

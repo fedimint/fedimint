@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 
 use anyhow::Result;
+use async_trait::async_trait;
 
 use super::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
@@ -61,6 +62,7 @@ impl IDatabase for MemDatabase {
 
 // In-memory database transaction should only be used for test code and never for production
 // as it doesn't properly implement MVCC
+#[async_trait(?Send)]
 impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key);
@@ -102,7 +104,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Box::new(MemDbIter { data })
     }
 
-    fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn commit_tx(self: Box<Self>) -> Result<()> {
         for op in self.operations {
             match op {
                 DatabaseOperation::Insert(insert_op) => {
@@ -153,9 +155,9 @@ impl Iterator for MemDbIter {
 mod tests {
     use super::MemDatabase;
 
-    #[test_log::test]
-    fn test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_insert_elements() {
+        fedimint_api::db::verify_insert_elements(MemDatabase::new().into()).await;
     }
 
     #[test_log::test]
@@ -178,19 +180,19 @@ mod tests {
         fedimint_api::db::verify_prevent_dirty_reads(MemDatabase::new().into());
     }
 
-    #[test_log::test]
-    fn test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_find_by_prefix() {
+        fedimint_api::db::verify_find_by_prefix(MemDatabase::new().into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_commit() {
+        fedimint_api::db::verify_commit(MemDatabase::new().into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_prevent_nonrepeatable_reads() {
-        fedimint_api::db::verify_prevent_nonrepeatable_reads(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_prevent_nonrepeatable_reads() {
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(MemDatabase::new().into()).await;
     }
 
     #[test_log::test]
@@ -198,8 +200,8 @@ mod tests {
         fedimint_api::db::verify_rollback_to_savepoint(MemDatabase::new().into());
     }
 
-    #[test_log::test]
-    fn test_dbtx_phantom_entry() {
-        fedimint_api::db::verify_phantom_entry(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_phantom_entry() {
+        fedimint_api::db::verify_phantom_entry(MemDatabase::new().into()).await;
     }
 }

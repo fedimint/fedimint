@@ -334,29 +334,29 @@ mod tests {
         };
 
         // generate fake UTXO
-        fed.lock().await.patch_dbs(|db| {
-            let out_point = bitcoin::OutPoint::default();
-            let tweak = [42; 32];
-            let utxo = SpendableUTXO {
-                tweak,
-                amount: bitcoin::Amount::from_sat(48000),
-            };
+        fed.lock()
+            .await
+            .patch_dbs(|dbtx| {
+                let out_point = bitcoin::OutPoint::default();
+                let tweak = [42; 32];
+                let utxo = SpendableUTXO {
+                    tweak,
+                    amount: bitcoin::Amount::from_sat(48000),
+                };
 
-            let mut dbtx = db.begin_transaction();
-            dbtx.insert_entry(&UTXOKey(out_point), &utxo).unwrap();
+                dbtx.insert_entry(&UTXOKey(out_point), &utxo).unwrap();
 
-            dbtx.insert_entry(
-                &RoundConsensusKey,
-                &RoundConsensus {
-                    block_height: 0,
-                    fee_rate: Feerate { sats_per_kvb: 0 },
-                    randomness_beacon: tweak,
-                },
-            )
-            .unwrap();
-
-            dbtx.commit_tx().expect("DB Error");
-        });
+                dbtx.insert_entry(
+                    &RoundConsensusKey,
+                    &RoundConsensus {
+                        block_height: 0,
+                        fee_rate: Feerate { sats_per_kvb: 0 },
+                        randomness_beacon: tweak,
+                    },
+                )
+                .unwrap();
+            })
+            .await;
 
         let addr = Address::from_str("msFGPqHVk8rbARMd69FfGYxwcboZLemdBi").unwrap();
         let amount = bitcoin::Amount::from_sat(42000);

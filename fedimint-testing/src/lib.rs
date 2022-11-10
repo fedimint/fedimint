@@ -7,7 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
-use fedimint_api::db::Database;
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{ApiError, ModuleError, TransactionItemAmount};
 use fedimint_api::InputMeta;
@@ -132,12 +132,12 @@ where
                     .expect("Faulty output");
             }
 
-            dbtx.commit_tx().expect("DB Error");
+            dbtx.commit_tx().await.expect("DB Error");
 
             let mut dbtx = database.begin_transaction();
             member.end_consensus_epoch(&peers, &mut dbtx).await;
 
-            dbtx.commit_tx().expect("DB Error");
+            dbtx.commit_tx().await.expect("DB Error");
         }
     }
 
@@ -153,12 +153,14 @@ where
         )
     }
 
-    pub fn patch_dbs<U>(&mut self, update: U)
+    pub async fn patch_dbs<U>(&mut self, update: U)
     where
-        U: Fn(&mut Database),
+        U: Fn(&mut DatabaseTransaction),
     {
         for (_, _, db) in &mut self.members {
-            update(db);
+            let mut dbtx = db.begin_transaction();
+            update(&mut dbtx);
+            dbtx.commit_tx().await.expect("DB Error");
         }
     }
 

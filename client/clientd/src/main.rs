@@ -118,7 +118,9 @@ async fn new_peg_in_address(
     let client = &state.client;
     let rng = state.rng;
     json_success!(PegInAddressResponse {
-        peg_in_address: client.get_new_pegin_address(rng)
+        peg_in_address: futures::executor::block_on(async {
+            client.get_new_pegin_address(rng).await
+        })
     })
 }
 
@@ -143,7 +145,10 @@ async fn peg_in(
     let mut rng = state.rng;
     let txout_proof = payload.0.txout_proof;
     let transaction = payload.0.transaction;
-    let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
+    let txid = futures::executor::block_on(async {
+        client.peg_in(txout_proof, transaction, &mut rng).await
+    })
+    .map_err(|_| ClientdError::ServerError)?;
     info!("Started peg-in {}", txid.to_hex());
     fetch_signal
         .send(())
@@ -159,7 +164,9 @@ async fn spend(
     let client = &state.client;
     let rng = state.rng;
 
-    let notes = client.spend_ecash(payload.0.amount, rng).await?;
+    let notes =
+        futures::executor::block_on(async { client.spend_ecash(payload.0.amount, rng).await })
+            .map_err(|_e| ClientdError::ServerError)?;
     json_success!(SpendResponse { notes })
 }
 

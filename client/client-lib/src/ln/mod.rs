@@ -249,11 +249,11 @@ impl<'c> LnClient<'c> {
             .map_err(LnClientError::ApiError)
     }
 
-    pub fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
+    pub async fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
         let mut dbtx = self.context.db.begin_transaction();
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .expect("Db error");
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
@@ -487,7 +487,7 @@ mod tests {
             .create_outgoing_output(&mut dbtx, invoice.clone(), &gateway, timelock, &mut rng)
             .unwrap();
 
-        dbtx.commit_tx().expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
 
         let contract = match &output {
             ContractOrOfferOutput::Contract(c) => &c.contract,
