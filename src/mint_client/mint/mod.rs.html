@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ef244fc9943488f7.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-c11f492748536797.css"><link rel="stylesheet" disabled href="../../../static.files/dark-a78f946771c40031.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-70b683d68cb31790.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-0dede64717b247ca.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-201a7e04dc4c6fce.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-71d02aebf3a9cedb.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-c11f492748536797.css"><link rel="stylesheet" disabled href="../../../static.files/dark-a78f946771c40031.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-70b683d68cb31790.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-0dede64717b247ca.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-201a7e04dc4c6fce.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -734,6 +734,17 @@
 <span id="734">734</span>
 <span id="735">735</span>
 <span id="736">736</span>
+<span id="737">737</span>
+<span id="738">738</span>
+<span id="739">739</span>
+<span id="740">740</span>
+<span id="741">741</span>
+<span id="742">742</span>
+<span id="743">743</span>
+<span id="744">744</span>
+<span id="745">745</span>
+<span id="746">746</span>
+<span id="747">747</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -899,22 +910,25 @@
             <span class="string">&quot;Federation is faulty, returned wrong tx id.&quot;
         </span>);
 
-        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         <span class="prelude-val">Ok</span>(txid)
     }
 
-    <span class="kw">pub fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">pub async fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>, F, Fut&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         coin_gen: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; (NoteIssuanceRequest, BlindNonce),
-        <span class="kw-2">mut </span>create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
-    ) {
+        <span class="kw-2">mut </span>create_tx: F,
+    ) <span class="kw">where
+        </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
+        Fut: futures::Future&lt;Output = OutPoint&gt;,
+    {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
 
         <span class="kw">let </span>(finalization, coins) =
             builder.create_output_coins(amount, || coin_gen(dbtx), <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks);
-        <span class="kw">let </span>out_point = create_tx(coins);
+        <span class="kw">let </span>out_point = create_tx(coins).<span class="kw">await</span>;
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
             .expect(<span class="string">&quot;DB Error&quot;</span>);
     }
@@ -984,7 +998,9 @@
                 <span class="kw">loop </span>{
                     <span class="kw">match </span><span class="self">self</span>.fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                            dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
+                            futures::executor::block_on(<span class="kw">async </span>{
+                                dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                            });
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(out_point);
                         }
                         <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
@@ -1289,21 +1305,23 @@
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction();
-        client.receive_coins(
-            amt,
-            <span class="kw-2">&amp;mut </span>dbtx,
-            |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
-            |output| {
-                <span class="comment">// Agree on output
-                </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
-                block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, output)]));
-                <span class="comment">// Generate signatures
-                </span>block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]));
+        client
+            .receive_coins(
+                amt,
+                <span class="kw-2">&amp;mut </span>dbtx,
+                |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
+                |output| <span class="kw">async </span>{
+                    <span class="comment">// Agree on output
+                    </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
+                    block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, output)]));
+                    <span class="comment">// Generate signatures
+                    </span>block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]));
 
-                out_point
-            },
-        );
-        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
+                    out_point
+                },
+            )
+            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         client.fetch_all_coins().<span class="kw">await</span>;
     }
@@ -1354,7 +1372,7 @@
             tbs_pks,
             rng,
         );
-        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
         <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);
@@ -1392,7 +1410,7 @@
             tbs_pks,
             rng,
         );
-        dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
         <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);
@@ -1429,12 +1447,16 @@
         };
 
         <span class="kw">let </span>client_ref: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>MintClient&lt;<span class="lifetime">&#39;static</span>&gt; = Box::leak(Box::new(client));
+
         <span class="kw">let </span>issuance_thread = || {
             (<span class="number">0</span>..ITERATIONS)
                 .filter_map(|<span class="kw">_</span>| {
-                    <span class="kw">let </span><span class="kw-2">mut </span>tx = client_ref.context.db.begin_transaction();
-                    <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, <span class="kw-2">&amp;mut </span>tx);
-                    tx.commit_tx().map(|<span class="kw">_</span>| nonce).ok()
+                    block_on(<span class="kw">async </span>{
+                        <span class="kw">let </span><span class="kw-2">mut </span>tx = client_ref.context.db.begin_transaction();
+                        <span class="kw">let </span>(<span class="kw">_</span>, nonce) =
+                            client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, <span class="kw-2">&amp;mut </span>tx);
+                        tx.commit_tx().<span class="kw">await</span>.map(|<span class="kw">_</span>| nonce).ok()
+                    })
                 })
                 .collect::&lt;Vec&lt;BlindNonce&gt;&gt;()
         };
@@ -1471,4 +1493,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (85f4f41de 2022-11-08)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-3a0b9947ba1bd99a.js" data-settings-css="settings-a66f7524084a489a.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e75aab045 2022-11-09)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-3a0b9947ba1bd99a.js" data-settings-css="settings-a66f7524084a489a.css" ></div></body></html>
