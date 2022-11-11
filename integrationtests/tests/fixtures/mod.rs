@@ -56,7 +56,8 @@ use ln_gateway::{
     actor::GatewayActor,
     client::{GatewayClientBuilder, MemoryDbGatewayClientBuilder},
     config::GatewayConfig,
-    GatewayRequest, LnGateway,
+    rpc::GatewayRequest,
+    LnGateway,
 };
 use mint_client::{
     api::WsFederationApi, mint::SpendableNote, Client, FederationId, GatewayClient,
