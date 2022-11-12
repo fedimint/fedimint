@@ -19,7 +19,7 @@ use bitcoin::{PackedLockTime, Sequence};
 use config::WalletClientConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ClientModuleConfig, ConfigGenPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedClientModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::db::{Database, DatabaseTransaction};
@@ -31,7 +31,7 @@ use fedimint_api::module::{
     api_endpoint, FederationModuleConfigGen, IntoModuleError, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
-use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::multiplexed::ModuleMultiplexer;
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
 use fedimint_bitcoind::BitcoindRpc;
@@ -210,7 +210,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        connections: &mut AnyPeerConnections<ConfigGenPeerMsg>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ModuleConfigGenParams,
@@ -222,7 +222,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
 
         if let Err(Cancelled) = connections
-            .send(peers, ConfigGenPeerMsg::PublicKey(our_key.key))
+            .send(peers, "wallet", DkgPeerMsg::PublicKey(our_key.key))
             .await
         {
             return Ok(Err(Cancelled));
@@ -230,8 +230,8 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
 
         peer_peg_in_keys.insert(*our_id, our_key);
         while peer_peg_in_keys.len() < peers.len() {
-            match connections.receive().await {
-                Ok((peer, ConfigGenPeerMsg::PublicKey(key))) => {
+            match connections.receive("wallet").await {
+                Ok((peer, DkgPeerMsg::PublicKey(key))) => {
                     peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
                 }
                 Ok((peer, msg)) => {

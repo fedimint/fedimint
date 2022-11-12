@@ -9,13 +9,11 @@ use secp256k1_zkp::XOnlyPublicKey;
 use thiserror::Error;
 
 use crate::cancellable::Cancellable;
-use crate::config::{
-    ClientModuleConfig, ConfigGenPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
-};
+use crate::config::{ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig};
 use crate::db::DatabaseTransaction;
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
-use crate::net::peers::AnyPeerConnections;
+use crate::multiplexed::ModuleMultiplexer;
 use crate::task::TaskGroup;
 use crate::{Amount, PeerId};
 
@@ -186,7 +184,7 @@ pub trait FederationModuleConfigGen {
 
     async fn distributed_gen(
         &self,
-        connections: &mut AnyPeerConnections<ConfigGenPeerMsg>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ModuleConfigGenParams,

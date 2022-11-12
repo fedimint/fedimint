@@ -20,6 +20,7 @@ use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
+use fedimint_api::multiplexed::ModuleMultiplexer;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_api::FederationModule;
@@ -286,16 +287,17 @@ async fn distributed_config(
 
             async move {
                 let our_params = params[peer].clone();
-                let mut server_conn = connect(
+                let server_conn = connect(
                     our_params.server_dkg.clone(),
                     our_params.tls.clone(),
                     &mut task_group,
                 )
                 .await;
+                let connections = ModuleMultiplexer::new(server_conn);
 
                 let rng = OsRng;
                 let cfg = ServerConfig::distributed_gen(
-                    &mut server_conn,
+                    &connections,
                     peer,
                     &peers,
                     &our_params,

@@ -24,7 +24,7 @@ use tbs::Scalar;
 use url::Url;
 
 use crate::cancellable::Cancellable;
-use crate::net::peers::AnyPeerConnections;
+use crate::multiplexed::{ModuleIdRef, ModuleMultiplexer};
 use crate::Amount;
 use crate::PeerId;
 
@@ -146,20 +146,9 @@ pub trait TypedClientModuleConfig: DeserializeOwned + Serialize {
 
 /// Things that a `distributed_gen` config can send between peers
 #[derive(Serialize, Deserialize, Debug, Clone)]
-// TODO: is this even needed?
-#[non_exhaustive]
-pub enum ConfigGenPeerMsg {
+pub enum DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
-    DistributedGen((String, SupportedDpkgMsg)),
-    // TODO: remove
-    Other,
-}
-
-/// Types which values of can be used as a keys for for distributed config gen
-pub trait IConfigGenMsgKey {}
-
-dyn_newtype_define! {
-    pub ConfigDkgGenMsgKey(Box<IConfigGenMsgKey>)
+    DistributedGen((String, SupportedDkgMessage)),
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types
@@ -445,26 +434,31 @@ where
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     pub async fn run_g2(
         &mut self,
-        connections: &mut AnyPeerConnections<ConfigGenPeerMsg>,
+        module_id: ModuleIdRef<'_>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G2Projective>>> {
-        self.run(G2Projective::generator(), connections, rng).await
+        self.run(module_id, G2Projective::generator(), connections, rng)
+            .await
     }
 
     /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     pub async fn run_g1(
         &mut self,
-        connections: &mut AnyPeerConnections<ConfigGenPeerMsg>,
+        module_id: ModuleIdRef<'_>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G1Projective>>> {
-        self.run(G1Projective::generator(), connections, rng).await
+        self.run(module_id, G1Projective::generator(), connections, rng)
+            .await
     }
 
     /// Runs the DKG algorithms with our peers
     pub async fn run<G: DkgGroup>(
         &mut self,
+        module_id: ModuleIdRef<'_>,
         group: G,
-        connections: &mut AnyPeerConnections</*(T, DkgMessage<G>)*/ ConfigGenPeerMsg>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G>>>
     where
@@ -483,7 +477,8 @@ where
                     connections
                         .send(
                             &[peer],
-                            ConfigGenPeerMsg::DistributedGen((
+                            module_id,
+                            DkgPeerMsg::DistributedGen((
                                 serde_json::to_string(key).expect("serialization can't fail"),
                                 msg.to_msg(),
                             )),
@@ -497,12 +492,12 @@ where
         // process steps for each key
         // TODO: fix error handling here; what do we do on a malfunctining peer when building the federation?
         loop {
-            let (peer, msg) = connections.receive().await?;
+            let (peer, msg) = connections.receive(module_id).await?;
 
-            let (key, message) = if let ConfigGenPeerMsg::DistributedGen(v) = msg {
+            let (key, message) = if let DkgPeerMsg::DistributedGen(v) = msg {
                 v
             } else {
-                panic!("wrong message received")
+                panic!("Module {module_id} wrong message received: {msg:?}")
             };
 
             let key = serde_json::from_str(&key).expect("invalid key");
@@ -515,7 +510,8 @@ where
                         connections
                             .send(
                                 &[peer],
-                                ConfigGenPeerMsg::DistributedGen((
+                                module_id,
+                                DkgPeerMsg::DistributedGen((
                                     serde_json::to_string(&key)
                                         .expect("FIXME - handle errors here"),
                                     msg.to_msg(),

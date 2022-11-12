@@ -3,10 +3,11 @@ use std::collections::{BTreeMap, HashMap};
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ConfigGenPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
+    BitcoindRpcCfg, ClientConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
     ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::multiplexed::ModuleMultiplexer;
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -264,7 +265,7 @@ impl ServerConfig {
     }
 
     pub async fn distributed_gen(
-        connections: &mut AnyPeerConnections<ConfigGenPeerMsg>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ServerConfigParams,
@@ -284,7 +285,7 @@ impl ServerConfig {
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
-        let keys = if let Ok(v) = dkg.run_g1(connections, &mut rng).await {
+        let keys = if let Ok(v) = dkg.run_g1("global", connections, &mut rng).await {
             v
         } else {
             return Ok(Err(Cancelled));
