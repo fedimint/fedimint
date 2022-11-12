@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["GatewayRpcSender",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["GatewayRequest",""]],"fn":[["serde_hex_deserialize",""],["serde_hex_serialize",""]],"macro":[["impl_gateway_request_trait",""]],"struct":[["BalancePayload",""],["DepositAddressPayload",""],["DepositPayload",""],["GatewayInfo",""],["GatewayRequestInner",""],["GatewayRpcSender",""],["InfoPayload",""],["ReceivePaymentPayload",""],["RegisterFedPayload",""],["WithdrawPayload",""]],"trait":[["GatewayRequestTrait",""]]};
