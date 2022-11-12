@@ -7,8 +7,8 @@ use ln_gateway::{
     cln::build_cln_rpc,
     config::GatewayConfig,
     ln::LnRpcRef,
-    rpc::GatewayRpcSender,
-    GatewayRequest, LnGateway,
+    rpc::{GatewayRequest, GatewayRpcSender},
+    LnGateway,
 };
 use mint_client::GatewayClientConfig;
 use rand::thread_rng;

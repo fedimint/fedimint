@@ -9,8 +9,11 @@ use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::instrument;
 
 use crate::{
-    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    InfoPayload, LnGatewayError, RegisterFedPayload, WithdrawPayload,
+    rpc::{
+        BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest, GatewayRpcSender,
+        InfoPayload, RegisterFedPayload, WithdrawPayload,
+    },
+    LnGatewayError,
 };
 
 pub async fn run_webserver(

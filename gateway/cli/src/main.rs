@@ -4,8 +4,10 @@ use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
-    config::GatewayConfig, BalancePayload, DepositAddressPayload, DepositPayload,
-    RegisterFedPayload, WithdrawPayload,
+    config::GatewayConfig,
+    rpc::{
+        BalancePayload, DepositAddressPayload, DepositPayload, RegisterFedPayload, WithdrawPayload,
+    },
 };
 use mint_client::{utils::from_hex, FederationId};
 use serde::Serialize;
