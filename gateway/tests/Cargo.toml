@@ -1,0 +1,15 @@
+[package]
+name = "gateway-tests"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "Fedimint gateway integration tests validating the interactions between the gateway components and it's dependencies"
+license = "MIT"
+
+[[test]]
+name = "gateway-tests"
+path = "tests/tests.rs"
+
+[dev-dependencies]
+ln-gateway = { path = "../ln-gateway" }
+tokio = { version = "1.21.2", features = ["full"] }
