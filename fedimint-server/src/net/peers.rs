@@ -387,7 +387,7 @@ where
     }
 
     fn disconnect_err(&self, err: anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
-        warn!(peer = ?self.peer, %err, %disconnect_count, "Some error occurred, disconnecting");
+        info!(peer = ?self.peer, %err, %disconnect_count, "Peer disconnected");
         self.disconnect(disconnect_count)
     }
 
