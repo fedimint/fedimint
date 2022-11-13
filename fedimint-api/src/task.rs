@@ -64,7 +64,7 @@ impl TaskGroup {
         Self::default()
     }
 
-    fn make_handle(&self) -> TaskHandle {
+    pub fn make_handle(&self) -> TaskHandle {
         TaskHandle {
             inner: self.inner.clone(),
         }
@@ -224,6 +224,7 @@ impl Drop for TaskPanicGuard {
     }
 }
 
+#[derive(Clone)]
 pub struct TaskHandle {
     inner: Arc<TaskGroupInner>,
 }

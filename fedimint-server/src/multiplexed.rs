@@ -159,3 +159,154 @@ where
         self.inner.connections.lock().await.ban_peer(peer).await;
     }
 }
+
+#[cfg(test)]
+pub mod test {
+    use std::time::Duration;
+
+    use async_trait::async_trait;
+    use fedimint_api::cancellable::{Cancellable, Cancelled};
+    use fedimint_api::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
+    use fedimint_api::task::{TaskGroup, TaskHandle};
+    use fedimint_api::PeerId;
+    use rand::rngs::OsRng;
+    use rand::Rng;
+    use serde::de::DeserializeOwned;
+    use serde::Serialize;
+    use tokio::sync::mpsc::{self, Receiver, Sender};
+    use tokio::time::sleep;
+
+    use crate::multiplexed::PeerConnectionMultiplexer;
+
+    struct FakePeerConnections<Msg> {
+        tx: Sender<Msg>,
+        rx: Receiver<Msg>,
+        peer_id: PeerId,
+        task_handle: TaskHandle,
+    }
+
+    #[async_trait]
+    impl<Msg> IPeerConnections<Msg> for FakePeerConnections<Msg>
+    where
+        Msg: Serialize + DeserializeOwned + Unpin + Send,
+    {
+        async fn send(&mut self, peers: &[PeerId], msg: Msg) -> Cancellable<()> {
+            assert_eq!(peers, &[self.peer_id]);
+
+            // If the peer is gone, just pretend we are going to resend
+            // the msg eventually, even if it will never happen.
+            let _ = self.tx.send(msg).await;
+            Ok(())
+        }
+
+        async fn receive(&mut self) -> Cancellable<(PeerId, Msg)> {
+            // Just like a real implementation, do not return
+            // if the peer is gone.
+            while !self.task_handle.is_shutting_down() {
+                if let Some(msg) = self.rx.recv().await {
+                    return Ok((self.peer_id, msg));
+                } else {
+                    sleep(Duration::from_secs(10)).await
+                }
+            }
+            Err(Cancelled)
+        }
+
+        /// Removes a peer connection in case of misbehavior
+        async fn ban_peer(&mut self, _peer: PeerId) {
+            unimplemented!();
+        }
+    }
+
+    pub fn fake_link<Msg>(
+        peer1: PeerId,
+        peer2: PeerId,
+        buf_size: usize,
+        task_handle: TaskHandle,
+    ) -> (PeerConnections<Msg>, PeerConnections<Msg>)
+    where
+        Msg: Serialize + DeserializeOwned + Unpin + Send + 'static,
+    {
+        let (tx1, rx1) = mpsc::channel(buf_size);
+        let (tx2, rx2) = mpsc::channel(buf_size);
+
+        (
+            FakePeerConnections {
+                tx: tx1,
+                rx: rx2,
+                peer_id: peer2,
+                task_handle: task_handle.clone(),
+            }
+            .into_dyn(),
+            FakePeerConnections {
+                tx: tx2,
+                rx: rx1,
+                peer_id: peer1,
+                task_handle,
+            }
+            .into_dyn(),
+        )
+    }
+
+    /// Send over many messages a multiplexed fake link
+    ///
+    /// Some things this is checking for:
+    ///
+    /// * no message were missed
+    /// * messages arrived in order (from PoW of each module)
+    /// * nothing deadlocked somewhere.
+    #[test_log::test(tokio::test)]
+    async fn test_multiplexer() {
+        const NUM_MODULES: usize = 128;
+        const NUM_MSGS_PER_MODULE: usize = 128;
+        const NUM_REPEAT_TEST: usize = 10;
+
+        for _ in 0..NUM_REPEAT_TEST {
+            let mut task_group = TaskGroup::new();
+            let task_handle = task_group.make_handle();
+
+            let peer1 = PeerId::from(0);
+            let peer2 = PeerId::from(1);
+
+            let (conn1, conn2) = fake_link(peer1, peer2, 1000, task_handle.clone());
+            let (conn1, conn2) = (
+                PeerConnectionMultiplexer::new(conn1).into_dyn(),
+                PeerConnectionMultiplexer::new(conn2).into_dyn(),
+            );
+
+            for mux_key in 0..NUM_MODULES {
+                let (conn1, conn2) = (conn1.clone(), conn2.clone());
+                let task_handle = task_handle.clone();
+                task_group
+                    .spawn(format!("sender-{mux_key}"), move |_| async move {
+                        for msg_i in 0..NUM_MSGS_PER_MODULE {
+                            // add some random jitter
+                            if OsRng.gen() {
+                                sleep(Duration::from_millis(1)).await;
+                            }
+                            if task_handle.is_shutting_down() {
+                                break;
+                            }
+                            conn1.send(&[peer2], mux_key, msg_i).await.unwrap();
+                        }
+                    })
+                    .await;
+                task_group
+                    .spawn(format!("receiver-{mux_key}"), move |_| async move {
+                        for msg_i in 0..NUM_MSGS_PER_MODULE {
+                            // add some random jitter
+                            if OsRng.gen() {
+                                sleep(Duration::from_millis(1)).await;
+                            }
+                            assert_eq!(conn2.receive(mux_key).await.unwrap(), (peer1, msg_i));
+                        }
+                    })
+                    .await;
+            }
+            drop(conn1);
+            drop(conn2);
+
+            task_group.join_all().await.expect("no failures");
+        }
+    }
+}

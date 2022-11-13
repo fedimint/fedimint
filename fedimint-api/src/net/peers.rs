@@ -63,6 +63,7 @@ where
 }
 
 /// Owned [`MuxPeerConnections`] trait object type
+#[derive(Clone)]
 pub struct MuxPeerConnections<MuxKey, Msg>(
     Arc<dyn IMuxPeerConnections<MuxKey, Msg> + Send + Sync + Unpin + 'static>,
 );

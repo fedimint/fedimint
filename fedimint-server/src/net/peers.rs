@@ -1,6 +1,6 @@
 //! Implements a connection manager for communication with other federation members
 //!
-//! The main interface is [`PeerConnections`] and its main implementation is
+//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
 //! [`ReconnectPeerConnections`], see these for details.
 
 use std::cmp::min;
@@ -625,7 +625,6 @@ mod tests {
     use fedimint_api::task::TaskGroup;
     use fedimint_api::PeerId;
     use futures::Future;
-    use tracing_subscriber::EnvFilter;
 
     use crate::net::connect::mock::MockNetwork;
     use crate::net::connect::Connector;
@@ -640,14 +639,8 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(100), f).await.ok()
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_connect() {
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,fedimint::net=trace")),
-            )
-            .init();
         let task_group = TaskGroup::new();
 
         {
