@@ -5,12 +5,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use fedimint_api::{
-    config::GenerateConfig,
+    config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
     FederationModule, TransactionId,
 };
-use fedimint_core::config::ClientConfig;
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::outcome::TransactionStatus;
 use futures::future::BoxFuture;

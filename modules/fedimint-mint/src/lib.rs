@@ -4,23 +4,37 @@ use std::iter::FromIterator;
 use std::ops::Sub;
 
 use async_trait::async_trait;
+use config::{FeeConsensus, MintClientConfig};
+use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::{
+    scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
+};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{ApiEndpoint, IntoModuleError, ModuleError, TransactionItemAmount};
+use fedimint_api::module::{
+    ApiEndpoint, FederationModuleConfigGen, IntoModuleError, ModuleError, TransactionItemAmount,
+};
+use fedimint_api::multiplexed::ModuleMultiplexer;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
-    Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
+    Amount, FederationModule, InputMeta, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
+    TieredMultiZip,
 };
 use itertools::Itertools;
+use rand::rngs::OsRng;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use tbs::{
-    combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
-    PublicKeyShare, SecretKeyShare,
+    combine_valid_shares, dealer_keygen, sign_blinded_msg, verify_blind_share, Aggregatable,
+    AggregatePublicKey, PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
+use threshold_crypto::group::Curve;
 use tracing::{debug, error, warn};
 
 use crate::config::MintConfig;
@@ -101,6 +115,154 @@ pub struct BlindNonce(pub tbs::BlindedMessage);
 #[derive(Debug)]
 pub struct VerificationCache {
     valid_coins: HashMap<Note, Amount>,
+}
+
+pub struct MintConfigGenerator;
+
+#[async_trait]
+impl FederationModuleConfigGen for MintConfigGenerator {
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        params: &ModuleConfigGenParams,
+    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+        let tbs_keys = params
+            .mint_amounts
+            .iter()
+            .map(|&amount| {
+                let (tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(peers.threshold(), peers.len());
+                (amount, (tbs_pk, tbs_pks, tbs_sks))
+            })
+            .collect::<HashMap<_, _>>();
+
+        let mint_cfg: BTreeMap<_, MintConfig> = peers
+            .iter()
+            .map(|&peer| {
+                let config = MintConfig {
+                    threshold: peers.threshold(),
+                    tbs_sks: params
+                        .mint_amounts
+                        .iter()
+                        .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
+                        .collect(),
+                    peer_tbs_pks: peers
+                        .iter()
+                        .map(|&key_peer| {
+                            let keys = params
+                                .mint_amounts
+                                .iter()
+                                .map(|amount| (*amount, tbs_keys[amount].1[key_peer.to_usize()]))
+                                .collect();
+                            (key_peer, keys)
+                        })
+                        .collect(),
+                    fee_consensus: FeeConsensus::default(),
+                };
+                (peer, config)
+            })
+            .collect();
+
+        let client_cfg = MintClientConfig {
+            tbs_pks: tbs_keys
+                .into_iter()
+                .map(|(amount, (pk, _, _))| (amount, pk))
+                .collect(),
+            fee_consensus: FeeConsensus::default(),
+        };
+
+        (
+            mint_cfg
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        serde_json::to_value(v)
+                            .expect("serialization can't fail")
+                            .into(),
+                    )
+                })
+                .collect(),
+            serde_json::to_value(client_cfg)
+                .expect("serialization can't fail")
+                .into(),
+        )
+    }
+
+    async fn distributed_gen(
+        &self,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        params: &ModuleConfigGenParams,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>> {
+        let mut dkg = DkgRunner::multi(
+            params.mint_amounts.to_vec(),
+            peers.threshold(),
+            our_id,
+            peers,
+        );
+        let g2 = if let Ok(g2) = dkg.run_g2("mint", connections, &mut OsRng).await {
+            g2
+        } else {
+            return Ok(Err(Cancelled));
+        };
+
+        let amounts_keys = g2
+            .into_iter()
+            .map(|(amount, keys)| (amount, keys.tbs()))
+            .collect::<HashMap<_, _>>();
+
+        let server = MintConfig {
+            tbs_sks: amounts_keys
+                .iter()
+                .map(|(amount, (_, sks))| (*amount, *sks))
+                .collect(),
+            peer_tbs_pks: peers
+                .iter()
+                .map(|peer| {
+                    let pks = amounts_keys
+                        .iter()
+                        .map(|(amount, (pks, _))| {
+                            let pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
+                            (*amount, pks)
+                        })
+                        .collect::<Tiered<PublicKeyShare>>();
+
+                    (*peer, pks)
+                })
+                .collect(),
+            fee_consensus: Default::default(),
+            threshold: peers.threshold(),
+        };
+
+        let client = MintClientConfig {
+            tbs_pks: amounts_keys
+                .iter()
+                .map(|(amount, (pks, _))| {
+                    (*amount, AggregatePublicKey(pks.evaluate(0).to_affine()))
+                })
+                .collect(),
+            fee_consensus: Default::default(),
+        };
+
+        Ok(Ok((
+            serde_json::to_value(server)
+                .expect("serialization can't fail")
+                .into(),
+            serde_json::to_value(client)
+                .expect("serialization can't fail")
+                .into(),
+        )))
+    }
+
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
+        Ok(config.to_typed::<MintConfig>()?.to_client_config())
+    }
+
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
+        config.to_typed::<MintConfig>()?.validate_config(identity)
+    }
 }
 
 #[async_trait(?Send)]
@@ -752,22 +914,27 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    use fedimint_api::config::GenerateConfig;
+    use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
     use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
-    use rand::rngs::OsRng;
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
+    use crate::{BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, PeerErrorType};
 
     const THRESHOLD: usize = 1;
     const MINTS: usize = 5;
 
-    fn build_configs() -> (Vec<MintConfig>, MintClientConfig) {
+    fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-        let (mint_cfg, client_cfg) =
-            MintConfig::trusted_dealer_gen(&peers, &[Amount::from_sat(1)], OsRng);
+        let (mint_cfg, client_cfg) = MintConfigGenerator.trusted_dealer_gen(
+            &peers,
+            &ModuleConfigGenParams {
+                mint_amounts: vec![Amount::from_sat(1)],
+                ..ModuleConfigGenParams::fake_config_gen_params()
+            },
+        );
 
         (mint_cfg.into_iter().map(|(_, c)| c).collect(), client_cfg)
     }
@@ -776,10 +943,15 @@ mod test {
         let (mint_cfg, client_cfg) = build_configs();
         let mints = mint_cfg
             .into_iter()
-            .map(|config| Mint::new(config, MemDatabase::new().into()))
+            .map(|config| Mint::new(config.to_typed().unwrap(), MemDatabase::new().into()))
             .collect::<Vec<_>>();
 
-        let agg_pk = *client_cfg.tbs_pks.get(Amount::from_sat(1)).unwrap();
+        let agg_pk = *client_cfg
+            .cast::<MintClientConfig>()
+            .unwrap()
+            .tbs_pks
+            .get(Amount::from_sat(1))
+            .unwrap();
 
         (agg_pk, mints)
     }
@@ -936,8 +1108,14 @@ mod test {
         Mint::new(
             MintConfig {
                 threshold: THRESHOLD,
-                tbs_sks: mint_server_cfg1[0].tbs_sks.clone(),
-                peer_tbs_pks: mint_server_cfg2[0].peer_tbs_pks.clone(),
+                tbs_sks: mint_server_cfg1[0]
+                    .to_typed::<MintConfig>()
+                    .unwrap()
+                    .tbs_sks,
+                peer_tbs_pks: mint_server_cfg2[0]
+                    .to_typed::<MintConfig>()
+                    .unwrap()
+                    .peer_tbs_pks,
                 fee_consensus: FeeConsensus::default(),
             },
             MemDatabase::new().into(),

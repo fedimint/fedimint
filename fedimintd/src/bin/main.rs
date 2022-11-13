@@ -8,6 +8,7 @@ use fedimint_mint_server::MintServerModule;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
+use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::Wallet;
 use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
@@ -83,7 +84,9 @@ async fn main() -> anyhow::Result<()> {
     let db: Database = fedimint_rocksdb::RocksDb::open(opts.cfg_path.join(DB_FILE))
         .expect("Error opening DB")
         .into();
-    let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;
+    let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
+        &cfg.get_module_config::<WalletConfig>("wallet")?.btc_rpc,
+    )?;
 
     let mut task_group = TaskGroup::new();
     let local_task_set = tokio::task::LocalSet::new();
@@ -91,14 +94,18 @@ async fn main() -> anyhow::Result<()> {
 
     task_group.install_kill_handler();
 
-    let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), db.clone());
+    let mint = fedimint_core::modules::mint::Mint::new(cfg.get_module_config("mint")?, db.clone());
 
-    let wallet =
-        Wallet::new_with_bitcoind(cfg.wallet.clone(), db.clone(), btc_rpc, &mut task_group)
-            .await
-            .expect("Couldn't create wallet");
+    let wallet = Wallet::new_with_bitcoind(
+        cfg.get_module_config("wallet")?,
+        db.clone(),
+        btc_rpc,
+        &mut task_group,
+    )
+    .await
+    .expect("Couldn't create wallet");
 
-    let ln = LightningModule::new(cfg.ln.clone(), db.clone());
+    let ln = LightningModule::new(cfg.get_module_config("ln")?, db.clone());
 
     let mut consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
 

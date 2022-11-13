@@ -3,7 +3,9 @@ use std::hash::Hash;
 use std::io::Write;
 use std::ops::Mul;
 
-use async_trait::async_trait;
+use anyhow::bail;
+use anyhow::format_err;
+use bitcoin::secp256k1;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::BitcoinHash;
@@ -19,41 +21,179 @@ use tbs::hash::hash_bytes_to_curve;
 use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
+use url::Url;
 
 use crate::cancellable::Cancellable;
-use crate::net::peers::AnyPeerConnections;
-use crate::task::TaskGroup;
+use crate::multiplexed::{ModuleIdRef, ModuleMultiplexer};
+use crate::Amount;
 use crate::PeerId;
 
-/// Part of a config that needs to be generated to bootstrap a new federation.
-#[async_trait(? Send)]
-pub trait GenerateConfig: Sized {
-    type Params: ?Sized;
-    type ClientConfig;
-    type ConfigMessage;
-    type ConfigError;
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct Node {
+    pub url: Url,
+    pub name: String,
+}
 
-    /// Function that generates the config of all peers locally. This is only meant to be used for
-    /// testing as the generating machine would be a single point of failure/compromise.
-    fn trusted_dealer_gen(
-        peers: &[PeerId],
-        params: &Self::Params,
-        rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig);
+/// Total client config
+///
+/// This includes global settings and client-side module configs.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ClientConfig {
+    pub federation_name: String,
+    pub nodes: Vec<Node>,
+    pub modules: BTreeMap<String, ClientModuleConfig>,
+}
 
-    fn to_client_config(&self) -> Self::ClientConfig;
+impl ClientConfig {
+    pub fn get_module<T: DeserializeOwned>(&self, module: &str) -> anyhow::Result<T> {
+        if let Some(client_cfg) = self.modules.get(module) {
+            Ok(serde_json::from_value(client_cfg.0.clone())?)
+        } else {
+            Err(format_err!("Client config for {module} module not found"))
+        }
+    }
+}
 
-    /// Asserts that the public keys in the config are and panics otherwise (no way to recover)
-    fn validate_config(&self, identity: &PeerId);
+/// Global Fedimint configuration generation settings passed to modules
+///
+/// This includes typed module settings for know modules for simplicity,
+/// and better UX, while the non-standard modules have to use a type-erased
+/// config.
+///
+/// Candidate for re-designing when the modularization effort is
+/// complete.
+pub struct ModuleConfigGenParams {
+    pub mint_amounts: Vec<Amount>,
+    pub bitcoin_rpc: BitcoindRpcCfg,
 
-    async fn distributed_gen(
-        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
-        our_id: &PeerId,
-        peers: &[PeerId],
-        params: &Self::Params,
-        rng: impl RngCore + CryptoRng,
-        task_group: &mut TaskGroup,
-    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError>;
+    /// extra options for extra settings and modules
+    pub other: BTreeMap<String, serde_json::Value>,
+}
+
+impl ModuleConfigGenParams {
+    /// Default & fake config gen params for things like tests
+    ///
+    /// TODO: Possibly this does not belong here.
+    pub fn fake_config_gen_params() -> ModuleConfigGenParams {
+        ModuleConfigGenParams {
+            mint_amounts: [1, 10, 100, 1000, 10000, 100000, 1000000]
+                .into_iter()
+                .map(Amount::from_milli_sats)
+                .collect(),
+            bitcoin_rpc: fedimint_api::config::BitcoindRpcCfg {
+                btc_rpc_address: "localhost".into(),
+                btc_rpc_user: "bitcoin".into(),
+                btc_rpc_pass: "bitcoin".into(),
+            },
+            other: Default::default(),
+        }
+    }
+}
+
+/// Config for the client-side of a particular Federation module
+///
+/// Since modules are (tbd.) pluggable into Federations,
+/// it needs to be some form of an abstract type-erased-like
+/// value.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ClientModuleConfig(pub serde_json::Value);
+
+impl From<serde_json::Value> for ClientModuleConfig {
+    fn from(v: serde_json::Value) -> Self {
+        Self(v)
+    }
+}
+
+impl ClientModuleConfig {
+    pub fn cast<T: TypedClientModuleConfig>(&self) -> anyhow::Result<T> {
+        Ok(serde_json::from_value(self.0.clone())?)
+    }
+}
+
+/// Config for the server-side of a particular Federation module
+///
+/// See [`ClientModuleConfig`].
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ServerModuleConfig(pub serde_json::Value);
+
+impl From<serde_json::Value> for ServerModuleConfig {
+    fn from(v: serde_json::Value) -> Self {
+        Self(v)
+    }
+}
+
+impl ServerModuleConfig {
+    pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
+        Ok(serde_json::from_value(self.0.clone())?)
+    }
+}
+
+pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
+    fn to_erased(&self) -> ServerModuleConfig {
+        ServerModuleConfig(serde_json::to_value(self).expect("serialization can't fail"))
+    }
+
+    fn to_client_config(&self) -> ClientModuleConfig;
+
+    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()>;
+}
+
+pub trait TypedClientModuleConfig: DeserializeOwned + Serialize {
+    fn to_erased(&self) -> ClientModuleConfig {
+        ClientModuleConfig(serde_json::to_value(self).expect("serialization can't fail"))
+    }
+}
+
+/// Things that a `distributed_gen` config can send between peers
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum DkgPeerMsg {
+    PublicKey(secp256k1::PublicKey),
+    DistributedGen((String, SupportedDkgMessage)),
+}
+
+/// Supported (by Fedimint's code) `DkgMessage<T>` types
+///
+/// Since `DkgMessage` is an open-set, yet we only use a subset of it,
+/// we can make a subset-trait to convert it to an `enum` that we
+/// it's easier to handle.
+///
+/// Candidate for refactoring after modularization effort is complete.
+pub trait ISupportedDkgMessage: Sized + Serialize + DeserializeOwned {
+    fn to_msg(self) -> SupportedDkgMessage;
+    fn from_msg(msg: SupportedDkgMessage) -> anyhow::Result<Self>;
+}
+
+/// `enum` version of [`SupportedDkgMessage`]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum SupportedDkgMessage {
+    G1(DkgMessage<G1Projective>),
+    G2(DkgMessage<G2Projective>),
+}
+
+impl ISupportedDkgMessage for DkgMessage<G1Projective> {
+    fn to_msg(self) -> SupportedDkgMessage {
+        SupportedDkgMessage::G1(self)
+    }
+
+    fn from_msg(msg: SupportedDkgMessage) -> anyhow::Result<Self> {
+        match msg {
+            SupportedDkgMessage::G1(s) => Ok(s),
+            SupportedDkgMessage::G2(_) => bail!("Incorrect DkgGroup: G2"),
+        }
+    }
+}
+
+impl ISupportedDkgMessage for DkgMessage<G2Projective> {
+    fn to_msg(self) -> SupportedDkgMessage {
+        SupportedDkgMessage::G2(self)
+    }
+
+    fn from_msg(msg: SupportedDkgMessage) -> anyhow::Result<Self> {
+        match msg {
+            SupportedDkgMessage::G1(_) => bail!("Incorrect DkgGroup: G1"),
+            SupportedDkgMessage::G2(s) => Ok(s),
+        }
+    }
 }
 
 struct Dkg<G> {
@@ -294,28 +434,36 @@ where
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     pub async fn run_g2(
         &mut self,
-        connections: &mut AnyPeerConnections<(T, DkgMessage<G2Projective>)>,
+        module_id: ModuleIdRef<'_>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G2Projective>>> {
-        self.run(G2Projective::generator(), connections, rng).await
+        self.run(module_id, G2Projective::generator(), connections, rng)
+            .await
     }
 
     /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     pub async fn run_g1(
         &mut self,
-        connections: &mut AnyPeerConnections<(T, DkgMessage<G1Projective>)>,
+        module_id: ModuleIdRef<'_>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G1Projective>>> {
-        self.run(G1Projective::generator(), connections, rng).await
+        self.run(module_id, G1Projective::generator(), connections, rng)
+            .await
     }
 
     /// Runs the DKG algorithms with our peers
     pub async fn run<G: DkgGroup>(
         &mut self,
+        module_id: ModuleIdRef<'_>,
         group: G,
-        connections: &mut AnyPeerConnections<(T, DkgMessage<G>)>,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Cancellable<HashMap<T, DkgKeys<G>>> {
+    ) -> Cancellable<HashMap<T, DkgKeys<G>>>
+    where
+        DkgMessage<G>: ISupportedDkgMessage,
+    {
         let mut dkgs: HashMap<T, Dkg<G>> = HashMap::new();
         let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
 
@@ -326,21 +474,50 @@ where
             let (dkg, step) = Dkg::new(group, our_id, peers, *threshold, rng);
             if let DkgStep::Messages(messages) = step {
                 for (peer, msg) in messages {
-                    connections.send(&[peer], (key.clone(), msg)).await?;
+                    connections
+                        .send(
+                            &[peer],
+                            module_id,
+                            DkgPeerMsg::DistributedGen((
+                                serde_json::to_string(key).expect("serialization can't fail"),
+                                msg.to_msg(),
+                            )),
+                        )
+                        .await?;
                 }
             }
             dkgs.insert(key.clone(), dkg);
         }
 
         // process steps for each key
+        // TODO: fix error handling here; what do we do on a malfunctining peer when building the federation?
         loop {
-            let (peer, (key, message)) = connections.receive().await?;
+            let (peer, msg) = connections.receive(module_id).await?;
+
+            let (key, message) = if let DkgPeerMsg::DistributedGen(v) = msg {
+                v
+            } else {
+                panic!("Module {module_id} wrong message received: {msg:?}")
+            };
+
+            let key = serde_json::from_str(&key).expect("invalid key");
+            let message = ISupportedDkgMessage::from_msg(message).expect("invalid message");
             let step = dkgs.get_mut(&key).expect("exists").step(peer, message);
 
             match step {
                 DkgStep::Messages(messages) => {
                     for (peer, msg) in messages {
-                        connections.send(&[peer], (key.clone(), msg)).await?;
+                        connections
+                            .send(
+                                &[peer],
+                                module_id,
+                                DkgPeerMsg::DistributedGen((
+                                    serde_json::to_string(&key)
+                                        .expect("FIXME - handle errors here"),
+                                    msg.to_msg(),
+                                )),
+                            )
+                            .await?;
                     }
                 }
                 DkgStep::Result(result) => {

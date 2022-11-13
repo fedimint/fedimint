@@ -5,19 +5,21 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::config::GenerateConfig;
+use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{ApiError, ModuleError, TransactionItemAmount};
+use fedimint_api::module::{
+    ApiError, FederationModuleConfigGen, ModuleError, TransactionItemAmount,
+};
 use fedimint_api::InputMeta;
 use fedimint_api::{FederationModule, OutPoint, PeerId};
 
 pub mod bitcoind;
 
-pub struct FakeFed<M, CC> {
-    members: Vec<(PeerId, M, Database)>,
-    client_cfg: CC,
+pub struct FakeFed<Module> {
+    members: Vec<(PeerId, Module, Database)>,
+    client_cfg: ClientModuleConfig,
     block_height: Arc<std::sync::atomic::AtomicU64>,
 }
 
@@ -27,46 +29,47 @@ pub struct TestInputMeta {
     pub keys: Vec<secp256k1_zkp::XOnlyPublicKey>,
 }
 
-impl<M, CC> FakeFed<M, CC>
+impl<Module> FakeFed<Module>
 where
-    M: FederationModule,
-    M::ConsensusItem: Clone,
-    M::TxOutputOutcome: Eq + Debug,
+    Module: FederationModule,
+    Module::ConsensusItem: Clone,
+    Module::TxOutputOutcome: Eq + Debug,
 {
-    pub async fn new<C, F, FF>(
+    pub async fn new<ConfGen, F, FF>(
         members: usize,
         constructor: F,
-        params: &C::Params,
-    ) -> FakeFed<M, C::ClientConfig>
+        params: &ModuleConfigGenParams,
+        conf_gen: &ConfGen,
+    ) -> anyhow::Result<FakeFed<Module>>
     where
-        C: GenerateConfig,
-        F: Fn(C, Database) -> FF, // TODO: put constructor into Module trait
-        FF: Future<Output = M>,
+        ConfGen: FederationModuleConfigGen,
+        F: Fn(ServerModuleConfig, Database) -> FF,
+        FF: Future<Output = anyhow::Result<Module>>,
     {
         let peers = (0..members)
             .map(|idx| PeerId::from(idx as u16))
             .collect::<Vec<_>>();
-        let (server_cfg, client_cfg) = C::trusted_dealer_gen(&peers, params, rand::rngs::OsRng);
+        let (server_cfg, client_cfg) = conf_gen.trusted_dealer_gen(&peers, params);
 
         let mut members = vec![];
         for (peer, cfg) in server_cfg {
             let mem_db: Database = MemDatabase::new().into();
-            let member = constructor(cfg, mem_db.clone()).await;
+            let member = constructor(cfg, mem_db.clone()).await?;
             members.push((peer, member, mem_db));
         }
 
-        FakeFed {
+        Ok(FakeFed {
             members,
             client_cfg,
             block_height: Arc::new(AtomicU64::new(0)),
-        }
+        })
     }
 
     pub fn set_block_height(&self, bh: u64) {
         self.block_height.store(bh, Ordering::Relaxed);
     }
 
-    pub fn verify_input(&self, input: &M::TxInput) -> Result<TestInputMeta, ModuleError> {
+    pub fn verify_input(&self, input: &Module::TxInput) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         let results = self.members.iter().map(|(_, member, _)| {
@@ -80,7 +83,7 @@ where
         assert_all_equal_result(results)
     }
 
-    pub fn verify_output(&self, output: &M::TxOutput) -> bool {
+    pub fn verify_output(&self, output: &Module::TxOutput) -> bool {
         let results = self
             .members
             .iter()
@@ -91,10 +94,10 @@ where
     // TODO: add expected result to inputs/outputs
     pub async fn consensus_round(
         &mut self,
-        inputs: &[M::TxInput],
-        outputs: &[(OutPoint, M::TxOutput)],
+        inputs: &[Module::TxInput],
+        outputs: &[(OutPoint, Module::TxOutput)],
     ) where
-        <M as FederationModule>::TxInput: Send + Sync,
+        <Module as FederationModule>::TxInput: Send + Sync,
     {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
@@ -141,7 +144,7 @@ where
         }
     }
 
-    pub fn output_outcome(&self, out_point: OutPoint) -> Option<M::TxOutputOutcome> {
+    pub fn output_outcome(&self, out_point: OutPoint) -> Option<Module::TxOutputOutcome> {
         // Since every member is in the same epoch they should have the same internal state, even
         // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
         // main consensus loop into another thread to optimize latency. This test will probably fail
@@ -164,14 +167,18 @@ where
         }
     }
 
-    pub fn client_cfg(&self) -> &CC {
+    pub fn client_cfg(&self) -> &ClientModuleConfig {
         &self.client_cfg
+    }
+
+    pub fn client_cfg_typed<T: serde::de::DeserializeOwned>(&self) -> anyhow::Result<T> {
+        Ok(serde_json::from_value(self.client_cfg.0.clone())?)
     }
 
     pub fn fetch_from_all<O, F>(&mut self, fetch: F) -> O
     where
         O: Debug + Eq,
-        F: Fn(&mut M) -> O,
+        F: Fn(&mut Module) -> O,
     {
         assert_all_equal(self.members.iter_mut().map(|(_, member, _)| fetch(member)))
     }

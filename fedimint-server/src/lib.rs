@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use config::ServerConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::GenerateConfig;
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
@@ -102,7 +101,7 @@ impl FedimintServer {
         connector: PeerConnector<EpochMessage>,
         task_group: &mut TaskGroup,
     ) -> Self {
-        cfg.validate_config(&cfg.identity);
+        cfg.validate_config(&cfg.identity).expect("invalid config");
 
         let connections =
             ReconnectPeerConnections::new(cfg.network_config(), connector, task_group)

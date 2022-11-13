@@ -11,6 +11,7 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::DecryptionShareCI;
+use fedimint_mint::config::MintClientConfig;
 use fedimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::Output;
@@ -801,7 +802,11 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
-    let tbs_pks = &user.config.0.mint.tbs_pks;
+    let tbs_pks = &user
+        .config
+        .0
+        .get_module::<MintClientConfig>("mint")?
+        .tbs_pks;
     let mut dbtx = user.client.mint_client().context.db.begin_transaction();
     let tx = builder.build(
         sats(0),

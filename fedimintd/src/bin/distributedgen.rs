@@ -1,13 +1,13 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::GenerateConfig;
+use fedimint_api::config::ClientConfig;
+use fedimint_api::multiplexed::ModuleMultiplexer;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
-use fedimint_core::config::ClientConfig;
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
 use fedimintd::encrypt::*;
 use itertools::Itertools;
@@ -181,21 +181,14 @@ async fn run_dkg(
         federation_name,
         bitcoind_rpc,
     );
-    let param_map = HashMap::from([(our_id, params.clone())]);
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
-    let mut server_conn =
-        fedimint_server::config::connect(params.server_dkg, params.tls, task_group).await;
-    let rng = OsRng;
-    ServerConfig::distributed_gen(
-        &mut server_conn,
-        &our_id,
-        &peer_ids,
-        &param_map,
-        rng,
-        task_group,
-    )
-    .await
-    .expect("failed to run DKG to generate configs")
+    let server_conn =
+        fedimint_server::config::connect(params.server_dkg.clone(), params.tls.clone(), task_group)
+            .await;
+    let connections = ModuleMultiplexer::new(server_conn);
+    ServerConfig::distributed_gen(&connections, &our_id, &peer_ids, &params, OsRng, task_group)
+        .await
+        .expect("failed to run DKG to generate configs")
 }
 
 fn parse_peer_params(url: String) -> PeerServerParams {

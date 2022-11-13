@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 
-use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
+use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ModuleConfigGenParams, Node};
+use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::{Amount, PeerId};
-use fedimint_core::config::{ClientConfig, Node};
-use fedimint_core::modules::ln::config::LightningModuleConfig;
-use fedimint_core::modules::mint::config::MintConfig;
+use fedimint_core::modules::ln::LightningModuleConfigGen;
+use fedimint_core::modules::mint::MintConfigGenerator;
 use fedimint_server::config::{gen_cert_and_key, Peer as ServerPeer, ServerConfig};
 use fedimint_server::net::peers::ConnectionConfig;
-use fedimint_wallet::config::WalletConfig;
+use fedimint_wallet::WalletConfigGenerator;
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use threshold_crypto::serde_impl::SerdeSecret;
@@ -109,12 +109,24 @@ fn trusted_dealer_gen(
         })
         .collect::<BTreeMap<_, _>>();
 
-    let (wallet_server_cfg, wallet_client_cfg) =
-        WalletConfig::trusted_dealer_gen(peers, &params.btc_rpc, &mut rng);
-    let (mint_server_cfg, mint_client_cfg) =
-        MintConfig::trusted_dealer_gen(peers, params.amount_tiers.as_ref(), &mut rng);
-    let (ln_server_cfg, ln_client_cfg) =
-        LightningModuleConfig::trusted_dealer_gen(peers, &(), &mut rng);
+    let module_cfg_gen_params = ModuleConfigGenParams {
+        mint_amounts: params.amount_tiers.clone(),
+        bitcoin_rpc: params.btc_rpc.clone(),
+        other: BTreeMap::new(),
+    };
+    let module_config_gens: Vec<(&'static str, Box<_>)> = vec![
+        (
+            "wallet",
+            Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
+        ),
+        ("mint", Box::new(MintConfigGenerator)),
+        ("ln", Box::new(LightningModuleConfigGen)),
+    ];
+
+    let module_configs: Vec<_> = module_config_gens
+        .iter()
+        .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &module_cfg_gen_params)))
+        .collect();
 
     let server_config = netinfo
         .iter()
@@ -140,9 +152,11 @@ fn trusted_dealer_gen(
                 hbbft_pk_set: netinf.public_key_set().clone(),
                 epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
                 epoch_pk_set: epoch_keys.public_key_set().clone(),
-                wallet: wallet_server_cfg[&id].clone(),
-                mint: mint_server_cfg[&id].clone(),
-                ln: ln_server_cfg[&id].clone(),
+
+                modules: module_configs
+                    .iter()
+                    .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
+                    .collect(),
             };
             (id, config)
         })
@@ -166,9 +180,10 @@ fn trusted_dealer_gen(
                 }
             })
             .collect(),
-        mint: mint_client_cfg,
-        wallet: wallet_client_cfg,
-        ln: ln_client_cfg,
+        modules: module_configs
+            .iter()
+            .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))
+            .collect(),
     };
 
     (server_config, client_config)

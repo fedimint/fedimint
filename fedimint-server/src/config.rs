@@ -1,26 +1,33 @@
 use std::collections::{BTreeMap, HashMap};
 
-use async_trait::async_trait;
+use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::BitcoindRpcCfg;
-use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
+use fedimint_api::config::{
+    BitcoindRpcCfg, ClientConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
+    ServerModuleConfig, TypedServerModuleConfig,
+};
+use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::multiplexed::ModuleMultiplexer;
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::task::TaskGroup;
-use fedimint_api::{Amount, NumPeers, PeerId};
+use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::LightningModuleConfig;
+use fedimint_core::modules::ln::LightningModuleConfigGen;
 use fedimint_core::modules::mint::config::MintConfig;
-use fedimint_core::modules::wallet::config::WalletConfig;
+use fedimint_core::modules::mint::MintConfigGenerator;
+use fedimint_wallet::config::WalletConfig;
+use fedimint_wallet::WalletConfigGenerator;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use threshold_crypto::G1Projective;
 use tokio_rustls::rustls;
 use tracing::info;
 use url::Url;
 
 use crate::fedimint_api::net::peers::PeerConnections;
+use crate::fedimint_api::NumPeers;
 use crate::net::connect::Connector;
 use crate::net::connect::TlsConfig;
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
@@ -48,9 +55,16 @@ pub struct ServerConfig {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
 
-    pub wallet: WalletConfig,
-    pub mint: MintConfig,
-    pub ln: LightningModuleConfig,
+    pub modules: BTreeMap<String, ServerModuleConfig>,
+}
+
+impl ServerConfig {
+    pub fn get_module_config<T: TypedServerModuleConfig>(&self, name: &str) -> anyhow::Result<T> {
+        self.modules
+            .get(name)
+            .ok_or_else(|| format_err!("Module {name} not found"))?
+            .to_typed()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +78,14 @@ pub struct Peer {
     pub name: String,
 }
 
+pub struct FederationeConfigGenParams {
+    pub mint_amounts: Vec<Amount>,
+    pub bitcoin_rpc: BitcoindRpcCfg,
+
+    /// extra options for extra settings and modules
+    pub other: BTreeMap<String, serde_json::Value>,
+}
+
 #[derive(Debug, Clone)]
 /// network config for a server
 pub struct ServerConfigParams {
@@ -71,45 +93,134 @@ pub struct ServerConfigParams {
     pub hbbft: NetworkConfig,
     pub api: NetworkConfig,
     pub server_dkg: NetworkConfig,
-    pub wallet_dkg: NetworkConfig,
-    pub lightning_dkg: NetworkConfig,
-    pub mint_dkg: NetworkConfig,
+    // TODO: delete unused dkgs
     pub amount_tiers: Vec<Amount>,
     pub federation_name: String,
     pub bitcoind_rpc: String,
+
+    /// extra options for extra settings and modules
+    pub other: BTreeMap<String, serde_json::Value>,
 }
 
-#[async_trait(?Send)]
-impl GenerateConfig for ServerConfig {
-    type Params = HashMap<PeerId, ServerConfigParams>;
-    type ClientConfig = ClientConfig;
-    type ConfigMessage = (KeyType, DkgMessage<G1Projective>);
-    type ConfigError = ();
+impl ServerConfig {
+    pub fn to_client_config(&self) -> ClientConfig {
+        let nodes = self
+            .peers
+            .iter()
+            .map(|(peer_id, peer)| Node {
+                url: peer.api_addr.clone(),
+                name: format!("node #{}", peer_id),
+            })
+            .collect();
 
-    fn trusted_dealer_gen(
+        ClientConfig {
+            federation_name: self.federation_name.clone(),
+            nodes,
+            modules: self
+                .modules
+                .iter()
+                .map(|(name, cfg)| {
+                    (
+                        name.clone(),
+                        match name.as_str() {
+                            "wallet" => cfg
+                                .to_typed::<WalletConfig>()
+                                .expect("valid config should not fail")
+                                .to_client_config(),
+                            "mint" => cfg
+                                .to_typed::<MintConfig>()
+                                .expect("valid config should not fail")
+                                .to_client_config(),
+                            "ln" => cfg
+                                .to_typed::<LightningModuleConfig>()
+                                .expect("valid config should not fail")
+                                .to_client_config(),
+                            other => panic!("module name that was not expected: {other}"),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    pub fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
+        if self.epoch_sks.public_key_share()
+            != self.epoch_pk_set.public_key_share(identity.to_usize())
+        {
+            bail!("Epoch private key doesn't match pubkey share");
+        }
+        if self.hbbft_sks.public_key_share()
+            != self.hbbft_pk_set.public_key_share(identity.to_usize())
+        {
+            bail!("HBBFT private key doesn't match pubkey share");
+        }
+        if self.peers.keys().max().copied().map(|id| id.to_usize()) != Some(self.peers.len() - 1) {
+            bail!("Peer ids are not indexed from 0");
+        }
+        if self.peers.keys().min().copied() != Some(PeerId::from(0)) {
+            bail!("Peer ids are not indexed from 0");
+        }
+
+        let res: anyhow::Result<Vec<()>> = self
+            .modules
+            .iter()
+            .map(|(name, cfg)| match name.as_str() {
+                "wallet" => cfg
+                    .to_typed::<WalletConfig>()
+                    .expect("valid config should not fail")
+                    .validate_config(identity),
+                "mint" => cfg
+                    .to_typed::<MintConfig>()
+                    .expect("valid config should not fail")
+                    .validate_config(identity),
+                "ln" => cfg
+                    .to_typed::<LightningModuleConfig>()
+                    .expect("valid config should not fail")
+                    .validate_config(identity),
+                other => panic!("module name that was not expected: {other}"),
+            })
+            .collect();
+
+        res?;
+
+        Ok(())
+    }
+
+    pub fn trusted_dealer_gen(
         peers: &[PeerId],
-        params: &Self::Params,
+        params: &HashMap<PeerId, ServerConfigParams>,
         mut rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
+    ) -> (BTreeMap<PeerId, Self>, ClientConfig) {
         let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
         let epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
         let peer0 = &params[&PeerId::from(0)];
-        let (wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(
-            peers,
-            &BitcoindRpcCfg {
+
+        let module_cfg_gen_params = ModuleConfigGenParams {
+            mint_amounts: peer0.amount_tiers.clone(),
+            // TODO: FIXME: meh
+            bitcoin_rpc: BitcoindRpcCfg {
                 btc_rpc_address: peer0.bitcoind_rpc.clone(),
                 btc_rpc_user: "bitcoin".into(),
                 btc_rpc_pass: "bitcoin".into(),
             },
-            &mut rng,
-        );
-        let (mint_server_cfg, mint_client_cfg) =
-            MintConfig::trusted_dealer_gen(peers, &peer0.amount_tiers, &mut rng);
-        let (ln_server_cfg, ln_client_cfg) =
-            LightningModuleConfig::trusted_dealer_gen(peers, &(), &mut rng);
+            other: peer0.other.clone(),
+        };
+        let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
+            (
+                "wallet",
+                Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
+            ),
+            ("mint", Box::new(MintConfigGenerator)),
+            ("ln", Box::new(LightningModuleConfigGen)),
+        ];
+
+        let module_configs: Vec<_> = module_config_gens
+            .iter()
+            .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &module_cfg_gen_params)))
+            .collect();
 
         let server_config = netinfo
             .iter()
@@ -127,9 +238,10 @@ impl GenerateConfig for ServerConfig {
                     hbbft_pk_set: netinf.public_key_set().clone(),
                     epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
                     epoch_pk_set: epoch_keys.public_key_set().clone(),
-                    wallet: wallet_server_cfg[&id].clone(),
-                    mint: mint_server_cfg[&id].clone(),
-                    ln: ln_server_cfg[&id].clone(),
+                    modules: module_configs
+                        .iter()
+                        .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
+                        .collect(),
                 };
                 (id, config)
             })
@@ -143,81 +255,37 @@ impl GenerateConfig for ServerConfig {
         let client_config = ClientConfig {
             federation_name: peer0.federation_name.clone(),
             nodes: peer0.api.nodes("ws://", names),
-            mint: mint_client_cfg,
-            wallet: wallet_client_cfg,
-            ln: ln_client_cfg,
+            modules: module_configs
+                .iter()
+                .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))
+                .collect(),
         };
 
         (server_config, client_config)
     }
 
-    fn to_client_config(&self) -> Self::ClientConfig {
-        let nodes = self
-            .peers
-            .iter()
-            .map(|(peer_id, peer)| Node {
-                url: peer.api_addr.clone(),
-                name: format!("node #{}", peer_id),
-            })
-            .collect();
-        ClientConfig {
-            federation_name: self.federation_name.clone(),
-            nodes,
-            mint: self.mint.to_client_config(),
-            wallet: self.wallet.to_client_config(),
-            ln: self.ln.to_client_config(),
-        }
-    }
-
-    fn validate_config(&self, identity: &PeerId) {
-        assert_eq!(
-            self.epoch_sks.public_key_share(),
-            self.epoch_pk_set.public_key_share(identity.to_usize()),
-            "Epoch private key doesn't match pubkey share"
-        );
-        assert_eq!(
-            self.hbbft_sks.public_key_share(),
-            self.hbbft_pk_set.public_key_share(identity.to_usize()),
-            "HBBFT private key doesn't match pubkey share"
-        );
-        assert_eq!(
-            self.peers.keys().max().copied().map(|id| id.to_usize()),
-            Some(self.peers.len() - 1),
-            "Peer ids are not indexed from 0"
-        );
-        assert_eq!(
-            self.peers.keys().min().copied(),
-            Some(PeerId::from(0)),
-            "Peer ids are not indexed from 0"
-        );
-
-        self.mint.validate_config(identity);
-        self.ln.validate_config(identity);
-        self.wallet.validate_config(identity);
-    }
-
-    async fn distributed_gen(
-        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
+    pub async fn distributed_gen(
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
-        params: &Self::Params,
+        params: &ServerConfigParams,
         mut rng: impl RngCore + CryptoRng,
         task_group: &mut TaskGroup,
-    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError> {
+    ) -> anyhow::Result<Cancellable<(Self, ClientConfig)>> {
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
-            let (server, client) = Self::trusted_dealer_gen(peers, params, rng);
+            let (server, client) =
+                Self::trusted_dealer_gen(peers, &HashMap::from([(*our_id, params.clone())]), rng);
             return Ok(Ok((server[our_id].clone(), client)));
         }
         info!("Peer {} running distributed key generation...", our_id);
 
-        let params = params[our_id].clone();
         // hbbft uses a lower threshold of signing keys (f+1)
         let mut dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
-        let keys = if let Ok(v) = dkg.run_g1(connections, &mut rng).await {
+        let keys = if let Ok(v) = dkg.run_g1("global", connections, &mut rng).await {
             v
         } else {
             return Ok(Err(Cancelled));
@@ -225,48 +293,45 @@ impl GenerateConfig for ServerConfig {
         let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
 
-        let mut wallet = connect(params.wallet_dkg.clone(), params.tls.clone(), task_group).await;
-        let bitcoin = &BitcoindRpcCfg {
-            btc_rpc_address: params.bitcoind_rpc.clone(),
-            btc_rpc_user: "bitcoin".into(),
-            btc_rpc_pass: "bitcoin".into(),
+        let module_cfg_gen_params = ModuleConfigGenParams {
+            mint_amounts: params.amount_tiers.clone(),
+            bitcoin_rpc: BitcoindRpcCfg {
+                btc_rpc_address: params.bitcoind_rpc.clone(),
+                btc_rpc_user: "bitcoin".into(),
+                btc_rpc_pass: "bitcoin".into(),
+            },
+            other: params.other.clone(),
         };
-        let (wallet_server_cfg, wallet_client_cfg) = if let Ok(v) =
-            WalletConfig::distributed_gen(&mut wallet, our_id, peers, bitcoin, &mut rng, task_group)
-                .await
-                .expect("wallet error")
-        {
-            v
-        } else {
-            return Ok(Err(Cancelled));
-        };
+        let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
+            (
+                "wallet",
+                Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
+            ),
+            ("mint", Box::new(MintConfigGenerator)),
+            ("ln", Box::new(LightningModuleConfigGen)),
+        ];
 
-        let mut ln = connect(params.lightning_dkg.clone(), params.tls.clone(), task_group).await;
-        let (ln_server_cfg, ln_client_cfg) = if let Ok(v) = LightningModuleConfig::distributed_gen(
-            &mut ln,
-            our_id,
-            peers,
-            &(),
-            &mut rng,
-            task_group,
-        )
-        .await?
-        {
-            v
-        } else {
-            return Ok(Err(Cancelled));
-        };
+        let mut module_cfgs: Vec<(&'static str, (_, _))> = vec![];
 
-        let mut mint = connect(params.mint_dkg.clone(), params.tls.clone(), task_group).await;
-        let param = &params.amount_tiers;
-        let (mint_server_cfg, mint_client_cfg) = if let Ok(v) =
-            MintConfig::distributed_gen(&mut mint, our_id, peers, param, &mut rng, task_group)
-                .await?
-        {
-            v
-        } else {
-            return Ok(Err(Cancelled));
-        };
+        for (name, gen) in module_config_gens {
+            module_cfgs.push((
+                name,
+                if let Ok(cfgs) = gen
+                    .distributed_gen(
+                        connections,
+                        our_id,
+                        peers,
+                        &module_cfg_gen_params,
+                        task_group,
+                    )
+                    .await?
+                {
+                    cfgs
+                } else {
+                    return Ok(Err(Cancelled));
+                },
+            ));
+        }
 
         let server = ServerConfig {
             federation_name: params.federation_name.clone(),
@@ -280,17 +345,19 @@ impl GenerateConfig for ServerConfig {
             hbbft_pk_set: hbbft_pks,
             epoch_sks: SerdeSecret(epoch_sks),
             epoch_pk_set: epoch_pks,
-            wallet: wallet_server_cfg,
-            mint: mint_server_cfg,
-            ln: ln_server_cfg,
+            modules: module_cfgs
+                .iter()
+                .map(|(name, cfgs)| (name.to_string(), cfgs.0.clone()))
+                .collect(),
         };
 
         let client = ClientConfig {
-            federation_name: params.federation_name,
-            nodes: params.api.nodes("ws://", params.tls.peer_names),
-            mint: mint_client_cfg,
-            wallet: wallet_client_cfg,
-            ln: ln_client_cfg,
+            federation_name: params.federation_name.clone(),
+            nodes: params.api.nodes("ws://", params.tls.peer_names.clone()),
+            modules: module_cfgs
+                .iter()
+                .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))
+                .collect(),
         };
 
         Ok(Ok((server, client)))
@@ -395,12 +462,10 @@ impl ServerConfigParams {
             hbbft: Self::gen_network(&our_id, 0, peers),
             api: Self::gen_network(&our_id, 1, peers),
             server_dkg: Self::gen_network(&our_id, 2, peers),
-            wallet_dkg: Self::gen_network(&our_id, 3, peers),
-            lightning_dkg: Self::gen_network(&our_id, 4, peers),
-            mint_dkg: Self::gen_network(&our_id, 5, peers),
             amount_tiers,
             federation_name,
             bitcoind_rpc,
+            other: BTreeMap::new(),
         }
     }
 

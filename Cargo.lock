@@ -883,6 +883,7 @@ dependencies = [
 name = "fedimint-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bincode",
  "bitcoin",
@@ -931,6 +932,7 @@ dependencies = [
  "itertools",
  "lightning",
  "lightning-invoice",
+ "rand",
  "secp256k1",
  "serde",
  "serde_json",
@@ -1064,6 +1066,7 @@ dependencies = [
 name = "fedimint-testing"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bitcoin",
  "fedimint-api",
@@ -1071,6 +1074,7 @@ dependencies = [
  "futures",
  "rand",
  "secp256k1-zkp",
+ "serde",
  "serde_json",
 ]
 

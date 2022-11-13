@@ -1,15 +1,7 @@
-use std::collections::BTreeMap;
-
-use async_trait::async_trait;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
-use fedimint_api::net::peers::AnyPeerConnections;
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{NumPeers, PeerId};
-use secp256k1::rand::{CryptoRng, RngCore};
+use anyhow::bail;
+use fedimint_api::config::{ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig};
+use fedimint_api::PeerId;
 use serde::{Deserialize, Serialize};
-use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::G1Projective;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningModuleConfig {
@@ -21,98 +13,33 @@ pub struct LightningModuleConfig {
     pub fee_consensus: FeeConsensus,
 }
 
+impl TypedClientModuleConfig for LightningModuleClientConfig {}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct LightningModuleClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
 }
 
-#[async_trait(?Send)]
-impl GenerateConfig for LightningModuleConfig {
-    type Params = ();
-    type ClientConfig = LightningModuleClientConfig;
-    type ConfigMessage = ((), DkgMessage<G1Projective>);
-    type ConfigError = ();
-
-    fn trusted_dealer_gen(
-        peers: &[PeerId],
-        _params: &Self::Params,
-        mut rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut rng);
-        let pks = sks.public_keys();
-
-        let server_cfg = peers
-            .iter()
-            .map(|&peer| {
-                let sk = sks.secret_key_share(peer.to_usize());
-
-                (
-                    peer,
-                    LightningModuleConfig {
-                        threshold_pub_keys: pks.clone(),
-                        threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
-                        threshold: peers.threshold(),
-                        fee_consensus: FeeConsensus::default(),
-                    },
-                )
-            })
-            .collect();
-
-        let client_cfg = LightningModuleClientConfig {
-            threshold_pub_key: pks.public_key(),
-            fee_consensus: FeeConsensus::default(),
-        };
-
-        (server_cfg, client_cfg)
-    }
-
-    fn to_client_config(&self) -> Self::ClientConfig {
-        LightningModuleClientConfig {
+impl TypedServerModuleConfig for LightningModuleConfig {
+    fn to_client_config(&self) -> ClientModuleConfig {
+        serde_json::to_value(&LightningModuleClientConfig {
             threshold_pub_key: self.threshold_pub_keys.public_key(),
             fee_consensus: self.fee_consensus.clone(),
+        })
+        .expect("Serialization can't fail")
+        .into()
+    }
+
+    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
+        if self.threshold_sec_key.public_key_share()
+            != self
+                .threshold_pub_keys
+                .public_key_share(identity.to_usize())
+        {
+            bail!("Lightning private key doesn't match pubkey share");
         }
-    }
-
-    fn validate_config(&self, identity: &PeerId) {
-        assert_eq!(
-            self.threshold_sec_key.public_key_share(),
-            self.threshold_pub_keys
-                .public_key_share(identity.to_usize()),
-            "Lightning private key doesn't match pubkey share"
-        )
-    }
-
-    async fn distributed_gen(
-        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
-        our_id: &PeerId,
-        peers: &[PeerId],
-        _params: &Self::Params,
-        mut rng: impl RngCore + CryptoRng,
-        _task_group: &mut TaskGroup,
-    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError> {
-        let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let g1 = if let Ok(g1) = dkg.run_g1(connections, &mut rng).await {
-            g1
-        } else {
-            return Ok(Err(Cancelled));
-        };
-
-        let (pks, sks) = g1[&()].threshold_crypto();
-
-        let server = LightningModuleConfig {
-            threshold_pub_keys: pks.clone(),
-            threshold_sec_key: SerdeSecret(sks),
-            threshold: peers.threshold(),
-            fee_consensus: Default::default(),
-        };
-
-        let client = LightningModuleClientConfig {
-            threshold_pub_key: pks.public_key(),
-            fee_consensus: Default::default(),
-        };
-
-        Ok(Ok((server, client)))
+        Ok(())
     }
 }
 

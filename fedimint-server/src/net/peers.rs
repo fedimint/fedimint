@@ -11,10 +11,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::Node;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
-use fedimint_core::config::Node;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;
@@ -387,7 +387,7 @@ where
     }
 
     fn disconnect_err(&self, err: anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
-        warn!(peer = ?self.peer, %err, %disconnect_count, "Some error occurred, disconnecting");
+        info!(peer = ?self.peer, %err, %disconnect_count, "Peer disconnected");
         self.disconnect(disconnect_count)
     }
 

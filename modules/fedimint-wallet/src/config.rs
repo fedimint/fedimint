@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
-use async_trait::async_trait;
-use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
+use anyhow::bail;
+use anyhow::format_err;
 use bitcoin::Network;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
-use fedimint_api::net::peers::AnyPeerConnections;
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{Feerate, NumPeers, PeerId};
+use fedimint_api::config::TypedClientModuleConfig;
+use fedimint_api::config::TypedServerModuleConfig;
+use fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
+use fedimint_api::module::__reexports::serde_json;
+use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
@@ -41,6 +41,8 @@ pub struct WalletClientConfig {
     pub fee_consensus: FeeConsensus,
 }
 
+impl TypedClientModuleConfig for WalletClientConfig {}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub peg_in_abs: fedimint_api::Amount,
@@ -56,96 +58,31 @@ impl Default for FeeConsensus {
     }
 }
 
-#[async_trait(?Send)]
-impl GenerateConfig for WalletConfig {
-    type Params = BitcoindRpcCfg;
-    type ClientConfig = WalletClientConfig;
-    type ConfigMessage = CompressedPublicKey;
-    type ConfigError = ();
-
-    fn trusted_dealer_gen(
-        peers: &[PeerId],
-        params: &Self::Params,
-        mut rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let secp = secp256k1::Secp256k1::new();
-
-        let btc_pegin_keys = peers
-            .iter()
-            .map(|&id| (id, secp.generate_keypair(&mut rng)))
-            .collect::<Vec<_>>();
-
-        let wallet_cfg: BTreeMap<PeerId, WalletConfig> = btc_pegin_keys
-            .iter()
-            .map(|(id, (sk, _))| {
-                let cfg = WalletConfig::new(
-                    btc_pegin_keys
-                        .iter()
-                        .map(|(peer_id, (_, pk))| (*peer_id, CompressedPublicKey { key: *pk }))
-                        .collect(),
-                    *sk,
-                    peers.threshold(),
-                    params.clone(),
-                );
-                (*id, cfg)
-            })
-            .collect();
-
-        let descriptor = wallet_cfg[&PeerId::from(0)].peg_in_descriptor.clone();
-        let client_cfg = WalletClientConfig::new(descriptor);
-
-        (wallet_cfg, client_cfg)
-    }
-
-    fn to_client_config(&self) -> Self::ClientConfig {
-        WalletClientConfig {
+impl TypedServerModuleConfig for WalletConfig {
+    fn to_client_config(&self) -> ClientModuleConfig {
+        serde_json::to_value(&WalletClientConfig {
             peg_in_descriptor: self.peg_in_descriptor.clone(),
             network: self.network,
             fee_consensus: self.fee_consensus.clone(),
             finality_delay: self.finality_delay,
-        }
+        })
+        .expect("Serialization can't fail")
+        .into()
     }
 
-    fn validate_config(&self, identity: &PeerId) {
+    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
         let pubkey = secp256k1::PublicKey::from_secret_key_global(&self.peg_in_key);
 
-        assert_eq!(
-            self.peer_peg_in_keys.get(identity).unwrap(),
-            &CompressedPublicKey::new(pubkey),
-            "Bitcoin wallet private key doesn't match multisig pubkey"
-        );
-    }
-
-    async fn distributed_gen(
-        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
-        our_id: &PeerId,
-        peers: &[PeerId],
-        params: &Self::Params,
-        mut rng: impl RngCore + CryptoRng,
-        _task_group: &mut TaskGroup,
-    ) -> Result<Cancellable<(Self, Self::ClientConfig)>, Self::ConfigError> {
-        let secp = secp256k1::Secp256k1::new();
-        let (sk, pk) = secp.generate_keypair(&mut rng);
-        let our_key = CompressedPublicKey { key: pk };
-        let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
-
-        if let Err(Cancelled) = connections.send(peers, our_key.clone()).await {
-            return Ok(Err(Cancelled));
+        if self
+            .peer_peg_in_keys
+            .get(identity)
+            .ok_or_else(|| format_err!("Secret key doesn't match any public key"))?
+            != &CompressedPublicKey::new(pubkey)
+        {
+            bail!(" Bitcoin wallet private key doesn't match multisig pubkey");
         }
 
-        peer_peg_in_keys.insert(*our_id, our_key);
-        while peer_peg_in_keys.len() < peers.len() {
-            if let Ok((peer, msg)) = connections.receive().await {
-                peer_peg_in_keys.insert(peer, msg);
-            } else {
-                return Ok(Err(Cancelled));
-            }
-        }
-
-        let wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
-        let client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
-
-        Ok(Ok((wallet_cfg, client_cfg)))
+        Ok(())
     }
 }
 
@@ -157,11 +94,7 @@ impl WalletConfig {
         btc_rpc: BitcoindRpcCfg,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
-            Wsh::new_sortedmulti(
-                threshold,
-                pubkeys.iter().map(|(_, pk)| pk.clone()).collect(),
-            )
-            .unwrap(),
+            Wsh::new_sortedmulti(threshold, pubkeys.iter().map(|(_, pk)| *pk).collect()).unwrap(),
         );
 
         Self {

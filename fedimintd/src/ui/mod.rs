@@ -9,8 +9,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use fedimint_api::config::BitcoindRpcCfg;
-use fedimint_core::config::ClientConfig;
+use fedimint_api::config::{BitcoindRpcCfg, ClientConfig};
 use fedimint_server::config::ServerConfig;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;

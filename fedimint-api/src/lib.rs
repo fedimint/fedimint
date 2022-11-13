@@ -27,6 +27,7 @@ pub mod db;
 pub mod encoding;
 pub mod macros;
 pub mod module;
+pub mod multiplexed;
 pub mod net;
 pub mod task;
 pub mod tiered;
@@ -74,6 +75,12 @@ pub struct PeerId(u16);
 #[serde(transparent)]
 pub struct Amount {
     pub milli_sat: u64,
+}
+
+impl Amount {
+    pub fn from_milli_sats(v: u64) -> Self {
+        Amount { milli_sat: v }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

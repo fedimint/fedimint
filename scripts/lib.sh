@@ -67,7 +67,7 @@ function start_gateway() {
 }
 
 function get_finality_delay() {
-    cat $FM_CFG_DIR/client.json | jq -r '.wallet.finality_delay'
+    cat $FM_CFG_DIR/client.json | jq -r '.modules.wallet.finality_delay'
 }
 
 function sat_to_btc() {

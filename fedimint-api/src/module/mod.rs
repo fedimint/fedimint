@@ -1,16 +1,20 @@
 pub mod audit;
 pub mod interconnect;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
 use thiserror::Error;
 
+use crate::cancellable::Cancellable;
+use crate::config::{ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig};
 use crate::db::DatabaseTransaction;
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
+use crate::multiplexed::ModuleMultiplexer;
+use crate::task::TaskGroup;
 use crate::{Amount, PeerId};
 
 pub struct InputMeta<'a> {
@@ -168,6 +172,28 @@ where
     fn into_module_error_other(self) -> Self::Target {
         self.map_err(|e| ModuleError::Other(e.into()))
     }
+}
+
+#[async_trait]
+pub trait FederationModuleConfigGen {
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        params: &ModuleConfigGenParams,
+    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig);
+
+    async fn distributed_gen(
+        &self,
+        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        params: &ModuleConfigGenParams,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>>;
+
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig>;
+
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 }
 
 #[async_trait(?Send)]

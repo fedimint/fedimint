@@ -4,12 +4,12 @@ use std::borrow::Cow;
 use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
+use fedimint_api::config::ClientConfig;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
-use fedimint_core::config::ClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse};
 use futures::stream::FuturesUnordered;
@@ -33,7 +33,7 @@ const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
 pub struct MintClient<'c> {
-    pub config: &'c MintClientConfig,
+    pub config: MintClientConfig,
     pub context: &'c ClientContext,
     pub secret: DerivableSecret,
 }
@@ -422,6 +422,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
+    use fedimint_api::config::ModuleConfigGenParams;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
@@ -430,7 +431,7 @@ mod tests {
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     use fedimint_core::modules::mint::config::MintClientConfig;
-    use fedimint_core::modules::mint::Mint;
+    use fedimint_core::modules::mint::{Mint, MintConfigGenerator};
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
@@ -443,7 +444,7 @@ mod tests {
     use crate::mint::MintClient;
     use crate::{BlindNonce, ClientContext, DerivableSecret, TransactionBuilder};
 
-    type Fed = FakeFed<Mint, MintClientConfig>;
+    type Fed = FakeFed<Mint>;
 
     struct FakeApi {
         mint: Arc<tokio::sync::Mutex<Fed>>,
@@ -528,13 +529,19 @@ mod tests {
         ClientContext,
     ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::<Mint, MintClientConfig>::new(
+            FakeFed::<Mint>::new(
                 4,
-                |cfg, db| async { Mint::new(cfg, db) },
-                &[Amount::from_sat(1), Amount::from_sat(10)][..],
+                |cfg, db| async move { Ok(Mint::new(cfg.to_typed().unwrap(), db)) },
+                &ModuleConfigGenParams {
+                    mint_amounts: vec![Amount::from_sat(1), Amount::from_sat(10)],
+                    ..ModuleConfigGenParams::fake_config_gen_params()
+                },
+                &MintConfigGenerator,
             )
-            .await,
+            .await
+            .unwrap(),
         ));
+
         let api = FakeApi { mint: fed.clone() };
 
         let client_config = fed.lock().await.client_cfg().clone();
@@ -545,7 +552,7 @@ mod tests {
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_config, client_context)
+        (fed, client_config.cast().unwrap(), client_context)
     }
 
     async fn issue_tokens<'a>(
@@ -584,7 +591,7 @@ mod tests {
         let (fed, client_config, client_context) = new_mint_and_client().await;
 
         let client = MintClient {
-            config: &client_config,
+            config: client_config,
             context: &client_context,
             secret: DerivableSecret::new(&[], &[]),
         };
@@ -601,7 +608,7 @@ mod tests {
 
         let (fed, client_config, client_context) = new_mint_and_client().await;
         let client = MintClient {
-            config: &client_config,
+            config: client_config,
             context: &client_context,
             secret: DerivableSecret::new(&[], &[]),
         };
@@ -687,10 +694,10 @@ mod tests {
         let db = fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap();
 
         let client: MintClient<'static> = MintClient {
-            config: Box::leak(Box::new(MintClientConfig {
+            config: MintClientConfig {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
-            })),
+            },
             context: Box::leak(Box::new(ClientContext {
                 db: db.into(),
                 api: WsFederationApi::new(vec![]).into(),

@@ -1,3 +1,4 @@
+#![cfg_attr(target_family = "wasm", allow(dead_code))]
 use std::future::Future;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
