@@ -8,6 +8,9 @@ use serde::Serialize;
 
 use crate::cancellable::Cancellable;
 
+#[cfg(not(target_family = "wasm"))]
+pub mod fake;
+
 /// Owned [`PeerConnections`] trait object type
 pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + Unpin + 'static>);
 
