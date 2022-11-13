@@ -214,7 +214,10 @@ pub mod test {
                         for msg_i in 0..NUM_MSGS_PER_MODULE {
                             // add some random jitter
                             if OsRng.gen() {
-                                sleep(Duration::from_millis(1)).await;
+                                // Note that randomized sleep in sender is larger than
+                                // in receiver, to avoid just running with always full
+                                // queues.
+                                sleep(Duration::from_millis(2)).await;
                             }
                             if task_handle.is_shutting_down() {
                                 break;
