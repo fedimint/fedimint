@@ -27,7 +27,6 @@ pub mod db;
 pub mod encoding;
 pub mod macros;
 pub mod module;
-pub mod multiplexed;
 pub mod net;
 pub mod task;
 pub mod tiered;

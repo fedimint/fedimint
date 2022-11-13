@@ -1,20 +1,19 @@
-#![cfg_attr(target_family = "wasm", allow(unused))]
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
     time::Duration,
 };
 
+use async_trait::async_trait;
+use fedimint_api::cancellable::Cancellable;
+use fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-#[cfg(not(target_family = "wasm"))]
 use tokio::{sync::Mutex, time::sleep};
-#[cfg(target_family = "wasm")]
-type Mutex<T> = std::marker::PhantomData<T>;
-
 use tracing::{debug, error};
 
-use crate::{cancellable::Cancellable, net::peers::PeerConnections, PeerId};
+use crate::PeerId;
 
 /// TODO: Use proper ModuleId after modularization is complete
 pub type ModuleId = String;
@@ -22,19 +21,19 @@ pub type ModuleIdRef<'a> = &'a str;
 
 /// A `Msg` that can target a specific destination module
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ModuleMultiplexed<Msg> {
-    pub module: String,
+pub struct ModuleMultiplexed<MuxKey, Msg> {
+    pub key: MuxKey,
     pub msg: Msg,
 }
 
-struct ModuleMultiplexerOutOfOrder<Msg> {
+struct ModuleMultiplexerOutOfOrder<MuxKey, Msg> {
     /// Messages per `ModuleId` in a queue each
-    msgs: HashMap<ModuleId, VecDeque<(PeerId, Msg)>>,
+    msgs: HashMap<MuxKey, VecDeque<(PeerId, Msg)>>,
     /// Track pending messages per peer to avoid a potential DoS
     peer_counts: HashMap<PeerId, u64>,
 }
 
-impl<Msg> Default for ModuleMultiplexerOutOfOrder<Msg> {
+impl<MuxKey, Msg> Default for ModuleMultiplexerOutOfOrder<MuxKey, Msg> {
     fn default() -> Self {
         Self {
             msgs: Default::default(),
@@ -43,12 +42,12 @@ impl<Msg> Default for ModuleMultiplexerOutOfOrder<Msg> {
     }
 }
 
-/// Shared, mutable (wrapped in mutex) data of [`ModuleMultiplexer`].
-struct ModuleMultiplexerInner<Msg> {
+/// Shared, mutable (wrapped in mutex) data of [`PeerConnectionMultiplexer`].
+struct ModuleMultiplexerInner<MuxKey, Msg> {
     /// Underlying connection pool
-    connections: Mutex<PeerConnections<ModuleMultiplexed<Msg>>>,
+    connections: Mutex<PeerConnections<ModuleMultiplexed<MuxKey, Msg>>>,
     /// Messages that arrived before an interested thread asked for them
-    out_of_order: Mutex<ModuleMultiplexerOutOfOrder<Msg>>,
+    out_of_order: Mutex<ModuleMultiplexerOutOfOrder<MuxKey, Msg>>,
 }
 
 /// A wrapper around `AnyPeerConnections` multiplexing communication between multiple modules over it
@@ -58,22 +57,16 @@ struct ModuleMultiplexerInner<Msg> {
 ///
 /// This type is thread-safe and can be cheaply cloned.
 #[derive(Clone)]
-#[cfg(not(target_family = "wasm"))]
-pub struct ModuleMultiplexer<Msg> {
-    inner: Arc<ModuleMultiplexerInner<Msg>>,
+pub struct PeerConnectionMultiplexer<MuxKey, Msg> {
+    inner: Arc<ModuleMultiplexerInner<MuxKey, Msg>>,
 }
 
-#[cfg(target_family = "wasm")]
-pub struct ModuleMultiplexer<Msg> {
-    inner: std::marker::PhantomData<Msg>,
-}
-
-impl<Msg> ModuleMultiplexer<Msg>
+impl<MuxKey, Msg> PeerConnectionMultiplexer<MuxKey, Msg>
 where
     Msg: Serialize + DeserializeOwned + Unpin + Send + Debug,
+    MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone,
 {
-    #[cfg(not(target_family = "wasm"))]
-    pub fn new(connections: PeerConnections<ModuleMultiplexed<Msg>>) -> Self {
+    pub fn new(connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
         Self {
             inner: Arc::new(ModuleMultiplexerInner {
                 connections: Mutex::new(connections),
@@ -81,37 +74,26 @@ where
             }),
         }
     }
+}
 
-    #[cfg(target_family = "wasm")]
-    pub fn new(connections: PeerConnections<ModuleMultiplexed<Msg>>) -> Self {
-        unimplemented!();
-    }
-
-    #[cfg(not(target_family = "wasm"))]
-    pub async fn send(&self, peers: &[PeerId], module: &str, msg: Msg) -> Cancellable<()> {
-        debug!("Sending to {peers:?}: to {module}, {msg:?}");
+#[async_trait]
+impl<MuxKey, Msg> IMuxPeerConnections<MuxKey, Msg> for PeerConnectionMultiplexer<MuxKey, Msg>
+where
+    Msg: Serialize + DeserializeOwned + Unpin + Send + Debug,
+    MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone,
+{
+    async fn send(&self, peers: &[PeerId], key: MuxKey, msg: Msg) -> Cancellable<()> {
+        debug!("Sending to {peers:?}/{key:?}, {msg:?}");
         self.inner
             .connections
             .lock()
             .await
-            .send(
-                peers,
-                ModuleMultiplexed {
-                    module: module.into(),
-                    msg,
-                },
-            )
+            .send(peers, ModuleMultiplexed { key, msg })
             .await
     }
 
-    #[cfg(target_family = "wasm")]
-    pub async fn send(&self, peers: &[PeerId], module: &str, msg: Msg) -> Cancellable<()> {
-        unimplemented!();
-    }
-
-    #[cfg(not(target_family = "wasm"))]
     /// Await receipt of a message from any connected peer.
-    pub async fn receive(&self, module: &str) -> Cancellable<(PeerId, Msg)> {
+    async fn receive(&self, key: MuxKey) -> Cancellable<(PeerId, Msg)> {
         loop {
             // Note: tokio locks are FIFO, so no need to sleep between loop iterations,
             // as each thread should get a chance to check for a message.
@@ -125,7 +107,7 @@ where
             // received item and go into `recv`, possibly blocking indefinitely
             // if no more messages are being delivered.
             let mut out_of_order = self.inner.out_of_order.lock().await;
-            if let Some(queue) = out_of_order.msgs.get_mut(module) {
+            if let Some(queue) = out_of_order.msgs.get_mut(&key) {
                 if let Some(existing) = queue.pop_front() {
                     *out_of_order
                         .peer_counts
@@ -143,7 +125,7 @@ where
                 drop(out_of_order);
 
                 let (peer, new_msg) = connections.receive().await?;
-                if module == new_msg.module {
+                if key == new_msg.key {
                     return Ok((peer, new_msg.msg));
                 }
 
@@ -157,7 +139,7 @@ where
                     *peer_msgs_pending_count += 1;
                     out_of_order
                         .msgs
-                        .entry(new_msg.module.to_owned())
+                        .entry(new_msg.key.clone())
                         .or_default()
                         .push_back((peer, new_msg.msg));
                 } else {
@@ -173,8 +155,7 @@ where
         }
     }
 
-    #[cfg(target_family = "wasm")]
-    pub async fn receive(&self, module: &str) -> Cancellable<(PeerId, Msg)> {
-        unimplemented!();
+    async fn ban_peer(&self, peer: PeerId) {
+        self.inner.connections.lock().await.ban_peer(peer).await;
     }
 }

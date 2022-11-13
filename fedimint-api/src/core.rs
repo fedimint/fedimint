@@ -25,6 +25,15 @@ pub mod server;
 /// of module-specific data.
 pub type ModuleKey = u16;
 
+/// Temporary constant for the modules we already have
+///
+/// To be removed after modularization is complete.
+pub const MODULE_KEY_WALLET: u16 = 0;
+pub const MODULE_KEY_MINT: u16 = 1;
+pub const MODULE_KEY_LN: u16 = 2;
+// not really a module
+pub const MODULE_KEY_GLOBAL: u16 = 1024;
+
 /// Implement `Encodable` and `Decodable` for a "module dyn newtype"
 ///
 /// "Module dyn newtype" is just a "dyn newtype" used by general purpose

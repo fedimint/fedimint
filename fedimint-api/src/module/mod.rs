@@ -11,9 +11,10 @@ use thiserror::Error;
 use crate::cancellable::Cancellable;
 use crate::config::{ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig};
 use crate::db::DatabaseTransaction;
+use crate::encoding::ModuleKey;
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
-use crate::multiplexed::ModuleMultiplexer;
+use crate::net::peers::MuxPeerConnections;
 use crate::task::TaskGroup;
 use crate::{Amount, PeerId};
 
@@ -184,7 +185,7 @@ pub trait FederationModuleConfigGen {
 
     async fn distributed_gen(
         &self,
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ModuleConfigGenParams,

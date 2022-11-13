@@ -6,9 +6,9 @@ use fedimint_api::config::{
     BitcoindRpcCfg, ClientConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
     ServerModuleConfig, TypedServerModuleConfig,
 };
+use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
-use fedimint_api::multiplexed::ModuleMultiplexer;
-use fedimint_api::net::peers::{IPeerConnections, PeerConnections};
+use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
@@ -264,7 +264,7 @@ impl ServerConfig {
     }
 
     pub async fn distributed_gen(
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ServerConfigParams,
@@ -284,7 +284,7 @@ impl ServerConfig {
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
-        let keys = if let Ok(v) = dkg.run_g1("global", connections, &mut rng).await {
+        let keys = if let Ok(v) = dkg.run_g1(MODULE_KEY_GLOBAL, connections, &mut rng).await {
             v
         } else {
             return Ok(Err(Cancelled));

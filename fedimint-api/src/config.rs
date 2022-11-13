@@ -24,7 +24,8 @@ use tbs::Scalar;
 use url::Url;
 
 use crate::cancellable::Cancellable;
-use crate::multiplexed::{ModuleIdRef, ModuleMultiplexer};
+use crate::core::ModuleKey;
+use crate::net::peers::MuxPeerConnections;
 use crate::Amount;
 use crate::PeerId;
 
@@ -434,8 +435,8 @@ where
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     pub async fn run_g2(
         &mut self,
-        module_id: ModuleIdRef<'_>,
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        module_id: ModuleKey,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(module_id, G2Projective::generator(), connections, rng)
@@ -445,8 +446,8 @@ where
     /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     pub async fn run_g1(
         &mut self,
-        module_id: ModuleIdRef<'_>,
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        module_id: ModuleKey,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(module_id, G1Projective::generator(), connections, rng)
@@ -456,9 +457,9 @@ where
     /// Runs the DKG algorithms with our peers
     pub async fn run<G: DkgGroup>(
         &mut self,
-        module_id: ModuleIdRef<'_>,
+        module_id: ModuleKey,
         group: G,
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G>>>
     where

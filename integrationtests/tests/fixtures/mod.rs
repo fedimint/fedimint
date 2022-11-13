@@ -20,7 +20,7 @@ use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
-use fedimint_api::multiplexed::ModuleMultiplexer;
+use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_api::FederationModule;
@@ -36,6 +36,7 @@ use fedimint_server::config::{connect, ServerConfig};
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::consensus::{ConsensusOutcome, ConsensusProposal};
 use fedimint_server::epoch::ConsensusItem;
+use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
@@ -293,7 +294,7 @@ async fn distributed_config(
                     &mut task_group,
                 )
                 .await;
-                let connections = ModuleMultiplexer::new(server_conn);
+                let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
                 let rng = OsRng;
                 let cfg = ServerConfig::distributed_gen(

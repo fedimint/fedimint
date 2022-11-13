@@ -1,4 +1,5 @@
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_api::PeerId;
@@ -58,5 +59,47 @@ where
         Self: Sized + Send + Unpin + 'static,
     {
         PeerConnections(Box::new(self))
+    }
+}
+
+/// Owned [`MuxPeerConnections`] trait object type
+pub struct MuxPeerConnections<MuxKey, Msg>(
+    Arc<dyn IMuxPeerConnections<MuxKey, Msg> + Send + Sync + Unpin + 'static>,
+);
+
+impl<MuxKey, Msg> Deref for MuxPeerConnections<MuxKey, Msg> {
+    type Target = dyn IMuxPeerConnections<MuxKey, Msg> + Send + Sync + Unpin + 'static;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+#[async_trait]
+/// Like [`IPeerConnections`] but with an ability to handle multiple destinations (like modules) per each peer-connection.
+///
+/// Notably, unlike [`IPeerConnections`] implementations need to be thread-safe,
+/// as the primary intendet use should support multiple threads using multiplexed
+/// channel at the same time.
+pub trait IMuxPeerConnections<MuxKey, Msg>
+where
+    Msg: Serialize + DeserializeOwned + Unpin + Send,
+    MuxKey: Serialize + DeserializeOwned + Unpin + Send,
+{
+    /// Send a message to a specific destination at specific peer.
+    async fn send(&self, peers: &[PeerId], mux_key: MuxKey, msg: Msg) -> Cancellable<()>;
+
+    /// Await receipt of a message from any connected peer.
+    async fn receive(&self, mux_key: MuxKey) -> Cancellable<(PeerId, Msg)>;
+
+    /// Removes a peer connection in case of misbehavior
+    async fn ban_peer(&self, peer: PeerId);
+
+    /// Converts the struct to a `PeerConnection` trait object
+    fn into_dyn(self) -> MuxPeerConnections<MuxKey, Msg>
+    where
+        Self: Sized + Send + Sync + Unpin + 'static,
+    {
+        MuxPeerConnections(Arc::new(self))
     }
 }

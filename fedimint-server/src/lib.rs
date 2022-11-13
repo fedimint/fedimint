@@ -42,6 +42,9 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
+/// Implementation of multiplexed peer connections
+pub mod multiplexed;
+
 /// Some abstractions to handle randomness
 mod rng;
 

@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
-use fedimint_api::multiplexed::ModuleMultiplexer;
+use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
+use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimintd::encrypt::*;
 use itertools::Itertools;
 use rand::rngs::OsRng;
@@ -185,7 +186,7 @@ async fn run_dkg(
     let server_conn =
         fedimint_server::config::connect(params.server_dkg.clone(), params.tls.clone(), task_group)
             .await;
-    let connections = ModuleMultiplexer::new(server_conn);
+    let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
     ServerConfig::distributed_gen(&connections, &our_id, &peer_ids, &params, OsRng, task_group)
         .await
         .expect("failed to run DKG to generate configs")
