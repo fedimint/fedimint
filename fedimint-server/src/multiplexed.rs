@@ -19,6 +19,12 @@ use crate::PeerId;
 pub type ModuleId = String;
 pub type ModuleIdRef<'a> = &'a str;
 
+/// Amount of per-peer messages after which we will stop throwing them away.
+///
+/// It's hard to predict how many messages is too many, but we have
+/// to draw the line somewhere.
+pub const MAX_PEER_OUT_OF_ORDER_MESSAGES: u64 = 10000;
+
 /// A `Msg` that can target a specific destination module
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModuleMultiplexed<MuxKey, Msg> {
@@ -135,7 +141,7 @@ where
                 let mut out_of_order = self.inner.out_of_order.lock().await;
                 // TODO: use `raw_entry` to avoid clone once stable
                 let peer_msgs_pending_count = out_of_order.peer_counts.entry(peer).or_default();
-                if *peer_msgs_pending_count < 1000 {
+                if *peer_msgs_pending_count < MAX_PEER_OUT_OF_ORDER_MESSAGES {
                     *peer_msgs_pending_count += 1;
                     out_of_order
                         .msgs
