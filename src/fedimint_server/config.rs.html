@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-eabf764633b9d7be.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-777f3e9583f8c92d.css"><link rel="stylesheet" disabled href="../../static.files/dark-e2f4109f2e82e3af.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c360e709a65bed99.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-c2d2a5dbaed13e6b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-83be770da8fbb54b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-860cb8b69b437763.css"><link rel="stylesheet" disabled href="../../static.files/dark-ca7398001115f6db.css"><link rel="stylesheet" disabled href="../../static.files/ayu-2916eb07452214a6.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-c2d2a5dbaed13e6b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -559,29 +559,101 @@
 <span id="559">559</span>
 <span id="560">560</span>
 <span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
-<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
-<span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
+<span class="kw">use </span>fedimint_api::config::{
+    BitcoindRpcCfg, ClientConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
+    ServerModuleConfig, TypedServerModuleConfig,
+};
+<span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
+<span class="kw">use </span>fedimint_api::multiplexed::ModuleMultiplexer;
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
+<span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleConfig;
+<span class="kw">use </span>fedimint_core::modules::ln::LightningModuleConfigGen;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintConfig;
-<span class="kw">use </span>fedimint_core::modules::wallet::config::WalletConfig;
+<span class="kw">use </span>fedimint_core::modules::mint::MintConfigGenerator;
+<span class="kw">use </span>fedimint_wallet::config::WalletConfig;
+<span class="kw">use </span>fedimint_wallet::WalletConfigGenerator;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>threshold_crypto::G1Projective;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::NumPeers;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
@@ -609,9 +681,16 @@
     <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
 
-    <span class="kw">pub </span>wallet: WalletConfig,
-    <span class="kw">pub </span>mint: MintConfig,
-    <span class="kw">pub </span>ln: LightningModuleConfig,
+    <span class="kw">pub </span>modules: BTreeMap&lt;String, ServerModuleConfig&gt;,
+}
+
+<span class="kw">impl </span>ServerConfig {
+    <span class="kw">pub fn </span>get_module_config&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;T&gt; {
+        <span class="self">self</span>.modules
+            .get(name)
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {name} not found&quot;</span>))<span class="question-mark">?
+            </span>.to_typed()
+    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -625,6 +704,14 @@
     </span><span class="kw">pub </span>name: String,
 }
 
+<span class="kw">pub struct </span>FederationeConfigGenParams {
+    <span class="kw">pub </span>mint_amounts: Vec&lt;Amount&gt;,
+    <span class="kw">pub </span>bitcoin_rpc: BitcoindRpcCfg,
+
+    <span class="doccomment">/// extra options for extra settings and modules
+    </span><span class="kw">pub </span>other: BTreeMap&lt;String, serde_json::Value&gt;,
+}
+
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="doccomment">/// network config for a server
 </span><span class="kw">pub struct </span>ServerConfigParams {
@@ -632,45 +719,134 @@
     <span class="kw">pub </span>hbbft: NetworkConfig,
     <span class="kw">pub </span>api: NetworkConfig,
     <span class="kw">pub </span>server_dkg: NetworkConfig,
-    <span class="kw">pub </span>wallet_dkg: NetworkConfig,
-    <span class="kw">pub </span>lightning_dkg: NetworkConfig,
-    <span class="kw">pub </span>mint_dkg: NetworkConfig,
-    <span class="kw">pub </span>amount_tiers: Vec&lt;Amount&gt;,
+    <span class="comment">// TODO: delete unused dkgs
+    </span><span class="kw">pub </span>amount_tiers: Vec&lt;Amount&gt;,
     <span class="kw">pub </span>federation_name: String,
     <span class="kw">pub </span>bitcoind_rpc: String,
+
+    <span class="doccomment">/// extra options for extra settings and modules
+    </span><span class="kw">pub </span>other: BTreeMap&lt;String, serde_json::Value&gt;,
 }
 
-<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
-</span><span class="kw">impl </span>GenerateConfig <span class="kw">for </span>ServerConfig {
-    <span class="kw">type </span>Params = HashMap&lt;PeerId, ServerConfigParams&gt;;
-    <span class="kw">type </span>ClientConfig = ClientConfig;
-    <span class="kw">type </span>ConfigMessage = (KeyType, DkgMessage&lt;G1Projective&gt;);
-    <span class="kw">type </span>ConfigError = ();
+<span class="kw">impl </span>ServerConfig {
+    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
+        <span class="kw">let </span>nodes = <span class="self">self
+            </span>.peers
+            .iter()
+            .map(|(peer_id, peer)| Node {
+                url: peer.api_addr.clone(),
+                name: <span class="macro">format!</span>(<span class="string">&quot;node #{}&quot;</span>, peer_id),
+            })
+            .collect();
 
-    <span class="kw">fn </span>trusted_dealer_gen(
+        ClientConfig {
+            federation_name: <span class="self">self</span>.federation_name.clone(),
+            nodes,
+            modules: <span class="self">self
+                </span>.modules
+                .iter()
+                .map(|(name, cfg)| {
+                    (
+                        name.clone(),
+                        <span class="kw">match </span>name.as_str() {
+                            <span class="string">&quot;wallet&quot; </span>=&gt; cfg
+                                .to_typed::&lt;WalletConfig&gt;()
+                                .expect(<span class="string">&quot;valid config should not fail&quot;</span>)
+                                .to_client_config(),
+                            <span class="string">&quot;mint&quot; </span>=&gt; cfg
+                                .to_typed::&lt;MintConfig&gt;()
+                                .expect(<span class="string">&quot;valid config should not fail&quot;</span>)
+                                .to_client_config(),
+                            <span class="string">&quot;ln&quot; </span>=&gt; cfg
+                                .to_typed::&lt;LightningModuleConfig&gt;()
+                                .expect(<span class="string">&quot;valid config should not fail&quot;</span>)
+                                .to_client_config(),
+                            other =&gt; <span class="macro">panic!</span>(<span class="string">&quot;module name that was not expected: {other}&quot;</span>),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    <span class="kw">pub fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">if </span><span class="self">self</span>.epoch_sks.public_key_share()
+            != <span class="self">self</span>.epoch_pk_set.public_key_share(identity.to_usize())
+        {
+            <span class="macro">bail!</span>(<span class="string">&quot;Epoch private key doesn&#39;t match pubkey share&quot;</span>);
+        }
+        <span class="kw">if </span><span class="self">self</span>.hbbft_sks.public_key_share()
+            != <span class="self">self</span>.hbbft_pk_set.public_key_share(identity.to_usize())
+        {
+            <span class="macro">bail!</span>(<span class="string">&quot;HBBFT private key doesn&#39;t match pubkey share&quot;</span>);
+        }
+        <span class="kw">if </span><span class="self">self</span>.peers.keys().max().copied().map(|id| id.to_usize()) != <span class="prelude-val">Some</span>(<span class="self">self</span>.peers.len() - <span class="number">1</span>) {
+            <span class="macro">bail!</span>(<span class="string">&quot;Peer ids are not indexed from 0&quot;</span>);
+        }
+        <span class="kw">if </span><span class="self">self</span>.peers.keys().min().copied() != <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)) {
+            <span class="macro">bail!</span>(<span class="string">&quot;Peer ids are not indexed from 0&quot;</span>);
+        }
+
+        <span class="kw">let </span>res: anyhow::Result&lt;Vec&lt;()&gt;&gt; = <span class="self">self
+            </span>.modules
+            .iter()
+            .map(|(name, cfg)| <span class="kw">match </span>name.as_str() {
+                <span class="string">&quot;wallet&quot; </span>=&gt; cfg
+                    .to_typed::&lt;WalletConfig&gt;()
+                    .expect(<span class="string">&quot;valid config should not fail&quot;</span>)
+                    .validate_config(identity),
+                <span class="string">&quot;mint&quot; </span>=&gt; cfg
+                    .to_typed::&lt;MintConfig&gt;()
+                    .expect(<span class="string">&quot;valid config should not fail&quot;</span>)
+                    .validate_config(identity),
+                <span class="string">&quot;ln&quot; </span>=&gt; cfg
+                    .to_typed::&lt;LightningModuleConfig&gt;()
+                    .expect(<span class="string">&quot;valid config should not fail&quot;</span>)
+                    .validate_config(identity),
+                other =&gt; <span class="macro">panic!</span>(<span class="string">&quot;module name that was not expected: {other}&quot;</span>),
+            })
+            .collect();
+
+        res<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
+        params: <span class="kw-2">&amp;</span>HashMap&lt;PeerId, ServerConfigParams&gt;,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
-    ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
+    ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, ClientConfig) {
         <span class="kw">let </span>netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
         <span class="kw">let </span>epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
-        <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(
-            peers,
-            <span class="kw-2">&amp;</span>BitcoindRpcCfg {
+
+        <span class="kw">let </span>module_cfg_gen_params = ModuleConfigGenParams {
+            mint_amounts: peer0.amount_tiers.clone(),
+            <span class="comment">// TODO: FIXME: meh
+            </span>bitcoin_rpc: BitcoindRpcCfg {
                 btc_rpc_address: peer0.bitcoind_rpc.clone(),
                 btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
                 btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
             },
-            <span class="kw-2">&amp;mut </span>rng,
-        );
-        <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) =
-            MintConfig::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>peer0.amount_tiers, <span class="kw-2">&amp;mut </span>rng);
-        <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) =
-            LightningModuleConfig::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng);
+            other: peer0.other.clone(),
+        };
+        <span class="kw">let </span>module_config_gens: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;)&gt; = <span class="macro">vec!</span>[
+            (
+                <span class="string">&quot;wallet&quot;</span>,
+                Box::new(WalletConfigGenerator) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;,
+            ),
+            (<span class="string">&quot;mint&quot;</span>, Box::new(MintConfigGenerator)),
+            (<span class="string">&quot;ln&quot;</span>, Box::new(LightningModuleConfigGen)),
+        ];
+
+        <span class="kw">let </span>module_configs: Vec&lt;<span class="kw">_</span>&gt; = module_config_gens
+            .iter()
+            .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>module_cfg_gen_params)))
+            .collect();
 
         <span class="kw">let </span>server_config = netinfo
             .iter()
@@ -688,9 +864,10 @@
                     hbbft_pk_set: netinf.public_key_set().clone(),
                     epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
                     epoch_pk_set: epoch_keys.public_key_set().clone(),
-                    wallet: wallet_server_cfg[<span class="kw-2">&amp;</span>id].clone(),
-                    mint: mint_server_cfg[<span class="kw-2">&amp;</span>id].clone(),
-                    ln: ln_server_cfg[<span class="kw-2">&amp;</span>id].clone(),
+                    modules: module_configs
+                        .iter()
+                        .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">0</span>[<span class="kw-2">&amp;</span>id].clone()))
+                        .collect(),
                 };
                 (id, config)
             })
@@ -704,81 +881,37 @@
         <span class="kw">let </span>client_config = ClientConfig {
             federation_name: peer0.federation_name.clone(),
             nodes: peer0.api.nodes(<span class="string">&quot;ws://&quot;</span>, names),
-            mint: mint_client_cfg,
-            wallet: wallet_client_cfg,
-            ln: ln_client_cfg,
+            modules: module_configs
+                .iter()
+                .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">1</span>.clone()))
+                .collect(),
         };
 
         (server_config, client_config)
     }
 
-    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ClientConfig {
-        <span class="kw">let </span>nodes = <span class="self">self
-            </span>.peers
-            .iter()
-            .map(|(peer_id, peer)| Node {
-                url: peer.api_addr.clone(),
-                name: <span class="macro">format!</span>(<span class="string">&quot;node #{}&quot;</span>, peer_id),
-            })
-            .collect();
-        ClientConfig {
-            federation_name: <span class="self">self</span>.federation_name.clone(),
-            nodes,
-            mint: <span class="self">self</span>.mint.to_client_config(),
-            wallet: <span class="self">self</span>.wallet.to_client_config(),
-            ln: <span class="self">self</span>.ln.to_client_config(),
-        }
-    }
-
-    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) {
-        <span class="macro">assert_eq!</span>(
-            <span class="self">self</span>.epoch_sks.public_key_share(),
-            <span class="self">self</span>.epoch_pk_set.public_key_share(identity.to_usize()),
-            <span class="string">&quot;Epoch private key doesn&#39;t match pubkey share&quot;
-        </span>);
-        <span class="macro">assert_eq!</span>(
-            <span class="self">self</span>.hbbft_sks.public_key_share(),
-            <span class="self">self</span>.hbbft_pk_set.public_key_share(identity.to_usize()),
-            <span class="string">&quot;HBBFT private key doesn&#39;t match pubkey share&quot;
-        </span>);
-        <span class="macro">assert_eq!</span>(
-            <span class="self">self</span>.peers.keys().max().copied().map(|id| id.to_usize()),
-            <span class="prelude-val">Some</span>(<span class="self">self</span>.peers.len() - <span class="number">1</span>),
-            <span class="string">&quot;Peer ids are not indexed from 0&quot;
-        </span>);
-        <span class="macro">assert_eq!</span>(
-            <span class="self">self</span>.peers.keys().min().copied(),
-            <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)),
-            <span class="string">&quot;Peer ids are not indexed from 0&quot;
-        </span>);
-
-        <span class="self">self</span>.mint.validate_config(identity);
-        <span class="self">self</span>.ln.validate_config(identity);
-        <span class="self">self</span>.wallet.validate_config(identity);
-    }
-
-    <span class="kw">async fn </span>distributed_gen(
-        connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;<span class="self">Self</span>::ConfigMessage&gt;,
+    <span class="kw">pub async fn </span>distributed_gen(
+        connections: <span class="kw-2">&amp;</span>ModuleMultiplexer&lt;DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
+        params: <span class="kw-2">&amp;</span>ServerConfigParams,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig)&gt;, <span class="self">Self</span>::ConfigError&gt; {
+    ) -&gt; anyhow::Result&lt;Cancellable&lt;(<span class="self">Self</span>, ClientConfig)&gt;&gt; {
         <span class="comment">// in case we are running by ourselves, avoid DKG
         </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
-            <span class="kw">let </span>(server, client) = <span class="self">Self</span>::trusted_dealer_gen(peers, params, rng);
+            <span class="kw">let </span>(server, client) =
+                <span class="self">Self</span>::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>HashMap::from([(<span class="kw-2">*</span>our_id, params.clone())]), rng);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server[our_id].clone(), client)));
         }
         <span class="macro">info!</span>(<span class="string">&quot;Peer {} running distributed key generation...&quot;</span>, our_id);
 
-        <span class="kw">let </span>params = params[our_id].clone();
         <span class="comment">// hbbft uses a lower threshold of signing keys (f+1)
         </span><span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
         dkg.add(KeyType::Epoch, peers.threshold());
 
         <span class="comment">// run DKG for epoch and hbbft keys
-        </span><span class="kw">let </span>keys = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = dkg.run_g1(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
+        </span><span class="kw">let </span>keys = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = dkg.run_g1(<span class="string">&quot;global&quot;</span>, connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
             v
         } <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
@@ -786,48 +919,45 @@
         <span class="kw">let </span>(hbbft_pks, hbbft_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
         <span class="kw">let </span>(epoch_pks, epoch_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>wallet = connect(params.wallet_dkg.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
-        <span class="kw">let </span>bitcoin = <span class="kw-2">&amp;</span>BitcoindRpcCfg {
-            btc_rpc_address: params.bitcoind_rpc.clone(),
-            btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
-            btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
+        <span class="kw">let </span>module_cfg_gen_params = ModuleConfigGenParams {
+            mint_amounts: params.amount_tiers.clone(),
+            bitcoin_rpc: BitcoindRpcCfg {
+                btc_rpc_address: params.bitcoind_rpc.clone(),
+                btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
+                btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
+            },
+            other: params.other.clone(),
         };
-        <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) =
-            WalletConfig::distributed_gen(<span class="kw-2">&amp;mut </span>wallet, our_id, peers, bitcoin, <span class="kw-2">&amp;mut </span>rng, task_group)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;wallet error&quot;</span>)
-        {
-            v
-        } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
-        };
+        <span class="kw">let </span>module_config_gens: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;)&gt; = <span class="macro">vec!</span>[
+            (
+                <span class="string">&quot;wallet&quot;</span>,
+                Box::new(WalletConfigGenerator) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;,
+            ),
+            (<span class="string">&quot;mint&quot;</span>, Box::new(MintConfigGenerator)),
+            (<span class="string">&quot;ln&quot;</span>, Box::new(LightningModuleConfigGen)),
+        ];
 
-        <span class="kw">let </span><span class="kw-2">mut </span>ln = connect(params.lightning_dkg.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
-        <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = LightningModuleConfig::distributed_gen(
-            <span class="kw-2">&amp;mut </span>ln,
-            our_id,
-            peers,
-            <span class="kw-2">&amp;</span>(),
-            <span class="kw-2">&amp;mut </span>rng,
-            task_group,
-        )
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>{
-            v
-        } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
-        };
+        <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, (<span class="kw">_</span>, <span class="kw">_</span>))&gt; = <span class="macro">vec!</span>[];
 
-        <span class="kw">let </span><span class="kw-2">mut </span>mint = connect(params.mint_dkg.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
-        <span class="kw">let </span>param = <span class="kw-2">&amp;</span>params.amount_tiers;
-        <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) =
-            MintConfig::distributed_gen(<span class="kw-2">&amp;mut </span>mint, our_id, peers, param, <span class="kw-2">&amp;mut </span>rng, task_group)
-                .<span class="kw">await</span><span class="question-mark">?
-        </span>{
-            v
-        } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
-        };
+        <span class="kw">for </span>(name, gen) <span class="kw">in </span>module_config_gens {
+            module_cfgs.push((
+                name,
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfgs) = gen
+                    .distributed_gen(
+                        connections,
+                        our_id,
+                        peers,
+                        <span class="kw-2">&amp;</span>module_cfg_gen_params,
+                        task_group,
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?
+                </span>{
+                    cfgs
+                } <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
+                },
+            ));
+        }
 
         <span class="kw">let </span>server = ServerConfig {
             federation_name: params.federation_name.clone(),
@@ -841,17 +971,19 @@
             hbbft_pk_set: hbbft_pks,
             epoch_sks: SerdeSecret(epoch_sks),
             epoch_pk_set: epoch_pks,
-            wallet: wallet_server_cfg,
-            mint: mint_server_cfg,
-            ln: ln_server_cfg,
+            modules: module_cfgs
+                .iter()
+                .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">0</span>.clone()))
+                .collect(),
         };
 
         <span class="kw">let </span>client = ClientConfig {
-            federation_name: params.federation_name,
-            nodes: params.api.nodes(<span class="string">&quot;ws://&quot;</span>, params.tls.peer_names),
-            mint: mint_client_cfg,
-            wallet: wallet_client_cfg,
-            ln: ln_client_cfg,
+            federation_name: params.federation_name.clone(),
+            nodes: params.api.nodes(<span class="string">&quot;ws://&quot;</span>, params.tls.peer_names.clone()),
+            modules: module_cfgs
+                .iter()
+                .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">1</span>.clone()))
+                .collect(),
         };
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server, client)))
@@ -956,12 +1088,10 @@
             hbbft: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">0</span>, peers),
             api: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">1</span>, peers),
             server_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">2</span>, peers),
-            wallet_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">3</span>, peers),
-            lightning_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">4</span>, peers),
-            mint_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">5</span>, peers),
             amount_tiers,
             federation_name,
             bitcoind_rpc,
+            other: BTreeMap::new(),
         }
     }
 
@@ -1121,4 +1251,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (42325c525 2022-11-11)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-3a0b9947ba1bd99a.js" data-settings-css="settings-a66f7524084a489a.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (6284998a2 2022-11-12)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

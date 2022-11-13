@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/wallet/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-eabf764633b9d7be.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-777f3e9583f8c92d.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e2f4109f2e82e3af.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-c360e709a65bed99.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-c2d2a5dbaed13e6b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/wallet/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-83be770da8fbb54b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-860cb8b69b437763.css"><link rel="stylesheet" disabled href="../../../static.files/dark-ca7398001115f6db.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-2916eb07452214a6.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-c2d2a5dbaed13e6b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -414,6 +414,9 @@
 <span id="414">414</span>
 <span id="415">415</span>
 <span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>db::PegInKey;
@@ -436,7 +439,7 @@
 <span class="doccomment">/// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
 </span><span class="kw">pub struct </span>WalletClient&lt;<span class="lifetime">&#39;c</span>&gt; {
-    <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>WalletClientConfig,
+    <span class="kw">pub </span>config: WalletClientConfig,
     <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
 }
 
@@ -591,7 +594,7 @@
     <span class="kw">use </span>bitcoin::hashes::sha256;
     <span class="kw">use </span>bitcoin::{Address, Txid};
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
+    <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::task::TaskGroup;
     <span class="kw">use </span>fedimint_api::{Feerate, OutPoint, TransactionId};
@@ -603,6 +606,7 @@
     <span class="kw">use </span>fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     <span class="kw">use </span>fedimint_core::modules::wallet::{
         PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
+        WalletConfigGenerator,
     };
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
@@ -614,7 +618,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClient;
     <span class="kw">use </span><span class="kw">crate</span>::ClientContext;
 
-    <span class="kw">type </span>Fed = FakeFed&lt;Wallet, WalletClientConfig&gt;;
+    <span class="kw">type </span>Fed = FakeFed&lt;Wallet&gt;;
     <span class="kw">type </span>SharedFed = Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;;
 
     <span class="kw">struct </span>FakeApi {
@@ -702,29 +706,26 @@
         <span class="kw">let </span>btc_rpc_controller = btc_rpc.controller();
 
         <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::&lt;Wallet, WalletClientConfig&gt;::new(
+            FakeFed::&lt;Wallet&gt;::new(
                 <span class="number">4</span>,
                 <span class="kw">move </span>|cfg, db| {
                     <span class="kw">let </span><span class="kw-2">mut </span>task_group = task_group.clone();
                     <span class="kw">let </span>btc_rpc_clone = btc_rpc.clone();
                     <span class="kw">async move </span>{
-                        Wallet::new_with_bitcoind(
-                            cfg,
+                        <span class="prelude-val">Ok</span>(Wallet::new_with_bitcoind(
+                            cfg.to_typed().unwrap(),
                             db,
                             btc_rpc_clone.clone().into(),
                             <span class="kw-2">&amp;mut </span>task_group,
                         )
-                        .<span class="kw">await
-                        </span>.unwrap()
+                        .<span class="kw">await</span><span class="question-mark">?</span>)
                     }
                 },
-                <span class="kw-2">&amp;</span>BitcoindRpcCfg {
-                    btc_rpc_address: <span class="string">&quot;127.0.0.1&quot;</span>.into(),
-                    btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
-                    btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
-                },
+                <span class="kw-2">&amp;</span>ModuleConfigGenParams::fake_config_gen_params(),
+                <span class="kw-2">&amp;</span>WalletConfigGenerator,
             )
-            .<span class="kw">await</span>,
+            .<span class="kw">await
+            </span>.unwrap(),
         ));
 
         <span class="kw">let </span>api = FakeApi { _mint: fed.clone() }.into();
@@ -736,7 +737,12 @@
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_config, client, btc_rpc_controller)
+        (
+            fed,
+            client_config.cast().unwrap(),
+            client,
+            btc_rpc_controller,
+        )
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
@@ -745,7 +751,7 @@
         <span class="kw">let </span>(fed, client_config, client_context, btc_rpc) =
             new_mint_and_client(<span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span>;
         <span class="kw">let </span>_client = WalletClient {
-            config: <span class="kw-2">&amp;</span>client_config,
+            config: client_config,
             context: <span class="kw-2">&amp;</span>client_context,
         };
 
@@ -831,4 +837,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (42325c525 2022-11-11)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-3a0b9947ba1bd99a.js" data-settings-css="settings-a66f7524084a489a.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (6284998a2 2022-11-12)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

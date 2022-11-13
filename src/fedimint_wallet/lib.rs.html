@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-eabf764633b9d7be.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-777f3e9583f8c92d.css"><link rel="stylesheet" disabled href="../../static.files/dark-e2f4109f2e82e3af.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c360e709a65bed99.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-c2d2a5dbaed13e6b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_wallet/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-83be770da8fbb54b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-860cb8b69b437763.css"><link rel="stylesheet" disabled href="../../static.files/dark-ca7398001115f6db.css"><link rel="stylesheet" disabled href="../../static.files/ayu-2916eb07452214a6.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-74087aa2e88f4475.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-c2d2a5dbaed13e6b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_wallet/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -1277,12 +1277,132 @@
 <span id="1277">1277</span>
 <span id="1278">1278</span>
 <span id="1279">1279</span>
+<span id="1280">1280</span>
+<span id="1281">1281</span>
+<span id="1282">1282</span>
+<span id="1283">1283</span>
+<span id="1284">1284</span>
+<span id="1285">1285</span>
+<span id="1286">1286</span>
+<span id="1287">1287</span>
+<span id="1288">1288</span>
+<span id="1289">1289</span>
+<span id="1290">1290</span>
+<span id="1291">1291</span>
+<span id="1292">1292</span>
+<span id="1293">1293</span>
+<span id="1294">1294</span>
+<span id="1295">1295</span>
+<span id="1296">1296</span>
+<span id="1297">1297</span>
+<span id="1298">1298</span>
+<span id="1299">1299</span>
+<span id="1300">1300</span>
+<span id="1301">1301</span>
+<span id="1302">1302</span>
+<span id="1303">1303</span>
+<span id="1304">1304</span>
+<span id="1305">1305</span>
+<span id="1306">1306</span>
+<span id="1307">1307</span>
+<span id="1308">1308</span>
+<span id="1309">1309</span>
+<span id="1310">1310</span>
+<span id="1311">1311</span>
+<span id="1312">1312</span>
+<span id="1313">1313</span>
+<span id="1314">1314</span>
+<span id="1315">1315</span>
+<span id="1316">1316</span>
+<span id="1317">1317</span>
+<span id="1318">1318</span>
+<span id="1319">1319</span>
+<span id="1320">1320</span>
+<span id="1321">1321</span>
+<span id="1322">1322</span>
+<span id="1323">1323</span>
+<span id="1324">1324</span>
+<span id="1325">1325</span>
+<span id="1326">1326</span>
+<span id="1327">1327</span>
+<span id="1328">1328</span>
+<span id="1329">1329</span>
+<span id="1330">1330</span>
+<span id="1331">1331</span>
+<span id="1332">1332</span>
+<span id="1333">1333</span>
+<span id="1334">1334</span>
+<span id="1335">1335</span>
+<span id="1336">1336</span>
+<span id="1337">1337</span>
+<span id="1338">1338</span>
+<span id="1339">1339</span>
+<span id="1340">1340</span>
+<span id="1341">1341</span>
+<span id="1342">1342</span>
+<span id="1343">1343</span>
+<span id="1344">1344</span>
+<span id="1345">1345</span>
+<span id="1346">1346</span>
+<span id="1347">1347</span>
+<span id="1348">1348</span>
+<span id="1349">1349</span>
+<span id="1350">1350</span>
+<span id="1351">1351</span>
+<span id="1352">1352</span>
+<span id="1353">1353</span>
+<span id="1354">1354</span>
+<span id="1355">1355</span>
+<span id="1356">1356</span>
+<span id="1357">1357</span>
+<span id="1358">1358</span>
+<span id="1359">1359</span>
+<span id="1360">1360</span>
+<span id="1361">1361</span>
+<span id="1362">1362</span>
+<span id="1363">1363</span>
+<span id="1364">1364</span>
+<span id="1365">1365</span>
+<span id="1366">1366</span>
+<span id="1367">1367</span>
+<span id="1368">1368</span>
+<span id="1369">1369</span>
+<span id="1370">1370</span>
+<span id="1371">1371</span>
+<span id="1372">1372</span>
+<span id="1373">1373</span>
+<span id="1374">1374</span>
+<span id="1375">1375</span>
+<span id="1376">1376</span>
+<span id="1377">1377</span>
+<span id="1378">1378</span>
+<span id="1379">1379</span>
+<span id="1380">1380</span>
+<span id="1381">1381</span>
+<span id="1382">1382</span>
+<span id="1383">1383</span>
+<span id="1384">1384</span>
+<span id="1385">1385</span>
+<span id="1386">1386</span>
+<span id="1387">1387</span>
+<span id="1388">1388</span>
+<span id="1389">1389</span>
+<span id="1390">1390</span>
+<span id="1391">1391</span>
+<span id="1392">1392</span>
+<span id="1393">1393</span>
+<span id="1394">1394</span>
+<span id="1395">1395</span>
+<span id="1396">1396</span>
+<span id="1397">1397</span>
+<span id="1398">1398</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
 <span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -1294,14 +1414,24 @@
     Transaction, TxIn, TxOut, Txid,
 };
 <span class="kw">use </span>bitcoin::{PackedLockTime, Sequence};
+<span class="kw">use </span>config::WalletClientConfig;
+<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_api::config::{
+    ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    TypedClientModuleConfig, TypedServerModuleConfig,
+};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
+<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{api_endpoint, IntoModuleError, TransactionItemAmount};
+<span class="kw">use </span>fedimint_api::module::{
+    api_endpoint, FederationModuleConfigGen, IntoModuleError, TransactionItemAmount,
+};
 <span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
+<span class="kw">use </span>fedimint_api::multiplexed::ModuleMultiplexer;
 <span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_api::{FederationModule, Feerate, InputMeta, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_bitcoind::BitcoindRpc;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
@@ -1422,6 +1552,114 @@
 <span class="doccomment">/// Contains the Bitcoin transaction id of the transaction created by the withdraw request
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutOutcome(<span class="kw">pub </span>bitcoin::Txid);
+
+<span class="kw">pub struct </span>WalletConfigGenerator;
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>FederationModuleConfigGen <span class="kw">for </span>WalletConfigGenerator {
+    <span class="kw">fn </span>trusted_dealer_gen(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+    ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
+        <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
+
+        <span class="kw">let </span>btc_pegin_keys = peers
+            .iter()
+            .map(|<span class="kw-2">&amp;</span>id| (id, secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng)))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">let </span>wallet_cfg: BTreeMap&lt;PeerId, WalletConfig&gt; = btc_pegin_keys
+            .iter()
+            .map(|(id, (sk, <span class="kw">_</span>))| {
+                <span class="kw">let </span>cfg = WalletConfig::new(
+                    btc_pegin_keys
+                        .iter()
+                        .map(|(peer_id, (<span class="kw">_</span>, pk))| (<span class="kw-2">*</span>peer_id, CompressedPublicKey { key: <span class="kw-2">*</span>pk }))
+                        .collect(),
+                    <span class="kw-2">*</span>sk,
+                    peers.threshold(),
+                    params.bitcoin_rpc.clone(),
+                );
+                (<span class="kw-2">*</span>id, cfg)
+            })
+            .collect();
+
+        <span class="kw">let </span>descriptor = wallet_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].peg_in_descriptor.clone();
+        <span class="kw">let </span>client_cfg = WalletClientConfig::new(descriptor);
+
+        (
+            wallet_cfg
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        serde_json::to_value(v)
+                            .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
+                            .into(),
+                    )
+                })
+                .collect(),
+            serde_json::to_value(client_cfg)
+                .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
+                .into(),
+        )
+    }
+
+    <span class="kw">async fn </span>distributed_gen(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        connections: <span class="kw-2">&amp;</span>ModuleMultiplexer&lt;DkgPeerMsg&gt;,
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; anyhow::Result&lt;Cancellable&lt;(ServerModuleConfig, ClientModuleConfig)&gt;&gt; {
+        <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
+        <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+        <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = BTreeMap::new();
+
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(Cancelled) = connections
+            .send(peers, <span class="string">&quot;wallet&quot;</span>, DkgPeerMsg::PublicKey(our_key.key))
+            .<span class="kw">await
+        </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
+        }
+
+        peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
+        <span class="kw">while </span>peer_peg_in_keys.len() &lt; peers.len() {
+            <span class="kw">match </span>connections.receive(<span class="string">&quot;wallet&quot;</span>).<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>((peer, DkgPeerMsg::PublicKey(key))) =&gt; {
+                    peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
+                }
+                <span class="prelude-val">Ok</span>((peer, msg)) =&gt; {
+                    <span class="macro">bail!</span>(<span class="string">&quot;Invalid message received from: {peer}: {msg:?}&quot;</span>);
+                }
+                <span class="kw">_ </span>=&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
+                }
+            }
+        }
+
+        <span class="kw">let </span>wallet_cfg = WalletConfig::new(
+            peer_peg_in_keys,
+            sk,
+            peers.threshold(),
+            params.bitcoin_rpc.clone(),
+        );
+        <span class="kw">let </span>client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
+
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((wallet_cfg.to_erased(), client_cfg.to_erased())))
+    }
+
+    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+        <span class="prelude-val">Ok</span>(config.to_typed::&lt;WalletConfig&gt;()<span class="question-mark">?</span>.to_client_config())
+    }
+
+    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
+        config.to_typed::&lt;WalletConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
+    }
+}
 
 <span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Wallet {
@@ -2557,4 +2795,4 @@
 <span class="doccomment">/// **WARNING**: this is only intended to be used for testing
 </span><span class="kw">impl </span>Eq <span class="kw">for </span>WalletError {}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (42325c525 2022-11-11)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-3a0b9947ba1bd99a.js" data-settings-css="settings-a66f7524084a489a.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (6284998a2 2022-11-12)" data-search-js="search-39ee4160c7dc16c9.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
