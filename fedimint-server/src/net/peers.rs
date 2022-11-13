@@ -12,7 +12,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::Node;
-use fedimint_api::net::peers::PeerConnections;
+use fedimint_api::net::peers::IPeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
 use futures::future::select_all;
@@ -228,7 +228,7 @@ impl PeerSlice for Target<PeerId> {
 }
 
 #[async_trait]
-impl<T> PeerConnections<T> for ReconnectPeerConnections<T>
+impl<T> IPeerConnections<T> for ReconnectPeerConnections<T>
 where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
@@ -630,7 +630,7 @@ mod tests {
     use crate::net::connect::mock::MockNetwork;
     use crate::net::connect::Connector;
     use crate::net::peers::{
-        ConnectionConfig, NetworkConfig, PeerConnections, ReconnectPeerConnections,
+        ConnectionConfig, IPeerConnections, NetworkConfig, ReconnectPeerConnections,
     };
 
     async fn timeout<F, T>(f: F) -> Option<T>

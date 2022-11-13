@@ -14,7 +14,7 @@ type Mutex<T> = std::marker::PhantomData<T>;
 
 use tracing::{debug, error};
 
-use crate::{cancellable::Cancellable, net::peers::AnyPeerConnections, PeerId};
+use crate::{cancellable::Cancellable, net::peers::PeerConnections, PeerId};
 
 /// TODO: Use proper ModuleId after modularization is complete
 pub type ModuleId = String;
@@ -46,7 +46,7 @@ impl<Msg> Default for ModuleMultiplexerOutOfOrder<Msg> {
 /// Shared, mutable (wrapped in mutex) data of [`ModuleMultiplexer`].
 struct ModuleMultiplexerInner<Msg> {
     /// Underlying connection pool
-    connections: Mutex<AnyPeerConnections<ModuleMultiplexed<Msg>>>,
+    connections: Mutex<PeerConnections<ModuleMultiplexed<Msg>>>,
     /// Messages that arrived before an interested thread asked for them
     out_of_order: Mutex<ModuleMultiplexerOutOfOrder<Msg>>,
 }
@@ -73,7 +73,7 @@ where
     Msg: Serialize + DeserializeOwned + Unpin + Send + Debug,
 {
     #[cfg(not(target_family = "wasm"))]
-    pub fn new(connections: AnyPeerConnections<ModuleMultiplexed<Msg>>) -> Self {
+    pub fn new(connections: PeerConnections<ModuleMultiplexed<Msg>>) -> Self {
         Self {
             inner: Arc::new(ModuleMultiplexerInner {
                 connections: Mutex::new(connections),
@@ -83,7 +83,7 @@ where
     }
 
     #[cfg(target_family = "wasm")]
-    pub fn new(connections: AnyPeerConnections<ModuleMultiplexed<Msg>>) -> Self {
+    pub fn new(connections: PeerConnections<ModuleMultiplexed<Msg>>) -> Self {
         unimplemented!();
     }
 

@@ -8,7 +8,7 @@ use fedimint_api::config::{
 };
 use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::multiplexed::ModuleMultiplexer;
-use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::net::peers::{IPeerConnections, PeerConnections};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
@@ -26,7 +26,6 @@ use tokio_rustls::rustls;
 use tracing::info;
 use url::Url;
 
-use crate::fedimint_api::net::peers::PeerConnections;
 use crate::fedimint_api::NumPeers;
 use crate::net::connect::Connector;
 use crate::net::connect::TlsConfig;
@@ -543,7 +542,7 @@ pub async fn connect<T>(
     network: NetworkConfig,
     certs: TlsConfig,
     task_group: &mut TaskGroup,
-) -> AnyPeerConnections<T>
+) -> PeerConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
