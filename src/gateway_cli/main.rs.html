@@ -204,6 +204,10 @@
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
@@ -390,10 +394,14 @@
 
     <span class="kw">match </span>response.status() {
         reqwest::StatusCode::OK =&gt; {
-            <span class="kw">let </span>val: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>response.text().<span class="kw">await</span>.unwrap())
-                .expect(<span class="string">&quot;failed to parse response&quot;</span>);
-            <span class="kw">let </span>formatted = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">&quot;failed to format response&quot;</span>);
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, formatted)
+            <span class="kw">let </span>text = response.text().<span class="kw">await</span>.expect(<span class="string">&quot;Failed to read response body&quot;</span>);
+            <span class="kw">if </span>!text.is_empty() {
+                <span class="kw">let </span>val: serde_json::Value =
+                    serde_json::from_str(<span class="kw-2">&amp;</span>text).expect(<span class="string">&quot;failed to parse response as json&quot;</span>);
+                <span class="kw">let </span>formatted =
+                    serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">&quot;failed to format response&quot;</span>);
+                <span class="macro">println!</span>(<span class="string">&quot;\n{}&quot;</span>, formatted)
+            }
         }
         <span class="kw">_ </span>=&gt; {
             <span class="macro">println!</span>(<span class="string">&quot;\nError: {}&quot;</span>, <span class="kw-2">&amp;</span>response.text().<span class="kw">await</span>.unwrap());

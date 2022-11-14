@@ -237,7 +237,6 @@
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
@@ -282,8 +281,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ client, id })
     }
 
-    <span class="doccomment">/// Fetch all coins minted for this gateway by the federation
-    </span><span class="kw">pub async fn </span>fetch_all_coins(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+    <span class="kw">async fn </span>fetch_all_coins(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">for </span>fetch_result <span class="kw">in </span><span class="self">self</span>.client.fetch_all_coins().<span class="kw">await </span>{
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = fetch_result {
                 <span class="macro">debug!</span>(error = %e, <span class="string">&quot;Fetching coins failed&quot;</span>)
@@ -373,6 +371,8 @@
         payment_hash: <span class="kw-2">&amp;</span>sha256::Hash,
         invoice_amount: <span class="kw-2">&amp;</span>Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
+        <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
+
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>(out_point, contract_id) = <span class="self">self
             </span>.client
@@ -454,6 +454,8 @@
         amount: bitcoin::Amount,
         address: Address,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
+
         <span class="kw">let </span>rng = rand::rngs::OsRng;
 
         <span class="kw">let </span>peg_out = <span class="self">self
@@ -469,11 +471,7 @@
     }
 
     <span class="kw">pub async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
-        <span class="self">self</span>.client
-            .fetch_all_coins()
-            .<span class="kw">await
-            </span>.into_iter()
-            .collect::&lt;std::result::Result&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+        <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.client.coins().total_amount())
     }

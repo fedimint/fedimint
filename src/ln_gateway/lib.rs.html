@@ -327,12 +327,6 @@
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -583,12 +577,6 @@
         <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were interrupted
         </span><span class="kw">loop </span>{
             <span class="kw">let </span>least_wait_until = Instant::now() + Duration::from_millis(<span class="number">100</span>);
-
-            <span class="comment">// Sync wallet for the default federation
-            // TODO: We should sync wallets for all the federation clients
-            </span><span class="self">self</span>.select_actor(<span class="self">self</span>.config.default_federation.clone())<span class="question-mark">?
-                </span>.fetch_all_coins()
-                .<span class="kw">await</span>;
 
             <span class="comment">// Handle messages from webserver and plugin
             </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(msg) = <span class="self">self</span>.receiver.try_recv() {
