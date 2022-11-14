@@ -1,6 +1,6 @@
 //! Implements a connection manager for communication with other federation members
 //!
-//! The main interface is [`PeerConnections`] and its main implementation is
+//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
 //! [`ReconnectPeerConnections`], see these for details.
 
 use std::cmp::min;
@@ -12,7 +12,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::Node;
-use fedimint_api::net::peers::PeerConnections;
+use fedimint_api::net::peers::IPeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
 use futures::future::select_all;
@@ -228,7 +228,7 @@ impl PeerSlice for Target<PeerId> {
 }
 
 #[async_trait]
-impl<T> PeerConnections<T> for ReconnectPeerConnections<T>
+impl<T> IPeerConnections<T> for ReconnectPeerConnections<T>
 where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
@@ -625,12 +625,11 @@ mod tests {
     use fedimint_api::task::TaskGroup;
     use fedimint_api::PeerId;
     use futures::Future;
-    use tracing_subscriber::EnvFilter;
 
     use crate::net::connect::mock::MockNetwork;
     use crate::net::connect::Connector;
     use crate::net::peers::{
-        ConnectionConfig, NetworkConfig, PeerConnections, ReconnectPeerConnections,
+        ConnectionConfig, IPeerConnections, NetworkConfig, ReconnectPeerConnections,
     };
 
     async fn timeout<F, T>(f: F) -> Option<T>
@@ -640,14 +639,8 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(100), f).await.ok()
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_connect() {
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,fedimint::net=trace")),
-            )
-            .init();
         let task_group = TaskGroup::new();
 
         {

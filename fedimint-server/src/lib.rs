@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use config::ServerConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
@@ -24,7 +24,7 @@ use crate::consensus::{
     ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
 };
 use crate::db::{EpochHistoryKey, LastEpochKey};
-use crate::fedimint_api::net::peers::PeerConnections;
+use crate::fedimint_api::net::peers::IPeerConnections;
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::PeerSlice;
 use crate::net::peers::{PeerConnector, ReconnectPeerConnections};
@@ -42,6 +42,9 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
+/// Implementation of multiplexed peer connections
+pub mod multiplexed;
+
 /// Some abstractions to handle randomness
 mod rng;
 
@@ -57,7 +60,7 @@ pub enum EpochMessage {
 
 pub struct FedimintServer {
     pub consensus: Arc<FedimintConsensus>,
-    pub connections: AnyPeerConnections<EpochMessage>,
+    pub connections: PeerConnections<EpochMessage>,
     pub cfg: ServerConfig,
     pub hbbft: HoneyBadger<Vec<ConsensusItem>, PeerId>,
     pub api: Arc<dyn IFederationApi>,

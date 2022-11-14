@@ -22,6 +22,7 @@ use fedimint_api::config::{
     ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedClientModuleConfig, TypedServerModuleConfig,
 };
+use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
@@ -31,7 +32,7 @@ use fedimint_api::module::{
     api_endpoint, FederationModuleConfigGen, IntoModuleError, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
-use fedimint_api::multiplexed::ModuleMultiplexer;
+use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
 use fedimint_bitcoind::BitcoindRpc;
@@ -210,7 +211,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ModuleConfigGenParams,
@@ -222,7 +223,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
 
         if let Err(Cancelled) = connections
-            .send(peers, "wallet", DkgPeerMsg::PublicKey(our_key.key))
+            .send(peers, MODULE_KEY_WALLET, DkgPeerMsg::PublicKey(our_key.key))
             .await
         {
             return Ok(Err(Cancelled));
@@ -230,7 +231,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
 
         peer_peg_in_keys.insert(*our_id, our_key);
         while peer_peg_in_keys.len() < peers.len() {
-            match connections.receive("wallet").await {
+            match connections.receive(MODULE_KEY_WALLET).await {
                 Ok((peer, DkgPeerMsg::PublicKey(key))) => {
                     peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
                 }

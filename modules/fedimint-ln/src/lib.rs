@@ -26,6 +26,7 @@ use fedimint_api::config::{
     ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
+use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
@@ -34,7 +35,7 @@ use fedimint_api::module::{
     api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, IntoModuleError, ModuleError,
     TransactionItemAmount,
 };
-use fedimint_api::multiplexed::ModuleMultiplexer;
+use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, FederationModule, NumPeers, PeerId};
 use fedimint_api::{InputMeta, OutPoint};
@@ -198,14 +199,14 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
 
     async fn distributed_gen(
         &self,
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         _params: &ModuleConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let g1 = if let Ok(g1) = dkg.run_g1("ln", connections, &mut OsRng).await {
+        let g1 = if let Ok(g1) = dkg.run_g1(MODULE_KEY_LN, connections, &mut OsRng).await {
             g1
         } else {
             return Ok(Err(Cancelled));

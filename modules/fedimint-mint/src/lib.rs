@@ -10,6 +10,7 @@ use fedimint_api::config::{
     scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
+use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
@@ -18,7 +19,7 @@ use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
     ApiEndpoint, FederationModuleConfigGen, IntoModuleError, ModuleError, TransactionItemAmount,
 };
-use fedimint_api::multiplexed::ModuleMultiplexer;
+use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
@@ -190,7 +191,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        connections: &ModuleMultiplexer<DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ModuleConfigGenParams,
@@ -202,7 +203,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
             our_id,
             peers,
         );
-        let g2 = if let Ok(g2) = dkg.run_g2("mint", connections, &mut OsRng).await {
+        let g2 = if let Ok(g2) = dkg.run_g2(MODULE_KEY_MINT, connections, &mut OsRng).await {
             g2
         } else {
             return Ok(Err(Cancelled));

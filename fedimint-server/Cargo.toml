@@ -45,6 +45,7 @@ threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 
 [build-dependencies]
 fedimint-build = { path = "../fedimint-build" }
