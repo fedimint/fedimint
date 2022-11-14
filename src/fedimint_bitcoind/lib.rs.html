@@ -142,13 +142,15 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Block, BlockHash, Network, Transaction};
-<span class="kw">use </span>fedimint_api::{dyn_newtype_define, Feerate};
+<span class="kw">use </span>fedimint_api::{dyn_newtype_define, task::TaskHandle, Feerate};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::info;
 
@@ -211,14 +213,16 @@
     inner: C,
     max_retries: u16,
     base_sleep: Duration,
+    task_handle: TaskHandle,
 }
 
 <span class="kw">impl</span>&lt;C&gt; RetryClient&lt;C&gt; {
-    <span class="kw">pub fn </span>new(inner: C) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(inner: C, task_handle: TaskHandle) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             inner,
             max_retries: <span class="number">10</span>,
             base_sleep: Duration::from_millis(<span class="number">10</span>),
+            task_handle,
         }
     }
 
@@ -237,7 +241,7 @@
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     retries += <span class="number">1</span>;
 
-                    <span class="kw">if </span>retries &gt; <span class="self">self</span>.max_retries {
+                    <span class="kw">if </span>retries &gt; <span class="self">self</span>.max_retries || <span class="self">self</span>.task_handle.is_shutting_down() {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
 

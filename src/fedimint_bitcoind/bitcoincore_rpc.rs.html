@@ -141,13 +141,13 @@
 <span class="comment">// &lt;https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48&gt;
 </span><span class="kw">const </span>RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -<span class="number">27</span>;
 
-<span class="kw">pub fn </span>make_bitcoind_rpc(cfg: <span class="kw-2">&amp;</span>BitcoindRpcCfg) -&gt; <span class="prelude-ty">Result</span>&lt;BitcoindRpc&gt; {
+<span class="kw">pub fn </span>make_bitcoind_rpc(cfg: <span class="kw-2">&amp;</span>BitcoindRpcCfg, task_handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;BitcoindRpc&gt; {
     <span class="kw">let </span>bitcoind_client = ::bitcoincore_rpc::Client::new(
         <span class="kw-2">&amp;</span>cfg.btc_rpc_address,
         Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
     )
     .map_err(anyhow::Error::from)<span class="question-mark">?</span>;
-    <span class="kw">let </span>retry_client = RetryClient::new(Client(ErrorReporting::new(bitcoind_client)));
+    <span class="kw">let </span>retry_client = RetryClient::new(Client(ErrorReporting::new(bitcoind_client)), task_handle);
 
     <span class="prelude-val">Ok</span>(retry_client.into())
 }
