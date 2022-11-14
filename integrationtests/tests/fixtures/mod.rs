@@ -148,9 +148,11 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
                 .1
                 .get_module_config("wallet")
                 .unwrap();
-            let bitcoin_rpc =
-                fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(&wallet_config.btc_rpc)
-                    .expect("Could not create bitcoinrpc");
+            let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
+                &wallet_config.btc_rpc,
+                task_group.make_handle(),
+            )
+            .expect("Could not create bitcoinrpc");
             let bitcoin = RealBitcoinTest::new(&wallet_config.btc_rpc);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");

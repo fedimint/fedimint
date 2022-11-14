@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
-use fedimint_api::{dyn_newtype_define, Feerate};
+use fedimint_api::{dyn_newtype_define, task::TaskHandle, Feerate};
 use thiserror::Error;
 use tracing::info;
 
@@ -67,14 +67,16 @@ pub struct RetryClient<C> {
     inner: C,
     max_retries: u16,
     base_sleep: Duration,
+    task_handle: TaskHandle,
 }
 
 impl<C> RetryClient<C> {
-    pub fn new(inner: C) -> Self {
+    pub fn new(inner: C, task_handle: TaskHandle) -> Self {
         Self {
             inner,
             max_retries: 10,
             base_sleep: Duration::from_millis(10),
+            task_handle,
         }
     }
 
@@ -93,7 +95,7 @@ impl<C> RetryClient<C> {
                 Err(e) => {
                     retries += 1;
 
-                    if retries > self.max_retries {
+                    if retries > self.max_retries || self.task_handle.is_shutting_down() {
                         return Err(e);
                     }
 

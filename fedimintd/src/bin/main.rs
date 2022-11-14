@@ -81,14 +81,16 @@ async fn main() -> anyhow::Result<()> {
     let cfg_string = String::from_utf8(decrypted).expect("is not correctly encoded");
     let cfg: ServerConfig = serde_json::from_str(&cfg_string).expect("could not parse config");
 
+    let mut task_group = TaskGroup::new();
+
     let db: Database = fedimint_rocksdb::RocksDb::open(opts.cfg_path.join(DB_FILE))
         .expect("Error opening DB")
         .into();
     let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
         &cfg.get_module_config::<WalletConfig>("wallet")?.btc_rpc,
+        task_group.make_handle(),
     )?;
 
-    let mut task_group = TaskGroup::new();
     let local_task_set = tokio::task::LocalSet::new();
     let _guard = local_task_set.enter();
 
