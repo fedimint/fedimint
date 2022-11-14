@@ -6,6 +6,8 @@ echo "Run with 'source ./scripts/build.sh [fed_size] [dir]"
 # allow for overriding arguments
 export FM_FED_SIZE=${1:-4}
 export FM_TMP_DIR=${2-"$(mktemp -d)"}
+export FM_TEST_FAST_WEAK_CRYPTO="1"
+
 echo "Setting up env variables in $FM_TMP_DIR"
 
 # Builds the rust executables and sets environment variables

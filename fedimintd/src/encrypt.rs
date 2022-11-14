@@ -20,7 +20,8 @@ use std::path::PathBuf;
 use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
 use ring::{aead, digest, pbkdf2};
 
-const ITERATIONS: Option<NonZeroU32> = NonZeroU32::new(1_000_000);
+const ITERATIONS_PROD: Option<NonZeroU32> = NonZeroU32::new(1_000_000);
+const ITERATIONS_DEBUG: Option<NonZeroU32> = NonZeroU32::new(1);
 
 // server files
 pub const SALT_FILE: &str = "salt";
@@ -66,7 +67,11 @@ pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
     let algo = pbkdf2::PBKDF2_HMAC_SHA256;
     pbkdf2::derive(
         algo,
-        ITERATIONS.unwrap(),
+        if std::env::var("FM_TEST_FAST_WEAK_CRYPTO").as_deref() == Ok("1") {
+            ITERATIONS_DEBUG.unwrap()
+        } else {
+            ITERATIONS_PROD.unwrap()
+        },
         &salt,
         password.as_bytes(),
         &mut key,
