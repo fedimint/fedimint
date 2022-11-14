@@ -623,7 +623,6 @@
 <a href="#623" id="623">623</a>
 <a href="#624" id="624">624</a>
 <a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -632,9 +631,9 @@
     BitcoindRpcCfg, ClientConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
     ServerModuleConfig, TypedServerModuleConfig,
 };
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
-<span class="kw">use </span>fedimint_api::multiplexed::ModuleMultiplexer;
-<span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
+<span class="kw">use </span>fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
@@ -652,7 +651,6 @@
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::NumPeers;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
@@ -891,7 +889,7 @@
     }
 
     <span class="kw">pub async fn </span>distributed_gen(
-        connections: <span class="kw-2">&amp;</span>ModuleMultiplexer&lt;DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ServerConfigParams,
@@ -911,7 +909,7 @@
         dkg.add(KeyType::Epoch, peers.threshold());
 
         <span class="comment">// run DKG for epoch and hbbft keys
-        </span><span class="kw">let </span>keys = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = dkg.run_g1(<span class="string">&quot;global&quot;</span>, connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
+        </span><span class="kw">let </span>keys = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = dkg.run_g1(MODULE_KEY_GLOBAL, connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
             v
         } <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
@@ -1169,7 +1167,7 @@
     network: NetworkConfig,
     certs: TlsConfig,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-) -&gt; AnyPeerConnections&lt;T&gt;
+) -&gt; PeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {

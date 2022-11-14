@@ -3,7 +3,7 @@ var sourcesIndex = JSON.parse('{\
 "clientd_cli":["",[],["clientd-cli.rs"]],\
 "configgen":["",[],["configgen.rs"]],\
 "distributedgen":["",[],["distributedgen.rs"]],\
-"fedimint_api":["",[["core",[],["client.rs","encode.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs"]],["net",[],["mod.rs","peers.rs"]]],["bitcoin_rpc.rs","cancellable.rs","config.rs","core.rs","lib.rs","macros.rs","multiplexed.rs","task.rs","tiered.rs","tiered_multi.rs"]],\
+"fedimint_api":["",[["core",[],["client.rs","encode.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]]],["bitcoin_rpc.rs","cancellable.rs","config.rs","core.rs","lib.rs","macros.rs","task.rs","tiered.rs","tiered_multi.rs"]],\
 "fedimint_bitcoind":["",[],["bitcoincore_rpc.rs","lib.rs"]],\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
@@ -16,7 +16,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_mint_common":["",[],["lib.rs"]],\
 "fedimint_mint_server":["",[],["lib.rs"]],\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
-"fedimint_server":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
+"fedimint_server":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["config.rs","db.rs","lib.rs","multiplexed.rs","rng.rs"]],\
 "fedimint_sled":["",[],["lib.rs"]],\
 "fedimint_testing":["",[],["bitcoind.rs","lib.rs"]],\
 "fedimint_wallet":["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\

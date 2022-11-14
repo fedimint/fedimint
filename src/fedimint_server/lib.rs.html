@@ -487,6 +487,9 @@
 <a href="#487" id="487">487</a>
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -496,7 +499,7 @@
 
 <span class="kw">use </span>config::ServerConfig;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
+<span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
@@ -513,7 +516,7 @@
     ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{EpochHistoryKey, LastEpochKey};
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::IPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::PeerSlice;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{PeerConnector, ReconnectPeerConnections};
@@ -531,6 +534,9 @@
 <span class="doccomment">/// Fedimint toplevel config
 </span><span class="kw">pub mod </span>config;
 
+<span class="doccomment">/// Implementation of multiplexed peer connections
+</span><span class="kw">pub mod </span>multiplexed;
+
 <span class="doccomment">/// Some abstractions to handle randomness
 </span><span class="kw">mod </span>rng;
 
@@ -546,7 +552,7 @@
 
 <span class="kw">pub struct </span>FedimintServer {
     <span class="kw">pub </span>consensus: Arc&lt;FedimintConsensus&gt;,
-    <span class="kw">pub </span>connections: AnyPeerConnections&lt;EpochMessage&gt;,
+    <span class="kw">pub </span>connections: PeerConnections&lt;EpochMessage&gt;,
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;,
     <span class="kw">pub </span>api: Arc&lt;<span class="kw">dyn </span>IFederationApi&gt;,

@@ -393,6 +393,15 @@
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -419,6 +428,15 @@
 /// Used as an unique ID, and also as prefix in serialization
 /// of module-specific data.
 </span><span class="kw">pub type </span>ModuleKey = u16;
+
+<span class="doccomment">/// Temporary constant for the modules we already have
+///
+/// To be removed after modularization is complete.
+</span><span class="kw">pub const </span>MODULE_KEY_WALLET: u16 = <span class="number">0</span>;
+<span class="kw">pub const </span>MODULE_KEY_MINT: u16 = <span class="number">1</span>;
+<span class="kw">pub const </span>MODULE_KEY_LN: u16 = <span class="number">2</span>;
+<span class="comment">// not really a module
+</span><span class="kw">pub const </span>MODULE_KEY_GLOBAL: u16 = <span class="number">1024</span>;
 
 <span class="doccomment">/// Implement `Encodable` and `Decodable` for a &quot;module dyn newtype&quot;
 ///

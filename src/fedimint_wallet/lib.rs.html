@@ -1396,6 +1396,7 @@
 <a href="#1396" id="1396">1396</a>
 <a href="#1397" id="1397">1397</a>
 <a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1420,6 +1421,7 @@
     ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedClientModuleConfig, TypedServerModuleConfig,
 };
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
@@ -1429,7 +1431,7 @@
     api_endpoint, FederationModuleConfigGen, IntoModuleError, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
-<span class="kw">use </span>fedimint_api::multiplexed::ModuleMultiplexer;
+<span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_bitcoind::BitcoindRpc;
@@ -1608,7 +1610,7 @@
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: <span class="kw-2">&amp;</span>ModuleMultiplexer&lt;DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
@@ -1620,7 +1622,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = BTreeMap::new();
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(Cancelled) = connections
-            .send(peers, <span class="string">&quot;wallet&quot;</span>, DkgPeerMsg::PublicKey(our_key.key))
+            .send(peers, MODULE_KEY_WALLET, DkgPeerMsg::PublicKey(our_key.key))
             .<span class="kw">await
         </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
@@ -1628,7 +1630,7 @@
 
         peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
         <span class="kw">while </span>peer_peg_in_keys.len() &lt; peers.len() {
-            <span class="kw">match </span>connections.receive(<span class="string">&quot;wallet&quot;</span>).<span class="kw">await </span>{
+            <span class="kw">match </span>connections.receive(MODULE_KEY_WALLET).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>((peer, DkgPeerMsg::PublicKey(key))) =&gt; {
                     peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
                 }

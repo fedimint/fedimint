@@ -689,16 +689,9 @@
 <a href="#689" id="689">689</a>
 <a href="#690" id="690">690</a>
 <a href="#691" id="691">691</a>
-<a href="#692" id="692">692</a>
-<a href="#693" id="693">693</a>
-<a href="#694" id="694">694</a>
-<a href="#695" id="695">695</a>
-<a href="#696" id="696">696</a>
-<a href="#697" id="697">697</a>
-<a href="#698" id="698">698</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
-//! The main interface is [`PeerConnections`] and its main implementation is
+//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
 //! [`ReconnectPeerConnections`], see these for details.
 
 </span><span class="kw">use </span>std::cmp::min;
@@ -710,7 +703,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::Node;
-<span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
+<span class="kw">use </span>fedimint_api::net::peers::IPeerConnections;
 <span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>futures::future::select_all;
@@ -926,7 +919,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;T&gt; PeerConnections&lt;T&gt; <span class="kw">for </span>ReconnectPeerConnections&lt;T&gt;
+</span><span class="kw">impl</span>&lt;T&gt; IPeerConnections&lt;T&gt; <span class="kw">for </span>ReconnectPeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
@@ -1323,12 +1316,11 @@
     <span class="kw">use </span>fedimint_api::task::TaskGroup;
     <span class="kw">use </span>fedimint_api::PeerId;
     <span class="kw">use </span>futures::Future;
-    <span class="kw">use </span>tracing_subscriber::EnvFilter;
 
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::MockNetwork;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
     <span class="kw">use </span><span class="kw">crate</span>::net::peers::{
-        ConnectionConfig, NetworkConfig, PeerConnections, ReconnectPeerConnections,
+        ConnectionConfig, IPeerConnections, NetworkConfig, ReconnectPeerConnections,
     };
 
     <span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
@@ -1338,14 +1330,8 @@
         tokio::time::timeout(Duration::from_secs(<span class="number">100</span>), f).<span class="kw">await</span>.ok()
     }
 
-    <span class="attr">#[tokio::test]
+    <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_connect() {
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info,fedimint::net=trace&quot;</span>)),
-            )
-            .init();
         <span class="kw">let </span>task_group = TaskGroup::new();
 
         {

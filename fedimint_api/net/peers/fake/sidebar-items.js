@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["make_fake_peer_connection","Create a fake link between `peer1` and `peer2` for test purposes"]],"struct":[["FakePeerConnections",""]]};

@@ -709,6 +709,7 @@
 <a href="#709" id="709">709</a>
 <a href="#710" id="710">710</a>
 <a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
@@ -735,7 +736,8 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
-<span class="kw">use </span><span class="kw">crate</span>::multiplexed::{ModuleIdRef, ModuleMultiplexer};
+<span class="kw">use </span><span class="kw">crate</span>::core::ModuleKey;
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::Amount;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
@@ -1145,8 +1147,8 @@
     <span class="doccomment">/// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     </span><span class="kw">pub async fn </span>run_g2(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        module_id: ModuleIdRef&lt;<span class="lifetime">&#39;_</span>&gt;,
-        connections: <span class="kw-2">&amp;</span>ModuleMultiplexer&lt;DkgPeerMsg&gt;,
+        module_id: ModuleKey,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
     ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(module_id, G2Projective::generator(), connections, rng)
@@ -1156,8 +1158,8 @@
     <span class="doccomment">/// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     </span><span class="kw">pub async fn </span>run_g1(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        module_id: ModuleIdRef&lt;<span class="lifetime">&#39;_</span>&gt;,
-        connections: <span class="kw-2">&amp;</span>ModuleMultiplexer&lt;DkgPeerMsg&gt;,
+        module_id: ModuleKey,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
     ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(module_id, G1Projective::generator(), connections, rng)
@@ -1167,9 +1169,9 @@
     <span class="doccomment">/// Runs the DKG algorithms with our peers
     </span><span class="kw">pub async fn </span>run&lt;G: DkgGroup&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        module_id: ModuleIdRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        module_id: ModuleKey,
         group: G,
-        connections: <span class="kw-2">&amp;</span>ModuleMultiplexer&lt;DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
     ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G&gt;&gt;&gt;
     <span class="kw">where

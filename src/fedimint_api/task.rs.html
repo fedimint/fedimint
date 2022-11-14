@@ -352,6 +352,7 @@
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
 <a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
 </pre><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 </span><span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::atomic::AtomicBool;
@@ -418,7 +419,7 @@
         <span class="self">Self</span>::default()
     }
 
-    <span class="kw">fn </span>make_handle(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskHandle {
+    <span class="kw">pub fn </span>make_handle(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskHandle {
         TaskHandle {
             inner: <span class="self">self</span>.inner.clone(),
         }
@@ -578,7 +579,8 @@
     }
 }
 
-<span class="kw">pub struct </span>TaskHandle {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>TaskHandle {
     inner: Arc&lt;TaskGroupInner&gt;,
 }
 
