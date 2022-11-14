@@ -87,6 +87,11 @@
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
 <a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Encrypt and authenticate data stored on the filesystem with a user-supplied password.
 ///
 /// We encrypt the configs to prevent attackers from learning the private keys if they gain
@@ -109,7 +114,8 @@
 <span class="kw">use </span>ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
 <span class="kw">use </span>ring::{aead, digest, pbkdf2};
 
-<span class="kw">const </span>ITERATIONS: <span class="prelude-ty">Option</span>&lt;NonZeroU32&gt; = NonZeroU32::new(<span class="number">1_000_000</span>);
+<span class="kw">const </span>ITERATIONS_PROD: <span class="prelude-ty">Option</span>&lt;NonZeroU32&gt; = NonZeroU32::new(<span class="number">1_000_000</span>);
+<span class="kw">const </span>ITERATIONS_DEBUG: <span class="prelude-ty">Option</span>&lt;NonZeroU32&gt; = NonZeroU32::new(<span class="number">1</span>);
 
 <span class="comment">// server files
 </span><span class="kw">pub const </span>SALT_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;salt&quot;</span>;
@@ -155,7 +161,11 @@
     <span class="kw">let </span>algo = pbkdf2::PBKDF2_HMAC_SHA256;
     pbkdf2::derive(
         algo,
-        ITERATIONS.unwrap(),
+        <span class="kw">if </span>std::env::var(<span class="string">&quot;FM_TEST_FAST_WEAK_CRYPTO&quot;</span>).as_deref() == <span class="prelude-val">Ok</span>(<span class="string">&quot;1&quot;</span>) {
+            ITERATIONS_DEBUG.unwrap()
+        } <span class="kw">else </span>{
+            ITERATIONS_PROD.unwrap()
+        },
         <span class="kw-2">&amp;</span>salt,
         password.as_bytes(),
         <span class="kw-2">&amp;mut </span>key,
