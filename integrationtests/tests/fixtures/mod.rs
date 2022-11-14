@@ -30,7 +30,7 @@ use fedimint_api::TieredMulti;
 use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
-use fedimint_mint::Mint;
+use fedimint_mint::{Mint, MintOutput};
 use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
 use fedimint_server::consensus::FedimintConsensus;
@@ -697,7 +697,7 @@ impl FederationTest {
                     let mut dbtx = svr.database.begin_transaction();
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
-                        outputs: vec![Output::Mint(tokens.clone())],
+                        outputs: vec![Output::Mint(MintOutput(tokens.clone()))],
                         signature: None,
                     };
 
@@ -713,7 +713,7 @@ impl FederationTest {
                     svr.fedimint
                         .consensus
                         .mint
-                        .apply_output(&mut dbtx, &tokens, out_point)
+                        .apply_output(&mut dbtx, &MintOutput(tokens.clone()), out_point)
                         .unwrap();
                     dbtx.commit_tx().await.expect("DB Error");
                 }

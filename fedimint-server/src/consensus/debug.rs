@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use fedimint_core::modules::ln::contracts::Contract;
 use fedimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput, DecryptionShareCI};
-use fedimint_core::modules::mint::PartiallySignedRequest;
+use fedimint_core::modules::mint::{MintConsensusItem, PartiallySignedRequest};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use fedimint_wallet::{PegOutSignatureItem, RoundConsensusItem, WalletConsensusItem};
 
@@ -33,10 +33,10 @@ fn item_message(item: &ConsensusItem) -> String {
             txid,
             ..
         })) => format!("Wallet Peg Out PSBT {}", txid),
-        ConsensusItem::Mint(PartiallySignedRequest {
+        ConsensusItem::Mint(MintConsensusItem(PartiallySignedRequest {
             out_point,
             partial_signature,
-        }) => {
+        })) => {
             format!(
                 "Mint Signed Coins {} with TxId {}",
                 partial_signature.0.total_amount(),

@@ -955,6 +955,7 @@ dependencies = [
  "counter",
  "fedimint-api",
  "futures",
+ "impl-tools",
  "itertools",
  "rand",
  "rayon",
@@ -1756,6 +1757,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "impl-tools"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbc403c862b3c7dfde41c8a0d1393ce649618cb63adcc53e0608e4106adf4169"
+dependencies = [
+ "autocfg",
+ "impl-tools-lib",
+ "proc-macro-error",
+ "syn 1.0.103",
+]
+
+[[package]]
+name = "impl-tools-lib"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bbefd85b83792dddecb36da8b90620c163fcbd669dfd45554b99b1b023a53ef"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote 1.0.21",
+ "syn 1.0.103",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2219,6 +2244,7 @@ dependencies = [
  "bitcoin_hashes",
  "fedimint-api",
  "fedimint-core",
+ "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-testing",
  "futures",

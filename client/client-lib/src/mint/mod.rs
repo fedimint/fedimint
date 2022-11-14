@@ -11,7 +11,7 @@ use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse};
+use fedimint_core::modules::mint::{BlindNonce, Mint, MintOutputOutcome, Nonce, Note, SigResponse};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use rand::{CryptoRng, RngCore};
@@ -204,8 +204,10 @@ impl<'c> MintClient<'c> {
         let bsig = self
             .context
             .api
-            .fetch_output_outcome::<Option<SigResponse>>(outpoint)
+            .fetch_output_outcome::<MintOutputOutcome>(outpoint)
             .await?
+            .as_ref()
+            .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
 
         let coins = issuance.finalize(bsig, &self.config.tbs_pks)?;
@@ -431,7 +433,7 @@ mod tests {
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     use fedimint_core::modules::mint::config::MintClientConfig;
-    use fedimint_core::modules::mint::{Mint, MintConfigGenerator};
+    use fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
@@ -573,7 +575,7 @@ mod tests {
                 |output| async {
                     // Agree on output
                     let mut fed = block_on(fed.lock());
-                    block_on(fed.consensus_round(&[], &[(out_point, output)]));
+                    block_on(fed.consensus_round(&[], &[(out_point, MintOutput(output))]));
                     // Generate signatures
                     block_on(fed.consensus_round(&[], &[]));
 

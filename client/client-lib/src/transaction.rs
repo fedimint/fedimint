@@ -3,7 +3,7 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
-use fedimint_core::modules::mint::{BlindNonce, Note, SignRequest};
+use fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput, SignRequest};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use rand::{CryptoRng, RngCore};
 use tbs::AggregatePublicKey;
@@ -49,7 +49,7 @@ impl TransactionBuilder {
     pub fn create_input_from_coins(
         &mut self,
         coins: TieredMulti<SpendableNote>,
-    ) -> Result<(Vec<KeyPair>, TieredMulti<Note>), MintClientError> {
+    ) -> Result<(Vec<KeyPair>, MintInput), MintClientError> {
         let coin_key_pairs = coins
             .into_iter()
             .map(|(amt, coin)| {
@@ -63,7 +63,8 @@ impl TransactionBuilder {
                 }
             })
             .collect::<Result<Vec<_>, MintClientError>>()?;
-        Ok(coin_key_pairs.into_iter().unzip())
+        let (key_pairs, input) = coin_key_pairs.into_iter().unzip();
+        Ok((key_pairs, MintInput(input)))
     }
 
     pub fn input(&mut self, key: &mut Vec<KeyPair>, input: Input) {
@@ -94,7 +95,7 @@ impl TransactionBuilder {
 
         if !coin_output.is_empty() {
             let out_idx = self.tx.outputs.len();
-            self.output(Output::Mint(coin_output));
+            self.output(Output::Mint(MintOutput(coin_output)));
             self.output_notes
                 .push((out_idx as u64, coin_finalization_data));
         }

@@ -63,7 +63,7 @@ where
             match input {
                 Input::Mint(ref coins) => {
                     // TODO: can this be done without cloning? E.g. hashing?
-                    if !self.coin_set.insert(coins.clone()) {
+                    if !self.coin_set.insert(coins.0.clone()) {
                         return Err(tx.clone());
                     }
                 }

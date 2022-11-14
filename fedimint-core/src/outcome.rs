@@ -3,7 +3,7 @@ use fedimint_ln::contracts::incoming::OfferId;
 use fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 use fedimint_ln::contracts::{DecryptedPreimage, Preimage};
 use fedimint_ln::LightningModule;
-use fedimint_mint::SigResponse;
+use fedimint_mint::{Mint, MintOutputOutcome};
 use fedimint_wallet::{PegOutOutcome, Wallet};
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +24,7 @@ pub enum TransactionStatus {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum OutputOutcome {
-    Mint(Option<SigResponse>),
+    Mint(<Mint as FederationModule>::TxOutputOutcome),
     Wallet(<Wallet as FederationModule>::TxOutputOutcome),
     LN(<LightningModule as FederationModule>::TxOutputOutcome),
 }
@@ -46,8 +46,8 @@ impl OutputOutcome {
 impl Final for OutputOutcome {
     fn is_final(&self) -> bool {
         match self {
-            OutputOutcome::Mint(Some(_)) => true,
-            OutputOutcome::Mint(None) => false,
+            OutputOutcome::Mint(MintOutputOutcome(Some(_))) => true,
+            OutputOutcome::Mint(MintOutputOutcome(None)) => false,
             OutputOutcome::Wallet(_) => true,
             OutputOutcome::LN(fedimint_ln::OutputOutcome::Offer { .. }) => true,
             OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract { outcome, .. }) => {
@@ -71,7 +71,7 @@ impl Final for TransactionStatus {
     }
 }
 
-impl TryIntoOutcome for Option<SigResponse> {
+impl TryIntoOutcome for MintOutputOutcome {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         match common_outcome {
             OutputOutcome::Mint(outcome) => Ok(outcome),

@@ -30,6 +30,7 @@ use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
+use fedimint_core::modules::mint::MintOutput;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::PegOut;
 use fedimint_core::outcome::TransactionStatus;
@@ -368,7 +369,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .mint_client()
             .select_coins(blind_nonces.total_amount())?;
         tx.input_coins(input_coins)?;
-        tx.output(Output::Mint(blind_nonces));
+        tx.output(Output::Mint(MintOutput(blind_nonces)));
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
