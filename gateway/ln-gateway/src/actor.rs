@@ -42,8 +42,7 @@ impl GatewayActor {
         Ok(Self { client, id })
     }
 
-    /// Fetch all coins minted for this gateway by the federation
-    pub async fn fetch_all_coins(&self) {
+    async fn fetch_all_coins(&self) {
         for fetch_result in self.client.fetch_all_coins().await {
             if let Err(e) = fetch_result {
                 debug!(error = %e, "Fetching coins failed")
@@ -133,6 +132,8 @@ impl GatewayActor {
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
     ) -> Result<Preimage> {
+        self.fetch_all_coins().await;
+
         let mut rng = rand::rngs::OsRng;
         let (out_point, contract_id) = self
             .client
@@ -214,6 +215,8 @@ impl GatewayActor {
         amount: bitcoin::Amount,
         address: Address,
     ) -> Result<TransactionId> {
+        self.fetch_all_coins().await;
+
         let rng = rand::rngs::OsRng;
 
         let peg_out = self
@@ -229,11 +232,7 @@ impl GatewayActor {
     }
 
     pub async fn get_balance(&self) -> Result<Amount> {
-        self.client
-            .fetch_all_coins()
-            .await
-            .into_iter()
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+        self.fetch_all_coins().await;
 
         Ok(self.client.coins().total_amount())
     }

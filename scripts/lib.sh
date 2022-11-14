@@ -63,7 +63,14 @@ function kill_fedimint_processes {
 function start_gateway() {
   $FM_GATEWAY_CLI generate-config $FM_CFG_DIR # generate gateway config
   $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR &
-  sleep 1 # wait for plugin to start
+  sleep 5 # wait for plugin to start
+  gw_register_fed
+}
+
+function gw_register_fed() {
+  # register federation on the gateway
+  FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -r '.connect_info')"
+  $FM_GATEWAY_CLI register-fed "$FM_CONNECT_STR"
 }
 
 function get_finality_delay() {
