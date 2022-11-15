@@ -556,13 +556,14 @@
             "client/client-lib"
             "modules/fedimint-ln"
             "fedimint-api"
+            "fedimint-bitcoind"
             "fedimint-core"
             "fedimint-derive"
             "fedimint-rocksdb"
             "fedimint-server"
             "fedimint-build"
             "gateway/cli"
-            "gateway/ln_gateway"
+            "gateway/ln-gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
             "modules/mint-client"
@@ -795,7 +796,7 @@
                 ''; in
               pkgs.dockerTools.buildLayeredImage {
                 name = "ln-gateway-clightning";
-                contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils ];
+                contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils gateway-cli ];
                 config = {
                   Cmd = [
                     "${ln-gateway}/bin/ln_gateway"
