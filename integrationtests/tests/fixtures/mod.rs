@@ -398,22 +398,15 @@ impl GatewayTest {
 
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let adapter = Arc::new(ln_client_adapter);
-        let ln_client = Arc::clone(&adapter);
+        let ln_rpc = Arc::clone(&adapter);
 
         let gw_cfg = GatewayConfig {
+            address: bind_addr,
             password: "abc".into(),
             default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };
 
-        let gateway = LnGateway::new(
-            gw_cfg,
-            ln_client,
-            client_builder.clone(),
-            sender,
-            receiver,
-            bind_addr,
-            node_pub_key,
-        );
+        let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder.clone(), sender, receiver);
 
         let client = Arc::new(
             client_builder

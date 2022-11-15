@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
@@ -83,6 +83,7 @@ async fn main() {
             serde_json::to_writer_pretty(
                 cfg_file,
                 &GatewayConfig {
+                    address: SocketAddr::from(([127, 0, 0, 1], 8080)),
                     // TODO: Generate a strong random password
                     password: source_password(cli.rpcpassword),
                     // TODO: Remove this field with hardcoded value once we have fixed Issue 664:

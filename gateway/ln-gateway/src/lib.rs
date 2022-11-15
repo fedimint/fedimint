@@ -10,7 +10,6 @@ pub mod webserver;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -30,7 +29,7 @@ use mint_client::{
     ClientError, FederationId, GatewayClient, GatewayClientConfig,
 };
 use rand::thread_rng;
-use secp256k1::{KeyPair, PublicKey};
+use secp256k1::KeyPair;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
@@ -57,9 +56,6 @@ pub struct LnGateway {
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
     client_builder: GatewayClientBuilder,
-    // TODO: consider wrapping bind_addr, and node_pubkey in GatewayConfig
-    bind_addr: SocketAddr,
-    pub_key: PublicKey,
 }
 
 impl LnGateway {
@@ -70,14 +66,11 @@ impl LnGateway {
         // TODO: consider encapsulating message channel within LnGateway
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
-        // TODO: consider wrapping bind_addr, and node_pubkey in GatewayConfig
-        bind_addr: SocketAddr,
-        pub_key: PublicKey,
     ) -> Self {
         // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(
             config.password.clone(),
-            bind_addr,
+            config.address,
             GatewayRpcSender::new(sender),
         ));
 
@@ -88,8 +81,6 @@ impl LnGateway {
             webserver,
             receiver,
             client_builder,
-            bind_addr,
-            pub_key,
         }
     }
 
@@ -155,7 +146,7 @@ impl LnGateway {
             redeem_key: kp_fed,
             timelock_delta: 10,
             node_pub_key,
-            api: Url::parse(format!("http://{}", self.bind_addr).as_str())
+            api: Url::parse(format!("http://{}", self.config.address).as_str())
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
         };
 

@@ -73,7 +73,7 @@ impl LightningTest for FakeLightningTest {
 #[async_trait]
 impl LnRpc for FakeLightningTest {
     async fn pubkey(&self) -> Result<PublicKey, LightningError> {
-        Ok(self.gateway_node_pub_key.clone())
+        Ok(self.gateway_node_pub_key)
     }
 
     async fn pay(
