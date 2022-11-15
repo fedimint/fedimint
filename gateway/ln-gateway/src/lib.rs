@@ -53,7 +53,7 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 pub struct LnGateway {
     config: GatewayConfig,
     actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
-    ln_client: Arc<dyn LnRpc>,
+    ln_rpc: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
     client_builder: GatewayClientBuilder,
@@ -65,7 +65,7 @@ pub struct LnGateway {
 impl LnGateway {
     pub fn new(
         config: GatewayConfig,
-        ln_client: Arc<dyn LnRpc>,
+        ln_rpc: Arc<dyn LnRpc>,
         client_builder: GatewayClientBuilder,
         // TODO: consider encapsulating message channel within LnGateway
         sender: mpsc::Sender<GatewayRequest>,
@@ -84,7 +84,7 @@ impl LnGateway {
         Self {
             config,
             actors: Mutex::new(HashMap::new()),
-            ln_client,
+            ln_rpc,
             webserver,
             receiver,
             client_builder,
@@ -145,7 +145,7 @@ impl LnGateway {
         let kp_fed = KeyPair::new(&ctx, &mut rng);
 
         let node_pub_key = self
-            .ln_client
+            .ln_rpc
             .pubkey()
             .await
             .expect("Failed to get node pubkey from Lightning node");
@@ -209,9 +209,7 @@ impl LnGateway {
         } = payload;
 
         let actor = self.select_actor(federation_id)?;
-        let outpoint = actor
-            .pay_invoice(self.ln_client.clone(), contract_id)
-            .await?;
+        let outpoint = actor.pay_invoice(self.ln_rpc.clone(), contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
