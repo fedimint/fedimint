@@ -43,7 +43,7 @@ use fedimint_core::{
                 Contract, ContractId, DecryptedPreimage, IdentifyableContract,
                 OutgoingContractOutcome, Preimage,
             },
-            ContractOrOfferOutput, ContractOutput, LightningGateway,
+            ContractOutput, LightningGateway, LightningOutput,
         },
         mint::BlindNonce,
         wallet::txoproof::TxOutProof,
@@ -683,12 +683,12 @@ impl Client<UserClientConfig> {
         dbtx.commit_tx().await.expect("DB Error");
 
         let (contract_id, amount) = match &contract {
-            ContractOrOfferOutput::Contract(c) => {
+            LightningOutput::Contract(c) => {
                 let contract_id = c.contract.contract_id();
                 let amount = c.amount;
                 (contract_id, amount)
             }
-            ContractOrOfferOutput::Offer(_) | ContractOrOfferOutput::CancelOutgoing { .. } => {
+            LightningOutput::Offer(_) | LightningOutput::CancelOutgoing { .. } => {
                 panic!()
             } // FIXME: impl TryFrom
         };
@@ -1091,12 +1091,11 @@ impl Client<GatewayClientConfig> {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output = fedimint_core::transaction::Output::LN(
-            ContractOrOfferOutput::Contract(ContractOutput {
+        let incoming_output =
+            fedimint_core::transaction::Output::LN(LightningOutput::Contract(ContractOutput {
                 amount: offer.amount,
                 contract: contract.clone(),
-            }),
-        );
+            }));
 
         // Submit transaction
         builder.output(incoming_output);

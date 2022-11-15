@@ -49,15 +49,15 @@ impl Final for OutputOutcome {
             OutputOutcome::Mint(MintOutputOutcome(Some(_))) => true,
             OutputOutcome::Mint(MintOutputOutcome(None)) => false,
             OutputOutcome::Wallet(_) => true,
-            OutputOutcome::LN(fedimint_ln::OutputOutcome::Offer { .. }) => true,
-            OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract { outcome, .. }) => {
-                match outcome {
-                    ContractOutcome::Account(_) => true,
-                    ContractOutcome::Incoming(DecryptedPreimage::Some(_)) => true,
-                    ContractOutcome::Incoming(_) => false,
-                    ContractOutcome::Outgoing(_) => true,
-                }
-            }
+            OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Offer { .. }) => true,
+            OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
+                outcome, ..
+            }) => match outcome {
+                ContractOutcome::Account(_) => true,
+                ContractOutcome::Incoming(DecryptedPreimage::Some(_)) => true,
+                ContractOutcome::Incoming(_) => false,
+                ContractOutcome::Outgoing(_) => true,
+            },
         }
     }
 }
@@ -91,7 +91,7 @@ impl TryIntoOutcome for WalletOutputOutcome {
     }
 }
 
-impl TryIntoOutcome for fedimint_ln::OutputOutcome {
+impl TryIntoOutcome for fedimint_ln::LightningOutputOutcome {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         match common_outcome {
             OutputOutcome::Mint(_) => Err(CoreError::MismatchingVariant("ln", "mint")),
@@ -103,7 +103,7 @@ impl TryIntoOutcome for fedimint_ln::OutputOutcome {
 
 impl TryIntoOutcome for Preimage {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-        if let OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract {
+        if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
             outcome: ContractOutcome::Incoming(decrypted_preimage),
             ..
         }) = common_outcome
@@ -121,7 +121,8 @@ impl TryIntoOutcome for Preimage {
 
 impl TryIntoOutcome for OfferId {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-        if let OutputOutcome::LN(fedimint_ln::OutputOutcome::Offer { id }) = common_outcome {
+        if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Offer { id }) = common_outcome
+        {
             Ok(id)
         } else {
             Err(CoreError::MismatchingVariant("ln::incoming", "other"))
@@ -131,7 +132,7 @@ impl TryIntoOutcome for OfferId {
 
 impl TryIntoOutcome for AccountContractOutcome {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-        if let OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract {
+        if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
             outcome: ContractOutcome::Account(o),
             ..
         }) = common_outcome
@@ -145,7 +146,7 @@ impl TryIntoOutcome for AccountContractOutcome {
 
 impl TryIntoOutcome for OutgoingContractOutcome {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-        if let OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract {
+        if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
             outcome: ContractOutcome::Outgoing(o),
             ..
         }) = common_outcome

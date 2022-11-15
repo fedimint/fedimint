@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use fedimint_api::TieredMulti;
 use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-use fedimint_core::modules::ln::ContractOrOfferOutput;
+use fedimint_core::modules::ln::LightningOutput;
 use fedimint_core::modules::mint::Note;
 use fedimint_core::modules::wallet::txoproof::PegInProof;
 
@@ -80,7 +80,7 @@ where
             }
         }
         for output in &tx.outputs {
-            if let Output::LN(ContractOrOfferOutput::Contract(contract_output)) = output {
+            if let Output::LN(LightningOutput::Contract(contract_output)) = output {
                 // For contracts we need to avoid any parallel updating, so outputs need to
                 // be tracked too. Once the main loop gets refactored such that only computation
                 // intensive operations are parallelized, this restriction can be lifted.

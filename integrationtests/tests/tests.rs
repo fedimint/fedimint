@@ -10,7 +10,7 @@ use fedimint_api::cancellable::Cancellable;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
-use fedimint_ln::DecryptionShareCI;
+use fedimint_ln::LightningConsensusItem;
 use fedimint_mint::config::MintClientConfig;
 use fedimint_mint::{MintConsensusItem, PartialSigResponse, PartiallySignedRequest};
 use fedimint_server::epoch::ConsensusItem;
@@ -377,7 +377,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
     let share = SecretKeyShare::default()
         .decrypt_share_no_verify(&SecretKey::random().public_key().encrypt(""));
     fed.subset_peers(&[3])
-        .override_proposal(vec![ConsensusItem::LN(DecryptionShareCI {
+        .override_proposal(vec![ConsensusItem::LN(LightningConsensusItem {
             contract_id,
             share: PreimageDecryptionShare(share),
         })]);

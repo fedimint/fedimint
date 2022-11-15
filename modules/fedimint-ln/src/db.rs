@@ -4,7 +4,7 @@ use fedimint_api::{OutPoint, PeerId};
 use secp256k1::PublicKey;
 
 use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
-use crate::{ContractAccount, LightningGateway, OutputOutcome};
+use crate::{ContractAccount, LightningGateway, LightningOutputOutcome};
 
 #[repr(u8)]
 #[derive(Clone)]
@@ -41,7 +41,7 @@ pub struct ContractUpdateKey(pub OutPoint);
 impl DatabaseKeyPrefixConst for ContractUpdateKey {
     const DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate as u8;
     type Key = Self;
-    type Value = OutputOutcome;
+    type Value = LightningOutputOutcome;
 }
 
 #[derive(Debug, Encodable, Decodable)]
