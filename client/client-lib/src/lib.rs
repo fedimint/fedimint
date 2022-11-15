@@ -32,7 +32,7 @@ use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::MintOutput;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
-use fedimint_core::modules::wallet::PegOut;
+use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{
@@ -297,7 +297,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .wallet_client()
             .create_pegin_input(txout_proof, btc_transaction)?;
 
-        tx.input(&mut vec![peg_in_key], Input::Wallet(Box::new(peg_in_proof)));
+        tx.input(
+            &mut vec![peg_in_key],
+            Input::Wallet(WalletInput(Box::new(peg_in_proof))),
+        );
 
         self.submit_tx_with_change(tx, &mut rng).await
     }
@@ -427,7 +430,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
         tx.input_coins(coins)?;
-        let peg_out_idx = tx.output(Output::Wallet(peg_out));
+        let peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
 
         let fedimint_tx_id = self.submit_tx_with_change(tx, &mut rng).await?;
 

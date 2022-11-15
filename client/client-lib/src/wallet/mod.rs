@@ -7,7 +7,7 @@ use fedimint_api::{Amount, FederationModule};
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-use fedimint_core::modules::wallet::{PegOutOutcome, Wallet};
+use fedimint_core::modules::wallet::{Wallet, WalletOutputOutcome};
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
@@ -142,7 +142,7 @@ impl<'c> WalletClient<'c> {
     ) -> Result<bitcoin::Txid> {
         // TODO: define timeout centrally
         let timeout = std::time::Duration::from_secs(15);
-        let outcome: PegOutOutcome = self
+        let outcome: WalletOutputOutcome = self
             .context
             .api
             .await_output_outcome(out_point, timeout)
@@ -186,8 +186,8 @@ mod tests {
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     use fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
-        WalletConfigGenerator,
+        PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet, WalletConfigGenerator,
+        WalletOutput, WalletOutputOutcome,
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
@@ -215,7 +215,7 @@ mod tests {
         ) -> crate::api::Result<TransactionStatus> {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![OutputOutcome::Wallet(PegOutOutcome(
+                outputs: vec![OutputOutcome::Wallet(WalletOutputOutcome(
                     Txid::from_slice([0; 32].as_slice()).unwrap(),
                 ))],
             })
@@ -381,7 +381,7 @@ mod tests {
         btc_rpc.set_block_height(100).await;
         fed.lock()
             .await
-            .consensus_round(&[], &[(out_point, output)])
+            .consensus_round(&[], &[(out_point, WalletOutput(output))])
             .await;
 
         // begin pegout

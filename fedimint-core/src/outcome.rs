@@ -4,7 +4,7 @@ use fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingCo
 use fedimint_ln::contracts::{DecryptedPreimage, Preimage};
 use fedimint_ln::LightningModule;
 use fedimint_mint::{Mint, MintOutputOutcome};
-use fedimint_wallet::{PegOutOutcome, Wallet};
+use fedimint_wallet::{Wallet, WalletOutputOutcome};
 use serde::{Deserialize, Serialize};
 
 use crate::CoreError;
@@ -81,7 +81,7 @@ impl TryIntoOutcome for MintOutputOutcome {
     }
 }
 
-impl TryIntoOutcome for PegOutOutcome {
+impl TryIntoOutcome for WalletOutputOutcome {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         match common_outcome {
             OutputOutcome::Mint(_) => Err(CoreError::MismatchingVariant("wallet", "mint")),

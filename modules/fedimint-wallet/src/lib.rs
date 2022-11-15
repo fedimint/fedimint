@@ -36,6 +36,7 @@ use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
 use fedimint_bitcoind::BitcoindRpc;
+use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
 use rand::rngs::OsRng;
@@ -154,7 +155,7 @@ pub struct PegOut {
 
 /// Contains the Bitcoin transaction id of the transaction created by the withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct PegOutOutcome(pub bitcoin::Txid);
+pub struct WalletOutputOutcome(pub bitcoin::Txid);
 
 pub struct WalletConfigGenerator;
 
@@ -264,12 +265,19 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
     }
 }
 
+#[autoimpl(Deref, DerefMut using self.0)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct WalletInput(pub Box<PegInProof>);
+#[autoimpl(Deref, DerefMut using self.0)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct WalletOutput(pub PegOut);
+
 #[async_trait(?Send)]
 impl FederationModule for Wallet {
-    type TxInput = Box<PegInProof>;
-    type TxOutput = PegOut;
+    type TxInput = WalletInput;
+    type TxOutput = WalletOutput;
     // TODO: implement outcome
-    type TxOutputOutcome = PegOutOutcome;
+    type TxOutputOutcome = WalletOutputOutcome;
     type ConsensusItem = WalletConsensusItem;
     type VerificationCache = ();
 
@@ -529,8 +537,11 @@ impl FederationModule for Wallet {
             .expect("DB Error");
         dbtx.insert_new_entry(&PegOutTxSignatureCI(txid), &sigs)
             .expect("DB Error");
-        dbtx.insert_new_entry(&PegOutBitcoinTransaction(out_point), &PegOutOutcome(txid))
-            .expect("DB Error");
+        dbtx.insert_new_entry(
+            &PegOutBitcoinTransaction(out_point),
+            &WalletOutputOutcome(txid),
+        )
+        .expect("DB Error");
         Ok(amount)
     }
 
