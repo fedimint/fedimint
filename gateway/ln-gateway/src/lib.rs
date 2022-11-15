@@ -144,11 +144,17 @@ impl LnGateway {
         let ctx = secp256k1::Secp256k1::new();
         let kp_fed = KeyPair::new(&ctx, &mut rng);
 
+        let node_pub_key = self
+            .ln_client
+            .pubkey()
+            .await
+            .expect("Failed to get node pubkey from Lightning node");
+
         let gw_client_cfg = GatewayClientConfig {
             client_config: client_cfg,
             redeem_key: kp_fed,
             timelock_delta: 10,
-            node_pub_key: self.pub_key,
+            node_pub_key,
             api: Url::parse(format!("http://{}", self.bind_addr).as_str())
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
         };

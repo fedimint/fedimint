@@ -60,6 +60,24 @@ pub struct HtlcAccepted {
 
 #[async_trait]
 impl LnRpc for Mutex<cln_rpc::ClnRpc> {
+    #[instrument(name = "LnRpc::pubkey", skip(self))]
+    async fn pubkey(&self) -> Result<secp256k1::PublicKey, LightningError> {
+        let pubkey_result = self
+            .lock()
+            .await
+            .call(Request::Getinfo(model::requests::GetinfoRequest {}))
+            .await;
+
+        match pubkey_result {
+            Ok(Response::Getinfo(r)) => {
+                let node_pubkey_bytes = r.id;
+                Ok(secp256k1::PublicKey::from_slice(&node_pubkey_bytes.to_vec()).unwrap())
+            }
+            Ok(_) => panic!("Core lightning sent wrong message"),
+            Err(e) => panic!("Failed to fetch core-lightning node pubkey {:?}", e),
+        }
+    }
+
     #[instrument(name = "LnRpc::pay", skip(self))]
     async fn pay(
         &self,

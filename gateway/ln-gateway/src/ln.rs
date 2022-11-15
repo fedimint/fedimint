@@ -6,6 +6,9 @@ use secp256k1::PublicKey;
 
 #[async_trait]
 pub trait LnRpc: Send + Sync + 'static {
+    /// Get the public key of the lightning node
+    async fn pubkey(&self) -> Result<PublicKey, LightningError>;
+
     /// Attempt to pay an invoice and block till it succeeds, fails or times out
     async fn pay(
         &self,
