@@ -1420,7 +1420,13 @@ dependencies = [
 name = "gateway-tests"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "bitcoin",
+ "fedimint-ln",
+ "lightning-invoice",
  "ln-gateway",
+ "mint-client",
+ "rand",
  "tokio",
 ]
 
