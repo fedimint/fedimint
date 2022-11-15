@@ -14,7 +14,7 @@ use tracing::{debug, error, instrument};
 
 use crate::ReceivePaymentPayload;
 use crate::{
-    ln::{LightningError, LnRpc, LnRpcRef},
+    ln::{LightningError, LnRpc},
     rpc::GatewayRpcSender,
 };
 
@@ -56,6 +56,13 @@ pub struct Onion {
 pub struct HtlcAccepted {
     pub htlc: Htlc,
     pub onion: Onion,
+}
+
+pub struct ClnRpcRef {
+    // CLN RPC client
+    pub ln_rpc: Arc<Mutex<ClnRpc>>,
+    // Config directory
+    pub work_dir: PathBuf,
 }
 
 #[async_trait]
@@ -143,23 +150,13 @@ async fn htlc_accepted_hook(
     }))
 }
 
-pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<LnRpcRef, Error> {
+pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<ClnRpcRef, Error> {
     if let Some(plugin) = Builder::new(sender, stdin(), stdout())
         .option(options::ConfigOption::new(
             "fedimint-cfg",
             // FIXME: cln_plugin doesn't support parameters without defaults
             options::Value::String("default-dont-use".into()),
             "fedimint config directory",
-        ))
-        .option(options::ConfigOption::new(
-            "fedimint-host",
-            options::Value::String("127.0.0.1".into()),
-            "gateway hostname",
-        ))
-        .option(options::ConfigOption::new(
-            "fedimint-port",
-            options::Value::String("8080".into()),
-            "gateway port",
         ))
         .hook("htlc_accepted", |plugin, value| async move {
             // This callback needs to be `Sync`, so we use tokio::spawn
@@ -188,38 +185,14 @@ pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<LnRpcRef, Error> 
             _ => unreachable!(),
         };
 
-        let host = match plugin.option("fedimint-host") {
-            Some(options::Value::String(host)) => host,
-            _ => unreachable!(),
-        };
-        let port = match plugin.option("fedimint-port") {
-            Some(options::Value::String(port)) => port,
-            _ => unreachable!(),
-        };
-        let bind_addr = format!("{}:{}", host, port)
-            .parse()
-            .expect("Invalid gateway bind address");
-
         let config = plugin.configuration();
         let cln_rpc_socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
-        let mut cln_rpc = ClnRpc::new(cln_rpc_socket)
+        let cln_rpc = ClnRpc::new(cln_rpc_socket)
             .await
             .expect("connect to ln_socket");
 
-        let node_pub_key_bytes = match cln_rpc
-            .call(Request::Getinfo(model::requests::GetinfoRequest {}))
-            .await
-        {
-            Ok(Response::Getinfo(r)) => r.id,
-            Ok(_) => panic!("Core lightning sent wrong message"),
-            Err(e) => panic!("Failed to fetch core-lightning node pubkey {:?}", e),
-        };
-        let node_pub_key = secp256k1::PublicKey::from_slice(&node_pub_key_bytes.to_vec()).unwrap();
-
-        Ok(LnRpcRef {
+        Ok(ClnRpcRef {
             ln_rpc: Arc::new(Mutex::new(cln_rpc)),
-            bind_addr,
-            pub_key: node_pub_key,
             work_dir,
         })
     } else {

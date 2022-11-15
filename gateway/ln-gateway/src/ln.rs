@@ -1,5 +1,3 @@
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
-
 use async_trait::async_trait;
 use fedimint_server::modules::ln::contracts::Preimage;
 use secp256k1::PublicKey;
@@ -16,14 +14,6 @@ pub trait LnRpc: Send + Sync + 'static {
         max_delay: u64,
         max_fee_percent: f64,
     ) -> Result<Preimage, LightningError>;
-}
-
-#[derive(Clone)]
-pub struct LnRpcRef {
-    pub ln_rpc: Arc<dyn LnRpc>,
-    pub bind_addr: SocketAddr,
-    pub pub_key: PublicKey,
-    pub work_dir: PathBuf,
 }
 
 #[derive(Debug)]
