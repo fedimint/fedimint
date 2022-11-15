@@ -1,5 +1,12 @@
 # shellcheck shell=bash
 
+function await() {
+    until [[ $("$*") ]]
+    do
+        sleep "$POLL_INTERVAL"
+    done
+}
+
 function mine_blocks() {
     PEG_IN_ADDR="$($FM_BTC_CLIENT getnewaddress)"
     $FM_BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR
@@ -14,63 +21,54 @@ function open_channel() {
     FM_LN1_PUB_KEY="$($FM_LN1 getinfo | jq -r '.id')"
     export FM_LN1_PUB_KEY
     $FM_LN1 connect $FM_LN2_PUB_KEY@127.0.0.1:9001
-    until $FM_LN1 -k fundchannel id=$FM_LN2_PUB_KEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
+    await $FM_LN1 -k fundchannel id=$FM_LN2_PUB_KEY amount=0.1btc push_msat=5000000000
     mine_blocks 10
-    until [[ $($FM_LN1 listpeers | jq -r ".peers[] | select(.id == \"$FM_LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
+    await '$($FM_LN1 listpeers $FM_LN2_PUB_KEY | jq -r --arg id $FM_LN2_PUB_KEY ".peers[] | select(.id==$id).channels[0].state")' == 'CHANNELD_NORMAL'
 }
 
 function await_block_sync() {
-  FINALITY_DELAY=$(get_finality_delay)
-  EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALITY_DELAY ))"
-  echo "Node at ${EXPECTED_BLOCK_HEIGHT}H"
-  $FM_MINT_CLIENT wait-block-height $EXPECTED_BLOCK_HEIGHT
-  echo "Mint at ${EXPECTED_BLOCK_HEIGHT}H"
+    FINALITY_DELAY=$(get_finality_delay)
+    EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALITY_DELAY ))"
+    echo "Node at ${EXPECTED_BLOCK_HEIGHT}H"
+    $FM_MINT_CLIENT wait-block-height $EXPECTED_BLOCK_HEIGHT
+    echo "Mint at ${EXPECTED_BLOCK_HEIGHT}H"
 }
 
 function await_server_on_port() {
-  until nc -z 127.0.0.1 $1
-  do
-      sleep $POLL_INTERVAL
-  done
+    await nc -z 127.0.0.1 $1
 }
 
 # Check that core-lightning block-proccessing is caught up
 # CLI integration tests should call this before attempting to pay invoices
 function await_cln_block_processing() {
-  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks')"
+    EXPECTED_BLOCK_HEIGHT='$($FM_BTC_CLIENT getblockchaininfo | jq -r ".blocks")'
 
-  # ln1
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN1 getinfo | jq -r '.blockheight')" ]
-  do
-      sleep $POLL_INTERVAL
-  done
+    # ln1
+    await $EXPECTED_BLOCK_HEIGHT == '$($FM_LN1 getinfo | jq -r ".blockheight")'
 
-  # ln2
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN2 getinfo | jq -r '.blockheight')" ]
-  do
-      sleep $POLL_INTERVAL
-  done
+    # ln2
+    await $EXPECTED_BLOCK_HEIGHT == '$($FM_LN2 getinfo | jq -r ".blockheight")'
 }
 
 # Function for killing processes stored in FM_PID_FILE
 function kill_fedimint_processes {
-  # shellcheck disable=SC2046
-  kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
-  pkill "ln_gateway" || true;
-  rm $FM_PID_FILE
+    # shellcheck disable=SC2046
+    kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
+    pkill "ln_gateway" || true;
+    rm $FM_PID_FILE
 }
 
 function start_gateway() {
-  $FM_GATEWAY_CLI generate-config '127.0.0.1:8080' $FM_CFG_DIR # generate gateway config
-  $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR &
-  sleep 5 # wait for plugin to start
-  gw_register_fed
+    $FM_GATEWAY_CLI generate-config '127.0.0.1:8080' $FM_CFG_DIR # generate gateway config
+    $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR &
+    sleep 5 # wait for plugin to start
+    gw_register_fed
 }
 
 function gw_register_fed() {
-  # register federation on the gateway
-  FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -r '.connect_info')"
-  $FM_GATEWAY_CLI register-fed "$FM_CONNECT_STR"
+    # register federation on the gateway
+    FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -r '.connect_info')"
+    $FM_GATEWAY_CLI register-fed "$FM_CONNECT_STR"
 }
 
 function get_finality_delay() {
