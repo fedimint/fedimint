@@ -120,23 +120,19 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::{response::IntoResponse, routing::post, Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>mint_client::ln::PayInvoicePayload;
 <span class="kw">use </span>serde_json::json;
-<span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 <span class="kw">use </span>tracing::instrument;
 
 <span class="kw">use crate</span>::{
     rpc::{
-        BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest, GatewayRpcSender,
-        InfoPayload, RegisterFedPayload, WithdrawPayload,
+        BalancePayload, DepositAddressPayload, DepositPayload, GatewayRpcSender, InfoPayload,
+        RegisterFedPayload, WithdrawPayload,
     },
     LnGatewayError,
 };
@@ -144,10 +140,8 @@
 <span class="kw">pub async fn </span>run_webserver(
     authkey: String,
     bind_addr: SocketAddr,
-    sender: mpsc::Sender&lt;GatewayRequest&gt;,
+    sender: GatewayRpcSender,
 ) -&gt; axum::response::Result&lt;()&gt; {
-    <span class="kw">let </span>rpc = GatewayRpcSender::new(sender.clone());
-
     <span class="comment">// Public routes on gateway webserver
     </span><span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice));
 
@@ -164,7 +158,7 @@
     <span class="kw">let </span>app = Router::new()
         .merge(routes)
         .merge(admin_routes)
-        .layer(Extension(rpc.clone()))
+        .layer(Extension(sender))
         .layer(CorsLayer::permissive());
 
     axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr)

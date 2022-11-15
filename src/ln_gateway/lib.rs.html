@@ -327,6 +327,10 @@
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -372,7 +376,7 @@
     ln::{LightningError, LnRpc},
     rpc::{
         BalancePayload, DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest,
-        InfoPayload, ReceivePaymentPayload, RegisterFedPayload, WithdrawPayload,
+        GatewayRpcSender, InfoPayload, ReceivePaymentPayload, RegisterFedPayload, WithdrawPayload,
     },
     webserver::run_webserver,
 };
@@ -404,7 +408,11 @@
         pub_key: PublicKey,
     ) -&gt; <span class="self">Self </span>{
         <span class="comment">// Run webserver asynchronously in tokio
-        </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(config.password.clone(), bind_addr, sender));
+        </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(
+            config.password.clone(),
+            bind_addr,
+            GatewayRpcSender::new(sender),
+        ));
 
         <span class="self">Self </span>{
             config,
