@@ -43,7 +43,7 @@ use crate::{
     ln::{LightningError, LnRpc},
     rpc::{
         BalancePayload, DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest,
-        InfoPayload, ReceivePaymentPayload, RegisterFedPayload, WithdrawPayload,
+        GatewayRpcSender, InfoPayload, ReceivePaymentPayload, RegisterFedPayload, WithdrawPayload,
     },
     webserver::run_webserver,
 };
@@ -75,7 +75,11 @@ impl LnGateway {
         pub_key: PublicKey,
     ) -> Self {
         // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(config.password.clone(), bind_addr, sender));
+        let webserver = tokio::spawn(run_webserver(
+            config.password.clone(),
+            bind_addr,
+            GatewayRpcSender::new(sender),
+        ));
 
         Self {
             config,

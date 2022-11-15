@@ -4,14 +4,13 @@ use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
 use axum_macros::debug_handler;
 use mint_client::ln::PayInvoicePayload;
 use serde_json::json;
-use tokio::sync::mpsc;
 use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::instrument;
 
 use crate::{
     rpc::{
-        BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest, GatewayRpcSender,
-        InfoPayload, RegisterFedPayload, WithdrawPayload,
+        BalancePayload, DepositAddressPayload, DepositPayload, GatewayRpcSender, InfoPayload,
+        RegisterFedPayload, WithdrawPayload,
     },
     LnGatewayError,
 };
@@ -19,10 +18,8 @@ use crate::{
 pub async fn run_webserver(
     authkey: String,
     bind_addr: SocketAddr,
-    sender: mpsc::Sender<GatewayRequest>,
+    sender: GatewayRpcSender,
 ) -> axum::response::Result<()> {
-    let rpc = GatewayRpcSender::new(sender.clone());
-
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
@@ -39,7 +36,7 @@ pub async fn run_webserver(
     let app = Router::new()
         .merge(routes)
         .merge(admin_routes)
-        .layer(Extension(rpc.clone()))
+        .layer(Extension(sender))
         .layer(CorsLayer::permissive());
 
     axum::Server::bind(&bind_addr)
