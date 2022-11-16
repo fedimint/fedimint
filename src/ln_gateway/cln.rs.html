@@ -199,15 +199,6 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -224,7 +215,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::ReceivePaymentPayload;
 <span class="kw">use crate</span>::{
-    ln::{LightningError, LnRpc, LnRpcRef},
+    ln::{LightningError, LnRpc},
     rpc::GatewayRpcSender,
 };
 
@@ -268,8 +259,33 @@
     <span class="kw">pub </span>onion: Onion,
 }
 
+<span class="kw">pub struct </span>ClnRpcRef {
+    <span class="comment">// CLN RPC client
+    </span><span class="kw">pub </span>ln_rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
+    <span class="comment">// Config directory
+    </span><span class="kw">pub </span>work_dir: PathBuf,
+}
+
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>LnRpc <span class="kw">for </span>Mutex&lt;cln_rpc::ClnRpc&gt; {
+    <span class="attr">#[instrument(name = <span class="string">&quot;LnRpc::pubkey&quot;</span>, skip(<span class="self">self</span>))]
+    </span><span class="kw">async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, LightningError&gt; {
+        <span class="kw">let </span>pubkey_result = <span class="self">self
+            </span>.lock()
+            .<span class="kw">await
+            </span>.call(Request::Getinfo(model::requests::GetinfoRequest {}))
+            .<span class="kw">await</span>;
+
+        <span class="kw">match </span>pubkey_result {
+            <span class="prelude-val">Ok</span>(Response::Getinfo(r)) =&gt; {
+                <span class="kw">let </span>node_pubkey_bytes = r.id;
+                <span class="prelude-val">Ok</span>(secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>node_pubkey_bytes.to_vec()).unwrap())
+            }
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Core lightning sent wrong message&quot;</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Failed to fetch core-lightning node pubkey {:?}&quot;</span>, e),
+        }
+    }
+
     <span class="attr">#[instrument(name = <span class="string">&quot;LnRpc::pay&quot;</span>, skip(<span class="self">self</span>))]
     </span><span class="kw">async fn </span>pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -335,23 +351,13 @@
     }))
 }
 
-<span class="kw">pub async fn </span>build_cln_rpc(sender: GatewayRpcSender) -&gt; <span class="prelude-ty">Result</span>&lt;LnRpcRef, Error&gt; {
+<span class="kw">pub async fn </span>build_cln_rpc(sender: GatewayRpcSender) -&gt; <span class="prelude-ty">Result</span>&lt;ClnRpcRef, Error&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(plugin) = Builder::new(sender, stdin(), stdout())
         .option(options::ConfigOption::new(
             <span class="string">&quot;fedimint-cfg&quot;</span>,
             <span class="comment">// FIXME: cln_plugin doesn&#39;t support parameters without defaults
             </span>options::Value::String(<span class="string">&quot;default-dont-use&quot;</span>.into()),
             <span class="string">&quot;fedimint config directory&quot;</span>,
-        ))
-        .option(options::ConfigOption::new(
-            <span class="string">&quot;fedimint-host&quot;</span>,
-            options::Value::String(<span class="string">&quot;127.0.0.1&quot;</span>.into()),
-            <span class="string">&quot;gateway hostname&quot;</span>,
-        ))
-        .option(options::ConfigOption::new(
-            <span class="string">&quot;fedimint-port&quot;</span>,
-            options::Value::String(<span class="string">&quot;8080&quot;</span>.into()),
-            <span class="string">&quot;gateway port&quot;</span>,
         ))
         .hook(<span class="string">&quot;htlc_accepted&quot;</span>, |plugin, value| <span class="kw">async move </span>{
             <span class="comment">// This callback needs to be `Sync`, so we use tokio::spawn
@@ -380,38 +386,14 @@
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
         };
 
-        <span class="kw">let </span>host = <span class="kw">match </span>plugin.option(<span class="string">&quot;fedimint-host&quot;</span>) {
-            <span class="prelude-val">Some</span>(options::Value::String(host)) =&gt; host,
-            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
-        };
-        <span class="kw">let </span>port = <span class="kw">match </span>plugin.option(<span class="string">&quot;fedimint-port&quot;</span>) {
-            <span class="prelude-val">Some</span>(options::Value::String(port)) =&gt; port,
-            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
-        };
-        <span class="kw">let </span>bind_addr = <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, host, port)
-            .parse()
-            .expect(<span class="string">&quot;Invalid gateway bind address&quot;</span>);
-
         <span class="kw">let </span>config = plugin.configuration();
         <span class="kw">let </span>cln_rpc_socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
-        <span class="kw">let </span><span class="kw-2">mut </span>cln_rpc = ClnRpc::new(cln_rpc_socket)
+        <span class="kw">let </span>cln_rpc = ClnRpc::new(cln_rpc_socket)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;connect to ln_socket&quot;</span>);
 
-        <span class="kw">let </span>node_pub_key_bytes = <span class="kw">match </span>cln_rpc
-            .call(Request::Getinfo(model::requests::GetinfoRequest {}))
-            .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(Response::Getinfo(r)) =&gt; r.id,
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Core lightning sent wrong message&quot;</span>),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Failed to fetch core-lightning node pubkey {:?}&quot;</span>, e),
-        };
-        <span class="kw">let </span>node_pub_key = secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>node_pub_key_bytes.to_vec()).unwrap();
-
-        <span class="prelude-val">Ok</span>(LnRpcRef {
+        <span class="prelude-val">Ok</span>(ClnRpcRef {
             ln_rpc: Arc::new(Mutex::new(cln_rpc)),
-            bind_addr,
-            pub_key: node_pub_key,
             work_dir,
         })
     } <span class="kw">else </span>{

@@ -18,21 +18,15 @@
 <a href="#18" id="18">18</a>
 <a href="#19" id="19">19</a>
 <a href="#20" id="20">20</a>
-<a href="#21" id="21">21</a>
-<a href="#22" id="22">22</a>
-<a href="#23" id="23">23</a>
-<a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a>
-<a href="#27" id="27">27</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{net::SocketAddr, path::PathBuf, sync::Arc};
-
-<span class="kw">use </span>async_trait::async_trait;
+</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
 <span class="kw">use </span>secp256k1::PublicKey;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>LnRpc: Send + Sync + <span class="lifetime">&#39;static </span>{
+    <span class="doccomment">/// Get the public key of the lightning node
+    </span><span class="kw">async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PublicKey, LightningError&gt;;
+
     <span class="doccomment">/// Attempt to pay an invoice and block till it succeeds, fails or times out
     </span><span class="kw">async fn </span>pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -40,14 +34,6 @@
         max_delay: u64,
         max_fee_percent: f64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningError&gt;;
-}
-
-<span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>LnRpcRef {
-    <span class="kw">pub </span>ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
-    <span class="kw">pub </span>bind_addr: SocketAddr,
-    <span class="kw">pub </span>pub_key: PublicKey,
-    <span class="kw">pub </span>work_dir: PathBuf,
 }
 
 <span class="attr">#[derive(Debug)]
