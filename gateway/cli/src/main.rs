@@ -30,6 +30,8 @@ pub enum Commands {
     /// Ganerate gateway configuration
     /// NOTE: This command can only be used on a local gateway
     GenerateConfig {
+        /// The address of the gateway webserver
+        address: SocketAddr,
         /// The gateway configuration directory
         out_dir: PathBuf,
     },
@@ -72,7 +74,10 @@ pub enum Commands {
 async fn main() {
     let cli = Cli::parse();
     match cli.command {
-        Commands::GenerateConfig { mut out_dir } => {
+        Commands::GenerateConfig {
+            address,
+            mut out_dir,
+        } => {
             // Recursively create config directory if it doesn't exist
             std::fs::create_dir_all(&out_dir).expect("Failed to create config directory");
             // Create config file
@@ -83,7 +88,7 @@ async fn main() {
             serde_json::to_writer_pretty(
                 cfg_file,
                 &GatewayConfig {
-                    address: SocketAddr::from(([127, 0, 0, 1], 8080)),
+                    address,
                     // TODO: Generate a strong random password
                     password: source_password(cli.rpcpassword),
                     // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
