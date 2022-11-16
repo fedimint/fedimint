@@ -163,8 +163,8 @@ impl<'a> DatabaseDump<'a> {
                         .read_only
                         .get_value(&ConsensusRange::LastEpochKey)
                         .unwrap();
-                    if last_epoch.is_some() {
-                        consensus.insert("LastEpoch".to_string(), Box::new(last_epoch.unwrap()));
+                    if let Some(last_epoch) = last_epoch {
+                        consensus.insert("LastEpoch".to_string(), Box::new(last_epoch));
                     }
                 }
             }
@@ -289,11 +289,8 @@ impl<'a> DatabaseDump<'a> {
                         .read_only
                         .get_value(&WalletRange::RoundConsensusKey)
                         .unwrap();
-                    if round_consensus.is_some() {
-                        wallet.insert(
-                            "Round Consensus".to_string(),
-                            Box::new(round_consensus.unwrap()),
-                        );
+                    if let Some(round_consensus) = round_consensus {
+                        wallet.insert("Round Consensus".to_string(), Box::new(round_consensus));
                     }
                 }
                 WalletRange::DbKeyPrefix::UnsignedTransaction => {
@@ -505,10 +502,10 @@ impl<'a> DatabaseDump<'a> {
                         .read_only
                         .get_value(&ClientMintRange::LastECashNoteIndexKey)
                         .unwrap();
-                    if last_ecash_note.is_some() {
+                    if let Some(last_ecash_note) = last_ecash_note {
                         mint_client.insert(
                             "Last e-cash note index".to_string(),
-                            Box::new(last_ecash_note.unwrap()),
+                            Box::new(last_ecash_note),
                         );
                     }
                 }
@@ -556,8 +553,8 @@ impl<'a> DatabaseDump<'a> {
                         .read_only
                         .get_value(&ClientRange::ClientSecretKey)
                         .unwrap();
-                    if secret.is_some() {
-                        client.insert("Client Secret".to_string(), Box::new(secret.unwrap()));
+                    if let Some(secret) = secret {
+                        client.insert("Client Secret".to_string(), Box::new(secret));
                     }
                 }
             }
@@ -568,7 +565,7 @@ impl<'a> DatabaseDump<'a> {
     }
 }
 
-const USAGE: &'static str = "
+const USAGE: &str = "
 Usage:
     fedimint-dbdump <path> [--range=<range>] [--prefix=<prefix>]
     
@@ -579,7 +576,7 @@ Options:
     RANGES=consensus,mint,wallet,lightning,mintclient,lightningclient,walletclient,client
 ";
 
-const RANGES: [&'static str; 8] = [
+const RANGES: [&str; 8] = [
     "consensus",
     "mint",
     "wallet",
@@ -606,28 +603,27 @@ fn main() {
     let csv_range = args.flag_range;
     let csv_prefix = args.flag_prefix;
 
-    let ranges: Vec<String>;
-    if csv_range != "All" {
-        ranges = csv_range
-            .split(",")
+    let ranges: Vec<String> = if csv_range != "All" {
+        csv_range
+            .split(',')
             .map(|s| s.to_string().to_lowercase())
-            .collect::<Vec<String>>();
+            .collect::<Vec<String>>()
     } else {
-        ranges = RANGES.map(|s| s.to_string().to_lowercase()).to_vec();
-    }
+        RANGES.map(|s| s.to_string().to_lowercase()).to_vec()
+    };
 
     let prefixes = csv_prefix
-        .split(",")
+        .split(',')
         .map(|s| s.to_string().to_lowercase())
         .collect::<Vec<String>>();
 
     let read_only: DatabaseTransaction = RocksDbReadOnly::open_read_only(db_path).unwrap().into();
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
     let mut dbdump = DatabaseDump {
-        serialized: serialized,
-        read_only: read_only,
-        ranges: ranges,
-        prefixes: prefixes,
+        serialized,
+        read_only,
+        ranges,
+        prefixes,
         include_all_prefixes: csv_prefix == "All",
     };
 
