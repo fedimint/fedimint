@@ -655,6 +655,13 @@
           ];
         };
 
+        gateway-tests = pkg {
+          name = "gateway-tests";
+          dirs = [
+            "gateway/ln-gateway"
+          ];
+        };
+
         # Replace placeholder git hash in a binary
         #
         # To avoid impurity, we use a git hash placeholder when building binaries
