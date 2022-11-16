@@ -10,7 +10,6 @@ pub mod webserver;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -30,7 +29,7 @@ use mint_client::{
     ClientError, FederationId, GatewayClient, GatewayClientConfig,
 };
 use rand::thread_rng;
-use secp256k1::{KeyPair, PublicKey};
+use secp256k1::KeyPair;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
@@ -53,43 +52,35 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 pub struct LnGateway {
     config: GatewayConfig,
     actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
-    ln_client: Arc<dyn LnRpc>,
+    ln_rpc: Arc<dyn LnRpc>,
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
     client_builder: GatewayClientBuilder,
-    // TODO: consider wrapping bind_addr, and node_pubkey in GatewayConfig
-    bind_addr: SocketAddr,
-    pub_key: PublicKey,
 }
 
 impl LnGateway {
     pub fn new(
         config: GatewayConfig,
-        ln_client: Arc<dyn LnRpc>,
+        ln_rpc: Arc<dyn LnRpc>,
         client_builder: GatewayClientBuilder,
         // TODO: consider encapsulating message channel within LnGateway
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
-        // TODO: consider wrapping bind_addr, and node_pubkey in GatewayConfig
-        bind_addr: SocketAddr,
-        pub_key: PublicKey,
     ) -> Self {
         // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(
             config.password.clone(),
-            bind_addr,
+            config.address,
             GatewayRpcSender::new(sender),
         ));
 
         Self {
             config,
             actors: Mutex::new(HashMap::new()),
-            ln_client,
+            ln_rpc,
             webserver,
             receiver,
             client_builder,
-            bind_addr,
-            pub_key,
         }
     }
 
@@ -144,12 +135,18 @@ impl LnGateway {
         let ctx = secp256k1::Secp256k1::new();
         let kp_fed = KeyPair::new(&ctx, &mut rng);
 
+        let node_pub_key = self
+            .ln_rpc
+            .pubkey()
+            .await
+            .expect("Failed to get node pubkey from Lightning node");
+
         let gw_client_cfg = GatewayClientConfig {
             client_config: client_cfg,
             redeem_key: kp_fed,
             timelock_delta: 10,
-            node_pub_key: self.pub_key,
-            api: Url::parse(format!("http://{}", self.bind_addr).as_str())
+            node_pub_key,
+            api: Url::parse(format!("http://{}", self.config.address).as_str())
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
         };
 
@@ -203,9 +200,7 @@ impl LnGateway {
         } = payload;
 
         let actor = self.select_actor(federation_id)?;
-        let outpoint = actor
-            .pay_invoice(self.ln_client.clone(), contract_id)
-            .await?;
+        let outpoint = actor.pay_invoice(self.ln_rpc.clone(), contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;

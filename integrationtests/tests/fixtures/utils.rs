@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin::secp256k1::PublicKey;
 use fedimint_ln::contracts::Preimage;
 use ln_gateway::ln::{LightningError, LnRpc};
 use tokio::sync::Mutex;
@@ -33,6 +34,10 @@ impl LnRpcAdapter {
 
 #[async_trait]
 impl LnRpc for LnRpcAdapter {
+    async fn pubkey(&self) -> Result<PublicKey, LightningError> {
+        self.client.pubkey().await
+    }
+
     async fn pay(
         &self,
         invoice: lightning_invoice::Invoice,

@@ -2,14 +2,14 @@ use cln_plugin::Error;
 use fedimint_server::config::load_from_file;
 use ln_gateway::{
     client::{GatewayClientBuilder, RocksDbGatewayClientBuilder},
-    cln::build_cln_rpc,
+    cln::{build_cln_rpc, ClnRpcRef},
     config::GatewayConfig,
-    ln::LnRpcRef,
     rpc::{GatewayRequest, GatewayRpcSender},
     LnGateway,
 };
 use tokio::sync::mpsc;
 
+/// Fedimint gateway packaged as a CLN plugin
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let mut args = std::env::args();
@@ -20,16 +20,11 @@ async fn main() -> Result<(), Error> {
             return Ok(());
         }
     }
-    let (tx, rx): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
-        mpsc::channel(100);
 
-    let sender = GatewayRpcSender::new(tx.clone());
-    let LnRpcRef {
-        ln_rpc,
-        bind_addr,
-        pub_key,
-        work_dir,
-    } = build_cln_rpc(sender).await?;
+    // Create message channels
+    let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
+
+    let ClnRpcRef { ln_rpc, work_dir } = build_cln_rpc(GatewayRpcSender::new(tx.clone())).await?;
 
     let gw_cfg_path = work_dir.clone().join("gateway.config");
     let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path);
@@ -39,7 +34,7 @@ async fn main() -> Result<(), Error> {
         RocksDbGatewayClientBuilder::new(work_dir.clone()).into();
 
     // Create gateway instance
-    let mut gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, bind_addr, pub_key);
+    let mut gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx);
 
     // Start gateway
     gateway.run().await.expect("gateway failed to run");
