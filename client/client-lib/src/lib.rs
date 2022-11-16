@@ -1,5 +1,5 @@
 pub mod api;
-mod db;
+pub mod db;
 pub mod ln;
 pub mod mint;
 pub mod query;
@@ -156,6 +156,15 @@ pub struct Client<C> {
 
 #[derive(Encodable, Decodable)]
 pub struct ClientSecret([u8; 64]);
+
+impl Serialize for ClientSecret {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(&self.0)
+    }
+}
 
 impl AsRef<ClientConfig> for GatewayClientConfig {
     fn as_ref(&self) -> &ClientConfig {

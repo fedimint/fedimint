@@ -12,7 +12,7 @@ Options:
     --range=<range>    A CSV list of the ranges of the database to dump [default: All].
     --prefix=<prefix>  A CSV list of he prefixes within the range of the database to dump [default: All].
 
-    RANGES=consensus,mint,wallet,lightning,mintclient,lightningclient,walletclient
+    RANGES=consensus,mint,wallet,lightning,mintclient,lightningclient,walletclient,client
 ```
 
 Examples:
@@ -43,5 +43,5 @@ fedimint-dbdump $FM_CFG_DIR/server-1/database --range=mint,consensus --prefix=co
 
 Dump the entire client database
 ```shell
-fedimint-dbdump $FM_CFG_DIR/client.db --range=mintclient,lightningclient,walletclient
+fedimint-dbdump $FM_CFG_DIR/client.db --range=mintclient,lightningclient,walletclient,client
 ```

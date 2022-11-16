@@ -62,6 +62,9 @@ The Database is split into different key spaces based on prefixing that can be u
 | LightningGateway                 | `0x45` | Node Pubkey (PublicKey)             | `LightningGateway`           |
 
 ## Client DB Layout
+| Name                    | Prefix | Key                                | Value                        |
+|-------------------------|--------|------------------------------------|------------------------------|
+| ClientSecret            | `0x29` | none                               | `ClientSecret`               |
 
 ### LightningClient
 | Name                    | Prefix | Key                                | Value                        |
@@ -71,8 +74,7 @@ The Database is split into different key spaces based on prefixing that can be u
 | OutgoingContractAccount | `0x25` | contract id (sha256)               | `OutgoingContractAccount`    |
 | ConfirmedInvoice        | `0x26` | contract id (sha256 payment hash)  | `ConfirmedInvoice`           |
 | LightingGateway         | `0x28` | none                               | `LightningGateway`           |
-| ClientSecret            | `0x29` |                                    | `ClientSecret`               |
-| Last e-cash note index  | `0x2a` |                                    | `u64`                        |
+| LastECashNoteIndex      | `0x2a` | none                               | `u64`                        |
 
 ### MintClient
 | Name                   | Prefix | Key                                | Value                        |

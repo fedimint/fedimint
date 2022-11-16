@@ -79,7 +79,7 @@ impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
     type Value = NoteIssuanceRequests;
 }
 
-#[derive(Debug, Clone, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct LastECashNoteIndexKey;
 
 impl DatabaseKeyPrefixConst for LastECashNoteIndexKey {

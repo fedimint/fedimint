@@ -8,6 +8,7 @@ use fedimint_mint::db as MintRange;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::db as ConsensusRange;
 use fedimint_wallet::db as WalletRange;
+use mint_client::db as ClientRange;
 use mint_client::ln::db as ClientLightningRange;
 use mint_client::mint::db as ClientMintRange;
 use mint_client::wallet::db as ClientWalletRange;
@@ -88,6 +89,9 @@ impl<'a> DatabaseDump<'a> {
                 }
                 "walletclient" => {
                     self.get_wallet_client_data();
+                }
+                "client" => {
+                    self.get_client_data();
                 }
                 _ => {}
             }
@@ -496,6 +500,18 @@ impl<'a> DatabaseDump<'a> {
                         "Pending Coins"
                     );
                 }
+                ClientMintRange::DbKeyPrefix::LastECashNoteIndex => {
+                    let last_ecash_note = self
+                        .read_only
+                        .get_value(&ClientMintRange::LastECashNoteIndexKey)
+                        .unwrap();
+                    if last_ecash_note.is_some() {
+                        mint_client.insert(
+                            "Last e-cash note index".to_string(),
+                            Box::new(last_ecash_note.unwrap()),
+                        );
+                    }
+                }
             }
         }
 
@@ -527,6 +543,29 @@ impl<'a> DatabaseDump<'a> {
         self.serialized
             .insert("Client Wallet".to_string(), Box::new(wallet_client));
     }
+
+    fn get_client_data(&mut self) {
+        let mut client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
+
+        for table in ClientRange::DbKeyPrefix::iter() {
+            filter_prefixes!(table, self);
+
+            match table {
+                ClientRange::DbKeyPrefix::ClientSecret => {
+                    let secret = self
+                        .read_only
+                        .get_value(&ClientRange::ClientSecretKey)
+                        .unwrap();
+                    if secret.is_some() {
+                        client.insert("Client Secret".to_string(), Box::new(secret.unwrap()));
+                    }
+                }
+            }
+        }
+
+        self.serialized
+            .insert("Client".to_string(), Box::new(client));
+    }
 }
 
 const USAGE: &'static str = "
@@ -537,10 +576,10 @@ Options:
     --range=<range>    A CSV list of the ranges of the database to dump [default: All].
     --prefix=<prefix>  A CSV list of he prefixes within the range of the database to dump [default: All].
 
-    RANGES=consensus,mint,wallet,lightning,mintclient,lightningclient,walletclient
+    RANGES=consensus,mint,wallet,lightning,mintclient,lightningclient,walletclient,client
 ";
 
-const RANGES: [&'static str; 7] = [
+const RANGES: [&'static str; 8] = [
     "consensus",
     "mint",
     "wallet",
@@ -548,6 +587,7 @@ const RANGES: [&'static str; 7] = [
     "mintclient",
     "lightningclient",
     "walletclient",
+    "client",
 ];
 
 #[derive(Debug, Deserialize)]
