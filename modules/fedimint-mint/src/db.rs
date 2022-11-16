@@ -1,11 +1,13 @@
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, PeerId};
+use serde::Serialize;
+use strum_macros::EnumIter;
 
 use crate::{Nonce, PartialSigResponse, SigResponse};
 
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     CoinNonce = 0x10,
     ProposedPartialSig = 0x11,
@@ -14,7 +16,13 @@ pub enum DbKeyPrefix {
     MintAuditItem = 0x14,
 }
 
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
 pub struct NonceKey(pub Nonce);
 
 impl DatabaseKeyPrefixConst for NonceKey {
@@ -24,6 +32,15 @@ impl DatabaseKeyPrefixConst for NonceKey {
 }
 
 #[derive(Debug, Encodable, Decodable)]
+pub struct NonceKeyPrefix;
+
+impl DatabaseKeyPrefixConst for NonceKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::CoinNonce as u8;
+    type Key = NonceKey;
+    type Value = ();
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ProposedPartialSignatureKey {
     pub request_id: OutPoint, // tx + output idx
 }
@@ -43,7 +60,7 @@ impl DatabaseKeyPrefixConst for ProposedPartialSignaturesKeyPrefix {
     type Value = PartialSigResponse;
 }
 
-#[derive(Debug, Encodable, Decodable)]
+#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ReceivedPartialSignatureKey {
     pub request_id: OutPoint, // tx + output idx
     pub peer_id: PeerId,
@@ -76,7 +93,7 @@ impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
 }
 
 /// Transaction id and output index identifying an output outcome
-#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct OutputOutcomeKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputOutcomeKey {
@@ -85,8 +102,17 @@ impl DatabaseKeyPrefixConst for OutputOutcomeKey {
     type Value = SigResponse;
 }
 
+#[derive(Debug, Encodable, Decodable)]
+pub struct OutputOutcomeKeyPrefix;
+
+impl DatabaseKeyPrefixConst for OutputOutcomeKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
+    type Key = OutputOutcomeKey;
+    type Value = SigResponse;
+}
+
 /// Represents the amounts of issued (signed) and redeemed (verified) coins for auditing
-#[derive(Debug, Clone, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub enum MintAuditItemKey {
     Issuance(OutPoint),
     IssuanceTotal,

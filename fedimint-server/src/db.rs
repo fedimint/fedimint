@@ -4,12 +4,14 @@ use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{PeerId, TransactionId};
 use fedimint_core::epoch::EpochHistory;
+use serde::Serialize;
+use strum_macros::EnumIter;
 
 use crate::consensus::AcceptedTransaction;
 use crate::transaction::Transaction;
 
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     ProposedTransaction = 0x01,
     AcceptedTransaction = 0x02,
@@ -19,7 +21,13 @@ pub enum DbKeyPrefix {
     LastEpoch = 0x06,
 }
 
-#[derive(Debug, Encodable, Decodable)]
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ProposedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for ProposedTransactionKey {
@@ -37,7 +45,7 @@ impl DatabaseKeyPrefixConst for ProposedTransactionKeyPrefix {
     type Value = Transaction;
 }
 
-#[derive(Debug, Encodable, Decodable)]
+#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct AcceptedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
@@ -47,6 +55,15 @@ impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
 }
 
 #[derive(Debug, Encodable, Decodable)]
+pub struct AcceptedTransactionKeyPrefix;
+
+impl DatabaseKeyPrefixConst for AcceptedTransactionKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::AcceptedTransaction as u8;
+    type Key = AcceptedTransactionKey;
+    type Value = AcceptedTransaction;
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct RejectedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for RejectedTransactionKey {
@@ -56,6 +73,15 @@ impl DatabaseKeyPrefixConst for RejectedTransactionKey {
 }
 
 #[derive(Debug, Encodable, Decodable)]
+pub struct RejectedTransactionKeyPrefix;
+
+impl DatabaseKeyPrefixConst for RejectedTransactionKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::RejectedTransaction as u8;
+    type Key = RejectedTransactionKey;
+    type Value = String;
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct DropPeerKey(pub PeerId);
 
 impl DatabaseKeyPrefixConst for DropPeerKey {
@@ -73,7 +99,7 @@ impl DatabaseKeyPrefixConst for DropPeerKeyPrefix {
     type Value = ();
 }
 
-#[derive(Debug, Copy, Clone, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
 pub struct EpochHistoryKey(pub u64);
 
 impl DatabaseKeyPrefixConst for EpochHistoryKey {
@@ -83,6 +109,15 @@ impl DatabaseKeyPrefixConst for EpochHistoryKey {
 }
 
 #[derive(Debug, Encodable, Decodable)]
+pub struct EpochHistoryKeyPrefix;
+
+impl DatabaseKeyPrefixConst for EpochHistoryKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
+    type Key = EpochHistoryKey;
+    type Value = EpochHistory;
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LastEpochKey;
 
 impl DatabaseKeyPrefixConst for LastEpochKey {

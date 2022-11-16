@@ -123,6 +123,22 @@ pub struct PendingTransaction {
     pub change: bitcoin::Amount,
 }
 
+impl Serialize for PendingTransaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = Vec::new();
+        self.consensus_encode(&mut bytes).unwrap();
+
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(&bytes))
+        } else {
+            serializer.serialize_bytes(&bytes)
+        }
+    }
+}
+
 /// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UnsignedTransaction {
@@ -130,6 +146,22 @@ pub struct UnsignedTransaction {
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
     pub change: bitcoin::Amount,
     pub fees: PegOutFees,
+}
+
+impl Serialize for UnsignedTransaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = Vec::new();
+        self.consensus_encode(&mut bytes).unwrap();
+
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(&bytes))
+        } else {
+            serializer.serialize_bytes(&bytes)
+        }
+    }
 }
 
 struct StatelessWallet<'a> {

@@ -2,11 +2,13 @@ use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::Nonce;
+use serde::Serialize;
+use strum_macros::EnumIter;
 
 use crate::mint::{NoteIssuanceRequests, SpendableNote};
 
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     Coin = 0x20,
     OutputFinalizationData = 0x21,
@@ -14,7 +16,13 @@ pub enum DbKeyPrefix {
     LastECashNoteIndex = 0x2a,
 }
 
-#[derive(Debug, Clone, Encodable, Decodable)]
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct CoinKey {
     pub amount: Amount,
     pub nonce: Nonce,
@@ -35,7 +43,7 @@ impl DatabaseKeyPrefixConst for CoinKeyPrefix {
     type Value = SpendableNote;
 }
 
-#[derive(Debug, Clone, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct PendingCoinsKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for PendingCoinsKey {
@@ -53,7 +61,7 @@ impl DatabaseKeyPrefixConst for PendingCoinsKeyPrefix {
     type Value = TieredMulti<SpendableNote>;
 }
 
-#[derive(Debug, Clone, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct OutputFinalizationKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputFinalizationKey {

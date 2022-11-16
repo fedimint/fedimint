@@ -58,6 +58,7 @@ export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
 export FM_CLIENTD="$FM_BIN_DIR/clientd"
 export FM_CLIENTD_CLI="$FM_BIN_DIR/clientd-cli"
 export FM_GATEWAY_CLI="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
+export FM_DB_DUMP="$FM_BIN_DIR/fedimint-dbdump"
 
 # Alias clients
 alias ln1="\$FM_LN1"
@@ -68,5 +69,6 @@ alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 alias clientd="\$FM_CLIENTD"
 alias clientd-cli="\$FM_CLIENTD_CLI"
 alias gateway-cli="\$FM_GATEWAY_CLI"
+alias fedimint-dbdump="\$FM_DB_DUMP"
 
 trap kill_fedimint_processes EXIT

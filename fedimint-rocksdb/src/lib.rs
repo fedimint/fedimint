@@ -11,6 +11,8 @@ use tracing::warn;
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);
 
+pub struct RocksDbReadOnly(rocksdb::DB);
+
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
 impl RocksDb {
@@ -22,6 +24,14 @@ impl RocksDb {
 
     pub fn inner(&self) -> &rocksdb::OptimisticTransactionDB {
         &self.0
+    }
+}
+
+impl RocksDbReadOnly {
+    pub fn open_read_only(db_path: impl AsRef<Path>) -> Result<RocksDbReadOnly, rocksdb::Error> {
+        let opts = rocksdb::Options::default();
+        let db = rocksdb::DB::open_for_read_only(&opts, db_path, false)?;
+        Ok(RocksDbReadOnly(db))
     }
 }
 
@@ -105,6 +115,48 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
 
     fn set_tx_savepoint(&mut self) {
         self.0.set_savepoint();
+    }
+}
+
+impl IDatabaseTransaction<'_> for RocksDbReadOnly {
+    fn raw_insert_bytes(&mut self, _key: &[u8], _value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        panic!("Cannot insert into a read only transaction");
+    }
+
+    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Ok(self.0.get(key)?)
+    }
+
+    fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
+        panic!("Cannot remove from a read only transaction");
+    }
+
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
+        let prefix = key_prefix.to_vec();
+        Box::new(
+            self.0
+                .prefix_iterator(prefix.clone())
+                .map_while(move |res| {
+                    let (key_bytes, value_bytes) = res.expect("DB error");
+                    key_bytes
+                        .starts_with(&prefix)
+                        .then_some((key_bytes, value_bytes))
+                })
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                .map(Ok),
+        )
+    }
+
+    fn commit_tx(self: Box<Self>) -> Result<()> {
+        panic!("Cannot commit a read only transaction");
+    }
+
+    fn rollback_tx_to_savepoint(&mut self) {
+        panic!("Cannot rollback a read only transaction");
+    }
+
+    fn set_tx_savepoint(&mut self) {
+        panic!("Cannot set a savepoint in a read only transaction");
     }
 }
 
