@@ -32,9 +32,6 @@ TRANSACTION="$($FM_BTC_CLIENT getrawtransaction $TX_ID)"
 #perform peg-in
 [[ $($FM_CLIENTD_CLI peg-in $TXOUT_PROOF $TRANSACTION| jq -r 'has("data")') = true ]]
 
-#until we can check th (peg-in) tx status we just have to sleep to wait for fetch
-#the sleep here is unneccessary high but a I want to be sure to avoid unnecessary CI failure
-sleep 20 
 #spend
 ECASH=$($FM_CLIENTD_CLI spend 1000);
 [[ $(echo $ECASH | jq -r 'has("data")') = true ]]
