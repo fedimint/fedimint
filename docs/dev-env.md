@@ -18,7 +18,7 @@ Clone this repository locally, with `git clone <repo-url>`, then `cd <repo-dir>`
 
 If you encounter problems with Nix on MacOS, refer to the [macOS Guide](./macos.md).
 
-If you want to use [zld](https://github.com/michaeleisel/zld) for faster linking, you can uncomment the relevant 
+If you want to use [zld](https://github.com/michaeleisel/zld) for faster linking, you can uncomment the relevant
 lines in the `.cargo/config.toml`. Please put the `.cargo/config.toml` in your `.git/info/exclude` if you choose to use zld. In case you want
 to submit a PR changing this file, uncomment the zld configuration again.
 
@@ -64,20 +64,21 @@ If your Nix is set up properly `nix develop` started inside the project dir shou
 tooling). In the meantime you can read other documentation.
 
 **Using `nix develop` is strongly recommended**. It takes care of setting up
-all the required developer automation, checks and ensures that all the developers and CI are 
+all the required developer automation, checks and ensures that all the developers and CI are
 in sync: working with same set of tools (exact versions).
 
 You can still use your favorite IDE, Unix shell, and other personal utilities, but they MUST NOT
 be expected to be a requirements for other developers. In other words: if it's not automated
-and set up in `nix develop` shell, it doesn't exist from team's perspective.
+and set up in `nix develop` shell, it doesn't exist from the team's perspective.
 
 To use a different shell for `nix develop`, try `nix develop -c zsh`. You can alias it if
 don't want to remember about it. That's the recommended way to use a different shell
 for `nix develop`.
 
-#### _Preclude nix shell + tmux problems_
-Some of the scripts and examples in this repository make use of the `tmux` terminal multiplexer. 
-However, by default a tmux instance launches a _login shell_, which can lead to unintended problems 
+### _Preclude nix shell + tmux problems_
+
+Some of the scripts and examples in this repository make use of the `tmux` terminal multiplexer.
+However, by default a tmux instance launches a _login shell_, which can lead to unintended problems
 on certain operating systems (e.g. Debian)[^1]. Especially, when `tmux` is launched within a _nix shell_,
 as needed for [Running Fedimint for dev testing](./dev-running.md).
 
@@ -90,7 +91,7 @@ set -g default-command "${SHELL}"
 
 ## Setting up `direnv` or `lorri`
 
-One of the biggest QoL improvements you can do when working with flake-enabled project
+One of the biggest QoL improvements you can do when working with flake-enabled projects
 is setting up one of:
 
 * https://github.com/nix-community/nix-direnv
