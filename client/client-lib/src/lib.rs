@@ -44,7 +44,7 @@ use fedimint_core::{
             },
             ContractOrOfferOutput, ContractOutput, LightningGateway,
         },
-        mint::BlindNonce,
+        mint::{BlindNonce, SigResponse},
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -742,6 +742,33 @@ impl Client<UserClientConfig> {
             .await
             .map_err(ClientError::MintApiError)?;
         Ok(())
+    }
+
+    /// Waits for the federation to sign an ecash note.
+    ///
+    /// This function will poll until the returned result includes a SigResponse from the federation
+    /// or it will timeout.
+    pub async fn await_outpoint_outcome(&self, outpoint: OutPoint) -> Result<()> {
+        let poll = || async {
+            let interval = Duration::from_secs(1);
+            loop {
+                let res = self
+                    .context
+                    .api
+                    .await_output_outcome::<Option<SigResponse>>(outpoint, Duration::from_secs(30))
+                    .await
+                    .map_err(ClientError::MintApiError);
+                if res.is_ok() && res.unwrap().is_some() {
+                    return Ok(());
+                }
+                tracing::info!("Signature response not returned yet");
+                fedimint_api::task::sleep(interval).await
+            }
+        };
+
+        fedimint_api::task::timeout(Duration::from_secs(40), poll())
+            .await
+            .map_err(|_| ApiError::Timeout)?
     }
 
     pub async fn generate_invoice<R: RngCore + CryptoRng>(

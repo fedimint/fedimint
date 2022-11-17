@@ -15,8 +15,6 @@ use clientd::{Json as JsonExtract, SpendPayload};
 use fedimint_core::config::load_from_file;
 use mint_client::{Client, ClientError, UserClientConfig};
 use rand::rngs::OsRng;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::{info, Level};
@@ -28,7 +26,6 @@ struct Config {
 }
 struct State {
     client: Arc<Client<UserClientConfig>>,
-    fetch_tx: Sender<()>,
     rng: OsRng,
 }
 #[tokio::main]
@@ -56,12 +53,10 @@ async fn main() {
         .into();
 
     let client = Arc::new(Client::new(cfg.clone(), db, Default::default()));
-    let (tx, mut rx) = mpsc::channel(1024);
     let rng = OsRng;
 
     let shared_state = Arc::new(State {
         client: Arc::clone(&client),
-        fetch_tx: tx,
         rng,
     });
     let app = Router::new()
@@ -81,13 +76,6 @@ async fn main() {
                 )
                 .layer(Extension(shared_state)),
         );
-
-    let fetch_client = Arc::clone(&client);
-    tokio::spawn(async move {
-        while rx.recv().await.is_some() {
-            fetch(Arc::clone(&fetch_client)).await;
-        }
-    });
 
     Server::bind(&"127.0.0.1:8081".parse().unwrap())
         .serve(app.into_make_service())
@@ -141,7 +129,6 @@ async fn peg_in(
     payload: JsonExtract<PegInPayload>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    let fetch_signal = &state.fetch_tx;
     let mut rng = state.rng;
     let txout_proof = payload.0.txout_proof;
     let transaction = payload.0.transaction;
@@ -150,10 +137,13 @@ async fn peg_in(
     })
     .map_err(|_| ClientdError::ServerError)?;
     info!("Started peg-in {}", txid.to_hex());
-    fetch_signal
-        .send(())
+
+    let outpoint = fedimint_api::OutPoint { txid, out_idx: 0 };
+    client
+        .await_outpoint_outcome(outpoint)
         .await
-        .map_err(|_| ClientdError::ServerError)?;
+        .map_err(|_e| ClientdError::ServerError)?;
+    futures::executor::block_on(async { client.fetch_all_coins().await });
     json_success!(PegInOutResponse { txid })
 }
 
@@ -168,21 +158,4 @@ async fn spend(
         futures::executor::block_on(async { client.spend_ecash(payload.0.amount, rng).await })
             .map_err(|_e| ClientdError::ServerError)?;
     json_success!(SpendResponse { notes })
-}
-
-async fn fetch(client: Arc<Client<UserClientConfig>>) {
-    //TODO: log txid or error (handle unwrap)
-    let batch = client.fetch_all_coins().await;
-    for item in batch.iter() {
-        match item {
-            Ok(out_point) => {
-                //TODO: Log event
-                info!("fetched notes: {}", out_point);
-            }
-            Err(err) => {
-                //TODO: Log event
-                info!("error fetching notes: {}", err);
-            }
-        }
-    }
 }
