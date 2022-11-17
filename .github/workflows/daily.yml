@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get -y install mold
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - uses: actions-rs/toolchain@v1
         with:
