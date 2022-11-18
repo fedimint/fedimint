@@ -30,7 +30,7 @@ use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::MintOutput;
+use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
@@ -45,7 +45,7 @@ use fedimint_core::{
             },
             ContractOutput, LightningGateway, LightningOutput,
         },
-        mint::{BlindNonce, SigResponse},
+        mint::BlindNonce,
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -759,7 +759,7 @@ impl Client<UserClientConfig> {
                 let res = self
                     .context
                     .api
-                    .await_output_outcome::<Option<SigResponse>>(outpoint, Duration::from_secs(30))
+                    .await_output_outcome::<MintOutputOutcome>(outpoint, Duration::from_secs(30))
                     .await
                     .map_err(ClientError::MintApiError);
                 if res.is_ok() && res.unwrap().is_some() {
