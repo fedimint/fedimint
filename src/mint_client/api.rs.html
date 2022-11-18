@@ -703,6 +703,14 @@
 <a href="#703" id="703">703</a>
 <a href="#704" id="704">704</a>
 <a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1082,13 +1090,12 @@
     <span class="kw">where
         </span>R: serde::de::DeserializeOwned,
     {
-        <span class="kw">let </span>params = <span class="prelude-val">Some</span>(jsonrpsee_types::ParamsSer::ArrayRef(params));
         <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>rclient {
             <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
                 <span class="kw">return </span>FedResponse {
                     peer: <span class="self">self</span>.peer_id,
-                    result: client.request::&lt;R&gt;(method, params).<span class="kw">await</span>,
+                    result: client.request::&lt;R, <span class="kw">_</span>&gt;(method, params).<span class="kw">await</span>,
                 };
             }
             <span class="kw">_ </span>=&gt; {}
@@ -1102,7 +1109,11 @@
             <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
                 <span class="comment">// other task has already connected it
                 </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
-                rclient.as_ref().unwrap().request::&lt;R&gt;(method, params).<span class="kw">await
+                rclient
+                    .as_ref()
+                    .unwrap()
+                    .request::&lt;R, <span class="kw">_</span>&gt;(method, params)
+                    .<span class="kw">await
             </span>}
             <span class="kw">_ </span>=&gt; {
                 <span class="comment">// write lock is acquired before creating a new client
@@ -1112,7 +1123,11 @@
                         <span class="kw-2">*</span>wclient = <span class="prelude-val">Some</span>(client);
                         <span class="comment">// drop the write lock before making the request
                         </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
-                        rclient.as_ref().unwrap().request::&lt;R&gt;(method, params).<span class="kw">await
+                        rclient
+                            .as_ref()
+                            .unwrap()
+                            .request::&lt;R, <span class="kw">_</span>&gt;(method, params)
+                            .<span class="kw">await
                     </span>}
                     <span class="prelude-val">Err</span>(err) =&gt; {
                         <span class="macro">error!</span>(%err, <span class="string">&quot;unable to connect to server&quot;</span>);
@@ -1184,6 +1199,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::{
         collections::HashSet,
+        fmt,
         str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -1192,7 +1208,11 @@
     };
 
     <span class="kw">use </span>anyhow::anyhow;
+    <span class="kw">use </span>jsonrpsee_core::client::BatchResponse;
+    <span class="kw">use </span>jsonrpsee_core::params::BatchRequestBuilder;
+    <span class="kw">use </span>jsonrpsee_core::traits::ToRpcParams;
     <span class="kw">use </span>once_cell::sync::Lazy;
+    <span class="kw">use </span>serde::de::DeserializeOwned;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
@@ -1223,32 +1243,28 @@
 
     <span class="attr">#[async_trait]
     </span><span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; ClientT <span class="kw">for </span>Client&lt;C&gt; {
-        <span class="kw">async fn </span>request&lt;<span class="lifetime">&#39;a</span>, R&gt;(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            method: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
-            _params: <span class="prelude-ty">Option</span>&lt;jsonrpsee_types::ParamsSer&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
+        <span class="kw">async fn </span>request&lt;R, P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, _params: P) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
         <span class="kw">where
             </span>R: jsonrpsee_core::DeserializeOwned,
+            P: ToRpcParams + Send,
         {
             <span class="kw">let </span>json = <span class="self">self</span>.<span class="number">0</span>.request(method).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap())
         }
 
-        <span class="kw">async fn </span>notification&lt;<span class="lifetime">&#39;a</span>&gt;(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _method: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
-            _params: <span class="prelude-ty">Option</span>&lt;jsonrpsee_types::ParamsSer&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">async fn </span>notification&lt;P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _method: <span class="kw-2">&amp;</span>str, _params: P) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
+        <span class="kw">where
+            </span>P: ToRpcParams + Send,
+        {
             <span class="macro">unimplemented!</span>()
         }
 
         <span class="kw">async fn </span>batch_request&lt;<span class="lifetime">&#39;a</span>, R&gt;(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _batch: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str, <span class="prelude-ty">Option</span>&lt;jsonrpsee_types::ParamsSer&lt;<span class="lifetime">&#39;a</span>&gt;&gt;)&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;R&gt;&gt;
+            _batch: BatchRequestBuilder&lt;<span class="lifetime">&#39;a</span>&gt;,
+        ) -&gt; std::result::Result&lt;BatchResponse&lt;<span class="lifetime">&#39;a</span>, R&gt;, jsonrpsee_core::Error&gt;
         <span class="kw">where
-            </span>R: jsonrpsee_core::DeserializeOwned + Default + Clone,
+            </span>R: DeserializeOwned + fmt::Debug + <span class="lifetime">&#39;a</span>,
         {
             <span class="macro">unimplemented!</span>()
         }

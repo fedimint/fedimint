@@ -242,8 +242,8 @@
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>jsonrpsee::{
+    server::ServerBuilder,
     types::{error::CallError, ErrorObject},
-    ws_server::WsServerBuilder,
     RpcModule,
 };
 <span class="kw">use </span>tracing::{debug, error};
@@ -339,7 +339,7 @@
     );
 
     <span class="macro">debug!</span>(addr = cfg.api_bind_addr, <span class="string">&quot;Starting WSServer&quot;</span>);
-    <span class="kw">let </span>server = WsServerBuilder::new()
+    <span class="kw">let </span>server = ServerBuilder::new()
         .build(<span class="kw-2">&amp;</span>cfg.api_bind_addr)
         .<span class="kw">await
         </span>.context(<span class="macro">format!</span>(<span class="string">&quot;Bind address: {}&quot;</span>, cfg.api_bind_addr))
@@ -352,13 +352,13 @@
     <span class="kw">let </span>stop_handle = server_handle.clone();
 
     task_handle
-        .on_shutdown(|| {
+        .on_shutdown(<span class="kw">move </span>|| {
             <span class="comment">// ignore errors: we don&#39;t care if already stopped
             </span><span class="kw">let _ </span>= stop_handle.stop();
         })
         .<span class="kw">await</span>;
 
-    server_handle.<span class="kw">await
+    server_handle.stopped().<span class="kw">await
 </span>}
 
 <span class="kw">fn </span>attach_endpoints&lt;M&gt;(
