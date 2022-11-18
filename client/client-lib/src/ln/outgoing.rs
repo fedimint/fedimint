@@ -3,7 +3,7 @@ use fedimint_api::Amount;
 use fedimint_core::modules::ln::contracts::{
     outgoing::OutgoingContract, IdentifyableContract, Preimage,
 };
-use fedimint_core::modules::ln::ContractInput;
+use fedimint_core::modules::ln::LightningInput;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingContractData {
@@ -18,16 +18,16 @@ pub struct OutgoingContractAccount {
 }
 
 impl OutgoingContractAccount {
-    pub fn claim(&self, preimage: Preimage) -> ContractInput {
-        ContractInput {
+    pub fn claim(&self, preimage: Preimage) -> LightningInput {
+        LightningInput {
             contract_id: self.contract.contract_id(),
             amount: self.amount,
             witness: Some(preimage),
         }
     }
 
-    pub fn refund(&self) -> ContractInput {
-        ContractInput {
+    pub fn refund(&self) -> LightningInput {
+        LightningInput {
             contract_id: self.contract.contract_id(),
             amount: self.amount,
             witness: None,

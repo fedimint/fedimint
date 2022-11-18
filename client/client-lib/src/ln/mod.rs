@@ -17,8 +17,8 @@ use fedimint_core::modules::ln::contracts::{
     Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
 };
 use fedimint_core::modules::ln::{
-    ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput, LightningGateway,
-    LightningModule,
+    ContractAccount, ContractOutput, LightningGateway, LightningInput, LightningModule,
+    LightningOutput,
 };
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -57,11 +57,11 @@ impl<'a> ModuleClient for LnClient<'a> {
         output: &<Self::Module as FederationModule>::TxOutput,
     ) -> TransactionItemAmount {
         match output {
-            ContractOrOfferOutput::Contract(account_output) => TransactionItemAmount {
+            LightningOutput::Contract(account_output) => TransactionItemAmount {
                 amount: account_output.amount,
                 fee: self.config.fee_consensus.contract_output,
             },
-            ContractOrOfferOutput::Offer(_) | ContractOrOfferOutput::CancelOutgoing { .. } => {
+            LightningOutput::Offer(_) | LightningOutput::CancelOutgoing { .. } => {
                 TransactionItemAmount {
                     amount: Amount::ZERO,
                     fee: Amount::ZERO,
@@ -82,7 +82,7 @@ impl<'c> LnClient<'c> {
         gateway: &LightningGateway,
         timelock: u32,
         mut rng: impl RngCore + CryptoRng + 'a,
-    ) -> Result<ContractOrOfferOutput> {
+    ) -> Result<LightningOutput> {
         let contract_amount = {
             let invoice_amount_msat = invoice
                 .amount_milli_satoshis()
@@ -118,7 +118,7 @@ impl<'c> LnClient<'c> {
         )
         .expect("DB Error");
 
-        Ok(ContractOrOfferOutput::Contract(ContractOutput {
+        Ok(LightningOutput::Contract(ContractOutput {
             amount: contract_amount,
             contract: Contract::Outgoing(contract),
         }))
@@ -206,7 +206,7 @@ impl<'c> LnClient<'c> {
     pub fn create_refund_outgoing_contract_input<'a>(
         &self,
         contract_data: &'a OutgoingContractData,
-    ) -> (&'a bitcoin::KeyPair, ContractInput) {
+    ) -> (&'a bitcoin::KeyPair, LightningInput) {
         (
             &contract_data.recovery_key,
             contract_data.contract_account.refund(),
@@ -219,8 +219,8 @@ impl<'c> LnClient<'c> {
         payment_hash: Sha256Hash,
         payment_secret: Preimage,
         expiry_time: Option<u64>,
-    ) -> ContractOrOfferOutput {
-        ContractOrOfferOutput::Offer(IncomingContractOffer {
+    ) -> LightningOutput {
+        LightningOutput::Offer(IncomingContractOffer {
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
@@ -272,8 +272,8 @@ impl<'c> LnClient<'c> {
         &self,
         contract_id: ContractId,
         signature: secp256k1_zkp::schnorr::Signature,
-    ) -> ContractOrOfferOutput {
-        ContractOrOfferOutput::CancelOutgoing {
+    ) -> LightningOutput {
+        LightningOutput::CancelOutgoing {
             contract: contract_id,
             gateway_signature: signature,
         }
@@ -324,7 +324,7 @@ mod tests {
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
     use fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
-    use fedimint_core::modules::ln::{ContractOrOfferOutput, LightningGateway};
+    use fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
@@ -493,7 +493,7 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         let contract = match &output {
-            ContractOrOfferOutput::Contract(c) => &c.contract,
+            LightningOutput::Contract(c) => &c.contract,
             _ => unreachable!(),
         };
 

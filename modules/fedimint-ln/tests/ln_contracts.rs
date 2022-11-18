@@ -12,8 +12,8 @@ use fedimint_ln::contracts::{
 };
 use fedimint_ln::LightningModuleConfigGen;
 use fedimint_ln::{
-    ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
-    OutputOutcome,
+    ContractOutput, LightningInput, LightningModule, LightningModuleError, LightningOutput,
+    LightningOutputOutcome,
 };
 use fedimint_testing::FakeFed;
 use secp256k1::KeyPair;
@@ -37,7 +37,7 @@ async fn test_account() {
         key: kp.x_only_public_key().0,
     });
 
-    let account_output = ContractOrOfferOutput::Contract(ContractOutput {
+    let account_output = LightningOutput::Contract(ContractOutput {
         amount: Amount::from_sat(42),
         contract: contract.clone(),
     });
@@ -49,13 +49,13 @@ async fn test_account() {
 
     fed.consensus_round(&[], &outputs).await;
     match fed.output_outcome(account_out_point).unwrap() {
-        OutputOutcome::Contract { outcome, .. } => {
+        LightningOutputOutcome::Contract { outcome, .. } => {
             assert_eq!(outcome, ContractOutcome::Account(AccountContractOutcome {}));
         }
         _ => panic!(),
     };
 
-    let account_input = ContractInput {
+    let account_input = LightningInput {
         contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: None,
@@ -111,7 +111,7 @@ j5r6drg6k6zcqj0fcwg"
         cancelled: false,
     });
 
-    let outgoing_output = ContractOrOfferOutput::Contract(ContractOutput {
+    let outgoing_output = LightningOutput::Contract(ContractOutput {
         amount: Amount::from_sat(42),
         contract: contract.clone(),
     });
@@ -123,7 +123,7 @@ j5r6drg6k6zcqj0fcwg"
 
     fed.consensus_round(&[], &outputs).await;
     match fed.output_outcome(outgoing_out_point).unwrap() {
-        OutputOutcome::Contract { outcome, .. } => {
+        LightningOutputOutcome::Contract { outcome, .. } => {
             assert_eq!(
                 outcome,
                 ContractOutcome::Outgoing(OutgoingContractOutcome {})
@@ -136,7 +136,7 @@ j5r6drg6k6zcqj0fcwg"
     fed.set_block_height(0);
 
     // Error: Missing preimage
-    let account_input_no_witness = ContractInput {
+    let account_input_no_witness = LightningInput {
         contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: None,
@@ -148,7 +148,7 @@ j5r6drg6k6zcqj0fcwg"
     );
 
     // Ok
-    let account_input_witness = ContractInput {
+    let account_input_witness = LightningInput {
         contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: Some(preimage),
@@ -195,7 +195,7 @@ async fn test_incoming() {
         ),
         expiry_time: None,
     };
-    let offer_output = ContractOrOfferOutput::Offer(offer.clone());
+    let offer_output = LightningOutput::Offer(offer.clone());
     let offer_out_point = OutPoint {
         txid: sha256::Hash::hash(b"").into(),
         out_idx: 0,
@@ -212,7 +212,7 @@ async fn test_incoming() {
         decrypted_preimage: DecryptedPreimage::Pending, // TODO: check what happens if this is not pending
         gateway_key: gw_pk,
     });
-    let incoming_output = ContractOrOfferOutput::Contract(ContractOutput {
+    let incoming_output = LightningOutput::Contract(ContractOutput {
         amount: Amount::from_sat(42),
         contract: contract.clone(),
     });
@@ -224,7 +224,7 @@ async fn test_incoming() {
 
     fed.consensus_round(&[], &outputs).await;
     match fed.output_outcome(incoming_out_point).unwrap() {
-        OutputOutcome::Contract { outcome, .. } => {
+        LightningOutputOutcome::Contract { outcome, .. } => {
             assert_eq!(
                 outcome,
                 ContractOutcome::Incoming(DecryptedPreimage::Pending)
@@ -233,7 +233,7 @@ async fn test_incoming() {
         _ => panic!(),
     };
 
-    let incoming_input = ContractInput {
+    let incoming_input = LightningInput {
         contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: None,
@@ -246,7 +246,7 @@ async fn test_incoming() {
 
     fed.consensus_round(&[], &[]).await;
     match fed.output_outcome(incoming_out_point).unwrap() {
-        OutputOutcome::Contract { outcome, .. } => {
+        LightningOutputOutcome::Contract { outcome, .. } => {
             assert_eq!(
                 outcome,
                 ContractOutcome::Incoming(DecryptedPreimage::Some(preimage))

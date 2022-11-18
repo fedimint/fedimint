@@ -26,6 +26,7 @@ use fedimint_api::{
     Amount, FederationModule, InputMeta, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
     TieredMultiZip,
 };
+use impl_tools::autoimpl;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use rayon::iter::{ParallelBridge, ParallelIterator};
@@ -266,12 +267,27 @@ impl FederationModuleConfigGen for MintConfigGenerator {
     }
 }
 
+#[autoimpl(Deref, DerefMut using self.0)]
+#[derive(
+    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+)]
+pub struct MintInput(pub TieredMulti<Note>);
+#[autoimpl(Deref, DerefMut using self.0)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct MintOutput(pub TieredMulti<BlindNonce>);
+#[autoimpl(Deref, DerefMut using self.0)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct MintOutputOutcome(pub Option<SigResponse>);
+#[autoimpl(Deref, DerefMut using self.0)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct MintConsensusItem(pub PartiallySignedRequest);
+
 #[async_trait(?Send)]
 impl FederationModule for Mint {
-    type TxInput = TieredMulti<Note>;
-    type TxOutput = TieredMulti<BlindNonce>;
-    type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
-    type ConsensusItem = PartiallySignedRequest;
+    type TxInput = MintInput;
+    type TxOutput = MintOutput;
+    type TxOutputOutcome = MintOutputOutcome;
+    type ConsensusItem = MintConsensusItem;
     type VerificationCache = VerificationCache;
 
     async fn await_consensus_proposal(&self) {
@@ -286,10 +302,10 @@ impl FederationModule for Mint {
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 let (key, partial_signature) = res.expect("DB error");
-                PartiallySignedRequest {
+                MintConsensusItem(PartiallySignedRequest {
                     out_point: key.request_id,
                     partial_signature,
-                }
+                })
             })
             .collect()
     }
@@ -299,12 +315,12 @@ impl FederationModule for Mint {
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
-        for (peer, partial_sig) in consensus_items {
+        for (peer, consensus_item) in consensus_items {
             self.process_partial_signature(
                 dbtx,
                 peer,
-                partial_sig.out_point,
-                partial_sig.partial_signature,
+                consensus_item.out_point,
+                consensus_item.0.partial_signature,
             )
         }
     }
@@ -317,7 +333,7 @@ impl FederationModule for Mint {
         // calculation can happen massively in parallel since verification is a pure function and
         // thus has no side effects.
         let valid_coins = inputs
-            .flat_map(|inputs| inputs.iter_items())
+            .flat_map(|inputs| inputs.0.iter_items())
             .par_bridge()
             .filter_map(|(amount, coin)| {
                 let amount_key = self.pub_key.get(&amount)?;
@@ -423,7 +439,9 @@ impl FederationModule for Mint {
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
-        let partial_sig = self.blind_sign(output.clone()).into_module_error_other()?;
+        let partial_sig = self
+            .blind_sign(output.clone().0)
+            .into_module_error_other()?;
 
         dbtx.insert_new_entry(
             &ProposedPartialSignatureKey {
@@ -563,9 +581,9 @@ impl FederationModule for Mint {
             .expect("DB error");
 
         if final_sig.is_some() {
-            Some(final_sig)
+            Some(MintOutputOutcome(final_sig))
         } else if we_proposed || was_consensus_outcome {
-            Some(None)
+            Some(MintOutputOutcome(None))
         } else {
             None
         }

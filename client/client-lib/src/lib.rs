@@ -30,8 +30,9 @@ use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
+use fedimint_core::modules::mint::MintOutput;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
-use fedimint_core::modules::wallet::PegOut;
+use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{
@@ -42,7 +43,7 @@ use fedimint_core::{
                 Contract, ContractId, DecryptedPreimage, IdentifyableContract,
                 OutgoingContractOutcome, Preimage,
             },
-            ContractOrOfferOutput, ContractOutput, LightningGateway,
+            ContractOutput, LightningGateway, LightningOutput,
         },
         mint::{BlindNonce, SigResponse},
         wallet::txoproof::TxOutProof,
@@ -296,7 +297,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .wallet_client()
             .create_pegin_input(txout_proof, btc_transaction)?;
 
-        tx.input(&mut vec![peg_in_key], Input::Wallet(Box::new(peg_in_proof)));
+        tx.input(
+            &mut vec![peg_in_key],
+            Input::Wallet(WalletInput(Box::new(peg_in_proof))),
+        );
 
         self.submit_tx_with_change(tx, &mut rng).await
     }
@@ -368,7 +372,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .mint_client()
             .select_coins(blind_nonces.total_amount())?;
         tx.input_coins(input_coins)?;
-        tx.output(Output::Mint(blind_nonces));
+        tx.output(Output::Mint(MintOutput(blind_nonces)));
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
@@ -426,7 +430,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
         tx.input_coins(coins)?;
-        let peg_out_idx = tx.output(Output::Wallet(peg_out));
+        let peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
 
         let fedimint_tx_id = self.submit_tx_with_change(tx, &mut rng).await?;
 
@@ -679,12 +683,12 @@ impl Client<UserClientConfig> {
         dbtx.commit_tx().await.expect("DB Error");
 
         let (contract_id, amount) = match &contract {
-            ContractOrOfferOutput::Contract(c) => {
+            LightningOutput::Contract(c) => {
                 let contract_id = c.contract.contract_id();
                 let amount = c.amount;
                 (contract_id, amount)
             }
-            ContractOrOfferOutput::Offer(_) | ContractOrOfferOutput::CancelOutgoing { .. } => {
+            LightningOutput::Offer(_) | LightningOutput::CancelOutgoing { .. } => {
                 panic!()
             } // FIXME: impl TryFrom
         };
@@ -1114,12 +1118,11 @@ impl Client<GatewayClientConfig> {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output = fedimint_core::transaction::Output::LN(
-            ContractOrOfferOutput::Contract(ContractOutput {
+        let incoming_output =
+            fedimint_core::transaction::Output::LN(LightningOutput::Contract(ContractOutput {
                 amount: offer.amount,
                 contract: contract.clone(),
-            }),
-        );
+            }));
 
         // Submit transaction
         builder.output(incoming_output);

@@ -84,7 +84,7 @@ pub struct LightningModule {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct ContractInput {
+pub struct LightningInput {
     pub contract_id: contracts::ContractId,
     /// While for now we only support spending the entire contract we need to avoid
     pub amount: Amount,
@@ -106,7 +106,7 @@ pub struct ContractInput {
 /// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
 /// to receive their fist tokens via LN without already having tokens.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum ContractOrOfferOutput {
+pub enum LightningOutput {
     /// Fund contract
     Contract(ContractOutput),
     /// Creat incoming contract offer
@@ -133,7 +133,7 @@ pub struct ContractAccount {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum OutputOutcome {
+pub enum LightningOutputOutcome {
     Contract {
         id: ContractId,
         outcome: ContractOutcome,
@@ -151,7 +151,7 @@ pub struct LightningGateway {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct DecryptionShareCI {
+pub struct LightningConsensusItem {
     pub contract_id: ContractId,
     pub share: PreimageDecryptionShare,
 }
@@ -251,10 +251,10 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
 
 #[async_trait(?Send)]
 impl FederationModule for LightningModule {
-    type TxInput = ContractInput;
-    type TxOutput = ContractOrOfferOutput;
-    type TxOutputOutcome = OutputOutcome;
-    type ConsensusItem = DecryptionShareCI;
+    type TxInput = LightningInput;
+    type TxOutput = LightningOutput;
+    type TxOutputOutcome = LightningOutputOutcome;
+    type ConsensusItem = LightningConsensusItem;
     type VerificationCache = ();
 
     async fn await_consensus_proposal(&self) {
@@ -269,7 +269,7 @@ impl FederationModule for LightningModule {
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
             .map(|res| {
                 let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
-                DecryptionShareCI { contract_id, share }
+                LightningConsensusItem { contract_id, share }
             })
             .collect()
     }
@@ -399,7 +399,7 @@ impl FederationModule for LightningModule {
         output: &Self::TxOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         match output {
-            ContractOrOfferOutput::Contract(contract) => {
+            LightningOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
                 if let Contract::Incoming(incoming) = &contract.contract {
                     let offer = self
@@ -429,14 +429,14 @@ impl FederationModule for LightningModule {
                     })
                 }
             }
-            ContractOrOfferOutput::Offer(offer) => {
+            LightningOutput::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
                     Err(LightningModuleError::InvalidEncryptedPreimage).into_module_error_other()
                 } else {
                     Ok(TransactionItemAmount::ZERO)
                 }
             }
-            ContractOrOfferOutput::CancelOutgoing {
+            LightningOutput::CancelOutgoing {
                 contract,
                 gateway_signature,
             } => {
@@ -479,7 +479,7 @@ impl FederationModule for LightningModule {
         let amount = self.validate_output(output)?;
 
         match output {
-            ContractOrOfferOutput::Contract(contract) => {
+            LightningOutput::Contract(contract) => {
                 let contract_db_key = ContractKey(contract.contract.contract_id());
                 let updated_contract_account = self
                     .db
@@ -499,7 +499,7 @@ impl FederationModule for LightningModule {
 
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
-                    &OutputOutcome::Contract {
+                    &LightningOutputOutcome::Contract {
                         id: contract.contract.contract_id(),
                         outcome: contract.contract.to_outcome(),
                     },
@@ -527,17 +527,17 @@ impl FederationModule for LightningModule {
                     dbtx.remove_entry(&OfferKey(offer.hash)).expect("DB Error");
                 }
             }
-            ContractOrOfferOutput::Offer(offer) => {
+            LightningOutput::Offer(offer) => {
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
-                    &OutputOutcome::Offer { id: offer.id() },
+                    &LightningOutputOutcome::Offer { id: offer.id() },
                 )
                 .expect("DB Error");
                 // TODO: sanity-check encrypted preimage size
                 dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
                     .expect("DB Error");
             }
-            ContractOrOfferOutput::CancelOutgoing { contract, .. } => {
+            LightningOutput::CancelOutgoing { contract, .. } => {
                 let updated_contract_account = {
                     let mut contract_account = self
                         .db
@@ -717,7 +717,7 @@ impl FederationModule for LightningModule {
                 .expect("DB error")
                 .expect("outcome was created on funding");
             let incoming_contract_outcome_preimage = match &mut outcome {
-                OutputOutcome::Contract {
+                LightningOutputOutcome::Contract {
                     outcome: ContractOutcome::Incoming(decryption_outcome),
                     ..
                 } => decryption_outcome,

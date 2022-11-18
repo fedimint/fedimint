@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
 use fedimint_core::modules::ln::contracts::Contract;
-use fedimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput, DecryptionShareCI};
-use fedimint_core::modules::mint::PartiallySignedRequest;
+use fedimint_core::modules::ln::{ContractOutput, LightningConsensusItem, LightningOutput};
+use fedimint_core::modules::mint::{MintConsensusItem, PartiallySignedRequest};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use fedimint_wallet::{PegOutSignatureItem, RoundConsensusItem, WalletConsensusItem};
 
@@ -33,17 +33,17 @@ fn item_message(item: &ConsensusItem) -> String {
             txid,
             ..
         })) => format!("Wallet Peg Out PSBT {}", txid),
-        ConsensusItem::Mint(PartiallySignedRequest {
+        ConsensusItem::Mint(MintConsensusItem(PartiallySignedRequest {
             out_point,
             partial_signature,
-        }) => {
+        })) => {
             format!(
                 "Mint Signed Coins {} with TxId {}",
                 partial_signature.0.total_amount(),
                 out_point.txid
             )
         }
-        ConsensusItem::LN(DecryptionShareCI { contract_id, .. }) => {
+        ConsensusItem::LN(LightningConsensusItem { contract_id, .. }) => {
             format!("LN Decryption Share for contract {}", contract_id)
         }
         ConsensusItem::Transaction(Transaction {
@@ -68,26 +68,25 @@ fn item_message(item: &ConsensusItem) -> String {
                     Output::Wallet(t) => {
                         format!("Wallet PegOut {} to address {}", t.amount, t.recipient)
                     }
-                    Output::LN(ContractOrOfferOutput::Offer(o)) => {
+                    Output::LN(LightningOutput::Offer(o)) => {
                         format!("LN Offer for {} with hash {}", o.amount, o.hash)
                     }
-                    Output::LN(ContractOrOfferOutput::CancelOutgoing { contract, .. }) => {
+                    Output::LN(LightningOutput::CancelOutgoing { contract, .. }) => {
                         format!("LN Outgoing contract {} cancellation", contract)
                     }
-                    Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
-                        amount,
-                        contract,
-                    })) => match contract {
-                        Contract::Account(a) => {
-                            format!("LN Account Contract for {} key {}", amount, a.key)
+                    Output::LN(LightningOutput::Contract(ContractOutput { amount, contract })) => {
+                        match contract {
+                            Contract::Account(a) => {
+                                format!("LN Account Contract for {} key {}", amount, a.key)
+                            }
+                            Contract::Incoming(a) => {
+                                format!("LN Incoming Contract for {} hash {}", amount, a.hash)
+                            }
+                            Contract::Outgoing(a) => {
+                                format!("LN Outgoing Contract for {} hash {}", amount, a.hash)
+                            }
                         }
-                        Contract::Incoming(a) => {
-                            format!("LN Incoming Contract for {} hash {}", amount, a.hash)
-                        }
-                        Contract::Outgoing(a) => {
-                            format!("LN Outgoing Contract for {} hash {}", amount, a.hash)
-                        }
-                    },
+                    }
                 };
                 write!(tx_debug, "\n    Output: {}", output_debug).unwrap();
             }

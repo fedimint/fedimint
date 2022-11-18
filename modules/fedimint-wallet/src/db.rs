@@ -4,7 +4,7 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use secp256k1::ecdsa::Signature;
 
 use crate::{
-    PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
+    PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction, WalletOutputOutcome,
 };
 
 #[repr(u8)]
@@ -115,5 +115,5 @@ pub struct PegOutBitcoinTransaction(pub fedimint_api::OutPoint);
 impl DatabaseKeyPrefixConst for PegOutBitcoinTransaction {
     const DB_PREFIX: u8 = DbKeyPrefix::PegOutBitcoinOutPoint as u8;
     type Key = Self;
-    type Value = PegOutOutcome;
+    type Value = WalletOutputOutcome;
 }

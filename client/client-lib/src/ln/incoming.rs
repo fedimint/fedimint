@@ -3,7 +3,7 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::Amount;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContract;
 use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-use fedimint_core::modules::ln::ContractInput;
+use fedimint_core::modules::ln::LightningInput;
 use lightning_invoice::Invoice;
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -13,8 +13,8 @@ pub struct IncomingContractAccount {
 }
 
 impl IncomingContractAccount {
-    pub fn claim(&self) -> ContractInput {
-        ContractInput {
+    pub fn claim(&self) -> LightningInput {
+        LightningInput {
             contract_id: self.contract.contract_id(),
             amount: self.amount,
             witness: None,
