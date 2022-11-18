@@ -112,10 +112,10 @@ First let's have the gateway execute a peg-in so it has an ecash token balance. 
 $ ./scripts/pegin.sh 10000 1
 ```
 
-Now we can use `lightning-cli` of the node where the gateway plugin is running to get our ecash token balance:
+Now we can use `gateway-cli` of the node where the gateway plugin is running to get our ecash token balance:
 
 ```shell
-$ ln1 gw-balance
+$ gateway-cli balance Hals_trusty_mint
 {
    "balance_msat": 10000000
 }
