@@ -750,6 +750,8 @@
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -763,7 +765,7 @@
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Mint, MintOutputOutcome, Nonce, Note, SigResponse};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -956,9 +958,11 @@
         <span class="kw">let </span>bsig = <span class="self">self
             </span>.context
             .api
-            .fetch_output_outcome::&lt;<span class="prelude-ty">Option</span>&lt;SigResponse&gt;&gt;(outpoint)
+            .fetch_output_outcome::&lt;MintOutputOutcome&gt;(outpoint)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?</span>;
+            </span>.as_ref()
+            .cloned()
+            .ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>coins = issuance.finalize(bsig, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks)<span class="question-mark">?</span>;
 
@@ -1181,7 +1185,7 @@
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-    <span class="kw">use </span>fedimint_core::modules::mint::{Mint, MintConfigGenerator};
+    <span class="kw">use </span>fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
@@ -1323,7 +1327,7 @@
                 |output| <span class="kw">async </span>{
                     <span class="comment">// Agree on output
                     </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
-                    block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, output)]));
+                    block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, MintOutput(output))]));
                     <span class="comment">// Generate signatures
                     </span>block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]));
 
@@ -1503,4 +1507,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

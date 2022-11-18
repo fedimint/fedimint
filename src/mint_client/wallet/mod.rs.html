@@ -426,7 +426,7 @@
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::modules::wallet::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-<span class="kw">use </span>fedimint_core::modules::wallet::{PegOutOutcome, Wallet};
+<span class="kw">use </span>fedimint_core::modules::wallet::{Wallet, WalletOutputOutcome};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
@@ -561,7 +561,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
         <span class="comment">// TODO: define timeout centrally
         </span><span class="kw">let </span>timeout = std::time::Duration::from_secs(<span class="number">15</span>);
-        <span class="kw">let </span>outcome: PegOutOutcome = <span class="self">self
+        <span class="kw">let </span>outcome: WalletOutputOutcome = <span class="self">self
             </span>.context
             .api
             .await_output_outcome(out_point, timeout)
@@ -605,8 +605,8 @@
     <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
     <span class="kw">use </span>fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     <span class="kw">use </span>fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
-        WalletConfigGenerator,
+        PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet, WalletConfigGenerator,
+        WalletOutput, WalletOutputOutcome,
     };
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
@@ -634,7 +634,7 @@
         ) -&gt; <span class="kw">crate</span>::api::Result&lt;TransactionStatus&gt; {
             <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
                 epoch: <span class="number">0</span>,
-                outputs: <span class="macro">vec!</span>[OutputOutcome::Wallet(PegOutOutcome(
+                outputs: <span class="macro">vec!</span>[OutputOutcome::Wallet(WalletOutputOutcome(
                     Txid::from_slice([<span class="number">0</span>; <span class="number">32</span>].as_slice()).unwrap(),
                 ))],
             })
@@ -800,7 +800,7 @@
         </span>btc_rpc.set_block_height(<span class="number">100</span>).<span class="kw">await</span>;
         fed.lock()
             .<span class="kw">await
-            </span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, output)])
+            </span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, WalletOutput(output))])
             .<span class="kw">await</span>;
 
         <span class="comment">// begin pegout
@@ -837,4 +837,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

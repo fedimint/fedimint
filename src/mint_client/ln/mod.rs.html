@@ -567,8 +567,8 @@
     Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
 };
 <span class="kw">use </span>fedimint_core::modules::ln::{
-    ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput, LightningGateway,
-    LightningModule,
+    ContractAccount, ContractOutput, LightningGateway, LightningInput, LightningModule,
+    LightningOutput,
 };
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -607,11 +607,11 @@
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxOutput,
     ) -&gt; TransactionItemAmount {
         <span class="kw">match </span>output {
-            ContractOrOfferOutput::Contract(account_output) =&gt; TransactionItemAmount {
+            LightningOutput::Contract(account_output) =&gt; TransactionItemAmount {
                 amount: account_output.amount,
                 fee: <span class="self">self</span>.config.fee_consensus.contract_output,
             },
-            ContractOrOfferOutput::Offer(<span class="kw">_</span>) | ContractOrOfferOutput::CancelOutgoing { .. } =&gt; {
+            LightningOutput::Offer(<span class="kw">_</span>) | LightningOutput::CancelOutgoing { .. } =&gt; {
                 TransactionItemAmount {
                     amount: Amount::ZERO,
                     fee: Amount::ZERO,
@@ -632,7 +632,7 @@
         gateway: <span class="kw-2">&amp;</span>LightningGateway,
         timelock: u32,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContractOrOfferOutput&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;LightningOutput&gt; {
         <span class="kw">let </span>contract_amount = {
             <span class="kw">let </span>invoice_amount_msat = invoice
                 .amount_milli_satoshis()
@@ -668,7 +668,7 @@
         )
         .expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="prelude-val">Ok</span>(ContractOrOfferOutput::Contract(ContractOutput {
+        <span class="prelude-val">Ok</span>(LightningOutput::Contract(ContractOutput {
             amount: contract_amount,
             contract: Contract::Outgoing(contract),
         }))
@@ -756,7 +756,7 @@
     <span class="kw">pub fn </span>create_refund_outgoing_contract_input&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract_data: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>OutgoingContractData,
-    ) -&gt; (<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>bitcoin::KeyPair, ContractInput) {
+    ) -&gt; (<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>bitcoin::KeyPair, LightningInput) {
         (
             <span class="kw-2">&amp;</span>contract_data.recovery_key,
             contract_data.contract_account.refund(),
@@ -769,8 +769,8 @@
         payment_hash: Sha256Hash,
         payment_secret: Preimage,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; ContractOrOfferOutput {
-        ContractOrOfferOutput::Offer(IncomingContractOffer {
+    ) -&gt; LightningOutput {
+        LightningOutput::Offer(IncomingContractOffer {
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
@@ -822,8 +822,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract_id: ContractId,
         signature: secp256k1_zkp::schnorr::Signature,
-    ) -&gt; ContractOrOfferOutput {
-        ContractOrOfferOutput::CancelOutgoing {
+    ) -&gt; LightningOutput {
+        LightningOutput::CancelOutgoing {
             contract: contract_id,
             gateway_signature: signature,
         }
@@ -874,7 +874,7 @@
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
-    <span class="kw">use </span>fedimint_core::modules::ln::{ContractOrOfferOutput, LightningGateway};
+    <span class="kw">use </span>fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
@@ -1043,7 +1043,7 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>contract = <span class="kw">match </span><span class="kw-2">&amp;</span>output {
-            ContractOrOfferOutput::Contract(c) =&gt; <span class="kw-2">&amp;</span>c.contract,
+            LightningOutput::Contract(c) =&gt; <span class="kw-2">&amp;</span>c.contract,
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
         };
 
@@ -1099,4 +1099,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

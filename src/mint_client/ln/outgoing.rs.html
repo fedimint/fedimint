@@ -39,7 +39,7 @@
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::{
     outgoing::OutgoingContract, IdentifyableContract, Preimage,
 };
-<span class="kw">use </span>fedimint_core::modules::ln::ContractInput;
+<span class="kw">use </span>fedimint_core::modules::ln::LightningInput;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingContractData {
@@ -54,16 +54,16 @@
 }
 
 <span class="kw">impl </span>OutgoingContractAccount {
-    <span class="kw">pub fn </span>claim(<span class="kw-2">&amp;</span><span class="self">self</span>, preimage: Preimage) -&gt; ContractInput {
-        ContractInput {
+    <span class="kw">pub fn </span>claim(<span class="kw-2">&amp;</span><span class="self">self</span>, preimage: Preimage) -&gt; LightningInput {
+        LightningInput {
             contract_id: <span class="self">self</span>.contract.contract_id(),
             amount: <span class="self">self</span>.amount,
             witness: <span class="prelude-val">Some</span>(preimage),
         }
     }
 
-    <span class="kw">pub fn </span>refund(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractInput {
-        ContractInput {
+    <span class="kw">pub fn </span>refund(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningInput {
+        LightningInput {
             contract_id: <span class="self">self</span>.contract.contract_id(),
             amount: <span class="self">self</span>.amount,
             witness: <span class="prelude-val">None</span>,
@@ -71,4 +71,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

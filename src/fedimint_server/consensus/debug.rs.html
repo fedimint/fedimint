@@ -94,12 +94,11 @@
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
 <a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::Contract;
-<span class="kw">use </span>fedimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput, DecryptionShareCI};
-<span class="kw">use </span>fedimint_core::modules::mint::PartiallySignedRequest;
+<span class="kw">use </span>fedimint_core::modules::ln::{ContractOutput, LightningConsensusItem, LightningOutput};
+<span class="kw">use </span>fedimint_core::modules::mint::{MintConsensusItem, PartiallySignedRequest};
 <span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>fedimint_wallet::{PegOutSignatureItem, RoundConsensusItem, WalletConsensusItem};
 
@@ -130,17 +129,17 @@
             txid,
             ..
         })) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Wallet Peg Out PSBT {}&quot;</span>, txid),
-        ConsensusItem::Mint(PartiallySignedRequest {
+        ConsensusItem::Mint(MintConsensusItem(PartiallySignedRequest {
             out_point,
             partial_signature,
-        }) =&gt; {
+        })) =&gt; {
             <span class="macro">format!</span>(
                 <span class="string">&quot;Mint Signed Coins {} with TxId {}&quot;</span>,
                 partial_signature.<span class="number">0</span>.total_amount(),
                 out_point.txid
             )
         }
-        ConsensusItem::LN(DecryptionShareCI { contract_id, .. }) =&gt; {
+        ConsensusItem::LN(LightningConsensusItem { contract_id, .. }) =&gt; {
             <span class="macro">format!</span>(<span class="string">&quot;LN Decryption Share for contract {}&quot;</span>, contract_id)
         }
         ConsensusItem::Transaction(Transaction {
@@ -165,26 +164,25 @@
                     Output::Wallet(t) =&gt; {
                         <span class="macro">format!</span>(<span class="string">&quot;Wallet PegOut {} to address {}&quot;</span>, t.amount, t.recipient)
                     }
-                    Output::LN(ContractOrOfferOutput::Offer(o)) =&gt; {
+                    Output::LN(LightningOutput::Offer(o)) =&gt; {
                         <span class="macro">format!</span>(<span class="string">&quot;LN Offer for {} with hash {}&quot;</span>, o.amount, o.hash)
                     }
-                    Output::LN(ContractOrOfferOutput::CancelOutgoing { contract, .. }) =&gt; {
+                    Output::LN(LightningOutput::CancelOutgoing { contract, .. }) =&gt; {
                         <span class="macro">format!</span>(<span class="string">&quot;LN Outgoing contract {} cancellation&quot;</span>, contract)
                     }
-                    Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
-                        amount,
-                        contract,
-                    })) =&gt; <span class="kw">match </span>contract {
-                        Contract::Account(a) =&gt; {
-                            <span class="macro">format!</span>(<span class="string">&quot;LN Account Contract for {} key {}&quot;</span>, amount, a.key)
+                    Output::LN(LightningOutput::Contract(ContractOutput { amount, contract })) =&gt; {
+                        <span class="kw">match </span>contract {
+                            Contract::Account(a) =&gt; {
+                                <span class="macro">format!</span>(<span class="string">&quot;LN Account Contract for {} key {}&quot;</span>, amount, a.key)
+                            }
+                            Contract::Incoming(a) =&gt; {
+                                <span class="macro">format!</span>(<span class="string">&quot;LN Incoming Contract for {} hash {}&quot;</span>, amount, a.hash)
+                            }
+                            Contract::Outgoing(a) =&gt; {
+                                <span class="macro">format!</span>(<span class="string">&quot;LN Outgoing Contract for {} hash {}&quot;</span>, amount, a.hash)
+                            }
                         }
-                        Contract::Incoming(a) =&gt; {
-                            <span class="macro">format!</span>(<span class="string">&quot;LN Incoming Contract for {} hash {}&quot;</span>, amount, a.hash)
-                        }
-                        Contract::Outgoing(a) =&gt; {
-                            <span class="macro">format!</span>(<span class="string">&quot;LN Outgoing Contract for {} hash {}&quot;</span>, amount, a.hash)
-                        }
-                    },
+                    }
                 };
                 <span class="macro">write!</span>(tx_debug, <span class="string">&quot;\n    Output: {}&quot;</span>, output_debug).unwrap();
             }
@@ -193,4 +191,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

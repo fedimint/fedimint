@@ -156,13 +156,14 @@
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::FederationModule;
 <span class="kw">use </span>fedimint_ln::contracts::incoming::OfferId;
 <span class="kw">use </span>fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 <span class="kw">use </span>fedimint_ln::contracts::{DecryptedPreimage, Preimage};
 <span class="kw">use </span>fedimint_ln::LightningModule;
-<span class="kw">use </span>fedimint_mint::SigResponse;
-<span class="kw">use </span>fedimint_wallet::{PegOutOutcome, Wallet};
+<span class="kw">use </span>fedimint_mint::{Mint, MintOutputOutcome};
+<span class="kw">use </span>fedimint_wallet::{Wallet, WalletOutputOutcome};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::CoreError;
@@ -182,7 +183,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub enum </span>OutputOutcome {
-    Mint(<span class="prelude-ty">Option</span>&lt;SigResponse&gt;),
+    Mint(&lt;Mint <span class="kw">as </span>FederationModule&gt;::TxOutputOutcome),
     Wallet(&lt;Wallet <span class="kw">as </span>FederationModule&gt;::TxOutputOutcome),
     LN(&lt;LightningModule <span class="kw">as </span>FederationModule&gt;::TxOutputOutcome),
 }
@@ -204,18 +205,18 @@
 <span class="kw">impl </span>Final <span class="kw">for </span>OutputOutcome {
     <span class="kw">fn </span>is_final(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
-            OutputOutcome::Mint(<span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="bool-val">true</span>,
-            OutputOutcome::Mint(<span class="prelude-val">None</span>) =&gt; <span class="bool-val">false</span>,
+            OutputOutcome::Mint(MintOutputOutcome(<span class="prelude-val">Some</span>(<span class="kw">_</span>))) =&gt; <span class="bool-val">true</span>,
+            OutputOutcome::Mint(MintOutputOutcome(<span class="prelude-val">None</span>)) =&gt; <span class="bool-val">false</span>,
             OutputOutcome::Wallet(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            OutputOutcome::LN(fedimint_ln::OutputOutcome::Offer { .. }) =&gt; <span class="bool-val">true</span>,
-            OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract { outcome, .. }) =&gt; {
-                <span class="kw">match </span>outcome {
-                    ContractOutcome::Account(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                    ContractOutcome::Incoming(DecryptedPreimage::Some(<span class="kw">_</span>)) =&gt; <span class="bool-val">true</span>,
-                    ContractOutcome::Incoming(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-                    ContractOutcome::Outgoing(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                }
-            }
+            OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Offer { .. }) =&gt; <span class="bool-val">true</span>,
+            OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
+                outcome, ..
+            }) =&gt; <span class="kw">match </span>outcome {
+                ContractOutcome::Account(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                ContractOutcome::Incoming(DecryptedPreimage::Some(<span class="kw">_</span>)) =&gt; <span class="bool-val">true</span>,
+                ContractOutcome::Incoming(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+                ContractOutcome::Outgoing(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+            },
         }
     }
 }
@@ -229,7 +230,7 @@
     }
 }
 
-<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span><span class="prelude-ty">Option</span>&lt;SigResponse&gt; {
+<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>MintOutputOutcome {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
         <span class="kw">match </span>common_outcome {
             OutputOutcome::Mint(outcome) =&gt; <span class="prelude-val">Ok</span>(outcome),
@@ -239,7 +240,7 @@
     }
 }
 
-<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>PegOutOutcome {
+<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>WalletOutputOutcome {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
         <span class="kw">match </span>common_outcome {
             OutputOutcome::Mint(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(CoreError::MismatchingVariant(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
@@ -249,7 +250,7 @@
     }
 }
 
-<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>fedimint_ln::OutputOutcome {
+<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>fedimint_ln::LightningOutputOutcome {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
         <span class="kw">match </span>common_outcome {
             OutputOutcome::Mint(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(CoreError::MismatchingVariant(<span class="string">&quot;ln&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
@@ -261,7 +262,7 @@
 
 <span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>Preimage {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
-        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract {
+        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
             outcome: ContractOutcome::Incoming(decrypted_preimage),
             ..
         }) = common_outcome
@@ -279,7 +280,8 @@
 
 <span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>OfferId {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
-        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::OutputOutcome::Offer { id }) = common_outcome {
+        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Offer { id }) = common_outcome
+        {
             <span class="prelude-val">Ok</span>(id)
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(CoreError::MismatchingVariant(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
@@ -289,7 +291,7 @@
 
 <span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>AccountContractOutcome {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
-        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract {
+        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
             outcome: ContractOutcome::Account(o),
             ..
         }) = common_outcome
@@ -303,7 +305,7 @@
 
 <span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>OutgoingContractOutcome {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
-        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract {
+        <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
             outcome: ContractOutcome::Outgoing(o),
             ..
         }) = common_outcome
@@ -315,4 +317,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

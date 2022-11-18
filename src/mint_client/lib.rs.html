@@ -1337,6 +1337,9 @@
 <a href="#1337" id="1337">1337</a>
 <a href="#1338" id="1338">1338</a>
 <a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1369,8 +1372,9 @@
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
+<span class="kw">use </span>fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
-<span class="kw">use </span>fedimint_core::modules::wallet::PegOut;
+<span class="kw">use </span>fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{
@@ -1381,9 +1385,9 @@
                 Contract, ContractId, DecryptedPreimage, IdentifyableContract,
                 OutgoingContractOutcome, Preimage,
             },
-            ContractOrOfferOutput, ContractOutput, LightningGateway,
+            ContractOutput, LightningGateway, LightningOutput,
         },
-        mint::{BlindNonce, SigResponse},
+        mint::BlindNonce,
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -1635,7 +1639,10 @@
             </span>.wallet_client()
             .create_pegin_input(txout_proof, btc_transaction)<span class="question-mark">?</span>;
 
-        tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[peg_in_key], Input::Wallet(Box::new(peg_in_proof)));
+        tx.input(
+            <span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[peg_in_key],
+            Input::Wallet(WalletInput(Box::new(peg_in_proof))),
+        );
 
         <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await
     </span>}
@@ -1707,7 +1714,7 @@
             </span>.mint_client()
             .select_coins(blind_nonces.total_amount())<span class="question-mark">?</span>;
         tx.input_coins(input_coins)<span class="question-mark">?</span>;
-        tx.output(Output::Mint(blind_nonces));
+        tx.output(Output::Mint(MintOutput(blind_nonces)));
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
@@ -1765,7 +1772,7 @@
             + (peg_out.amount + peg_out.fees.amount()).into();
         <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(funding_amount)<span class="question-mark">?</span>;
         tx.input_coins(coins)<span class="question-mark">?</span>;
-        <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(peg_out));
+        <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
 
         <span class="kw">let </span>fedimint_tx_id = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2018,12 +2025,12 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span>(contract_id, amount) = <span class="kw">match </span><span class="kw-2">&amp;</span>contract {
-            ContractOrOfferOutput::Contract(c) =&gt; {
+            LightningOutput::Contract(c) =&gt; {
                 <span class="kw">let </span>contract_id = c.contract.contract_id();
                 <span class="kw">let </span>amount = c.amount;
                 (contract_id, amount)
             }
-            ContractOrOfferOutput::Offer(<span class="kw">_</span>) | ContractOrOfferOutput::CancelOutgoing { .. } =&gt; {
+            LightningOutput::Offer(<span class="kw">_</span>) | LightningOutput::CancelOutgoing { .. } =&gt; {
                 <span class="macro">panic!</span>()
             } <span class="comment">// FIXME: impl TryFrom
         </span>};
@@ -2094,7 +2101,7 @@
                 <span class="kw">let </span>res = <span class="self">self
                     </span>.context
                     .api
-                    .await_output_outcome::&lt;<span class="prelude-ty">Option</span>&lt;SigResponse&gt;&gt;(outpoint, Duration::from_secs(<span class="number">30</span>))
+                    .await_output_outcome::&lt;MintOutputOutcome&gt;(outpoint, Duration::from_secs(<span class="number">30</span>))
                     .<span class="kw">await
                     </span>.map_err(ClientError::MintApiError);
                 <span class="kw">if </span>res.is_ok() &amp;&amp; res.unwrap().is_some() {
@@ -2453,12 +2460,11 @@
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        <span class="kw">let </span>incoming_output = fedimint_core::transaction::Output::LN(
-            ContractOrOfferOutput::Contract(ContractOutput {
+        <span class="kw">let </span>incoming_output =
+            fedimint_core::transaction::Output::LN(LightningOutput::Contract(ContractOutput {
                 amount: offer.amount,
                 contract: contract.clone(),
-            }),
-        );
+            }));
 
         <span class="comment">// Submit transaction
         </span>builder.output(incoming_output);
@@ -2677,4 +2683,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

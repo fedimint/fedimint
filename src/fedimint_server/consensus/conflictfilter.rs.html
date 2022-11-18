@@ -119,7 +119,7 @@
 
 <span class="kw">use </span>fedimint_api::TieredMulti;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-<span class="kw">use </span>fedimint_core::modules::ln::ContractOrOfferOutput;
+<span class="kw">use </span>fedimint_core::modules::ln::LightningOutput;
 <span class="kw">use </span>fedimint_core::modules::mint::Note;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::PegInProof;
 
@@ -180,7 +180,7 @@
             <span class="kw">match </span>input {
                 Input::Mint(<span class="kw-2">ref </span>coins) =&gt; {
                     <span class="comment">// TODO: can this be done without cloning? E.g. hashing?
-                    </span><span class="kw">if </span>!<span class="self">self</span>.coin_set.insert(coins.clone()) {
+                    </span><span class="kw">if </span>!<span class="self">self</span>.coin_set.insert(coins.<span class="number">0</span>.clone()) {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(tx.clone());
                     }
                 }
@@ -197,7 +197,7 @@
             }
         }
         <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>tx.outputs {
-            <span class="kw">if let </span>Output::LN(ContractOrOfferOutput::Contract(contract_output)) = output {
+            <span class="kw">if let </span>Output::LN(LightningOutput::Contract(contract_output)) = output {
                 <span class="comment">// For contracts we need to avoid any parallel updating, so outputs need to
                 // be tracked too. Once the main loop gets refactored such that only computation
                 // intensive operations are parallelized, this restriction can be lifted.
@@ -233,4 +233,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

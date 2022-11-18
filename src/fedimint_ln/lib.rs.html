@@ -979,7 +979,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>ContractInput {
+</span><span class="kw">pub struct </span>LightningInput {
     <span class="kw">pub </span>contract_id: contracts::ContractId,
     <span class="doccomment">/// While for now we only support spending the entire contract we need to avoid
     </span><span class="kw">pub </span>amount: Amount,
@@ -1001,7 +1001,7 @@
 /// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
 /// to receive their fist tokens via LN without already having tokens.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>ContractOrOfferOutput {
+</span><span class="kw">pub enum </span>LightningOutput {
     <span class="doccomment">/// Fund contract
     </span>Contract(ContractOutput),
     <span class="doccomment">/// Creat incoming contract offer
@@ -1028,7 +1028,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>OutputOutcome {
+</span><span class="kw">pub enum </span>LightningOutputOutcome {
     Contract {
         id: ContractId,
         outcome: ContractOutcome,
@@ -1046,7 +1046,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>DecryptionShareCI {
+</span><span class="kw">pub struct </span>LightningConsensusItem {
     <span class="kw">pub </span>contract_id: ContractId,
     <span class="kw">pub </span>share: PreimageDecryptionShare,
 }
@@ -1146,10 +1146,10 @@
 
 <span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>LightningModule {
-    <span class="kw">type </span>TxInput = ContractInput;
-    <span class="kw">type </span>TxOutput = ContractOrOfferOutput;
-    <span class="kw">type </span>TxOutputOutcome = OutputOutcome;
-    <span class="kw">type </span>ConsensusItem = DecryptionShareCI;
+    <span class="kw">type </span>TxInput = LightningInput;
+    <span class="kw">type </span>TxOutput = LightningOutput;
+    <span class="kw">type </span>TxOutputOutcome = LightningOutputOutcome;
+    <span class="kw">type </span>ConsensusItem = LightningConsensusItem;
     <span class="kw">type </span>VerificationCache = ();
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -1164,7 +1164,7 @@
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(ProposeDecryptionShareKey(contract_id), share) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                DecryptionShareCI { contract_id, share }
+                LightningConsensusItem { contract_id, share }
             })
             .collect()
     }
@@ -1294,7 +1294,7 @@
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">match </span>output {
-            ContractOrOfferOutput::Contract(contract) =&gt; {
+            LightningOutput::Contract(contract) =&gt; {
                 <span class="comment">// Incoming contracts are special, they need to match an offer
                 </span><span class="kw">if let </span>Contract::Incoming(incoming) = <span class="kw-2">&amp;</span>contract.contract {
                     <span class="kw">let </span>offer = <span class="self">self
@@ -1324,14 +1324,14 @@
                     })
                 }
             }
-            ContractOrOfferOutput::Offer(offer) =&gt; {
+            LightningOutput::Offer(offer) =&gt; {
                 <span class="kw">if </span>!offer.encrypted_preimage.<span class="number">0</span>.verify() {
                     <span class="prelude-val">Err</span>(LightningModuleError::InvalidEncryptedPreimage).into_module_error_other()
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Ok</span>(TransactionItemAmount::ZERO)
                 }
             }
-            ContractOrOfferOutput::CancelOutgoing {
+            LightningOutput::CancelOutgoing {
                 contract,
                 gateway_signature,
             } =&gt; {
@@ -1374,7 +1374,7 @@
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
 
         <span class="kw">match </span>output {
-            ContractOrOfferOutput::Contract(contract) =&gt; {
+            LightningOutput::Contract(contract) =&gt; {
                 <span class="kw">let </span>contract_db_key = ContractKey(contract.contract.contract_id());
                 <span class="kw">let </span>updated_contract_account = <span class="self">self
                     </span>.db
@@ -1394,7 +1394,7 @@
 
                 dbtx.insert_new_entry(
                     <span class="kw-2">&amp;</span>ContractUpdateKey(out_point),
-                    <span class="kw-2">&amp;</span>OutputOutcome::Contract {
+                    <span class="kw-2">&amp;</span>LightningOutputOutcome::Contract {
                         id: contract.contract.contract_id(),
                         outcome: contract.contract.to_outcome(),
                     },
@@ -1422,17 +1422,17 @@
                     dbtx.remove_entry(<span class="kw-2">&amp;</span>OfferKey(offer.hash)).expect(<span class="string">&quot;DB Error&quot;</span>);
                 }
             }
-            ContractOrOfferOutput::Offer(offer) =&gt; {
+            LightningOutput::Offer(offer) =&gt; {
                 dbtx.insert_new_entry(
                     <span class="kw-2">&amp;</span>ContractUpdateKey(out_point),
-                    <span class="kw-2">&amp;</span>OutputOutcome::Offer { id: offer.id() },
+                    <span class="kw-2">&amp;</span>LightningOutputOutcome::Offer { id: offer.id() },
                 )
                 .expect(<span class="string">&quot;DB Error&quot;</span>);
                 <span class="comment">// TODO: sanity-check encrypted preimage size
                 </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OfferKey(offer.hash), <span class="kw-2">&amp;</span>(<span class="kw-2">*</span>offer).clone())
                     .expect(<span class="string">&quot;DB Error&quot;</span>);
             }
-            ContractOrOfferOutput::CancelOutgoing { contract, .. } =&gt; {
+            LightningOutput::CancelOutgoing { contract, .. } =&gt; {
                 <span class="kw">let </span>updated_contract_account = {
                     <span class="kw">let </span><span class="kw-2">mut </span>contract_account = <span class="self">self
                         </span>.db
@@ -1612,7 +1612,7 @@
                 .expect(<span class="string">&quot;DB error&quot;</span>)
                 .expect(<span class="string">&quot;outcome was created on funding&quot;</span>);
             <span class="kw">let </span>incoming_contract_outcome_preimage = <span class="kw">match </span><span class="kw-2">&amp;mut </span>outcome {
-                OutputOutcome::Contract {
+                LightningOutputOutcome::Contract {
                     outcome: ContractOutcome::Incoming(decryption_outcome),
                     ..
                 } =&gt; decryption_outcome,
@@ -1789,4 +1789,4 @@
     </span>InvalidCancellationSignature,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

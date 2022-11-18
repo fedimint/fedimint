@@ -1123,6 +1123,24 @@
 <a href="#1123" id="1123">1123</a>
 <a href="#1124" id="1124">1124</a>
 <a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1151,6 +1169,7 @@
     Amount, FederationModule, InputMeta, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
     TieredMultiZip,
 };
+<span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rayon::iter::{ParallelBridge, ParallelIterator};
@@ -1391,12 +1410,27 @@
     }
 }
 
+<span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
+#[derive(
+    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+)]
+</span><span class="kw">pub struct </span>MintInput(<span class="kw">pub </span>TieredMulti&lt;Note&gt;);
+<span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>MintOutput(<span class="kw">pub </span>TieredMulti&lt;BlindNonce&gt;);
+<span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>MintOutputOutcome(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;SigResponse&gt;);
+<span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>MintConsensusItem(<span class="kw">pub </span>PartiallySignedRequest);
+
 <span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Mint {
-    <span class="kw">type </span>TxInput = TieredMulti&lt;Note&gt;;
-    <span class="kw">type </span>TxOutput = TieredMulti&lt;BlindNonce&gt;;
-    <span class="kw">type </span>TxOutputOutcome = <span class="prelude-ty">Option</span>&lt;SigResponse&gt;; <span class="comment">// TODO: make newtype
-    </span><span class="kw">type </span>ConsensusItem = PartiallySignedRequest;
+    <span class="kw">type </span>TxInput = MintInput;
+    <span class="kw">type </span>TxOutput = MintOutput;
+    <span class="kw">type </span>TxOutputOutcome = MintOutputOutcome;
+    <span class="kw">type </span>ConsensusItem = MintConsensusItem;
     <span class="kw">type </span>VerificationCache = VerificationCache;
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -1411,10 +1445,10 @@
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(key, partial_signature) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                PartiallySignedRequest {
+                MintConsensusItem(PartiallySignedRequest {
                     out_point: key.request_id,
                     partial_signature,
-                }
+                })
             })
             .collect()
     }
@@ -1424,12 +1458,12 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
     ) {
-        <span class="kw">for </span>(peer, partial_sig) <span class="kw">in </span>consensus_items {
+        <span class="kw">for </span>(peer, consensus_item) <span class="kw">in </span>consensus_items {
             <span class="self">self</span>.process_partial_signature(
                 dbtx,
                 peer,
-                partial_sig.out_point,
-                partial_sig.partial_signature,
+                consensus_item.out_point,
+                consensus_item.<span class="number">0</span>.partial_signature,
             )
         }
     }
@@ -1442,7 +1476,7 @@
         // calculation can happen massively in parallel since verification is a pure function and
         // thus has no side effects.
         </span><span class="kw">let </span>valid_coins = inputs
-            .flat_map(|inputs| inputs.iter_items())
+            .flat_map(|inputs| inputs.<span class="number">0</span>.iter_items())
             .par_bridge()
             .filter_map(|(amount, coin)| {
                 <span class="kw">let </span>amount_key = <span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount)<span class="question-mark">?</span>;
@@ -1548,7 +1582,9 @@
 
         <span class="comment">// TODO: move actual signing to worker thread
         // TODO: get rid of clone
-        </span><span class="kw">let </span>partial_sig = <span class="self">self</span>.blind_sign(output.clone()).into_module_error_other()<span class="question-mark">?</span>;
+        </span><span class="kw">let </span>partial_sig = <span class="self">self
+            </span>.blind_sign(output.clone().<span class="number">0</span>)
+            .into_module_error_other()<span class="question-mark">?</span>;
 
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>ProposedPartialSignatureKey {
@@ -1688,9 +1724,9 @@
             .expect(<span class="string">&quot;DB error&quot;</span>);
 
         <span class="kw">if </span>final_sig.is_some() {
-            <span class="prelude-val">Some</span>(final_sig)
+            <span class="prelude-val">Some</span>(MintOutputOutcome(final_sig))
         } <span class="kw">else if </span>we_proposed || was_consensus_outcome {
-            <span class="prelude-val">Some</span>(<span class="prelude-val">None</span>)
+            <span class="prelude-val">Some</span>(MintOutputOutcome(<span class="prelude-val">None</span>))
         } <span class="kw">else </span>{
             <span class="prelude-val">None
         </span>}
@@ -2249,4 +2285,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

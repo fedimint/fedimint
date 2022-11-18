@@ -229,12 +229,13 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Note, SignRequest};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput, SignRequest};
 <span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>tbs::AggregatePublicKey;
@@ -280,7 +281,7 @@
     <span class="kw">pub fn </span>create_input_from_coins(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         coins: TieredMulti&lt;SpendableNote&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, TieredMulti&lt;Note&gt;), MintClientError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, MintInput), MintClientError&gt; {
         <span class="kw">let </span>coin_key_pairs = coins
             .into_iter()
             .map(|(amt, coin)| {
@@ -294,7 +295,8 @@
                 }
             })
             .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, MintClientError&gt;&gt;()<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(coin_key_pairs.into_iter().unzip())
+        <span class="kw">let </span>(key_pairs, input) = coin_key_pairs.into_iter().unzip();
+        <span class="prelude-val">Ok</span>((key_pairs, MintInput(input)))
     }
 
     <span class="kw">pub fn </span>input(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;mut </span>Vec&lt;KeyPair&gt;, input: Input) {
@@ -325,7 +327,7 @@
 
         <span class="kw">if </span>!coin_output.is_empty() {
             <span class="kw">let </span>out_idx = <span class="self">self</span>.tx.outputs.len();
-            <span class="self">self</span>.output(Output::Mint(coin_output));
+            <span class="self">self</span>.output(Output::Mint(MintOutput(coin_output)));
             <span class="self">self</span>.output_notes
                 .push((out_idx <span class="kw">as </span>u64, coin_finalization_data));
         }
@@ -461,4 +463,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e9493d63c 2022-11-16)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
