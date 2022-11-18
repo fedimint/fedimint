@@ -6,18 +6,19 @@ use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        BalancePayload, DepositAddressPayload, DepositPayload, RegisterFedPayload, WithdrawPayload,
+        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, DepositPayload,
+        RegisterFedPayload, WithdrawPayload,
     },
 };
 use mint_client::{utils::from_hex, FederationId};
-use serde::Serialize;
+use url::Url;
 
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
     /// The address of the gateway webserver
-    #[clap(short, long, default_value = "http://localhost:8080")]
-    url: String,
+    #[clap(short, long, default_value = "127.0.0.1:8080")]
+    address: SocketAddr,
     #[command(subcommand)]
     command: Commands,
     /// WARNING: Passing in a password from the command line may be less secure!
@@ -73,6 +74,9 @@ pub enum Commands {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+    let url = Url::parse(&format!("http://{}", cli.address)).expect("Invalid address");
+    let client = RpcClient::new(url);
+
     match cli.command {
         Commands::GenerateConfig {
             address,
@@ -101,93 +105,88 @@ async fn main() {
             println!("version: {}", env!("GIT_HASH"));
         }
         Commands::Info => {
-            call(
-                source_password(cli.rpcpassword),
-                cli.url,
-                String::from("/info"),
-                (),
-            )
-            .await;
+            let response = client
+                .get_info(source_password(cli.rpcpassword))
+                .await
+                .expect("Failed to get info");
+
+            print_response(response).await;
         }
         Commands::Balance { federation_id } => {
-            call(
-                source_password(cli.rpcpassword),
-                cli.url,
-                String::from("/balance"),
-                BalancePayload { federation_id },
-            )
-            .await;
+            let response = client
+                .get_balance(
+                    source_password(cli.rpcpassword),
+                    BalancePayload { federation_id },
+                )
+                .await
+                .expect("Failed to get balance");
+
+            print_response(response).await;
         }
         Commands::Address { federation_id } => {
-            call(
-                source_password(cli.rpcpassword),
-                cli.url,
-                String::from("/address"),
-                DepositAddressPayload { federation_id },
-            )
-            .await;
+            let response = client
+                .get_deposit_address(
+                    source_password(cli.rpcpassword),
+                    DepositAddressPayload { federation_id },
+                )
+                .await
+                .expect("Failed to get deposit address");
+
+            print_response(response).await;
         }
         Commands::Deposit {
             federation_id,
             txout_proof,
             transaction,
         } => {
-            call(
-                source_password(cli.rpcpassword),
-                cli.url,
-                String::from("/deposit"),
-                DepositPayload {
-                    federation_id,
-                    txout_proof,
-                    transaction,
-                },
-            )
-            .await;
+            let response = client
+                .deposit(
+                    source_password(cli.rpcpassword),
+                    DepositPayload {
+                        federation_id,
+                        txout_proof,
+                        transaction,
+                    },
+                )
+                .await
+                .expect("Failed to deposit");
+
+            print_response(response).await;
         }
         Commands::Withdraw {
             federation_id,
             amount,
             address,
         } => {
-            call(
-                source_password(cli.rpcpassword),
-                cli.url,
-                String::from("/withdraw"),
-                WithdrawPayload {
-                    federation_id,
-                    amount,
-                    address,
-                },
-            )
-            .await;
+            let response = client
+                .withdraw(
+                    source_password(cli.rpcpassword),
+                    WithdrawPayload {
+                        federation_id,
+                        amount,
+                        address,
+                    },
+                )
+                .await
+                .expect("Failed to withdraw");
+
+            print_response(response).await;
         }
         Commands::RegisterFed { connect } => {
-            call(
-                source_password(cli.rpcpassword),
-                cli.url,
-                String::from("/register"),
-                RegisterFedPayload { connect },
-            )
-            .await;
+            let response = client
+                .register_federation(
+                    source_password(cli.rpcpassword),
+                    RegisterFedPayload { connect },
+                )
+                .await
+                .expect("Failed to register federation");
+
+            print_response(response).await;
         }
     }
 }
 
-pub async fn call<P>(password: String, url: String, endpoint: String, payload: P)
-where
-    P: Serialize,
-{
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(format!("{}{}", url, endpoint))
-        .bearer_auth(password)
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .json(&payload)
-        .send()
-        .await
-        .expect("rpc call failed");
-
+pub async fn print_response(response: reqwest::Response) {
     match response.status() {
         reqwest::StatusCode::OK => {
             let text = response.text().await.expect("Failed to read response body");
