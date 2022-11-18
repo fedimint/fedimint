@@ -11,6 +11,7 @@ name = "gateway-tests"
 path = "tests/tests.rs"
 
 [dev-dependencies]
+anyhow = "1.0.66"
 async-trait = "0.1.42"
 bitcoin = "0.29.2"
 fedimint-api = { path = "../../fedimint-api" }
@@ -20,3 +21,4 @@ ln-gateway = { path = "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
 rand = "0.8"
 tokio = { version = "1.21.2", features = ["full"] }
+url = { version = "2.3.1", features = ["serde"] }

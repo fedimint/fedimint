@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::task::TaskGroup;
@@ -15,13 +16,25 @@ use ln_gateway::{
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 
-pub fn fixtures(gw_cfg: GatewayConfig) -> LnGateway {
+pub struct Fixtures {
+    pub gateway: LnGateway,
+    pub task_group: TaskGroup,
+}
+
+pub fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
+    let task_group = TaskGroup::new();
+
     let ln_rpc = Arc::new(MockLnRpc::new());
 
     let client_builder: GatewayClientBuilder = MemoryDbGatewayClientBuilder {}.into();
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
 
-    LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, TaskGroup::new())
+    let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone());
+
+    Ok(Fixtures {
+        gateway,
+        task_group,
+    })
 }
 
 struct MockLnRpc {

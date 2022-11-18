@@ -1392,6 +1392,7 @@ dependencies = [
 name = "gateway-tests"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bitcoin",
  "fedimint-api",
@@ -1401,6 +1402,7 @@ dependencies = [
  "mint-client",
  "rand",
  "tokio",
+ "url",
 ]
 
 [[package]]
