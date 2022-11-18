@@ -17,8 +17,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::config::ClientConfig;
-use fedimint_api::{Amount, NumPeers, TransactionId};
+use fedimint_api::{config::ClientConfig, task::TaskGroup, Amount, NumPeers, TransactionId};
 use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{
     api::{WsFederationApi, WsFederationConnect},
@@ -27,7 +26,6 @@ use mint_client::{
     query::CurrentConsensus,
     ClientError, FederationId, GatewayClient, GatewayClientConfig,
 };
-use rand::thread_rng;
 use secp256k1::KeyPair;
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -55,6 +53,7 @@ pub struct LnGateway {
     webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
     client_builder: GatewayClientBuilder,
+    task_group: TaskGroup,
 }
 
 impl LnGateway {
@@ -65,6 +64,7 @@ impl LnGateway {
         // TODO: consider encapsulating message channel within LnGateway
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
+        task_group: TaskGroup,
     ) -> Self {
         // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(
@@ -80,6 +80,7 @@ impl LnGateway {
             webserver,
             receiver,
             client_builder,
+            task_group,
         }
     }
 
@@ -130,7 +131,7 @@ impl LnGateway {
             .await
             .expect("Failed to get client config");
 
-        let mut rng = thread_rng();
+        let mut rng = rand::rngs::OsRng;
         let ctx = secp256k1::Secp256k1::new();
         let kp_fed = KeyPair::new(&ctx, &mut rng);
 
@@ -242,9 +243,17 @@ impl LnGateway {
             .await
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(mut self) -> Result<()> {
+        let mut tg = self.task_group.clone();
+        let loop_ctrl = tg.make_handle();
+
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
+            // Shut down main loop if requested
+            if loop_ctrl.is_shutting_down() {
+                break;
+            }
+
             let least_wait_until = Instant::now() + Duration::from_millis(100);
 
             // Handle messages from webserver and plugin
@@ -294,6 +303,7 @@ impl LnGateway {
 
             fedimint_api::task::sleep_until(least_wait_until).await;
         }
+        Ok(())
     }
 }
 

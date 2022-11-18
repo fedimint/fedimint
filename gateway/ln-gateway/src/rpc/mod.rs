@@ -152,7 +152,7 @@ where
     T: GatewayRequestTrait,
     T::Response: std::fmt::Debug,
 {
-    pub async fn handle<F: Fn(T) -> FF, FF: Future<Output = Result<T::Response>>>(
+    pub async fn handle<F: Fn(T) -> FF, FF: Future<Output = Result<T::Response>> + Send>(
         self,
         handler: F,
     ) {
