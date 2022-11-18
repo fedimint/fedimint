@@ -377,13 +377,12 @@ impl<C: JsonRpcClient> FederationMember<C> {
     where
         R: serde::de::DeserializeOwned,
     {
-        let params = Some(jsonrpsee_types::ParamsSer::ArrayRef(params));
         let rclient = self.client.read().await;
         match &*rclient {
             Some(client) if client.is_connected() => {
                 return FedResponse {
                     peer: self.peer_id,
-                    result: client.request::<R>(method, params).await,
+                    result: client.request::<R, _>(method, params).await,
                 };
             }
             _ => {}
@@ -397,7 +396,11 @@ impl<C: JsonRpcClient> FederationMember<C> {
             Some(client) if client.is_connected() => {
                 // other task has already connected it
                 let rclient = RwLockWriteGuard::downgrade(wclient);
-                rclient.as_ref().unwrap().request::<R>(method, params).await
+                rclient
+                    .as_ref()
+                    .unwrap()
+                    .request::<R, _>(method, params)
+                    .await
             }
             _ => {
                 // write lock is acquired before creating a new client
@@ -407,7 +410,11 @@ impl<C: JsonRpcClient> FederationMember<C> {
                         *wclient = Some(client);
                         // drop the write lock before making the request
                         let rclient = RwLockWriteGuard::downgrade(wclient);
-                        rclient.as_ref().unwrap().request::<R>(method, params).await
+                        rclient
+                            .as_ref()
+                            .unwrap()
+                            .request::<R, _>(method, params)
+                            .await
                     }
                     Err(err) => {
                         error!(%err, "unable to connect to server");
@@ -479,6 +486,7 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
 mod tests {
     use std::{
         collections::HashSet,
+        fmt,
         str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -487,7 +495,11 @@ mod tests {
     };
 
     use anyhow::anyhow;
+    use jsonrpsee_core::client::BatchResponse;
+    use jsonrpsee_core::params::BatchRequestBuilder;
+    use jsonrpsee_core::traits::ToRpcParams;
     use once_cell::sync::Lazy;
+    use serde::de::DeserializeOwned;
 
     use super::*;
 
@@ -518,32 +530,28 @@ mod tests {
 
     #[async_trait]
     impl<C: SimpleClient + Send + Sync> ClientT for Client<C> {
-        async fn request<'a, R>(
-            &self,
-            method: &'a str,
-            _params: Option<jsonrpsee_types::ParamsSer<'a>>,
-        ) -> Result<R>
+        async fn request<R, P>(&self, method: &str, _params: P) -> Result<R>
         where
             R: jsonrpsee_core::DeserializeOwned,
+            P: ToRpcParams + Send,
         {
             let json = self.0.request(method).await?;
             Ok(serde_json::from_str(&json).unwrap())
         }
 
-        async fn notification<'a>(
-            &self,
-            _method: &'a str,
-            _params: Option<jsonrpsee_types::ParamsSer<'a>>,
-        ) -> Result<()> {
+        async fn notification<P>(&self, _method: &str, _params: P) -> Result<()>
+        where
+            P: ToRpcParams + Send,
+        {
             unimplemented!()
         }
 
         async fn batch_request<'a, R>(
             &self,
-            _batch: Vec<(&'a str, Option<jsonrpsee_types::ParamsSer<'a>>)>,
-        ) -> Result<Vec<R>>
+            _batch: BatchRequestBuilder<'a>,
+        ) -> std::result::Result<BatchResponse<'a, R>, jsonrpsee_core::Error>
         where
-            R: jsonrpsee_core::DeserializeOwned + Default + Clone,
+            R: DeserializeOwned + fmt::Debug + 'a,
         {
             unimplemented!()
         }

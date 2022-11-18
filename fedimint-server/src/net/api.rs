@@ -15,8 +15,8 @@ use fedimint_core::outcome::TransactionStatus;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use jsonrpsee::{
+    server::ServerBuilder,
     types::{error::CallError, ErrorObject},
-    ws_server::WsServerBuilder,
     RpcModule,
 };
 use tracing::{debug, error};
@@ -112,7 +112,7 @@ pub async fn run_server(
     );
 
     debug!(addr = cfg.api_bind_addr, "Starting WSServer");
-    let server = WsServerBuilder::new()
+    let server = ServerBuilder::new()
         .build(&cfg.api_bind_addr)
         .await
         .context(format!("Bind address: {}", cfg.api_bind_addr))
@@ -125,13 +125,13 @@ pub async fn run_server(
     let stop_handle = server_handle.clone();
 
     task_handle
-        .on_shutdown(|| {
+        .on_shutdown(move || {
             // ignore errors: we don't care if already stopped
             let _ = stop_handle.stop();
         })
         .await;
 
-    server_handle.await
+    server_handle.stopped().await
 }
 
 fn attach_endpoints<M>(
