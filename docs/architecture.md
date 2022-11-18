@@ -72,3 +72,5 @@ The gateway uses a `GatewayClient` to communicate with the federation, which del
 
 When a user submits a pay invoice request, the gateway uses the `GatewayClient` to confirm the user has locked funds into a valid `ContractAccount`.
 The gateway then pays the LN invoice and provides the preimage to the federation as proof the payment succeeded, at which point the federation will release the funds to the gateway.
+
+Read [more about the lightning gateway](./gateway.md)

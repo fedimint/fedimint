@@ -104,7 +104,7 @@ $ fedimint-cli fetch
 }
 ```
 
-### Using the gateway
+### Using the Gateway
 
 First let's have the gateway execute a peg-in so it has an ecash token balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
 
@@ -178,6 +178,8 @@ $ fedimint-cli wait-invoice lnbcrt1u1p3vcp...
 $ fedimint-cli fetch
 $ fedimint-cli info
 ```
+
+Read [more about the Gateway here](./gateway.md)
 
 ### Other options
 
