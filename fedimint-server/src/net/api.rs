@@ -4,6 +4,7 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use anyhow::Context;
+use fedimint_api::server::ServerModule;
 use fedimint_api::{
     config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
@@ -47,6 +48,11 @@ pub async fn run_server(
     let mut rpc_module = RpcModule::new(state);
 
     attach_endpoints(&mut rpc_module, server_endpoints(), None);
+
+    for (_, module) in &fedimint.modules {
+        attach_endpoints_erased(&mut rpc_module, module);
+    }
+
     attach_endpoints(
         &mut rpc_module,
         fedimint.wallet.api_endpoints(),
@@ -82,6 +88,7 @@ pub async fn run_server(
     server_handle.await
 }
 
+// TODO: remove once modularized
 fn attach_endpoints<M>(
     rpc_module: &mut RpcModule<RpcHandlerCtx>,
     endpoints: Vec<ApiEndpoint<M>>,
@@ -126,6 +133,57 @@ fn attach_endpoints<M>(
                                 e.code, e.message, None::<()>,
                             )))
                         })
+                })
+            })
+            .expect("Failed to register async method");
+    }
+}
+
+fn attach_endpoints_erased(
+    rpc_module: &mut RpcModule<RpcHandlerCtx>,
+    server_module: &ServerModule,
+) {
+    let base_name = server_module.api_base_name();
+    let endpoints = server_module.api_endpoints();
+    let module_key = server_module.module_key();
+
+    for endpoint in endpoints {
+        // This memory leak is fine because it only happens on server startup
+        // and path has to live till the end of program anyways.
+        let path: &'static _ =
+            Box::leak(format!("/{}{}", base_name, endpoint.path).into_boxed_str());
+        let handler: &'static _ = Box::leak(endpoint.handler);
+
+        rpc_module
+            .register_async_method(path, move |params, state| {
+                Box::pin(async move {
+                    let params = params.one::<serde_json::Value>()?;
+                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                    // end up with an inconsistent state in theory. In practice most API functions
+                    // are only reading and the few that do write anything are atomic. Lastly, this
+                    // is only the last line of defense
+                    AssertUnwindSafe((handler)(
+                        (*state.fedimint)
+                            .modules
+                            .get(&module_key)
+                            .expect("Module exists if it was registered"),
+                        params,
+                    ))
+                    .catch_unwind()
+                    .await
+                    .map_err(|_| {
+                        error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            500,
+                            "API handler panicked",
+                            None::<()>,
+                        )))
+                    })?
+                    .map_err(|e| {
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            e.code, e.message, None::<()>,
+                        )))
+                    })
                 })
             })
             .expect("Failed to register async method");
