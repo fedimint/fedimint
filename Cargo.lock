@@ -1423,12 +1423,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bitcoin",
+ "fedimint-api",
  "fedimint-ln",
  "lightning-invoice",
  "ln-gateway",
  "mint-client",
  "rand",
  "tokio",
+ "url",
 ]
 
 [[package]]
