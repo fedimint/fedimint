@@ -1,4 +1,5 @@
 use cln_plugin::Error;
+use fedimint_api::task::TaskGroup;
 use fedimint_server::config::load_from_file;
 use ln_gateway::{
     client::{GatewayClientBuilder, RocksDbGatewayClientBuilder},
@@ -8,6 +9,7 @@ use ln_gateway::{
     LnGateway,
 };
 use tokio::sync::mpsc;
+use tracing::{error, info};
 
 /// Fedimint gateway packaged as a CLN plugin
 #[tokio::main]
@@ -34,10 +36,15 @@ async fn main() -> Result<(), Error> {
         RocksDbGatewayClientBuilder::new(work_dir.clone()).into();
 
     // Create gateway instance
-    let mut gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx);
+    let task_group = TaskGroup::new();
+    let mut gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group);
 
-    // Start gateway
-    gateway.run().await.expect("gateway failed to run");
+    if let Err(e) = gateway.run().await {
+        task_group.shutdown().await;
+
+        error!("Gateway stopped with error: {}", e);
+        return Error(e.into());
+    }
 
     Ok(())
 }
