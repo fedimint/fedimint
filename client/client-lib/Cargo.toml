@@ -35,7 +35,7 @@ tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.37"
 tracing ="0.1.37"
 jsonrpsee-types = "0.16.0"
-jsonrpsee-core = { version = "0.16.0", features = [ "client" ] }
+jsonrpsee-core = { version = "0.16.1", features = [ "client" ] }
 serde_json = "1.0.86"
 url = { version = "2.3.1", features = ["serde"] }
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
