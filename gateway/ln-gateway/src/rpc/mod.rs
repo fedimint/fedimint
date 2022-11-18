@@ -1,3 +1,5 @@
+pub mod rpc_client;
+
 use std::io::Cursor;
 
 use anyhow::Error;
