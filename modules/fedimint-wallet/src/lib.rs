@@ -628,8 +628,8 @@ impl FederationModule for Wallet {
         "wallet"
     }
 
-    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        const ENDPOINTS: &[ApiEndpoint<Wallet>] = &[
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
+        vec![
             api_endpoint! {
                 "/block_height",
                 async |module: &Wallet, _params: ()| -> u32 {
@@ -652,8 +652,7 @@ impl FederationModule for Wallet {
                     Ok(tx.map(|tx| tx.fees))
                 }
             },
-        ];
-        ENDPOINTS
+        ]
     }
 }
 

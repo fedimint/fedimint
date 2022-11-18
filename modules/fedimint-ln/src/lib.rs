@@ -748,8 +748,8 @@ impl FederationModule for LightningModule {
         "ln"
     }
 
-    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        const ENDPOINTS: &[ApiEndpoint<LightningModule>] = &[
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
+        vec![
             api_endpoint! {
                 "/account",
                 async |module: &LightningModule, contract_id: ContractId| -> ContractAccount {
@@ -790,8 +790,7 @@ impl FederationModule for LightningModule {
                     Ok(())
                 }
             },
-        ];
-        ENDPOINTS
+        ]
     }
 }
 

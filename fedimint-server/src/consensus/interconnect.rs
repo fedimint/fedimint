@@ -34,7 +34,7 @@ async fn call_internal<M: FederationModule + 'static>(
 ) -> Result<serde_json::Value, ApiError> {
     let endpoint = module
         .api_endpoints()
-        .iter()
+        .into_iter()
         .find(|endpoint| endpoint.path == path)
         .ok_or_else(|| ApiError::not_found(String::from("Method not found")))?;
 

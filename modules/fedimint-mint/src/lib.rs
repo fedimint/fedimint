@@ -602,8 +602,8 @@ impl FederationModule for Mint {
         "mint"
     }
 
-    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[]
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
+        vec![]
     }
 }
 

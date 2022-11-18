@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use fedimint_api::core::{ModuleKey, PluginConsensusItem};
-use fedimint_api::server::InitHandle;
+use fedimint_api::module::ApiEndpoint;
 use fedimint_api::server::{Error, InputMeta, PluginVerificationCache, ServerModulePlugin};
 use fedimint_api::{
     db::DatabaseTransaction,
@@ -55,13 +55,6 @@ impl ServerModulePlugin for MintServerModule {
 
     fn module_key(&self) -> ModuleKey {
         MINT_MODULE_KEY
-    }
-
-    fn init(&self, backend: &mut dyn InitHandle) {
-        // TODO: delete this dummy endpoint
-        backend.register_endpoint("/mint/echo", |value, _ctx| {
-            Box::pin(async move { Ok(value) })
-        });
     }
 
     async fn await_consensus_proposal<'a>(&'a self) {
@@ -132,6 +125,14 @@ impl ServerModulePlugin for MintServerModule {
     }
 
     fn audit(&self, _audit: &mut Audit) {
+        todo!()
+    }
+
+    fn api_base_name(&self) -> &'static str {
+        todo!()
+    }
+
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         todo!()
     }
 }

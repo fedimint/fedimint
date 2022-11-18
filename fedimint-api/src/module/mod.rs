@@ -116,7 +116,7 @@ macro_rules! __api_endpoint {
 
         ApiEndpoint {
             path: <Endpoint as $crate::module::TypedApiEndpoint>::PATH,
-            handler: |m, param| {
+            handler: Box::new(|m, param| {
                 Box::pin(async move {
                     let params = $crate::module::__reexports::serde_json::from_value(param)
                         .map_err(|e| $crate::module::ApiError::bad_request(e.to_string()))?;
@@ -126,7 +126,7 @@ macro_rules! __api_endpoint {
                     Ok($crate::module::__reexports::serde_json::to_value(ret)
                         .expect("encoding error"))
                 })
-            },
+            }),
         }
     }};
 }
@@ -142,8 +142,14 @@ pub struct ApiEndpoint<M> {
     /// Handler for the API call that takes the following arguments:
     ///   * Reference to the module which defined it
     ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
-    pub handler:
-        for<'a> fn(&'a M, serde_json::Value) -> BoxFuture<'a, Result<serde_json::Value, ApiError>>,
+    pub handler: Box<
+        dyn for<'a> Fn(
+                &'a M,
+                serde_json::Value,
+            ) -> BoxFuture<'a, Result<serde_json::Value, ApiError>>
+            + Sync
+            + Send,
+    >,
 }
 
 #[derive(Error, Debug)]
@@ -313,5 +319,5 @@ pub trait FederationModule: Sized {
     /// Returns a list of custom API endpoints defined by the module. These are made available both
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
     /// their input and the current epoch.
-    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>];
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>>;
 }
