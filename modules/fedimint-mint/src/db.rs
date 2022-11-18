@@ -14,6 +14,7 @@ pub enum DbKeyPrefix {
     ReceivedPartialSig = 0x12,
     OutputOutcome = 0x13,
     MintAuditItem = 0x14,
+    EcashBackup = 0x15,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -133,4 +134,15 @@ impl DatabaseKeyPrefixConst for MintAuditItemKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
     type Key = MintAuditItemKey;
     type Value = Amount;
+}
+
+/// Key used to store user's ecash backups
+#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
+
+impl DatabaseKeyPrefixConst for EcashBackupKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
+    type Key = Self;
+    // timestamp, payload
+    type Value = (u64, Vec<u8>);
 }

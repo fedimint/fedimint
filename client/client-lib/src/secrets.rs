@@ -5,12 +5,14 @@ use std::fmt::Formatter;
 use fedimint_api::encoding::{Decodable, Encodable};
 use hkdf::hashes::Sha512;
 use hkdf::Hkdf;
+use ring::aead;
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use tbs::Scalar;
 
 const CHILD_TAG: &[u8; 8] = b"childkey";
 const SECP256K1_TAG: &[u8; 8] = b"secp256k";
 const BLS12_381_TAG: &[u8; 8] = b"bls12381";
+const CHACHA20_POLY1305: &[u8; 8] = b"c20p1305";
 
 /// Describes a child key of a [`DerivableSecret`]
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
@@ -51,6 +53,16 @@ impl DerivableSecret {
 
     pub fn to_bls12_381_key(&self) -> Scalar {
         Scalar::from_bytes_wide(&self.kdf.derive(&tagged_derive(BLS12_381_TAG, ChildId(0))))
+    }
+
+    pub fn to_chacha20_poly1305_key(&self) -> aead::UnboundKey {
+        aead::UnboundKey::new(
+            &aead::CHACHA20_POLY1305,
+            &self
+                .kdf
+                .derive::<32>(&tagged_derive(CHACHA20_POLY1305, ChildId(0))),
+        )
+        .expect("created key")
     }
 }
 

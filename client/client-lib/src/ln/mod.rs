@@ -323,6 +323,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
+    use fedimint_api::backup::SignedBackupRequest;
     use fedimint_api::config::ModuleConfigGenParams;
     use fedimint_api::core::{Decoder, OutputOutcome, MODULE_KEY_LN};
     use fedimint_api::db::mem_impl::MemDatabase;
@@ -435,6 +436,20 @@ mod tests {
             &self,
             _payment_hash: bitcoin::hashes::sha256::Hash,
         ) -> crate::api::Result<bool> {
+            unimplemented!()
+        }
+
+        async fn upload_ecash_backup(
+            &self,
+            _request: &SignedBackupRequest,
+        ) -> crate::api::Result<()> {
+            unimplemented!()
+        }
+
+        async fn download_ecash_backup(
+            &self,
+            _id: &secp256k1::XOnlyPublicKey,
+        ) -> crate::api::Result<Vec<u8>> {
             unimplemented!()
         }
     }

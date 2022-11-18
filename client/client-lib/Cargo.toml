@@ -28,7 +28,9 @@ miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-mi
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-api = { path = "../../fedimint-api" }
 rand = "0.8"
-reqwest = { version = "0.11.13", features = [ "json", "rustls-tls" ], default-features = false }
+ring = "0.16.20"
+reqwest = { version = "0.11.12", features = [ "json", "rustls-tls" ], default-features = false }
+secp256k1 = "0.24.1"
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = "1.0.147"
 strum = "0.24"
