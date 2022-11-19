@@ -40,7 +40,7 @@ pub async fn run_webserver(
     axum::Server::bind(&bind_addr)
         .serve(app.into_make_service())
         .await
-        .unwrap();
+        .expect("Failed to start webserver");
 
     Ok(())
 }

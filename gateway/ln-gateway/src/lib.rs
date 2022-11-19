@@ -50,7 +50,7 @@ pub struct LnGateway {
     config: GatewayConfig,
     actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
     ln_rpc: Arc<dyn LnRpc>,
-    webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
+    sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
     client_builder: GatewayClientBuilder,
     task_group: TaskGroup,
@@ -66,18 +66,11 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
-        // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(
-            config.password.clone(),
-            config.address,
-            GatewayRpcSender::new(sender),
-        ));
-
         Self {
             config,
             actors: Mutex::new(HashMap::new()),
             ln_rpc,
-            webserver,
+            sender,
             receiver,
             client_builder,
             task_group,
@@ -245,9 +238,23 @@ impl LnGateway {
 
     pub async fn run(mut self) -> Result<()> {
         let mut tg = self.task_group.clone();
-        let loop_ctrl = tg.make_handle();
+
+        let cfg = self.config.clone();
+        let sender = GatewayRpcSender::new(self.sender.clone());
+        tg.spawn("Gateway Webserver", move |server_ctrl| async move {
+            let mut webserver =
+                tokio::spawn(run_webserver(cfg.password.clone(), cfg.address, sender));
+
+            // Shut down webserver if requested
+            if server_ctrl.is_shutting_down() {
+                webserver.abort();
+                let _ = futures::executor::block_on(&mut webserver);
+            }
+        })
+        .await;
 
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
+        let loop_ctrl = tg.make_handle();
         loop {
             // Shut down main loop if requested
             if loop_ctrl.is_shutting_down() {
@@ -309,8 +316,7 @@ impl LnGateway {
 
 impl Drop for LnGateway {
     fn drop(&mut self) {
-        self.webserver.abort();
-        let _ = futures::executor::block_on(&mut self.webserver);
+        futures::executor::block_on(self.task_group.shutdown());
     }
 }
 
