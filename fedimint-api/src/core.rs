@@ -84,7 +84,7 @@ macro_rules! module_plugin_trait_define {
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
         pub trait $plugin_ty:
-            std::fmt::Debug + DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
+            std::fmt::Debug + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
         {
             fn module_key(&self) -> ModuleKey;
 
@@ -107,7 +107,24 @@ macro_rules! module_plugin_trait_define {
                 <Self as Clone>::clone(self).into()
             }
 
+            fn dyn_hash(&self) -> u64 {
+                let mut s = std::collections::hash_map::DefaultHasher::new();
+                self.hash(&mut s);
+                std::hash::Hasher::finish(&s)
+            }
+
             $($extra_impls)*
+        }
+
+        impl std::hash::Hash for $newtype_ty {
+            fn hash<H>(&self, state: &mut H)
+            where
+                H: std::hash::Hasher
+            {
+                let module_key = self.module_key();
+                module_key.hash(state);
+                self.0.dyn_hash().hash(state);
+            }
         }
     };
 }
@@ -145,6 +162,35 @@ macro_rules! plugin_types_trait_impl {
                 $key
             }
         }
+    };
+}
+
+macro_rules! erased_eq {
+    ($newtype:ty) => {
+        fn erased_eq(&self, other: &$newtype) -> bool {
+            if self.module_key() != other.module_key() {
+                return false;
+            }
+
+            let other: &T = other
+                .as_any()
+                .downcast_ref()
+                .expect("Type is ensured in previous step");
+
+            self == other
+        }
+    };
+}
+
+macro_rules! newtype_impl_eq_passthrough {
+    ($newtype:ty) => {
+        impl PartialEq for $newtype {
+            fn eq(&self, other: &Self) -> bool {
+                self.erased_eq(other)
+            }
+        }
+
+        impl Eq for $newtype {}
     };
 }
 
@@ -207,12 +253,16 @@ pub trait ModuleInput: Debug + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> Input;
+    fn dyn_hash(&self) -> u64;
+    fn erased_eq(&self, other: &Input) -> bool;
 }
 
 module_plugin_trait_define! {
     Input, PluginInput, ModuleInput,
     { }
-    { }
+    {
+        erased_eq!(Input);
+    }
 }
 
 dyn_newtype_define! {
@@ -224,6 +274,8 @@ module_dyn_newtype_impl_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(Input);
 
+newtype_impl_eq_passthrough!(Input);
+
 /// Something that can be an [`Output`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Output`] instead
@@ -232,6 +284,8 @@ pub trait ModuleOutput: Debug + DynEncodable {
     fn module_key(&self) -> ModuleKey;
 
     fn clone(&self) -> Output;
+    fn dyn_hash(&self) -> u64;
+    fn erased_eq(&self, other: &Output) -> bool;
 }
 
 dyn_newtype_define! {
@@ -241,22 +295,28 @@ dyn_newtype_define! {
 module_plugin_trait_define! {
     Output, PluginOutput, ModuleOutput,
     { }
-    { }
+    {
+        erased_eq!(Output);
+    }
 }
 module_dyn_newtype_impl_encode_decode! {
     Output, decode_output
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(Output);
 
+newtype_impl_eq_passthrough!(Output);
+
 pub enum FinalizationError {
     SomethingWentWrong,
 }
 
 pub trait ModuleOutputOutcome: Debug + DynEncodable {
-    fn as_any(&self) -> &(dyn Any + '_);
+    fn as_any(&self) -> &(dyn Any + 'static);
     /// Module key
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> OutputOutcome;
+    fn dyn_hash(&self) -> u64;
+    fn erased_eq(&self, other: &OutputOutcome) -> bool;
 }
 
 dyn_newtype_define! {
@@ -266,18 +326,36 @@ dyn_newtype_define! {
 module_plugin_trait_define! {
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
     { }
-    { }
+    {
+        fn erased_eq(&self, other: &OutputOutcome) -> bool {
+            if self.module_key() != other.module_key() {
+                return false;
+            }
+
+            let other = other
+                .as_any()
+                .downcast_ref::<T>()
+                .expect("Type is ensured in previous step");
+
+            self == other
+        }
+    }
 }
 module_dyn_newtype_impl_encode_decode! {
     OutputOutcome, decode_output_outcome
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
 
+newtype_impl_eq_passthrough!(OutputOutcome);
+
 pub trait ModuleConsensusItem: Debug + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
     /// Module key
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> ConsensusItem;
+    fn dyn_hash(&self) -> u64;
+
+    fn erased_eq(&self, other: &ConsensusItem) -> bool;
 }
 
 dyn_newtype_define! {
@@ -287,12 +365,16 @@ dyn_newtype_define! {
 module_plugin_trait_define! {
     ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
     { }
-    { }
+    {
+        erased_eq!(ConsensusItem);
+    }
 }
 module_dyn_newtype_impl_encode_decode! {
     ConsensusItem, decode_consensus_item
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
+
+newtype_impl_eq_passthrough!(ConsensusItem);
 
 #[derive(Encodable, Decodable)]
 pub struct Signature;
@@ -322,5 +404,78 @@ where
             outputs: Decodable::consensus_decode(r, modules)?,
             signature: Decodable::consensus_decode(r, modules)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    use fedimint_api::core::PluginConsensusItem;
+    use fedimint_api::encoding::{Decodable, Encodable};
+
+    use crate::core::{
+        ConsensusItem, Input, ModuleKey, Output, OutputOutcome, PluginInput, PluginOutput,
+        PluginOutputOutcome,
+    };
+
+    macro_rules! test_newtype_eq_hash {
+        ($newtype:ty, $trait:ty) => {
+            #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+            struct Foo {
+                key: u16,
+                data: u16,
+            }
+
+            impl $trait for Foo {
+                fn module_key(&self) -> ModuleKey {
+                    self.key
+                }
+            }
+
+            let a: $newtype = Foo { key: 42, data: 0 }.into();
+            let b: $newtype = Foo { key: 21, data: 0 }.into();
+            let c: $newtype = Foo { key: 42, data: 1 }.into();
+
+            assert_eq!(a, a);
+            assert_ne!(a, b);
+            assert_ne!(a, c);
+            assert_ne!(b, c);
+
+            assert_eq!(hash(&a), hash(&a));
+            assert_ne!(hash(&a), hash(&b));
+            assert_ne!(hash(&a), hash(&c));
+            assert_ne!(hash(&b), hash(&c));
+        };
+    }
+
+    fn hash<T>(item: &T) -> u64
+    where
+        T: Hash,
+    {
+        let mut hasher = DefaultHasher::new();
+        item.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn test_dyn_eq_hash_input() {
+        test_newtype_eq_hash!(Input, PluginInput);
+    }
+
+    #[test]
+    fn test_dyn_eq_hash_output() {
+        test_newtype_eq_hash!(Output, PluginOutput);
+    }
+
+    #[test]
+    fn test_dyn_eq_hash_outcome() {
+        test_newtype_eq_hash!(OutputOutcome, PluginOutputOutcome);
+    }
+
+    #[test]
+    fn test_dyn_eq_hash_ci() {
+        test_newtype_eq_hash!(ConsensusItem, PluginConsensusItem);
     }
 }
