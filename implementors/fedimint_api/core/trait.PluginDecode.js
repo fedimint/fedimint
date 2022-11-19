@@ -1,3 +1,5 @@
 (function() {var implementors = {
-"fedimint_mint_common":[["impl PluginDecode for <a class=\"struct\" href=\"fedimint_mint_common/struct.MintModuleDecoder.html\" title=\"struct fedimint_mint_common::MintModuleDecoder\">MintModuleDecoder</a>"]]
+"fedimint_ln":[["impl PluginDecode for <a class=\"struct\" href=\"fedimint_ln/common/struct.LightningModuleDecoder.html\" title=\"struct fedimint_ln::common::LightningModuleDecoder\">LightningModuleDecoder</a>"]],
+"fedimint_mint":[["impl PluginDecode for <a class=\"struct\" href=\"fedimint_mint/common/struct.MintModuleDecoder.html\" title=\"struct fedimint_mint::common::MintModuleDecoder\">MintModuleDecoder</a>"]],
+"fedimint_wallet":[["impl PluginDecode for <a class=\"struct\" href=\"fedimint_wallet/common/struct.WalletModuleDecoder.html\" title=\"struct fedimint_wallet::common::WalletModuleDecoder\">WalletModuleDecoder</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

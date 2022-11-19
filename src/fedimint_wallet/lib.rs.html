@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ea97c800646ec4c5.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-1469fca9efc07bcb.css"><link rel="stylesheet" disabled href="../../static.files/dark-e9b7e5d8ba0dc980.css"><link rel="stylesheet" disabled href="../../static.files/ayu-0c1cf144240c9f40.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-2da75ee0e1909b3a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_wallet/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-bfda650e0f1b8d97.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-73ec76ce6fb6d670.css"><link rel="stylesheet" disabled href="../../static.files/dark-505cdfdf9d48c666.css"><link rel="stylesheet" disabled href="../../static.files/ayu-de5a1c2641418e5f.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-2da75ee0e1909b3a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_wallet/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1408,6 +1408,24 @@
 <a href="#1408" id="1408">1408</a>
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1439,12 +1457,14 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, FederationModuleConfigGen, IntoModuleError, TransactionItemAmount,
+    api_endpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_api::{
+    plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModulePlugin,
+};
 <span class="kw">use </span>fedimint_bitcoind::BitcoindRpc;
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
@@ -1456,6 +1476,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::common::WalletModuleDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
@@ -1466,6 +1487,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::tweakable::Tweakable;
 <span class="kw">use </span><span class="kw">crate</span>::txoproof::{PegInProof, PegInProofError};
 
+<span class="kw">mod </span>common;
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>keys;
@@ -1682,14 +1704,22 @@
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>WalletOutput(<span class="kw">pub </span>PegOut);
 
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>WalletVerificationCache;
+
 <span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
-</span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Wallet {
-    <span class="kw">type </span>TxInput = WalletInput;
-    <span class="kw">type </span>TxOutput = WalletOutput;
+</span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>Wallet {
+    <span class="kw">type </span>Decoder = WalletModuleDecoder;
+    <span class="kw">type </span>Input = WalletInput;
+    <span class="kw">type </span>Output = WalletOutput;
     <span class="comment">// TODO: implement outcome
-    </span><span class="kw">type </span>TxOutputOutcome = WalletOutputOutcome;
+    </span><span class="kw">type </span>OutputOutcome = WalletOutputOutcome;
     <span class="kw">type </span>ConsensusItem = WalletConsensusItem;
-    <span class="kw">type </span>VerificationCache = ();
+    <span class="kw">type </span>VerificationCache = WalletVerificationCache;
+
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_api::encoding::ModuleKey {
+        <span class="macro">todo!</span>()
+    }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
@@ -1749,9 +1779,9 @@
             .collect()
     }
 
-    <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
     ) {
         <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_items, <span class="string">&quot;Received consensus proposals&quot;</span>);
@@ -1801,16 +1831,17 @@
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput&gt;,
+        _inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input&gt;,
     ) -&gt; <span class="self">Self</span>::VerificationCache {
+        WalletVerificationCache
     }
 
     <span class="kw">fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, ModuleError&gt; {
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.block_is_known(input.proof_block()) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::UnknownPegInProofBlock(input.proof_block()))
                 .into_module_error_other();
@@ -1835,7 +1866,7 @@
                 amount: fedimint_api::Amount::from_sat(input.tx_output().value),
                 fee: <span class="self">self</span>.cfg.fee_consensus.peg_in_abs,
             },
-            puk_keys: Box::new(std::iter::once(<span class="kw-2">*</span>input.tweak_contract_key())),
+            puk_keys: <span class="macro">vec!</span>[<span class="kw-2">*</span>input.tweak_contract_key()],
         })
     }
 
@@ -1843,9 +1874,9 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::Input,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, ModuleError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(outpoint = %input.outpoint(), amount = %meta.amount.amount, <span class="string">&quot;Claiming peg-in&quot;</span>);
 
@@ -1861,10 +1892,7 @@
         <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn </span>validate_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
+    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">if </span>!is_address_valid_for_network(<span class="kw-2">&amp;</span>output.recipient, <span class="self">self</span>.cfg.network) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
                 <span class="self">self</span>.cfg.network,
@@ -1892,7 +1920,7 @@
     <span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
         out_point: fedimint_api::OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
@@ -1955,10 +1983,10 @@
         <span class="prelude-val">Ok</span>(amount)
     }
 
-    <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
         <span class="comment">// Sign and finalize any unsigned transactions that have signatures
         </span><span class="kw">let </span>unsigned_txs: Vec&lt;(UnsignedTransactionKey, UnsignedTransaction)&gt; = <span class="self">self
@@ -2015,7 +2043,7 @@
         drop_peers
     }
 
-    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
+    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
         <span class="self">self</span>.db
             .begin_transaction()
             .get_value(<span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point))
@@ -2038,8 +2066,8 @@
         <span class="string">&quot;wallet&quot;
     </span>}
 
-    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;<span class="self">Self</span>&gt;] {
-        <span class="kw">const </span>ENDPOINTS: <span class="kw-2">&amp;</span>[ApiEndpoint&lt;Wallet&gt;] = <span class="kw-2">&amp;</span>[
+    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
+        <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/block_height&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, _params: ()| -&gt; u32 {
@@ -2062,8 +2090,7 @@
                     <span class="prelude-val">Ok</span>(tx.map(|tx| tx.fees))
                 }
             },
-        ];
-        ENDPOINTS
+        ]
     }
 }
 
@@ -2768,6 +2795,15 @@
 
 <span class="kw">impl </span>Eq <span class="kw">for </span>PegOutSignatureItem {}
 
+<span class="macro">plugin_types_trait_impl!</span>(
+    common::WALLET_MODULE_KEY,
+    WalletInput,
+    WalletOutput,
+    WalletOutputOutcome,
+    WalletConsensusItem,
+    WalletVerificationCache
+);
+
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>WalletError {
     <span class="attr">#[error(<span class="string">&quot;Connected bitcoind is on wrong network, expected {0}, got {1}&quot;</span>)]
@@ -2819,4 +2855,4 @@
 <span class="doccomment">/// **WARNING**: this is only intended to be used for testing
 </span><span class="kw">impl </span>Eq <span class="kw">for </span>WalletError {}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (b833ad56f 2022-11-18)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7e1cf5cc683233f7.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

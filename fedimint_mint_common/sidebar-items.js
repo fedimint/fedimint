@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":[["MINT_MODULE_KEY",""]],"struct":[["MintConsensusItem",""],["MintInput",""],["MintModuleDecoder",""],["MintOutput",""],["MintOutputOutcome",""],["MintPendingOutput",""],["MintSpendableOutput",""]]};

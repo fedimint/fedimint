@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":[["WALLET_MODULE_KEY",""]],"struct":[["WalletModuleDecoder",""]]};

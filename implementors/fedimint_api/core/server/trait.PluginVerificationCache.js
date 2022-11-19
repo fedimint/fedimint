@@ -1,3 +1,5 @@
 (function() {var implementors = {
-"fedimint_mint_server":[["impl PluginVerificationCache for <a class=\"struct\" href=\"fedimint_mint_server/struct.MintVerificationCache.html\" title=\"struct fedimint_mint_server::MintVerificationCache\">MintVerificationCache</a>"]]
+"fedimint_ln":[["impl PluginVerificationCache for <a class=\"struct\" href=\"fedimint_ln/struct.LightningVerificationCache.html\" title=\"struct fedimint_ln::LightningVerificationCache\">LightningVerificationCache</a>"]],
+"fedimint_mint":[["impl PluginVerificationCache for <a class=\"struct\" href=\"fedimint_mint/struct.VerificationCache.html\" title=\"struct fedimint_mint::VerificationCache\">VerificationCache</a>"]],
+"fedimint_wallet":[["impl PluginVerificationCache for <a class=\"struct\" href=\"fedimint_wallet/struct.WalletVerificationCache.html\" title=\"struct fedimint_wallet::WalletVerificationCache\">WalletVerificationCache</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

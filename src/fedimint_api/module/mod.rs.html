@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-api/src/module/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ea97c800646ec4c5.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-1469fca9efc07bcb.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e9b7e5d8ba0dc980.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-0c1cf144240c9f40.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-2da75ee0e1909b3a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_api/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-api/src/module/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-bfda650e0f1b8d97.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-73ec76ce6fb6d670.css"><link rel="stylesheet" disabled href="../../../static.files/dark-505cdfdf9d48c666.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-de5a1c2641418e5f.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-2da75ee0e1909b3a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_api/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -315,6 +315,13 @@
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
 <a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 
@@ -327,17 +334,21 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::config::{ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig};
+<span class="kw">use </span><span class="kw">crate</span>::core::{
+    PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
+};
 <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseTransaction;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::ModuleKey;
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
 <span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::server::PluginVerificationCache;
 <span class="kw">use </span><span class="kw">crate</span>::task::TaskGroup;
-<span class="kw">use crate</span>::{Amount, PeerId};
+<span class="kw">use crate</span>::{Amount, OutPoint, PeerId};
 
-<span class="kw">pub struct </span>InputMeta&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">pub struct </span>InputMeta {
     <span class="kw">pub </span>amount: TransactionItemAmount,
-    <span class="kw">pub </span>puk_keys: Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = XOnlyPublicKey&gt; + <span class="lifetime">&#39;a</span>&gt;,
+    <span class="kw">pub </span>puk_keys: Vec&lt;XOnlyPublicKey&gt;,
 }
 
 <span class="doccomment">/// Information about the amount represented by an input or output.
@@ -433,7 +444,7 @@
 
         ApiEndpoint {
             path: &lt;Endpoint <span class="kw">as </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint</span>&gt;::PATH,
-            handler: |m, param| {
+            handler: Box::new(|m, param| {
                 Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span>params = <span class="macro-nonterminal">$crate::module::__reexports::serde_json::from_value</span>(param)
                         .map_err(|e| <span class="macro-nonterminal">$crate::module::ApiError::bad_request</span>(e.to_string()))<span class="question-mark">?</span>;
@@ -443,12 +454,16 @@
                     <span class="prelude-val">Ok</span>(<span class="macro-nonterminal">$crate::module::__reexports::serde_json::to_value</span>(ret)
                         .expect(<span class="string">&quot;encoding error&quot;</span>))
                 })
-            },
+            }),
         }
     }};
 }
 
 <span class="kw">pub use </span>__api_endpoint <span class="kw">as </span>api_endpoint;
+
+<span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; = BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;;
+<span class="kw">type </span>HandlerFn&lt;M&gt; =
+    Box&lt;<span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M, serde_json::Value) -&gt; HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; + Sync + Send&gt;;
 
 <span class="doccomment">/// Definition of an API endpoint defined by a module `M`.
 </span><span class="kw">pub struct </span>ApiEndpoint&lt;M&gt; {
@@ -459,8 +474,7 @@
     <span class="doccomment">/// Handler for the API call that takes the following arguments:
     ///   * Reference to the module which defined it
     ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
-    </span><span class="kw">pub </span>handler:
-        <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M, serde_json::Value) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;,
+    </span><span class="kw">pub </span>handler: HandlerFn&lt;M&gt;,
 }
 
 <span class="attr">#[derive(Error, Debug)]
@@ -515,26 +529,29 @@
 }
 
 <span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
-</span><span class="kw">pub trait </span>FederationModule: Sized {
-    <span class="kw">type </span>TxInput: Send + Sync;
-    <span class="kw">type </span>TxOutput;
-    <span class="kw">type </span>TxOutputOutcome;
-    <span class="kw">type </span>ConsensusItem;
-    <span class="kw">type </span>VerificationCache;
+</span><span class="kw">pub trait </span>ServerModulePlugin: Sized {
+    <span class="kw">type </span>Decoder: PluginDecode;
+    <span class="kw">type </span>Input: PluginInput;
+    <span class="kw">type </span>Output: PluginOutput;
+    <span class="kw">type </span>OutputOutcome: PluginOutputOutcome;
+    <span class="kw">type </span>ConsensusItem: PluginConsensusItem;
+    <span class="kw">type </span>VerificationCache: PluginVerificationCache;
+
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
-    </span><span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>);
+    </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>);
 
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
-    </span><span class="kw">async fn </span>consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt;;
+    </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
     );
 
@@ -544,7 +561,7 @@
     /// constructing such lookup tables.
     </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput&gt; + Send,
+        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input&gt; + Send,
     ) -&gt; <span class="self">Self</span>::VerificationCache;
 
     <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
@@ -555,8 +572,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, ModuleError&gt;;
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
     <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the
     /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
@@ -569,18 +586,15 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::Input,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, ModuleError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
     <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    </span><span class="kw">fn </span>validate_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
+    </span><span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
@@ -595,8 +609,8 @@
     </span><span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
-        out_point: <span class="kw">crate</span>::OutPoint,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
+        out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// This function is called once all transactions have been processed and changes were written
@@ -604,16 +618,16 @@
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    </span><span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: <span class="kw">crate</span>::OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt;;
+    </span><span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt;;
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
     ///
@@ -630,7 +644,7 @@
     <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
     /// their input and the current epoch.
-    </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;<span class="self">Self</span>&gt;];
+    </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt;;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (83356b78c 2022-11-17)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7873449fa8c00e11.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (b833ad56f 2022-11-18)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7e1cf5cc683233f7.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
