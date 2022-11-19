@@ -9,7 +9,7 @@ use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
-use fedimint_api::{Amount, FederationModule};
+use fedimint_api::{Amount, ServerModulePlugin};
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
@@ -44,7 +44,7 @@ impl<'a> ModuleClient for LnClient<'a> {
 
     fn input_amount(
         &self,
-        input: &<Self::Module as FederationModule>::TxInput,
+        input: &<Self::Module as ServerModulePlugin>::Input,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.amount,
@@ -54,7 +54,7 @@ impl<'a> ModuleClient for LnClient<'a> {
 
     fn output_amount(
         &self,
-        output: &<Self::Module as FederationModule>::TxOutput,
+        output: &<Self::Module as ServerModulePlugin>::Output,
     ) -> TransactionItemAmount {
         match output {
             LightningOutput::Contract(account_output) => TransactionItemAmount {

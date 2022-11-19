@@ -7,36 +7,18 @@
 use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
-use bitcoin::XOnlyPublicKey;
 use fedimint_api::{
     db::DatabaseTransaction,
-    encoding::DynEncodable,
-    module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
-    Amount, OutPoint, PeerId,
+    module::{audit::Audit, interconnect::ModuleInterconect},
+    OutPoint, PeerId,
 };
-use futures::future::BoxFuture;
-use thiserror::Error;
 
 use super::*;
-use crate::module_plugin_trait_define;
+use crate::module::{
+    ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount,
+};
 
-/// Api Endpoint exposed by a server side module
-pub struct ApiEndpoint {
-    pub path: String,
-    pub handler: ApiHandler,
-}
-
-#[async_trait]
-pub trait ModuleApiHandler {
-    async fn handle(&self, params: &serde_json::Value) -> Result<serde_json::Value, ApiError>;
-}
-
-dyn_newtype_define! {
-    /// [`ApiEndpoint`] handler exposed by the server side module
-    pub ApiHandler(Box<ModuleApiHandler>)
-}
-
-pub trait ModuleVerificationCache: DynEncodable {
+pub trait ModuleVerificationCache {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> VerificationCache;
@@ -45,40 +27,28 @@ pub trait ModuleVerificationCache: DynEncodable {
 dyn_newtype_define! {
     pub VerificationCache(Box<ModuleVerificationCache>)
 }
-module_plugin_trait_define!(
-    VerificationCache,
-    PluginVerificationCache,
-    ModuleVerificationCache,
-    {} {}
-);
 
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("oops")]
-    SomethingWentWrong,
+// TODO: make macro impl that doesn't force en/decodable
+pub trait PluginVerificationCache: Clone + Send + Sync + 'static {
+    fn module_key(&self) -> ModuleKey;
 }
 
-pub struct InputMeta {
-    pub amount: Amount,
-    pub puk_keys: Vec<XOnlyPublicKey>,
+impl<T> ModuleVerificationCache for T
+where
+    T: PluginVerificationCache + 'static,
+{
+    fn as_any(&self) -> &(dyn Any + 'static) {
+        self
+    }
+
+    fn module_key(&self) -> ModuleKey {
+        <Self as PluginVerificationCache>::module_key(self)
+    }
+
+    fn clone(&self) -> VerificationCache {
+        <Self as Clone>::clone(self).into()
+    }
 }
-
-/// An interface rpc handlers can use to query to access current running context
-pub trait RpcHandlerCtx: Sync {}
-
-/// An interface exposed to Fedimint modules
-pub trait InitHandle {
-    /// Register an rpc handler at a given path
-    fn register_endpoint(
-        &mut self,
-        path: &'static str,
-        handler: fn(
-            serde_json::Value,
-            ctx: &dyn RpcHandlerCtx,
-        ) -> BoxFuture<'static, Result<serde_json::Value, ApiError>>,
-    );
-}
-
 /// Backend side module interface
 ///
 /// Server side Fedimint mondule needs to implement this trait.
@@ -86,21 +56,15 @@ pub trait InitHandle {
 pub trait IServerModule {
     fn module_key(&self) -> ModuleKey;
 
-    fn decode_spendable_output(&self, r: &mut dyn io::Read)
-        -> Result<SpendableOutput, DecodeError>;
+    fn as_any(&self) -> &(dyn Any + 'static);
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
 
-    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
-
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
 
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
-
-    /// Initialize the module on registration in Fedimint
-    fn init(&self, backend: &mut dyn InitHandle);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self);
@@ -133,7 +97,7 @@ pub trait IServerModule {
         interconnect: &dyn ModuleInterconect,
         verification_cache: &VerificationCache,
         input: &Input,
-    ) -> Result<InputMeta, Error>;
+    ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
     /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
@@ -148,13 +112,13 @@ pub trait IServerModule {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
         verification_cache: &VerificationCache,
-    ) -> Result<InputMeta, Error>;
+    ) -> Result<InputMeta, ModuleError>;
 
     /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(&self, output: &Output) -> Result<Amount, Error>;
+    fn validate_output(&self, output: &Output) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
@@ -171,7 +135,7 @@ pub trait IServerModule {
         dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
         out_point: OutPoint,
-    ) -> Result<Amount, Error>;
+    ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// This function is called once all transactions have been processed and changes were written
     /// to the database. This allows running finalization code before the next epoch.
@@ -194,6 +158,17 @@ pub trait IServerModule {
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit);
+
+    /// Defines the prefix for API endpoints defined by the module.
+    ///
+    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
+    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
+    fn api_base_name(&self) -> &'static str;
+
+    /// Returns a list of custom API endpoints defined by the module. These are made available both
+    /// to users as well as to other modules. They thus should be deterministic, only dependant on
+    /// their input and the current epoch.
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<ServerModule>>;
 }
 
 dyn_newtype_define!(
@@ -202,23 +177,12 @@ dyn_newtype_define!(
 );
 
 impl ModuleDecode for ServerModule {
-    fn decode_spendable_output(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<SpendableOutput, DecodeError> {
-        (**self).decode_spendable_output(r)
-    }
-
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
         (**self).decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
         (**self).decode_output(r)
-    }
-
-    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
-        (**self).decode_pending_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
@@ -231,130 +195,16 @@ impl ModuleDecode for ServerModule {
 }
 
 #[async_trait(?Send)]
-pub trait ServerModulePlugin: Sized {
-    type Decoder: PluginDecode;
-    type Input: PluginInput;
-    type Output: PluginOutput;
-    type PendingOutput: PluginPendingOutput;
-    type SpendableOutput: PluginSpendableOutput;
-    type OutputOutcome: PluginOutputOutcome;
-    type ConsensusItem: PluginConsensusItem;
-    type VerificationCache: PluginVerificationCache;
-
-    fn module_key(&self) -> ModuleKey;
-    fn init(&self, backend: &mut dyn InitHandle);
-
-    /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self);
-
-    /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal<'a>(&'a self) -> Vec<Self::ConsensusItem>;
-
-    /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The batch will be committed to the
-    /// database after all other modules ran `begin_consensus_epoch`, so the results are available
-    /// when processing transactions.
-    async fn begin_consensus_epoch<'a, 'b>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
-    );
-
-    /// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
-    /// constructing such lookup tables.
-    fn build_verification_cache<'a>(
-        &'a self,
-        inputs: impl Iterator<Item = &'a Self::Input> + Send,
-    ) -> Self::VerificationCache;
-
-    /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
-    fn validate_input<'a>(
-        &self,
-        interconnect: &dyn ModuleInterconect,
-        verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
-    ) -> Result<InputMeta, Error>;
-
-    /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
-    /// take no effect.
-    ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
-    /// processed.
-    fn apply_input<'a, 'b, 'c>(
-        &'a self,
-        interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
-        verification_cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, Error>;
-
-    /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
-    fn validate_output(&self, output: &Self::Output) -> Result<Amount, Error>;
-
-    /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
-    /// reset and the operation will take no effect.
-    ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or coin issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
-    ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
-    fn apply_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
-        out_point: OutPoint,
-    ) -> Result<Amount, Error>;
-
-    /// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
-    ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
-    async fn end_consensus_epoch<'a, 'b>(
-        &'a self,
-        consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut DatabaseTransaction<'b>,
-    ) -> Vec<PeerId>;
-
-    /// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome>;
-
-    /// Queries the database and returns all assets and liabilities of the module.
-    ///
-    /// Summing over all modules, if liabilities > assets then an error has occurred in the database
-    /// and consensus should halt.
-    fn audit(&self, audit: &mut Audit);
-}
-
-#[async_trait(?Send)]
 impl<T> IServerModule for T
 where
-    T: ServerModulePlugin,
+    T: ServerModulePlugin + 'static,
 {
     fn module_key(&self) -> ModuleKey {
         <Self as ServerModulePlugin>::module_key(self)
     }
 
-    fn decode_spendable_output(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<SpendableOutput, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_spendable_output(r)
+    fn as_any(&self) -> &(dyn Any + 'static) {
+        self
     }
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
@@ -365,20 +215,12 @@ where
         <Self as ServerModulePlugin>::Decoder::decode_output(r)
     }
 
-    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_pending_output(r)
-    }
-
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
         <Self as ServerModulePlugin>::Decoder::decode_output_outcome(r)
     }
 
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
         <Self as ServerModulePlugin>::Decoder::decode_consensus_item(r)
-    }
-
-    fn init(&self, backend: &mut dyn InitHandle) {
-        <Self as ServerModulePlugin>::init(self, backend)
     }
 
     /// Blocks until a new `consensus_proposal` is available.
@@ -449,7 +291,7 @@ where
         interconnect: &dyn ModuleInterconect,
         verification_cache: &VerificationCache,
         input: &Input,
-    ) -> Result<InputMeta, Error> {
+    ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModulePlugin>::validate_input(
             self,
             interconnect,
@@ -478,7 +320,7 @@ where
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
         verification_cache: &VerificationCache,
-    ) -> Result<InputMeta, Error> {
+    ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModulePlugin>::apply_input(
             self,
             interconnect,
@@ -499,7 +341,7 @@ where
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(&self, output: &Output) -> Result<Amount, Error> {
+    fn validate_output(&self, output: &Output) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModulePlugin>::validate_output(
             self,
             output
@@ -524,7 +366,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
         out_point: OutPoint,
-    ) -> Result<Amount, Error> {
+    ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModulePlugin>::apply_output(
             self,
             dbtx,
@@ -562,5 +404,25 @@ where
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit) {
         <Self as ServerModulePlugin>::audit(self, audit)
+    }
+
+    fn api_base_name(&self) -> &'static str {
+        <Self as ServerModulePlugin>::api_base_name(self)
+    }
+
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<ServerModule>> {
+        <Self as ServerModulePlugin>::api_endpoints(self)
+            .into_iter()
+            .map(|ApiEndpoint { path, handler }| ApiEndpoint {
+                path,
+                handler: Box::new(move |module: &ServerModule, value: serde_json::Value| {
+                    let typed_module = module
+                        .as_any()
+                        .downcast_ref::<T>()
+                        .expect("the dispatcher should always call with the right module");
+                    Box::pin(handler(typed_module, value))
+                }),
+            })
+            .collect()
     }
 }

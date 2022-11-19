@@ -4,15 +4,15 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use anyhow::Context;
+use fedimint_api::server::ServerModule;
 use fedimint_api::{
     config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
-    FederationModule, TransactionId,
+    ServerModulePlugin, TransactionId,
 };
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::outcome::TransactionStatus;
-use futures::future::BoxFuture;
 use futures::FutureExt;
 use jsonrpsee::{
     server::ServerBuilder,
@@ -37,51 +37,6 @@ impl std::fmt::Debug for RpcHandlerCtx {
     }
 }
 
-impl fedimint_api::server::RpcHandlerCtx for FedimintConsensus {}
-
-struct InitHandle<'a> {
-    rpc_module: &'a mut RpcModule<RpcHandlerCtx>,
-}
-
-impl<'a> fedimint_api::server::InitHandle for InitHandle<'a> {
-    fn register_endpoint(
-        &mut self,
-        path: &'static str,
-        handler: fn(
-            serde_json::Value,
-            &dyn fedimint_api::server::RpcHandlerCtx,
-        ) -> BoxFuture<'static, Result<serde_json::Value, ApiError>>,
-    ) {
-        self.rpc_module
-            .register_async_method(path, move |params, state| {
-                Box::pin(async move {
-                    let params = params.one::<serde_json::Value>()?;
-                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    AssertUnwindSafe(handler(params, &*state.fedimint))
-                        .catch_unwind()
-                        .await
-                        .map_err(|_| {
-                            error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                500,
-                                "API handler panicked",
-                                None::<()>,
-                            )))
-                        })?
-                        .map_err(|e| {
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                e.code, e.message, None::<()>,
-                            )))
-                        })
-                })
-            })
-            .expect("Failed to register async method");
-    }
-}
-
 pub async fn run_server(
     cfg: ServerConfig,
     fedimint: Arc<FedimintConsensus>,
@@ -93,17 +48,16 @@ pub async fn run_server(
     let mut rpc_module = RpcModule::new(state);
 
     attach_endpoints(&mut rpc_module, server_endpoints(), None);
+
+    for module in fedimint.modules.values() {
+        attach_endpoints_erased(&mut rpc_module, module);
+    }
+
     attach_endpoints(
         &mut rpc_module,
         fedimint.wallet.api_endpoints(),
         Some(fedimint.wallet.api_base_name()),
     );
-
-    for module in fedimint.modules.values() {
-        module.init(&mut InitHandle {
-            rpc_module: &mut rpc_module,
-        });
-    }
 
     attach_endpoints(
         &mut rpc_module,
@@ -134,16 +88,16 @@ pub async fn run_server(
     server_handle.stopped().await
 }
 
+// TODO: remove once modularized
 fn attach_endpoints<M>(
     rpc_module: &mut RpcModule<RpcHandlerCtx>,
-    endpoints: &'static [ApiEndpoint<M>],
+    endpoints: Vec<ApiEndpoint<M>>,
     base_name: Option<&str>,
 ) where
     FedimintConsensus: AsRef<M>,
-    M: Sync,
+    M: Sync + 'static,
 {
     for endpoint in endpoints {
-        let endpoint: &'static ApiEndpoint<M> = endpoint;
         let path = if let Some(base_name) = base_name {
             // This memory leak is fine because it only happens on server startup
             // and path has to live till the end of program anyways.
@@ -151,6 +105,10 @@ fn attach_endpoints<M>(
         } else {
             endpoint.path
         };
+
+        // Another memory leak that is fine because the function is only called once at startup
+        let handler: &'static _ = Box::leak(endpoint.handler);
+
         rpc_module
             .register_async_method(path, move |params, state| {
                 Box::pin(async move {
@@ -159,7 +117,7 @@ fn attach_endpoints<M>(
                     // end up with an inconsistent state in theory. In practice most API functions
                     // are only reading and the few that do write anything are atomic. Lastly, this
                     // is only the last line of defense
-                    AssertUnwindSafe((endpoint.handler)((*state.fedimint).as_ref(), params))
+                    AssertUnwindSafe((handler)((*state.fedimint).as_ref(), params))
                         .catch_unwind()
                         .await
                         .map_err(|_| {
@@ -181,8 +139,60 @@ fn attach_endpoints<M>(
     }
 }
 
-fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus>] {
-    const ENDPOINTS: &[ApiEndpoint<FedimintConsensus>] = &[
+fn attach_endpoints_erased(
+    rpc_module: &mut RpcModule<RpcHandlerCtx>,
+    server_module: &ServerModule,
+) {
+    let base_name = server_module.api_base_name();
+    let endpoints = server_module.api_endpoints();
+    let module_key = server_module.module_key();
+
+    for endpoint in endpoints {
+        // This memory leak is fine because it only happens on server startup
+        // and path has to live till the end of program anyways.
+        let path: &'static _ =
+            Box::leak(format!("/{}{}", base_name, endpoint.path).into_boxed_str());
+        let handler: &'static _ = Box::leak(endpoint.handler);
+
+        rpc_module
+            .register_async_method(path, move |params, state| {
+                Box::pin(async move {
+                    let params = params.one::<serde_json::Value>()?;
+                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                    // end up with an inconsistent state in theory. In practice most API functions
+                    // are only reading and the few that do write anything are atomic. Lastly, this
+                    // is only the last line of defense
+                    AssertUnwindSafe((handler)(
+                        state
+                            .fedimint
+                            .modules
+                            .get(&module_key)
+                            .expect("Module exists if it was registered"),
+                        params,
+                    ))
+                    .catch_unwind()
+                    .await
+                    .map_err(|_| {
+                        error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            500,
+                            "API handler panicked",
+                            None::<()>,
+                        )))
+                    })?
+                    .map_err(|e| {
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            e.code, e.message, None::<()>,
+                        )))
+                    })
+                })
+            })
+            .expect("Failed to register async method");
+    }
+}
+
+fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
+    vec![
         api_endpoint! {
             "/transaction",
             async |fedimint: &FedimintConsensus, transaction: serde_json::Value| -> TransactionId {
@@ -221,7 +231,5 @@ fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus>] {
                 Ok(fedimint.cfg.to_client_config())
             }
         },
-    ];
-
-    ENDPOINTS
+    ]
 }

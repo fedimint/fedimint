@@ -29,12 +29,14 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, FederationModuleConfigGen, IntoModuleError, TransactionItemAmount,
+    api_endpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
-use fedimint_api::{FederationModule, Feerate, InputMeta, NumPeers, OutPoint, PeerId};
+use fedimint_api::{
+    plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModulePlugin,
+};
 use fedimint_bitcoind::BitcoindRpc;
 use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
@@ -46,6 +48,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use crate::common::WalletModuleDecoder;
 use crate::config::WalletConfig;
 use crate::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
@@ -56,6 +59,7 @@ use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 
+mod common;
 pub mod config;
 pub mod db;
 pub mod keys;
@@ -272,14 +276,22 @@ pub struct WalletInput(pub Box<PegInProof>);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletOutput(pub PegOut);
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct WalletVerificationCache;
+
 #[async_trait(?Send)]
-impl FederationModule for Wallet {
-    type TxInput = WalletInput;
-    type TxOutput = WalletOutput;
+impl ServerModulePlugin for Wallet {
+    type Decoder = WalletModuleDecoder;
+    type Input = WalletInput;
+    type Output = WalletOutput;
     // TODO: implement outcome
-    type TxOutputOutcome = WalletOutputOutcome;
+    type OutputOutcome = WalletOutputOutcome;
     type ConsensusItem = WalletConsensusItem;
-    type VerificationCache = ();
+    type VerificationCache = WalletVerificationCache;
+
+    fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
+        todo!()
+    }
 
     async fn await_consensus_proposal(&self) {
         let mut our_target_height = self.target_height().await;
@@ -339,9 +351,9 @@ impl FederationModule for Wallet {
             .collect()
     }
 
-    async fn begin_consensus_epoch<'a>(
+    async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
         trace!(?consensus_items, "Received consensus proposals");
@@ -391,16 +403,17 @@ impl FederationModule for Wallet {
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::TxInput>,
+        _inputs: impl Iterator<Item = &'a Self::Input>,
     ) -> Self::VerificationCache {
+        WalletVerificationCache
     }
 
     fn validate_input<'a>(
         &self,
         _interconnect: &dyn ModuleInterconect,
         _cache: &Self::VerificationCache,
-        input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, ModuleError> {
+        input: &'a Self::Input,
+    ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(input.proof_block()) {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
                 .into_module_error_other();
@@ -425,7 +438,7 @@ impl FederationModule for Wallet {
                 amount: fedimint_api::Amount::from_sat(input.tx_output().value),
                 fee: self.cfg.fee_consensus.peg_in_abs,
             },
-            puk_keys: Box::new(std::iter::once(*input.tweak_contract_key())),
+            puk_keys: vec![*input.tweak_contract_key()],
         })
     }
 
@@ -433,9 +446,9 @@ impl FederationModule for Wallet {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::TxInput,
+        input: &'b Self::Input,
         cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, ModuleError> {
+    ) -> Result<InputMeta, ModuleError> {
         let meta = self.validate_input(interconnect, cache, input)?;
         debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
@@ -451,10 +464,7 @@ impl FederationModule for Wallet {
         Ok(meta)
     }
 
-    fn validate_output(
-        &self,
-        output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+    fn validate_output(&self, output: &Self::Output) -> Result<TransactionItemAmount, ModuleError> {
         if !is_address_valid_for_network(&output.recipient, self.cfg.network) {
             return Err(WalletError::WrongNetwork(
                 self.cfg.network,
@@ -482,7 +492,7 @@ impl FederationModule for Wallet {
     fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::TxOutput,
+        output: &'a Self::Output,
         out_point: fedimint_api::OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(output)?;
@@ -545,10 +555,10 @@ impl FederationModule for Wallet {
         Ok(amount)
     }
 
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Sign and finalize any unsigned transactions that have signatures
         let unsigned_txs: Vec<(UnsignedTransactionKey, UnsignedTransaction)> = self
@@ -605,7 +615,7 @@ impl FederationModule for Wallet {
         drop_peers
     }
 
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
+    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
         self.db
             .begin_transaction()
             .get_value(&PegOutBitcoinTransaction(out_point))
@@ -628,8 +638,8 @@ impl FederationModule for Wallet {
         "wallet"
     }
 
-    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        const ENDPOINTS: &[ApiEndpoint<Wallet>] = &[
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
+        vec![
             api_endpoint! {
                 "/block_height",
                 async |module: &Wallet, _params: ()| -> u32 {
@@ -652,8 +662,7 @@ impl FederationModule for Wallet {
                     Ok(tx.map(|tx| tx.fees))
                 }
             },
-        ];
-        ENDPOINTS
+        ]
     }
 }
 
@@ -1357,6 +1366,15 @@ impl PartialEq for PegOutSignatureItem {
 }
 
 impl Eq for PegOutSignatureItem {}
+
+plugin_types_trait_impl!(
+    common::WALLET_MODULE_KEY,
+    WalletInput,
+    WalletOutput,
+    WalletOutputOutcome,
+    WalletConsensusItem,
+    WalletVerificationCache
+);
 
 #[derive(Debug, Error)]
 pub enum WalletError {

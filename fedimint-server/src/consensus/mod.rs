@@ -14,7 +14,7 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::{ModuleError, TransactionItemAmount};
 use fedimint_api::server::ServerModule;
-use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
+use fedimint_api::{Amount, OutPoint, PeerId, ServerModulePlugin, TransactionId};
 use fedimint_core::epoch::*;
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_core::modules::mint::Mint;
@@ -98,9 +98,9 @@ pub struct AcceptedTransaction {
 
 #[derive(Debug)]
 struct VerificationCaches {
-    mint: <Mint as FederationModule>::VerificationCache,
-    wallet: <Wallet as FederationModule>::VerificationCache,
-    ln: <LightningModule as FederationModule>::VerificationCache,
+    mint: <Mint as ServerModulePlugin>::VerificationCache,
+    wallet: <Wallet as ServerModulePlugin>::VerificationCache,
+    ln: <LightningModule as ServerModulePlugin>::VerificationCache,
 }
 
 struct FundingVerifier {

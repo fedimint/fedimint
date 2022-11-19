@@ -10,10 +10,9 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    ApiError, FederationModuleConfigGen, ModuleError, TransactionItemAmount,
+    ApiError, FederationModuleConfigGen, InputMeta, ModuleError, TransactionItemAmount,
 };
-use fedimint_api::InputMeta;
-use fedimint_api::{FederationModule, OutPoint, PeerId};
+use fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
 
 pub mod bitcoind;
 
@@ -23,6 +22,7 @@ pub struct FakeFed<Module> {
     block_height: Arc<std::sync::atomic::AtomicU64>,
 }
 
+// TODO: probably remove after modularization
 #[derive(Debug, PartialEq, Eq)]
 pub struct TestInputMeta {
     pub amount: TransactionItemAmount,
@@ -31,9 +31,9 @@ pub struct TestInputMeta {
 
 impl<Module> FakeFed<Module>
 where
-    Module: FederationModule,
+    Module: ServerModulePlugin,
     Module::ConsensusItem: Clone,
-    Module::TxOutputOutcome: Eq + Debug,
+    Module::OutputOutcome: Eq + Debug,
 {
     pub async fn new<ConfGen, F, FF>(
         members: usize,
@@ -69,21 +69,24 @@ where
         self.block_height.store(bh, Ordering::Relaxed);
     }
 
-    pub fn verify_input(&self, input: &Module::TxInput) -> Result<TestInputMeta, ModuleError> {
+    pub fn verify_input(&self, input: &Module::Input) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         let results = self.members.iter().map(|(_, member, _)| {
             let cache = member.build_verification_cache(std::iter::once(input));
-            let InputMeta { amount, puk_keys } = member.validate_input(&fake_ic, &cache, input)?;
+            let InputMeta {
+                amount,
+                puk_keys: pub_keys,
+            } = member.validate_input(&fake_ic, &cache, input)?;
             Ok(TestInputMeta {
                 amount,
-                keys: puk_keys.collect(),
+                keys: pub_keys,
             })
         });
         assert_all_equal_result(results)
     }
 
-    pub fn verify_output(&self, output: &Module::TxOutput) -> bool {
+    pub fn verify_output(&self, output: &Module::Output) -> bool {
         let results = self
             .members
             .iter()
@@ -94,10 +97,10 @@ where
     // TODO: add expected result to inputs/outputs
     pub async fn consensus_round(
         &mut self,
-        inputs: &[Module::TxInput],
-        outputs: &[(OutPoint, Module::TxOutput)],
+        inputs: &[Module::Input],
+        outputs: &[(OutPoint, Module::Output)],
     ) where
-        <Module as FederationModule>::TxInput: Send + Sync,
+        <Module as ServerModulePlugin>::Input: Send + Sync,
     {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
@@ -144,7 +147,7 @@ where
         }
     }
 
-    pub fn output_outcome(&self, out_point: OutPoint) -> Option<Module::TxOutputOutcome> {
+    pub fn output_outcome(&self, out_point: OutPoint) -> Option<Module::OutputOutcome> {
         // Since every member is in the same epoch they should have the same internal state, even
         // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
         // main consensus loop into another thread to optimize latency. This test will probably fail

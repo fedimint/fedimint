@@ -9,7 +9,7 @@ use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
+use fedimint_api::{Amount, OutPoint, ServerModulePlugin, Tiered, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{BlindNonce, Mint, MintOutputOutcome, Nonce, Note, SigResponse};
 use futures::stream::FuturesUnordered;
@@ -73,7 +73,7 @@ impl<'a> ModuleClient for MintClient<'a> {
 
     fn input_amount(
         &self,
-        input: &<Self::Module as FederationModule>::TxInput,
+        input: &<Self::Module as ServerModulePlugin>::Input,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.total_amount(),
@@ -83,7 +83,7 @@ impl<'a> ModuleClient for MintClient<'a> {
 
     fn output_amount(
         &self,
-        output: &<Self::Module as FederationModule>::TxOutput,
+        output: &<Self::Module as ServerModulePlugin>::Output,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: output.total_amount(),

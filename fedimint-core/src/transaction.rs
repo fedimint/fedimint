@@ -1,7 +1,7 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::{Amount, FederationModule, TransactionId};
+use fedimint_api::{Amount, ServerModulePlugin, TransactionId};
 use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
@@ -29,18 +29,18 @@ pub struct Transaction {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Input {
     // TODO: maybe treat every coin as a seperate input?
-    Mint(<fedimint_mint::Mint as FederationModule>::TxInput),
-    Wallet(<fedimint_wallet::Wallet as FederationModule>::TxInput),
-    LN(<fedimint_ln::LightningModule as FederationModule>::TxInput),
+    Mint(<fedimint_mint::Mint as ServerModulePlugin>::Input),
+    Wallet(<fedimint_wallet::Wallet as ServerModulePlugin>::Input),
+    LN(<fedimint_ln::LightningModule as ServerModulePlugin>::Input),
 }
 
 // TODO: check if clippy is right
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Output {
-    Mint(<fedimint_mint::Mint as FederationModule>::TxOutput),
-    Wallet(<fedimint_wallet::Wallet as FederationModule>::TxOutput),
-    LN(<fedimint_ln::LightningModule as FederationModule>::TxOutput),
+    Mint(<fedimint_mint::Mint as ServerModulePlugin>::Output),
+    Wallet(<fedimint_wallet::Wallet as ServerModulePlugin>::Output),
+    LN(<fedimint_ln::LightningModule as ServerModulePlugin>::Output),
 }
 
 impl Transaction {

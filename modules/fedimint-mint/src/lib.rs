@@ -17,14 +17,15 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    ApiEndpoint, FederationModuleConfigGen, IntoModuleError, ModuleError, TransactionItemAmount,
+    ApiEndpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, ModuleError,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
-    Amount, FederationModule, InputMeta, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
-    TieredMultiZip,
+    plugin_types_trait_impl, Amount, NumPeers, OutPoint, PeerId, ServerModulePlugin, Tiered,
+    TieredMulti, TieredMultiZip,
 };
 use impl_tools::autoimpl;
 use itertools::Itertools;
@@ -39,6 +40,7 @@ use thiserror::Error;
 use threshold_crypto::group::Curve;
 use tracing::{debug, error, warn};
 
+use crate::common::{MintModuleDecoder, MINT_MODULE_KEY};
 use crate::config::MintConfig;
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -48,7 +50,9 @@ use crate::db::{
 
 pub mod config;
 
+mod common;
 mod db;
+
 /// Data structures taking into account different amount tiers
 
 /// Federated mint member mint
@@ -114,7 +118,7 @@ pub struct Nonce(pub secp256k1_zkp::XOnlyPublicKey);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindNonce(pub tbs::BlindedMessage);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VerificationCache {
     valid_coins: HashMap<Note, Amount>,
 }
@@ -283,12 +287,17 @@ pub struct MintOutputOutcome(pub Option<SigResponse>);
 pub struct MintConsensusItem(pub PartiallySignedRequest);
 
 #[async_trait(?Send)]
-impl FederationModule for Mint {
-    type TxInput = MintInput;
-    type TxOutput = MintOutput;
-    type TxOutputOutcome = MintOutputOutcome;
+impl ServerModulePlugin for Mint {
+    type Decoder = MintModuleDecoder;
+    type Input = MintInput;
+    type Output = MintOutput;
+    type OutputOutcome = MintOutputOutcome;
     type ConsensusItem = MintConsensusItem;
     type VerificationCache = VerificationCache;
+
+    fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
+        MINT_MODULE_KEY
+    }
 
     async fn await_consensus_proposal(&self) {
         if self.consensus_proposal().await.is_empty() {
@@ -310,9 +319,9 @@ impl FederationModule for Mint {
             .collect()
     }
 
-    async fn begin_consensus_epoch<'a>(
+    async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
         for (peer, consensus_item) in consensus_items {
@@ -327,7 +336,7 @@ impl FederationModule for Mint {
 
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a Self::TxInput> + Send,
+        inputs: impl Iterator<Item = &'a Self::Input> + Send,
     ) -> Self::VerificationCache {
         // We build a lookup table for checking the validity of all coins for certain amounts. This
         // calculation can happen massively in parallel since verification is a pure function and
@@ -352,8 +361,8 @@ impl FederationModule for Mint {
         &self,
         _interconnect: &dyn ModuleInterconect,
         cache: &Self::VerificationCache,
-        input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, ModuleError> {
+        input: &'a Self::Input,
+    ) -> Result<InputMeta, ModuleError> {
         input
             .iter_items()
             .try_for_each(|(amount, coin)| {
@@ -386,7 +395,10 @@ impl FederationModule for Mint {
                 amount: input.total_amount(),
                 fee: self.cfg.fee_consensus.coin_spend_abs * (input.item_count() as u64),
             },
-            puk_keys: Box::new(input.iter_items().map(|(_, coin)| *coin.spend_key())),
+            puk_keys: input
+                .iter_items()
+                .map(|(_, coin)| *coin.spend_key())
+                .collect(),
         })
     }
 
@@ -394,9 +406,9 @@ impl FederationModule for Mint {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::TxInput,
+        input: &'b Self::Input,
         cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, ModuleError> {
+    ) -> Result<InputMeta, ModuleError> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
         input.iter_items().for_each(|(amount, coin)| {
@@ -409,10 +421,7 @@ impl FederationModule for Mint {
         Ok(meta)
     }
 
-    fn validate_output(
-        &self,
-        output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+    fn validate_output(&self, output: &Self::Output) -> Result<TransactionItemAmount, ModuleError> {
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
             if self.pub_key.get(&amount).is_none() {
                 Some(amount)
@@ -432,7 +441,7 @@ impl FederationModule for Mint {
     fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::TxOutput,
+        output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(output)?;
@@ -459,10 +468,10 @@ impl FederationModule for Mint {
         Ok(amount)
     }
 
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Finalize partial signatures for which we now have enough shares
         let req_psigs = self
@@ -557,7 +566,7 @@ impl FederationModule for Mint {
         dropped_peers
     }
 
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
+    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
         let we_proposed = self
             .db
             .begin_transaction()
@@ -602,8 +611,8 @@ impl FederationModule for Mint {
         "mint"
     }
 
-    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[]
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
+        vec![]
     }
 }
 
@@ -884,6 +893,15 @@ impl Extend<(Amount, BlindNonce)> for SignRequest {
         self.0.extend(iter)
     }
 }
+
+plugin_types_trait_impl!(
+    MINT_MODULE_KEY,
+    MintInput,
+    MintOutput,
+    MintOutputOutcome,
+    MintConsensusItem,
+    VerificationCache
+);
 
 /// Represents an array of mint indexes that delivered faulty shares
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

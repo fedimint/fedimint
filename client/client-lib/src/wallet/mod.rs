@@ -3,7 +3,7 @@ use bitcoin::KeyPair;
 use db::PegInKey;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::{Amount, FederationModule};
+use fedimint_api::{Amount, ServerModulePlugin};
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
@@ -29,7 +29,7 @@ impl<'a> ModuleClient for WalletClient<'a> {
 
     fn input_amount(
         &self,
-        input: &<Self::Module as FederationModule>::TxInput,
+        input: &<Self::Module as ServerModulePlugin>::Input,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: Amount::from_sat(input.tx_output().value),
@@ -39,7 +39,7 @@ impl<'a> ModuleClient for WalletClient<'a> {
 
     fn output_amount(
         &self,
-        output: &<Self::Module as FederationModule>::TxOutput,
+        output: &<Self::Module as ServerModulePlugin>::Output,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
