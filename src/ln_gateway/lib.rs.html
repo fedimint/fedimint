@@ -325,7 +325,6 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -333,7 +332,6 @@
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>rpc;
 <span class="kw">pub mod </span>utils;
-<span class="kw">pub mod </span>webserver;
 
 <span class="kw">use </span>std::{
     borrow::Cow,
@@ -369,10 +367,10 @@
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
-        BalancePayload, DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest,
-        GatewayRpcSender, InfoPayload, ReceivePaymentPayload, RegisterFedPayload, WithdrawPayload,
+        rpc_server::run_webserver, BalancePayload, DepositAddressPayload, DepositPayload,
+        GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
+        RegisterFedPayload, WithdrawPayload,
     },
-    webserver::run_webserver,
 };
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, LnGatewayError&gt;;

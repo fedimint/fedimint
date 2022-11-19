@@ -20,7 +20,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimintd":["",[["ui",[],["configgen.rs","mod.rs"]]],["encrypt.rs","lib.rs"]],\
 "gateway_cli":["",[],["main.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
-"ln_gateway":["",[],["actor.rs","client.rs","cln.rs","config.rs","lib.rs","ln.rs","rpc.rs","utils.rs","webserver.rs"]],\
+"ln_gateway":["",[["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","cln.rs","config.rs","lib.rs","ln.rs","utils.rs"]],\
 "mint_client":["",[["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","query.rs","secrets.rs","transaction.rs","utils.rs"]],\
 "mint_rpc_client":["",[],["mint-rpc-client.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
