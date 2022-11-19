@@ -4,7 +4,6 @@ use clap::Parser;
 use fedimint_api::db::Database;
 use fedimint_api::task::TaskGroup;
 use fedimint_core::modules::ln::LightningModule;
-use fedimint_mint_server::MintServerModule;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
@@ -109,9 +108,7 @@ async fn main() -> anyhow::Result<()> {
 
     let ln = LightningModule::new(cfg.get_module_config("ln")?, db.clone());
 
-    let mut consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
-
-    consensus.register_module(MintServerModule::new().into());
+    let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
 
     FedimintServer::run(cfg, consensus, &mut task_group).await?;
 

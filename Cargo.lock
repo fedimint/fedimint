@@ -875,7 +875,6 @@ version = "0.1.0"
 dependencies = [
  "bitcoin",
  "fedimint-api",
- "fedimint-mint-client",
  "thiserror",
 ]
 
@@ -967,33 +966,6 @@ dependencies = [
  "threshold_crypto",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "fedimint-mint-client"
-version = "0.1.0"
-dependencies = [
- "fedimint-api",
- "fedimint-mint-common",
- "tracing",
-]
-
-[[package]]
-name = "fedimint-mint-common"
-version = "0.1.0"
-dependencies = [
- "fedimint-api",
- "tracing",
-]
-
-[[package]]
-name = "fedimint-mint-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "fedimint-api",
- "fedimint-mint-common",
- "tracing",
 ]
 
 [[package]]
@@ -1153,7 +1125,6 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
- "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet",

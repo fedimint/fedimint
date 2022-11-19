@@ -9,7 +9,7 @@ use fedimint_api::{
     config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
-    FederationModule, TransactionId,
+    ServerModulePlugin, TransactionId,
 };
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::outcome::TransactionStatus;
@@ -49,7 +49,7 @@ pub async fn run_server(
 
     attach_endpoints(&mut rpc_module, server_endpoints(), None);
 
-    for (_, module) in &fedimint.modules {
+    for module in fedimint.modules.values() {
         attach_endpoints_erased(&mut rpc_module, module);
     }
 
@@ -163,7 +163,8 @@ fn attach_endpoints_erased(
                     // are only reading and the few that do write anything are atomic. Lastly, this
                     // is only the last line of defense
                     AssertUnwindSafe((handler)(
-                        (*state.fedimint)
+                        state
+                            .fedimint
                             .modules
                             .get(&module_key)
                             .expect("Module exists if it was registered"),

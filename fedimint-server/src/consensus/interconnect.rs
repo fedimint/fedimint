@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiError;
-use fedimint_api::FederationModule;
+use fedimint_api::ServerModulePlugin;
 use serde_json::Value;
 
 use crate::consensus::FedimintConsensus;
@@ -27,7 +27,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
     }
 }
 
-async fn call_internal<M: FederationModule + 'static>(
+async fn call_internal<M: ServerModulePlugin + 'static>(
     module: &M,
     path: String,
     data: Value,

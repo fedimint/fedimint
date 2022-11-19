@@ -10,6 +10,7 @@
 
 extern crate core;
 
+mod common;
 pub mod config;
 pub mod contracts;
 mod db;
@@ -32,13 +33,13 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, IntoModuleError, ModuleError,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, InputMeta, IntoModuleError,
+    ModuleError, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::TaskGroup;
-use fedimint_api::{Amount, FederationModule, NumPeers, PeerId};
-use fedimint_api::{InputMeta, OutPoint};
+use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
+use fedimint_api::{OutPoint, ServerModulePlugin};
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,7 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
+use crate::common::{LightningModuleDecoder, LIGHTNING_MODULE_KEY};
 use crate::config::LightningModuleConfig;
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
@@ -156,6 +158,9 @@ pub struct LightningConsensusItem {
     pub share: PreimageDecryptionShare,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+pub struct LightningVerificationCache;
+
 pub struct LightningModuleConfigGen;
 
 #[async_trait]
@@ -250,12 +255,17 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
 }
 
 #[async_trait(?Send)]
-impl FederationModule for LightningModule {
-    type TxInput = LightningInput;
-    type TxOutput = LightningOutput;
-    type TxOutputOutcome = LightningOutputOutcome;
+impl ServerModulePlugin for LightningModule {
+    type Decoder = LightningModuleDecoder;
+    type Input = LightningInput;
+    type Output = LightningOutput;
+    type OutputOutcome = LightningOutputOutcome;
     type ConsensusItem = LightningConsensusItem;
-    type VerificationCache = ();
+    type VerificationCache = LightningVerificationCache;
+
+    fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
+        LIGHTNING_MODULE_KEY
+    }
 
     async fn await_consensus_proposal(&self) {
         if self.consensus_proposal().await.is_empty() {
@@ -274,9 +284,9 @@ impl FederationModule for LightningModule {
             .collect()
     }
 
-    async fn begin_consensus_epoch<'a>(
+    async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
         consensus_items
@@ -295,16 +305,17 @@ impl FederationModule for LightningModule {
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::TxInput>,
+        _inputs: impl Iterator<Item = &'a Self::Input>,
     ) -> Self::VerificationCache {
+        LightningVerificationCache
     }
 
     fn validate_input<'a>(
         &self,
         interconnect: &dyn ModuleInterconect,
         _cache: &Self::VerificationCache,
-        input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, ModuleError> {
+        input: &'a Self::Input,
+    ) -> Result<InputMeta, ModuleError> {
         let account: ContractAccount = self
             .get_contract_account(input.contract_id)
             .ok_or(LightningModuleError::UnknownContract(input.contract_id))
@@ -367,7 +378,7 @@ impl FederationModule for LightningModule {
                 amount: input.amount,
                 fee: self.cfg.fee_consensus.contract_input,
             },
-            puk_keys: Box::new(std::iter::once(pub_key)),
+            puk_keys: vec![pub_key],
         })
     }
 
@@ -375,9 +386,9 @@ impl FederationModule for LightningModule {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::TxInput,
+        input: &'b Self::Input,
         cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, ModuleError> {
+    ) -> Result<InputMeta, ModuleError> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
         let account_db_key = ContractKey(input.contract_id);
@@ -394,10 +405,7 @@ impl FederationModule for LightningModule {
         Ok(meta)
     }
 
-    fn validate_output(
-        &self,
-        output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+    fn validate_output(&self, output: &Self::Output) -> Result<TransactionItemAmount, ModuleError> {
         match output {
             LightningOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
@@ -473,7 +481,7 @@ impl FederationModule for LightningModule {
     fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::TxOutput,
+        output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(output)?;
@@ -567,10 +575,10 @@ impl FederationModule for LightningModule {
     }
 
     #[instrument(skip_all)]
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Decrypt preimages
         let preimage_decryption_shares = self
@@ -731,7 +739,7 @@ impl FederationModule for LightningModule {
         bad_peers
     }
 
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
+    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
         self.db
             .begin_transaction()
             .get_value(&ContractUpdateKey(out_point))
@@ -851,6 +859,15 @@ impl LightningModule {
         dbtx.commit_tx().await.expect("DB Error");
     }
 }
+
+plugin_types_trait_impl!(
+    common::LIGHTNING_MODULE_KEY,
+    LightningInput,
+    LightningOutput,
+    LightningOutputOutcome,
+    LightningConsensusItem,
+    LightningVerificationCache
+);
 
 fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     // This is a future because we are normally reading from a network socket. But for internal

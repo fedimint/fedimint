@@ -1,4 +1,4 @@
-use fedimint_api::FederationModule;
+use fedimint_api::ServerModulePlugin;
 use fedimint_ln::contracts::incoming::OfferId;
 use fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 use fedimint_ln::contracts::{DecryptedPreimage, Preimage};
@@ -24,9 +24,9 @@ pub enum TransactionStatus {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum OutputOutcome {
-    Mint(<Mint as FederationModule>::TxOutputOutcome),
-    Wallet(<Wallet as FederationModule>::TxOutputOutcome),
-    LN(<LightningModule as FederationModule>::TxOutputOutcome),
+    Mint(<Mint as ServerModulePlugin>::OutputOutcome),
+    Wallet(<Wallet as ServerModulePlugin>::OutputOutcome),
+    LN(<LightningModule as ServerModulePlugin>::OutputOutcome),
 }
 
 pub trait Final {

@@ -11,12 +11,10 @@ pub use bitcoin::KeyPair;
 use fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
-    Amount,
 };
 
 pub mod encode;
 
-pub mod client;
 pub mod server;
 
 /// A module key identifing a module
@@ -113,6 +111,42 @@ macro_rules! module_plugin_trait_define {
     };
 }
 
+/// Implements the `Plugin*` traits for all associated types of a `FederationServerPlugin`.
+#[macro_export]
+macro_rules! plugin_types_trait_impl {
+    ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
+        impl fedimint_api::core::PluginInput for $input {
+            fn module_key(&self) -> ModuleKey {
+                $key
+            }
+        }
+
+        impl fedimint_api::core::PluginOutput for $output {
+            fn module_key(&self) -> ModuleKey {
+                $key
+            }
+        }
+
+        impl fedimint_api::core::PluginOutputOutcome for $outcome {
+            fn module_key(&self) -> ModuleKey {
+                $key
+            }
+        }
+
+        impl fedimint_api::core::PluginConsensusItem for $ci {
+            fn module_key(&self) -> ModuleKey {
+                $key
+            }
+        }
+
+        impl fedimint_api::server::PluginVerificationCache for $cache {
+            fn module_key(&self) -> ModuleKey {
+                $key
+            }
+        }
+    };
+}
+
 /// Module Decoder trait
 ///
 /// Static-polymorphism version of [`ModuleDecode`]
@@ -120,17 +154,11 @@ macro_rules! module_plugin_trait_define {
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleKey`]s
 pub trait PluginDecode {
-    /// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
-    fn decode_spendable_output(r: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError>;
-
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
     /// Decode `Output` compatible with this module, after the module key prefix was already decoded
     fn decode_output(r: &mut dyn io::Read) -> Result<Output, DecodeError>;
-
-    /// Decode `PendingOutput` compatible with this module, after the module key prefix was already decoded
-    fn decode_pending_output(r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
 
     /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
     fn decode_output_outcome(r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
@@ -140,18 +168,11 @@ pub trait PluginDecode {
 }
 
 pub trait ModuleDecode {
-    /// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
-    fn decode_spendable_output(&self, r: &mut dyn io::Read)
-        -> Result<SpendableOutput, DecodeError>;
-
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
     /// Decode `Output` compatible with this module, after the module key prefix was already decoded
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
-
-    /// Decode `PendingOutput` compatible with this module, after the module key prefix was already decoded
-    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
 
     /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
@@ -161,21 +182,11 @@ pub trait ModuleDecode {
 }
 
 impl ModuleDecode for () {
-    fn decode_spendable_output(
-        &self,
-        _r: &mut dyn io::Read,
-    ) -> Result<SpendableOutput, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
-    }
     fn decode_input(&self, _r: &mut dyn io::Read) -> Result<Input, DecodeError> {
         panic!("() is just a placeholder for when modules are not needed and should never be actually called");
     }
 
     fn decode_output(&self, _r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
-    }
-
-    fn decode_pending_output(&self, _r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
         panic!("() is just a placeholder for when modules are not needed and should never be actually called");
     }
 
@@ -194,20 +205,13 @@ impl ModuleDecode for () {
 pub trait ModuleInput: DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
-    fn amount(&self) -> Amount;
     fn clone(&self) -> Input;
 }
 
 module_plugin_trait_define! {
     Input, PluginInput, ModuleInput,
-    {
-        fn amount(&self) -> Amount;
-    }
-    {
-        fn amount(&self) -> Amount {
-            <Self as PluginInput>::amount(self)
-        }
-    }
+    { }
+    { }
 }
 
 dyn_newtype_define! {
@@ -225,7 +229,6 @@ dyn_newtype_impl_dyn_clone_passhthrough!(Input);
 pub trait ModuleOutput: DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
-    fn amount(&self) -> Amount;
 
     fn clone(&self) -> Output;
 }
@@ -236,99 +239,17 @@ dyn_newtype_define! {
 }
 module_plugin_trait_define! {
     Output, PluginOutput, ModuleOutput,
-    {
-        fn amount(&self) -> Amount;
-    }
-    {
-        fn amount(&self) -> Amount {
-            <Self as PluginOutput>::amount(self)
-        }
-    }
+    { }
+    { }
 }
 module_dyn_newtype_impl_encode_decode! {
     Output, decode_output
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(Output);
 
-/// A spendable output - tracked and persisted by the client
-///
-/// Created by generating transaction [`Output`], spendable
-/// by converting to [`Input`].
-pub trait ModuleSpendableOutput: DynEncodable {
-    fn as_any(&self) -> &(dyn Any + '_);
-    /// Module key
-    fn module_key(&self) -> ModuleKey;
-    fn amount(&self) -> Amount;
-    fn clone(&self) -> SpendableOutput;
-
-    // TODO: move to be module function
-    /// Prepare [`Input`] spending thish output in a transaction, and a key used to sign the [`Transaction`]
-    // fn to_input(&self) -> (Input, KeyPair);
-
-    fn key(&self) -> String;
-}
-
-dyn_newtype_define! {
-    /// An owned, immutable output of a [`Transaction`] after it was finalized (so it's spendable)
-    pub SpendableOutput(Box<ModuleSpendableOutput>)
-}
-module_plugin_trait_define! {
-    SpendableOutput, PluginSpendableOutput, ModuleSpendableOutput,
-    {
-        fn amount(&self) -> Amount;
-        fn key(&self) -> String;
-    }
-    {
-        fn amount(&self) -> Amount {
-            <Self as PluginSpendableOutput>::amount(self)
-        }
-        fn key(&self) -> String {
-            <Self as PluginSpendableOutput>::key(self)
-        }
-    }
-}
-module_dyn_newtype_impl_encode_decode! {
-    SpendableOutput, decode_spendable_output
-}
-dyn_newtype_impl_dyn_clone_passhthrough!(SpendableOutput);
-
 pub enum FinalizationError {
     SomethingWentWrong,
 }
-
-/// A pending output - tracked and persisted by the client
-///
-/// Created by generating transaction [`Output`], spendable
-/// by converting to [`Input`].
-pub trait ModulePendingOutput: DynEncodable {
-    fn as_any(&self) -> &(dyn Any + 'static);
-    /// Module key
-    fn module_key(&self) -> ModuleKey;
-    fn amount(&self) -> Amount;
-    fn clone(&self) -> PendingOutput;
-
-    // fn key(&self) -> String;
-}
-
-dyn_newtype_define! {
-    /// An owned, immutable output of a [`Transaction`] before it was finalized
-    pub PendingOutput(Box<ModulePendingOutput>)
-}
-module_plugin_trait_define! {
-    PendingOutput, PluginPendingOutput, ModulePendingOutput,
-    {
-        fn amount(&self) -> Amount;
-    }
-    {
-        fn amount(&self) -> Amount {
-            <Self as PluginPendingOutput>::amount(self)
-        }
-    }
-}
-module_dyn_newtype_impl_encode_decode! {
-    PendingOutput, decode_pending_output
-}
-dyn_newtype_impl_dyn_clone_passhthrough!(PendingOutput);
 
 pub trait ModuleOutputOutcome: DynEncodable {
     fn as_any(&self) -> &(dyn Any + '_);

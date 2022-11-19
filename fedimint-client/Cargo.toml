@@ -18,5 +18,4 @@ fedimint-api  = { path = "../fedimint-api/" }
 thiserror = "1.0.30"
 
 [dev-dependencies]
-fedimint-mint-client = { path = "../modules/mint-client" }
 fedimint-api = { path = "../fedimint-api/" }

@@ -25,8 +25,8 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::TieredMulti;
-use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
+use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
+use fedimint_api::{ServerModulePlugin, TieredMulti};
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
@@ -137,18 +137,18 @@ pub struct GatewayClientConfig {
 
 #[async_trait]
 pub trait ModuleClient {
-    type Module: FederationModule;
+    type Module: ServerModulePlugin;
 
     /// Returns the amount represented by the input and the fee its processing requires
     fn input_amount(
         &self,
-        input: &<Self::Module as FederationModule>::TxInput,
+        input: &<Self::Module as ServerModulePlugin>::Input,
     ) -> TransactionItemAmount;
 
     /// Returns the amount represented by the output and the fee its processing requires
     fn output_amount(
         &self,
-        output: &<Self::Module as FederationModule>::TxOutput,
+        output: &<Self::Module as ServerModulePlugin>::Output,
     ) -> TransactionItemAmount;
 }
 
@@ -1182,7 +1182,7 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<<fedimint_core::modules::mint::Mint as FederationModule>::TxOutputOutcome>(outpoint, Duration::from_secs(10))
+            .await_output_outcome::<<fedimint_core::modules::mint::Mint as ServerModulePlugin>::OutputOutcome>(outpoint, Duration::from_secs(10))
             .await?;
         // We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need
