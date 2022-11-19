@@ -56,6 +56,7 @@ mod db;
 /// Data structures taking into account different amount tiers
 
 /// Federated mint member mint
+#[derive(Debug)]
 pub struct Mint {
     cfg: MintConfig,
     sec_key: Tiered<SecretKeyShare>,

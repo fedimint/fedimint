@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +24,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// Functions may panic if if the bitcoind node is not reachable.
 #[async_trait]
-pub trait IBitcoindRpc: Send + Sync {
+pub trait IBitcoindRpc: Debug + Send + Sync {
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 

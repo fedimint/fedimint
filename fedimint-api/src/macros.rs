@@ -68,6 +68,12 @@ macro_rules! _dyn_newtype_define_inner {
                 Self($container::new(i))
             }
         }
+
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Debug::fmt(&self.0, f)
+            }
+        }
     };
     (   $(#[$outer:meta])*
         $vis:vis $name:ident<$lifetime:lifetime>($container:ident<$trait:ident>)

@@ -100,6 +100,7 @@ pub struct RoundConsensus {
     pub randomness_beacon: [u8; 32],
 }
 
+#[derive(Debug)]
 pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,

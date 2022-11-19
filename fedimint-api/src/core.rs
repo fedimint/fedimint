@@ -4,6 +4,7 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
+use std::fmt::Debug;
 use std::io;
 use std::{any::Any, collections::BTreeMap};
 
@@ -83,7 +84,7 @@ macro_rules! module_plugin_trait_define {
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
         pub trait $plugin_ty:
-            DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
+            std::fmt::Debug + DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
         {
             fn module_key(&self) -> ModuleKey;
 
@@ -202,7 +203,7 @@ impl ModuleDecode for () {
 /// Something that can be an [`Input`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Input`] instead
-pub trait ModuleInput: DynEncodable {
+pub trait ModuleInput: Debug + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> Input;
@@ -226,7 +227,7 @@ dyn_newtype_impl_dyn_clone_passhthrough!(Input);
 /// Something that can be an [`Output`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Output`] instead
-pub trait ModuleOutput: DynEncodable {
+pub trait ModuleOutput: Debug + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
 
@@ -251,7 +252,7 @@ pub enum FinalizationError {
     SomethingWentWrong,
 }
 
-pub trait ModuleOutputOutcome: DynEncodable {
+pub trait ModuleOutputOutcome: Debug + DynEncodable {
     fn as_any(&self) -> &(dyn Any + '_);
     /// Module key
     fn module_key(&self) -> ModuleKey;
@@ -272,7 +273,7 @@ module_dyn_newtype_impl_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
 
-pub trait ModuleConsensusItem: DynEncodable {
+pub trait ModuleConsensusItem: Debug + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
     /// Module key
     fn module_key(&self) -> ModuleKey;

@@ -15,7 +15,7 @@ pub struct FakeBitcoindRpcState {
     tx_in_blocks: HashMap<BlockHash, Vec<Transaction>>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct FakeBitcoindRpc {
     state: Arc<Mutex<FakeBitcoindRpcState>>,
 }

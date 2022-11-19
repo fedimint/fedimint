@@ -62,7 +62,7 @@ struct Client<T>(T);
 #[async_trait]
 impl<T> IBitcoindRpc for Client<T>
 where
-    T: ::bitcoincore_rpc::RpcApi + Send + Sync,
+    T: ::bitcoincore_rpc::RpcApi + Debug + Send + Sync,
 {
     async fn get_network(&self) -> Result<Network> {
         let network = fedimint_api::task::block_in_place(|| {

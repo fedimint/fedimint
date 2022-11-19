@@ -339,6 +339,7 @@ mod tests {
 
     type Fed = FakeFed<LightningModule>;
 
+    #[derive(Debug)]
     struct FakeApi {
         mint: Arc<tokio::sync::Mutex<Fed>>,
     }
