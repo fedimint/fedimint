@@ -7,13 +7,11 @@ use serde_json::json;
 use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::instrument;
 
-use crate::{
-    rpc::{
-        BalancePayload, DepositAddressPayload, DepositPayload, GatewayRpcSender, InfoPayload,
-        RegisterFedPayload, WithdrawPayload,
-    },
-    LnGatewayError,
+use super::{
+    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRpcSender, InfoPayload,
+    RegisterFedPayload, WithdrawPayload,
 };
+use crate::LnGatewayError;
 
 pub async fn run_webserver(
     authkey: String,

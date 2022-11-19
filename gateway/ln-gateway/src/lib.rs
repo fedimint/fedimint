@@ -5,7 +5,6 @@ pub mod config;
 pub mod ln;
 pub mod rpc;
 pub mod utils;
-pub mod webserver;
 
 use std::{
     borrow::Cow,
@@ -41,10 +40,10 @@ use crate::{
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
-        BalancePayload, DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest,
-        GatewayRpcSender, InfoPayload, ReceivePaymentPayload, RegisterFedPayload, WithdrawPayload,
+        rpc_server::run_webserver, BalancePayload, DepositAddressPayload, DepositPayload,
+        GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
+        RegisterFedPayload, WithdrawPayload,
     },
-    webserver::run_webserver,
 };
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
