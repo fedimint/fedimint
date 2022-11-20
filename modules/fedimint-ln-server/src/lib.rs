@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::ops::Sub;
+use std::time::SystemTime;
 
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::{
@@ -36,14 +37,16 @@ use fedimint_ln_common::db::{
     AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
     ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix, LightningGatewayKey,
     LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
-    ProposeDecryptionShareKeyPrefix,
+    ProposeDecryptionShareKeyPrefix, RoundConsensusKey,
 };
 use fedimint_ln_common::{
-    ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError, LightningGateway,
-    LightningInput, LightningModuleTypes, LightningOutput, LightningOutputOutcome,
+    ContractAccount, DecryptionShareCI, IterUnzipLightningConsensusItem, LightningCommonGen,
+    LightningConsensusItem, LightningError, LightningGateway, LightningInput, LightningModuleTypes,
+    LightningOutput, LightningOutputOutcome, RoundConsensus, RoundConsensusItem,
+    UnzipLightningConsensusItem,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
-use futures::StreamExt;
+use futures::{stream, StreamExt};
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -219,6 +222,12 @@ impl ServerModuleGen for LightningGen {
                         "Proposed Decryption Shares"
                     );
                 }
+                DbKeyPrefix::RoundConsensus => {
+                    let round_consensus = dbtx.get_value(&RoundConsensusKey).await;
+                    if let Some(round_consensus) = round_consensus {
+                        lightning.insert("Round Consensus".to_string(), Box::new(round_consensus));
+                    }
+                }
             }
         }
 
@@ -277,15 +286,20 @@ impl ServerModule for Lightning {
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> ConsensusProposal<LightningConsensusItem> {
+        let round_ci = LightningConsensusItem::RoundConsensus(RoundConsensusItem {
+            clock_time: SystemTime::now(),
+        });
+
         ConsensusProposal::new_auto_trigger(
             dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
                 .await
-                .map(
-                    |(ProposeDecryptionShareKey(contract_id), share)| LightningConsensusItem {
+                .map(|(ProposeDecryptionShareKey(contract_id), share)| {
+                    LightningConsensusItem::DecryptionShare(DecryptionShareCI {
                         contract_id,
                         share,
-                    },
-                )
+                    })
+                })
+                .chain(stream::once(async { round_ci }))
                 .collect::<Vec<LightningConsensusItem>>()
                 .await,
         )
@@ -296,7 +310,32 @@ impl ServerModule for Lightning {
         dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         consensus_items: Vec<(PeerId, LightningConsensusItem)>,
     ) {
-        for (peer, decryption_share) in consensus_items.into_iter() {
+        // Separate round consensus items from decryption shares
+        let UnzipLightningConsensusItem {
+            decryption_share: decryption_shares,
+            round_consensus,
+        } = consensus_items.into_iter().unzip_lightning_consensus_item();
+
+        // FIXME: also warn on less than 1/3, that should never happen
+        // Make sure we have enough contributions to continue
+        if round_consensus.is_empty() {
+            panic!("No proposals were submitted this round");
+        }
+
+        let clock_time_proposals = round_consensus
+            .iter()
+            .map(|(_, rc)| rc.clock_time)
+            .collect();
+        let clock_time = self
+            .process_clock_time_proposals(clock_time_proposals)
+            .await;
+
+        let round_consensus = RoundConsensus { clock_time };
+
+        dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
+            .await;
+
+        for (peer, decryption_share) in decryption_shares.into_iter() {
             let span = info_span!("process decryption share", %peer);
             let _guard = span.enter();
 
@@ -858,6 +897,25 @@ impl Lightning {
     ) {
         dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
             .await;
+    }
+
+    async fn process_clock_time_proposals(&self, mut proposals: Vec<SystemTime>) -> SystemTime {
+        assert!(!proposals.is_empty());
+
+        proposals.sort();
+        let median_proposal = match proposals.len() % 2 {
+            0 => {
+                let earlier_time = proposals[proposals.len() / 2 - 1];
+                let later_time = proposals[proposals.len() / 2];
+                let time_diff = later_time.duration_since(earlier_time);
+                earlier_time
+                    + time_diff
+                        .expect("Error calculating median time")
+                        .div_f32(2.0)
+            }
+            _ => proposals[proposals.len() / 2],
+        };
+        median_proposal
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

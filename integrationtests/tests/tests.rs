@@ -26,7 +26,7 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
-use fedimint_ln_client::LightningConsensusItem;
+use fedimint_ln_client::{DecryptionShareCI, LightningConsensusItem};
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_server::common::{MintConsensusItem, MintOutputSignatureShare};
 use fedimint_server::consensus::TransactionSubmissionError::{
@@ -464,10 +464,10 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .override_proposal(vec![ConsensusItem::Module(
                 fedimint_core::core::DynModuleConsensusItem::from_typed(
                     fed.ln_id,
-                    LightningConsensusItem {
+                    LightningConsensusItem::DecryptionShare(DecryptionShareCI {
                         contract_id,
                         share: PreimageDecryptionShare(share),
-                    },
+                    }),
                 ),
             )])
             .await;

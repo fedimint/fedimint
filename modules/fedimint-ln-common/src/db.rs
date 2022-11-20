@@ -6,7 +6,7 @@ use strum_macros::EnumIter;
 
 use crate::contracts::incoming::IncomingContractOffer;
 use crate::contracts::{ContractId, PreimageDecryptionShare};
-use crate::{ContractAccount, LightningGateway, LightningOutputOutcome};
+use crate::{ContractAccount, LightningGateway, LightningOutputOutcome, RoundConsensus};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -17,6 +17,7 @@ pub enum DbKeyPrefix {
     AgreedDecryptionShare = 0x43,
     ContractUpdate = 0x44,
     LightningGateway = 0x45,
+    RoundConsensus = 0x46,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -117,4 +118,13 @@ impl_db_record!(
 impl_db_lookup!(
     key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct RoundConsensusKey;
+
+impl_db_record!(
+    key = RoundConsensusKey,
+    value = RoundConsensus,
+    db_prefix = DbKeyPrefix::RoundConsensus,
 );

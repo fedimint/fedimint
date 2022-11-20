@@ -68,6 +68,7 @@ The client is not currently modularized, so nothing is prepended to the below pr
 | AgreedDecryptionShare    |     `0x43`    | contract id (sha256), peer id (u16) | `DecryptionShare`            |
 | ContractUpdate           |     `0x44`    | out point (sha256, out idx)         | `fedimint_ln::OutputOutcome` |
 | LightningGateway         |     `0x45`    | Node Pubkey (PublicKey)             | `LightningGateway`           |
+| RoundConsensus          |     `0x46`    | none                                | clock time                   |
 
 ## Client DB Layout
 | Name                    | Entity Prefix | Key                                | Value                        |

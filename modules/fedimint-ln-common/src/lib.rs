@@ -15,9 +15,9 @@ pub mod db;
 use std::time::SystemTime;
 
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon};
-use fedimint_core::{plugin_types_trait_impl_common, Amount};
+use fedimint_core::{plugin_types_trait_impl_common, Amount, PeerId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -171,15 +171,42 @@ pub struct LightningGateway {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct LightningConsensusItem {
+pub struct DecryptionShareCI {
     pub contract_id: ContractId,
     pub share: PreimageDecryptionShare,
 }
 
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
+)]
+pub enum LightningConsensusItem {
+    RoundConsensus(RoundConsensusItem),
+    DecryptionShare(DecryptionShareCI),
+}
+
 impl std::fmt::Display for LightningConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LN Decryption Share for contract {}", self.contract_id)
+        match self {
+            LightningConsensusItem::RoundConsensus(rc) => {
+                write!(f, "Clock time {:?}", rc.clock_time)
+            }
+            LightningConsensusItem::DecryptionShare(decryption_share) => write!(
+                f,
+                "LN Decryption Share for contract {}",
+                decryption_share.contract_id
+            ),
+        }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct RoundConsensusItem {
+    pub clock_time: SystemTime,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct RoundConsensus {
+    pub clock_time: SystemTime,
 }
 
 #[derive(Debug)]
