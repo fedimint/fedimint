@@ -1,7 +1,7 @@
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
-use fedimint_api::core::client::ModuleClient;
+use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
@@ -28,7 +28,7 @@ pub struct WalletClient<'c> {
     pub context: &'c ClientContext,
 }
 
-impl<'a> ModuleClient for WalletClient<'a> {
+impl<'a> ClientModulePlugin for WalletClient<'a> {
     type Decoder = <Wallet as ServerModulePlugin>::Decoder;
     type Module = Wallet;
     const MODULE_KEY: ModuleKey = MODULE_KEY_WALLET;

@@ -12,7 +12,7 @@ use crate::module::TransactionItemAmount;
 use crate::{dyn_newtype_define, DecodeError, ModuleDecode, ServerModulePlugin};
 
 #[async_trait]
-pub trait ModuleClient: Debug {
+pub trait ClientModulePlugin: Debug {
     type Decoder: PluginDecode;
     type Module: ServerModulePlugin;
 
@@ -52,10 +52,10 @@ dyn_newtype_define!(
 
 impl<T> IClientModule for T
 where
-    T: ModuleClient + 'static,
+    T: ClientModulePlugin + 'static,
 {
     fn module_key(&self) -> ModuleKey {
-        <T as ModuleClient>::MODULE_KEY
+        <T as ClientModulePlugin>::MODULE_KEY
     }
 
     fn as_any(&self) -> &(dyn Any + 'static) {
@@ -63,19 +63,19 @@ where
     }
 
     fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
-        <T as ModuleClient>::Decoder::decode_input(r)
+        <T as ClientModulePlugin>::Decoder::decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn Read) -> Result<Output, DecodeError> {
-        <T as ModuleClient>::Decoder::decode_output(r)
+        <T as ClientModulePlugin>::Decoder::decode_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn Read) -> Result<OutputOutcome, DecodeError> {
-        <T as ModuleClient>::Decoder::decode_output_outcome(r)
+        <T as ClientModulePlugin>::Decoder::decode_output_outcome(r)
     }
 
     fn decode_consensus_item(&self, r: &mut dyn Read) -> Result<ConsensusItem, DecodeError> {
-        <T as ModuleClient>::Decoder::decode_consensus_item(r)
+        <T as ClientModulePlugin>::Decoder::decode_consensus_item(r)
     }
 }
 

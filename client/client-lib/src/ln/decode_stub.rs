@@ -1,4 +1,4 @@
-use fedimint_api::core::client::ModuleClient;
+use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::ServerModulePlugin;
@@ -7,7 +7,7 @@ use fedimint_core::modules::ln::LightningModule;
 #[derive(Debug)]
 pub struct LnDecoder;
 
-impl ModuleClient for LnDecoder {
+impl ClientModulePlugin for LnDecoder {
     type Decoder = <LightningModule as ServerModulePlugin>::Decoder;
     type Module = LightningModule;
     const MODULE_KEY: ModuleKey = MODULE_KEY_LN;

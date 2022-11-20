@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::config::ClientConfig;
-use fedimint_api::core::client::ModuleClient;
+use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -72,7 +72,7 @@ pub struct SpendableNote {
     pub spend_key: KeyPair,
 }
 
-impl<'a> ModuleClient for MintClient<'a> {
+impl<'a> ClientModulePlugin for MintClient<'a> {
     type Decoder = <Mint as ServerModulePlugin>::Decoder;
     type Module = Mint;
     const MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
