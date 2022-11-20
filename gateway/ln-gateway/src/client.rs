@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::{
     fs::File,
     path::{Path, PathBuf},
@@ -14,7 +15,7 @@ use tracing::debug;
 use crate::Result;
 
 /// Trait for gateway federation client builders
-pub trait IGatewayClientBuilder {
+pub trait IGatewayClientBuilder: Debug {
     /// Build a new gateway federation client
     fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>>;
 

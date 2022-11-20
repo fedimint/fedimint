@@ -59,7 +59,7 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
 
 pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
 
-pub trait IDatabase: Send + Sync {
+pub trait IDatabase: Debug + Send + Sync {
     fn begin_transaction(&self) -> DatabaseTransaction;
 }
 

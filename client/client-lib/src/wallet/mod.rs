@@ -202,6 +202,7 @@ mod tests {
     type Fed = FakeFed<Wallet>;
     type SharedFed = Arc<tokio::sync::Mutex<Fed>>;
 
+    #[derive(Debug)]
     struct FakeApi {
         // for later use once wallet outcomes are implemented
         _mint: SharedFed,

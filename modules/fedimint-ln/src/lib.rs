@@ -80,6 +80,7 @@ use crate::db::{
 /// [Account]: contracts::account::AccountContract
 /// [Outgoing]: contracts::outgoing::OutgoingContract
 /// [Incoming]: contracts::incoming::IncomingContract
+#[derive(Debug)]
 pub struct LightningModule {
     cfg: LightningModuleConfig,
     db: Database,

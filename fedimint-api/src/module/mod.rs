@@ -2,6 +2,7 @@ pub mod audit;
 pub mod interconnect;
 
 use std::collections::{BTreeMap, HashSet};
+use std::fmt::Debug;
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -205,7 +206,7 @@ pub trait FederationModuleConfigGen {
 }
 
 #[async_trait(?Send)]
-pub trait ServerModulePlugin: Sized {
+pub trait ServerModulePlugin: Debug + Sized {
     type Decoder: PluginDecode;
     type Input: PluginInput;
     type Output: PluginOutput;

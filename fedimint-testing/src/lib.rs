@@ -16,6 +16,7 @@ use fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
 
 pub mod bitcoind;
 
+#[derive(Debug)]
 pub struct FakeFed<Module> {
     members: Vec<(PeerId, Module, Database)>,
     client_cfg: ClientModuleConfig,

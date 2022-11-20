@@ -18,7 +18,7 @@ use crate::module::{
     ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount,
 };
 
-pub trait ModuleVerificationCache {
+pub trait ModuleVerificationCache: Debug {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> VerificationCache;
@@ -29,7 +29,7 @@ dyn_newtype_define! {
 }
 
 // TODO: make macro impl that doesn't force en/decodable
-pub trait PluginVerificationCache: Clone + Send + Sync + 'static {
+pub trait PluginVerificationCache: Clone + Debug + Send + Sync + 'static {
     fn module_key(&self) -> ModuleKey;
 }
 
@@ -53,7 +53,7 @@ where
 ///
 /// Server side Fedimint mondule needs to implement this trait.
 #[async_trait(?Send)]
-pub trait IServerModule {
+pub trait IServerModule: Debug {
     fn module_key(&self) -> ModuleKey;
 
     fn as_any(&self) -> &(dyn Any + 'static);

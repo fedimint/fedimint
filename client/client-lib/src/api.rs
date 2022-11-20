@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,7 +40,7 @@ use crate::query::{
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait IFederationApi: Send + Sync {
+pub trait IFederationApi: Debug + Send + Sync {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
 
@@ -199,7 +200,7 @@ impl ApiError {
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<C: JsonRpcClient + Send + Sync> IFederationApi for WsFederationApi<C> {
+impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<C> {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
         self.request(
