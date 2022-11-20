@@ -1,7 +1,7 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::{Amount, ServerModulePlugin, TransactionId};
+use fedimint_api::{serde_module_encoding_wrapper, Amount, ServerModulePlugin, TransactionId};
 use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use thiserror::Error;
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///
 /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct Transaction {
     /// [`Input`]s consumed by the transaction
     pub inputs: Vec<Input>,
@@ -19,6 +19,8 @@ pub struct Transaction {
     /// Aggregated MuSig2 signature over all the public keys of the inputs
     pub signature: Option<schnorr::Signature>,
 }
+
+serde_module_encoding_wrapper!(SerdeTransaction, Transaction);
 
 /// An Input consumed by a Transaction is defined within a Fedimint Module.
 ///

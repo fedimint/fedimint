@@ -23,7 +23,6 @@ use fedimint_wallet::Wallet;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info, info_span, instrument, trace, warn};
@@ -40,6 +39,7 @@ use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
 use crate::OsRngGen;
 
+pub type SerdeConsensusOutcome = Batch<Vec<SerdeConsensusItem>, PeerId>;
 pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
 
@@ -90,7 +90,7 @@ pub struct FedimintConsensus {
     pub transaction_notify: Arc<Notify>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct AcceptedTransaction {
     pub epoch: u64,
     pub transaction: Transaction,
@@ -535,41 +535,41 @@ impl FedimintConsensus {
             .expect("DB error");
 
         if let Some(accepted_tx) = accepted {
-            let outputs = accepted_tx
-                .transaction
-                .outputs
-                .iter()
-                .enumerate()
-                .map(|(out_idx, output)| {
-                    let outpoint = OutPoint {
-                        txid,
-                        out_idx: out_idx as u64,
-                    };
-                    match output {
-                        Output::Mint(_) => {
-                            let outcome = self
-                                .mint
-                                .output_status(outpoint)
-                                .expect("the transaction was processed, so should be known");
-                            OutputOutcome::Mint(outcome)
-                        }
-                        Output::Wallet(_) => {
-                            let outcome = self
-                                .wallet
-                                .output_status(outpoint)
-                                .expect("the transaction was processed, so should be known");
-                            OutputOutcome::Wallet(outcome)
-                        }
-                        Output::LN(_) => {
-                            let outcome = self
-                                .ln
-                                .output_status(outpoint)
-                                .expect("the transaction was processed, so should be known");
-                            OutputOutcome::LN(outcome)
-                        }
-                    }
-                })
-                .collect();
+            let outputs =
+                accepted_tx
+                    .transaction
+                    .outputs
+                    .iter()
+                    .enumerate()
+                    .map(|(out_idx, output)| {
+                        let outpoint = OutPoint {
+                            txid,
+                            out_idx: out_idx as u64,
+                        };
+                        let outcome =
+                            match output {
+                                Output::Mint(_) => {
+                                    let outcome = self.mint.output_status(outpoint).expect(
+                                        "the transaction was processed, so should be known",
+                                    );
+                                    OutputOutcome::Mint(outcome)
+                                }
+                                Output::Wallet(_) => {
+                                    let outcome = self.wallet.output_status(outpoint).expect(
+                                        "the transaction was processed, so should be known",
+                                    );
+                                    OutputOutcome::Wallet(outcome)
+                                }
+                                Output::LN(_) => {
+                                    let outcome = self.ln.output_status(outpoint).expect(
+                                        "the transaction was processed, so should be known",
+                                    );
+                                    OutputOutcome::LN(outcome)
+                                }
+                            };
+                        (&outcome).into()
+                    })
+                    .collect();
 
             return Some(crate::outcome::TransactionStatus::Accepted {
                 epoch: accepted_tx.epoch,

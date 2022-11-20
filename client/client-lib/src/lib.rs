@@ -15,14 +15,13 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use api::FederationApi;
-use async_trait::async_trait;
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::config::ClientConfig;
+use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::Database;
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::TransactionItemAmount;
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
@@ -73,13 +72,16 @@ use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
+use crate::ln::decode_stub::LnDecoder;
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
+use crate::mint::decode_stub::MintDecoder;
 use crate::mint::MintClientError;
 use crate::secrets::{ChildId, DerivableSecret};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
+use crate::wallet::decode_stub::WalletDecoder;
 use crate::wallet::WalletClientError;
 use crate::{
     api::ApiError,
@@ -133,23 +135,6 @@ pub struct GatewayClientConfig {
     pub timelock_delta: u64,
     pub api: Url,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
-}
-
-#[async_trait]
-pub trait ModuleClient {
-    type Module: ServerModulePlugin;
-
-    /// Returns the amount represented by the input and the fee its processing requires
-    fn input_amount(
-        &self,
-        input: &<Self::Module as ServerModulePlugin>::Input,
-    ) -> TransactionItemAmount;
-
-    /// Returns the amount represented by the output and the fee its processing requires
-    fn output_amount(
-        &self,
-        output: &<Self::Module as ServerModulePlugin>::Output,
-    ) -> TransactionItemAmount;
 }
 
 impl From<GatewayClientConfig> for LightningGateway {
@@ -1233,6 +1218,15 @@ impl Debug for ClientSecret {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ClientSecret([redacted])")
     }
+}
+
+/// Builds a fake module registry which is only usable for decoding messages since the client isn't
+/// modularized yet but we need the decoding functionality.
+fn module_decode_stubs() -> ModuleRegistry<ClientModule> {
+    vec![LnDecoder.into(), MintDecoder.into(), WalletDecoder.into()]
+        .into_iter()
+        .map(|decoder: ClientModule| (decoder.module_key(), decoder))
+        .collect()
 }
 
 // FIXME: move this elsewhere. maybe into "core".

@@ -7,12 +7,16 @@ use std::time::Duration;
 
 use config::ServerConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::core::ModuleDecode;
+use fedimint_api::encoding::{DecodeError, ModuleRegistry};
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
-use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
+use fedimint_core::epoch::{
+    ConsensusItem, EpochHistory, EpochVerifyError, SerdeConsensusItem, SerdeEpochHistory,
+};
 pub use fedimint_core::*;
-use hbbft::honey_badger::{HoneyBadger, Message};
+use hbbft::honey_badger::{Batch, HoneyBadger, Message};
 use hbbft::{Epoched, NetworkInfo, Target};
 use mint_client::api::{IFederationApi, WsFederationApi};
 use rand::rngs::OsRng;
@@ -22,6 +26,7 @@ use tracing::{info, warn};
 
 use crate::consensus::{
     ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
+    SerdeConsensusOutcome,
 };
 use crate::db::{EpochHistoryKey, LastEpochKey};
 use crate::fedimint_api::net::peers::IPeerConnections;
@@ -55,14 +60,14 @@ type PeerMessage = (PeerId, EpochMessage);
 pub enum EpochMessage {
     Continue(Message<PeerId>),
     RejoinRequest,
-    Rejoin(Option<EpochHistory>, u64),
+    Rejoin(Option<SerdeEpochHistory>, u64),
 }
 
 pub struct FedimintServer {
     pub consensus: Arc<FedimintConsensus>,
     pub connections: PeerConnections<EpochMessage>,
     pub cfg: ServerConfig,
-    pub hbbft: HoneyBadger<Vec<ConsensusItem>, PeerId>,
+    pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     pub api: Arc<dyn IFederationApi>,
     pub peers: BTreeSet<PeerId>,
 }
@@ -118,7 +123,7 @@ impl FedimintServer {
             cfg.peers.iter().map(|(id, _)| *id),
         );
 
-        let hbbft: HoneyBadger<Vec<ConsensusItem>, _> =
+        let hbbft: HoneyBadger<Vec<SerdeConsensusItem>, _> =
             HoneyBadger::builder(Arc::new(net_info)).build();
 
         let api_endpoints = cfg
@@ -318,6 +323,14 @@ impl FedimintServer {
                     return Err(Cancelled);
                 }
                 Ok(Ok((peer, EpochMessage::Rejoin(Some(history), epoch)))) => {
+                    let history = match history.try_into_inner(&self.consensus.modules) {
+                        Ok(history) => history,
+                        Err(decode_err) => {
+                            warn!("Peer {} sent malformed message: {}", peer, decode_err);
+                            continue;
+                        }
+                    };
+
                     let is_recent = epoch <= history.outcome.epoch + max_age;
                     if history.verify_sig(&pks).is_ok() && is_recent {
                         consensus_peers.insert(peer, epoch);
@@ -329,7 +342,10 @@ impl FedimintServer {
                     }
                 }
                 Ok(Ok((peer, EpochMessage::RejoinRequest))) => {
-                    let msg = EpochMessage::Rejoin(self.last_signed_epoch(next_epoch), next_epoch);
+                    let msg = EpochMessage::Rejoin(
+                        self.last_signed_epoch(next_epoch).map(|eh| (&eh).into()),
+                        next_epoch,
+                    );
                     self.connections.send(&[peer], msg).await?;
                 }
                 Ok(Ok(msg)) => msg_buffer.push(msg),
@@ -398,7 +414,10 @@ impl FedimintServer {
     ) -> Cancellable<Vec<ConsensusOutcome>> {
         let step = self
             .hbbft
-            .propose(&proposal.items, rng)
+            .propose(
+                &proposal.items.into_iter().map(|ci| (&ci).into()).collect(),
+                rng,
+            )
             .expect("HBBFT propose failed");
 
         for msg in step.messages {
@@ -410,7 +429,15 @@ impl FedimintServer {
                 .await?;
         }
 
-        Ok(step.output)
+        Ok(step
+            .output
+            .into_iter()
+            .map(|outcome| {
+                // FIXME: deal with faulty messages
+                let (outcome, _ban_peers) = module_parse_outcome(outcome, &self.consensus.modules);
+                outcome
+            })
+            .collect())
     }
 
     async fn await_proposal_or_peer_message(&mut self) -> Cancellable<Option<PeerMessage>> {
@@ -436,7 +463,10 @@ impl FedimintServer {
             (peer, EpochMessage::RejoinRequest) => {
                 let last_signed = self.last_signed_epoch(self.hbbft.epoch());
 
-                let msg = EpochMessage::Rejoin(last_signed, self.hbbft.next_epoch());
+                let msg = EpochMessage::Rejoin(
+                    last_signed.map(|eh| (&eh).into()),
+                    self.hbbft.next_epoch(),
+                );
                 self.connections.send(&[peer], msg).await?;
                 Ok(vec![])
             }
@@ -459,7 +489,16 @@ impl FedimintServer {
                         .await?;
                 }
 
-                Ok(step.output)
+                Ok(step
+                    .output
+                    .into_iter()
+                    .map(|outcome| {
+                        // FIXME: deal with faulty messages
+                        let (outcome, _ban_peers) =
+                            module_parse_outcome(outcome, &self.consensus.modules);
+                        outcome
+                    })
+                    .collect())
             }
         }
     }
@@ -489,4 +528,37 @@ impl RngGenerator for OsRngGen {
     fn get_rng(&self) -> Self::Rng {
         OsRng
     }
+}
+
+fn module_parse_outcome<M: ModuleDecode>(
+    outcome: SerdeConsensusOutcome,
+    module_registry: &ModuleRegistry<M>,
+) -> (ConsensusOutcome, Vec<PeerId>) {
+    let mut ban_peers = vec![];
+    let contributions = outcome
+        .contributions
+        .into_iter()
+        .filter_map(|(peer, cis)| {
+            let decoded_cis = cis
+                .into_iter()
+                .map(|ci| ci.try_into_inner(module_registry))
+                .collect::<Result<Vec<ConsensusItem>, DecodeError>>();
+
+            match decoded_cis {
+                Ok(cis) => Some((peer, cis)),
+                Err(e) => {
+                    warn!("Received invalid message from peer {}: {}", peer, e);
+                    ban_peers.push(peer);
+                    None
+                }
+            }
+        })
+        .collect::<BTreeMap<PeerId, Vec<ConsensusItem>>>();
+
+    let outcome = Batch {
+        epoch: outcome.epoch,
+        contributions,
+    };
+
+    (outcome, ban_peers)
 }

@@ -16,6 +16,7 @@ use fedimint_api::{
 
 pub mod encode;
 
+pub mod client;
 pub mod server;
 
 /// A module key identifing a module

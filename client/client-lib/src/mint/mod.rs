@@ -1,10 +1,13 @@
 pub mod db;
+pub mod decode_stub;
 
 use std::borrow::Cow;
 use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::config::ClientConfig;
+use fedimint_api::core::client::ClientModulePlugin;
+use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::TransactionItemAmount;
@@ -26,12 +29,13 @@ use crate::api::ApiError;
 use crate::mint::db::LastECashNoteIndexKey;
 use crate::transaction::TransactionBuilder;
 use crate::utils::ClientContext;
-use crate::{ChildId, Client, DerivableSecret, ModuleClient};
+use crate::{ChildId, Client, DerivableSecret};
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
+#[derive(Debug)]
 pub struct MintClient<'c> {
     pub config: MintClientConfig,
     pub context: &'c ClientContext,
@@ -68,8 +72,10 @@ pub struct SpendableNote {
     pub spend_key: KeyPair,
 }
 
-impl<'a> ModuleClient for MintClient<'a> {
+impl<'a> ClientModulePlugin for MintClient<'a> {
+    type Decoder = <Mint as ServerModulePlugin>::Decoder;
     type Module = Mint;
+    const MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
 
     fn input_amount(
         &self,
@@ -460,13 +466,14 @@ mod tests {
             let mint = self.mint.lock().await;
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![OutputOutcome::Mint(
+                outputs: vec![(&OutputOutcome::Mint(
                     mint.output_outcome(OutPoint {
                         txid: tx,
                         out_idx: 0,
                     })
                     .unwrap(),
-                )],
+                ))
+                    .into()],
             })
         }
 
