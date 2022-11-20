@@ -6,9 +6,11 @@ use async_trait::async_trait;
 use bitcoin::{Address, Amount};
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::config::ClientConfig;
+use fedimint_api::core::client::ClientModule;
+use fedimint_api::encoding::ModuleRegistry;
 use fedimint_api::task::{RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
-use fedimint_core::epoch::EpochHistory;
+use fedimint_core::epoch::{EpochHistory, SerdeEpochHistory};
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -33,6 +35,7 @@ use threshold_crypto::PublicKey;
 use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
+use crate::module_decode_stubs;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
     ValidHistory,
@@ -136,6 +139,7 @@ impl FederationApi {
 #[derive(Debug)]
 pub struct WsFederationApi<C = WsClient> {
     members: Vec<FederationMember<C>>,
+    module_registry: ModuleRegistry<fedimint_api::core::client::ClientModule>,
 }
 
 #[derive(Debug)]
@@ -173,6 +177,8 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 pub enum ApiError {
     #[error("Rpc error: {0}")]
     RpcError(#[from] JsonRpcError),
+    #[error("Decode error: {0}")]
+    DecodeError(#[from] fedimint_api::encoding::DecodeError),
     #[error("Error retrieving the transaction: {0}")]
     TransactionError(String),
     #[error("The transaction was rejected by consensus processing: {0}")]
@@ -223,12 +229,40 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
     }
 
     async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory> {
-        self.request(
-            "/fetch_epoch_history",
-            epoch,
-            ValidHistory::new(epoch_pk, self.peers().one_honest()),
-        )
-        .await
+        struct ValidHistoryWrapper<'a> {
+            modules: &'a ModuleRegistry<ClientModule>,
+            strategy: ValidHistory,
+        }
+
+        impl<'a> QueryStrategy<SerdeEpochHistory> for ValidHistoryWrapper<'a> {
+            fn process(
+                &mut self,
+                response: FedResponse<SerdeEpochHistory>,
+            ) -> QueryStep<SerdeEpochHistory> {
+                let response = FedResponse {
+                    peer: response.peer,
+                    result: response.result.and_then(|hist| {
+                        hist.try_into_inner(&self.modules)
+                            .map_err(|e| jsonrpsee_core::Error::Custom(e.to_string()))
+                    }),
+                };
+                match self.strategy.process(response) {
+                    QueryStep::Finished(res) => QueryStep::Finished(res.map(|val| (&val).into())),
+                    QueryStep::Request(r) => QueryStep::Request(r),
+                    QueryStep::Continue => QueryStep::Continue,
+                }
+            }
+        }
+
+        let qs = ValidHistoryWrapper {
+            modules: &self.module_registry,
+            strategy: ValidHistory::new(epoch_pk, self.peers().one_honest()),
+        };
+
+        Ok(self
+            .request::<_, SerdeEpochHistory>("/fetch_epoch_history", epoch, qs)
+            .await?
+            .try_into_inner(&self.module_registry)?)
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
@@ -363,6 +397,7 @@ impl<C> WsFederationApi<C> {
                     }
                 })
                 .collect(),
+            module_registry: module_decode_stubs(),
         }
     }
 }

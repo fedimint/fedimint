@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, HashSet};
+use std::io::Cursor;
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::core::ModuleDecode;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
-use fedimint_api::{BitcoinHash, PeerId, ServerModulePlugin};
+use fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId, ServerModulePlugin};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -28,12 +29,14 @@ pub struct EpochSignatureShare(pub SignatureShare);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EpochSignature(pub Signature);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct EpochHistory {
     pub outcome: OutcomeHistory,
     pub hash: Sha256,
     pub signature: Option<EpochSignature>,
 }
+
+serde_module_encoding_wrapper!(SerdeEpochHistory, EpochHistory);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct OutcomeHistory {

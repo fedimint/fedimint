@@ -54,6 +54,7 @@ pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Er
     secp256k1::PublicKey::from_str(s)
 }
 
+#[derive(Debug)]
 pub struct ClientContext {
     pub db: Database,
     pub api: FederationApi,

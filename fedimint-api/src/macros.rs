@@ -142,3 +142,33 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
         }
     };
 }
+
+/// Creates a struct that can be used to make our module-decodable structs interact with
+/// `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper that holds the data as serialized
+/// bytes internally.
+#[macro_export]
+macro_rules! serde_module_encoding_wrapper {
+    ($wrapper_name:ident, $wrapped:ty) => {
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        pub struct $wrapper_name(Vec<u8>);
+
+        impl From<&$wrapped> for $wrapper_name {
+            fn from(eh: &$wrapped) -> Self {
+                let mut bytes = vec![];
+                eh.consensus_encode(&mut bytes)
+                    .expect("Writing to buffer can never fail");
+                SerdeEpochHistory(bytes)
+            }
+        }
+
+        impl $wrapper_name {
+            pub fn try_into_inner<M: ModuleDecode>(
+                self,
+                modules: &ModuleRegistry<M>,
+            ) -> Result<$wrapped, DecodeError> {
+                let mut reader = Cursor::new(self.0);
+                Decodable::consensus_decode(&mut reader, modules)
+            }
+        }
+    };
+}

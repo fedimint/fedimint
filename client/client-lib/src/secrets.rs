@@ -1,5 +1,7 @@
 //! Scheme for deriving deterministic secret keys
 
+use std::fmt::Formatter;
+
 use fedimint_api::encoding::{Decodable, Encodable};
 use hkdf::hashes::Sha512;
 use hkdf::Hkdf;
@@ -57,4 +59,10 @@ fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
     derivation_info[0..8].copy_from_slice(&tag[..]);
     derivation_info[8..16].copy_from_slice(&derivation.0.to_le_bytes()[..]);
     derivation_info
+}
+
+impl std::fmt::Debug for DerivableSecret {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DerivableSecret")
+    }
 }

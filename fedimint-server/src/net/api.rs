@@ -11,7 +11,7 @@ use fedimint_api::{
     task::TaskHandle,
     ServerModulePlugin, TransactionId,
 };
-use fedimint_core::epoch::EpochHistory;
+use fedimint_core::epoch::SerdeEpochHistory;
 use fedimint_core::outcome::TransactionStatus;
 use futures::FutureExt;
 use jsonrpsee::{
@@ -220,9 +220,9 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/fetch_epoch_history",
-            async |fedimint: &FedimintConsensus, epoch: u64| -> EpochHistory {
+            async |fedimint: &FedimintConsensus, epoch: u64| -> SerdeEpochHistory {
                 let epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
-                Ok(epoch)
+                Ok((&epoch).into())
             }
         },
         api_endpoint! {

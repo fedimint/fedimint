@@ -1,6 +1,8 @@
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
+use fedimint_api::core::client::ModuleClient;
+use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModulePlugin};
@@ -13,19 +15,23 @@ use thiserror::Error;
 use tracing::debug;
 
 use crate::utils::ClientContext;
-use crate::{ApiError, ModuleClient};
+use crate::ApiError;
 
 mod db;
+pub mod decode_stub;
 
 /// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
+#[derive(Debug)]
 pub struct WalletClient<'c> {
     pub config: WalletClientConfig,
     pub context: &'c ClientContext,
 }
 
 impl<'a> ModuleClient for WalletClient<'a> {
+    type Decoder = <Wallet as ServerModulePlugin>::Decoder;
     type Module = Wallet;
+    const MODULE_KEY: ModuleKey = MODULE_KEY_WALLET;
 
     fn input_amount(
         &self,

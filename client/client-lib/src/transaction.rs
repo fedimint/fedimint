@@ -1,5 +1,6 @@
 use bitcoin::KeyPair;
 use fedimint_api::config::ClientConfig;
+use fedimint_api::core::client::ModuleClient;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
@@ -11,7 +12,7 @@ use tracing::debug;
 
 use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
 use crate::mint::{NoteIssuanceRequest, NoteIssuanceRequests};
-use crate::{Client, MintClientError, ModuleClient, SpendableNote};
+use crate::{Client, MintClientError, SpendableNote};
 
 pub struct TransactionBuilder {
     input_notes: TieredMulti<SpendableNote>,

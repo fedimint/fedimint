@@ -1,11 +1,14 @@
 // TODO: once user and mint client are merged, make this private again
 pub mod db;
+pub mod decode_stub;
 pub mod incoming;
 pub mod outgoing;
 
 use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use fedimint_api::core::client::ModuleClient;
+use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
@@ -32,15 +35,18 @@ use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::ClientContext;
-use crate::{FederationId, ModuleClient};
+use crate::FederationId;
 
+#[derive(Debug)]
 pub struct LnClient<'c> {
     pub config: LightningModuleClientConfig,
     pub context: &'c ClientContext,
 }
 
 impl<'a> ModuleClient for LnClient<'a> {
+    type Decoder = <LightningModule as ServerModulePlugin>::Decoder;
     type Module = LightningModule;
+    const MODULE_KEY: ModuleKey = MODULE_KEY_LN;
 
     fn input_amount(
         &self,

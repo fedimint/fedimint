@@ -10,7 +10,7 @@ use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
-use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
+use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError, SerdeEpochHistory};
 pub use fedimint_core::*;
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::{Epoched, NetworkInfo, Target};
@@ -55,7 +55,7 @@ type PeerMessage = (PeerId, EpochMessage);
 pub enum EpochMessage {
     Continue(Message<PeerId>),
     RejoinRequest,
-    Rejoin(Option<EpochHistory>, u64),
+    Rejoin(Option<SerdeEpochHistory>, u64),
 }
 
 pub struct FedimintServer {
@@ -318,6 +318,14 @@ impl FedimintServer {
                     return Err(Cancelled);
                 }
                 Ok(Ok((peer, EpochMessage::Rejoin(Some(history), epoch)))) => {
+                    let history = match history.try_into_inner(&self.consensus.modules) {
+                        Ok(history) => history,
+                        Err(decode_err) => {
+                            warn!("Peer {} sent malformed message: {}", peer, decode_err);
+                            continue;
+                        }
+                    };
+
                     let is_recent = epoch <= history.outcome.epoch + max_age;
                     if history.verify_sig(&pks).is_ok() && is_recent {
                         consensus_peers.insert(peer, epoch);
@@ -329,7 +337,10 @@ impl FedimintServer {
                     }
                 }
                 Ok(Ok((peer, EpochMessage::RejoinRequest))) => {
-                    let msg = EpochMessage::Rejoin(self.last_signed_epoch(next_epoch), next_epoch);
+                    let msg = EpochMessage::Rejoin(
+                        self.last_signed_epoch(next_epoch).map(|eh| (&eh).into()),
+                        next_epoch,
+                    );
                     self.connections.send(&[peer], msg).await?;
                 }
                 Ok(Ok(msg)) => msg_buffer.push(msg),
@@ -436,7 +447,10 @@ impl FedimintServer {
             (peer, EpochMessage::RejoinRequest) => {
                 let last_signed = self.last_signed_epoch(self.hbbft.epoch());
 
-                let msg = EpochMessage::Rejoin(last_signed, self.hbbft.next_epoch());
+                let msg = EpochMessage::Rejoin(
+                    last_signed.map(|eh| (&eh).into()),
+                    self.hbbft.next_epoch(),
+                );
                 self.connections.send(&[peer], msg).await?;
                 Ok(vec![])
             }
