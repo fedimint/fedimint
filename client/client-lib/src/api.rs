@@ -242,7 +242,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
                 let response = FedResponse {
                     peer: response.peer,
                     result: response.result.and_then(|hist| {
-                        hist.try_into_inner(&self.modules)
+                        hist.try_into_inner(self.modules)
                             .map_err(|e| jsonrpsee_core::Error::Custom(e.to_string()))
                     }),
                 };

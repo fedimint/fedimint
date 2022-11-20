@@ -12,9 +12,7 @@ use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
 use crate::transaction::Transaction;
 
-#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
-)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
 pub enum ConsensusItem {
     EpochInfo(EpochSignatureShare),
     Transaction(Transaction),
@@ -22,6 +20,8 @@ pub enum ConsensusItem {
     Wallet(<fedimint_wallet::Wallet as ServerModulePlugin>::ConsensusItem),
     LN(<fedimint_ln::LightningModule as ServerModulePlugin>::ConsensusItem),
 }
+
+serde_module_encoding_wrapper!(SerdeConsensusItem, ConsensusItem);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EpochSignatureShare(pub SignatureShare);

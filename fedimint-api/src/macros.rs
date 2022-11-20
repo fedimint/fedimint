@@ -149,7 +149,7 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
 #[macro_export]
 macro_rules! serde_module_encoding_wrapper {
     ($wrapper_name:ident, $wrapped:ty) => {
-        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
         pub struct $wrapper_name(Vec<u8>);
 
         impl From<&$wrapped> for $wrapper_name {
@@ -157,7 +157,7 @@ macro_rules! serde_module_encoding_wrapper {
                 let mut bytes = vec![];
                 eh.consensus_encode(&mut bytes)
                     .expect("Writing to buffer can never fail");
-                SerdeEpochHistory(bytes)
+                $wrapper_name(bytes)
             }
         }
 

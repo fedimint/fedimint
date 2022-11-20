@@ -40,6 +40,7 @@ use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
 use crate::OsRngGen;
 
+pub type SerdeConsensusOutcome = Batch<Vec<SerdeConsensusItem>, PeerId>;
 pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
 
