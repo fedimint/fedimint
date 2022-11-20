@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/api.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-bfda650e0f1b8d97.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-73ec76ce6fb6d670.css"><link rel="stylesheet" disabled href="../../static.files/dark-505cdfdf9d48c666.css"><link rel="stylesheet" disabled href="../../static.files/ayu-de5a1c2641418e5f.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-2da75ee0e1909b3a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/api.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-1d6438e53893d4f5.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-b8db113b98e15459.css"><link rel="stylesheet" disabled href="../../static.files/dark-4b64df8497ac42b0.css"><link rel="stylesheet" disabled href="../../static.files/ayu-4939169e939b96f8.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-8f89a77f33748381.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -711,22 +711,66 @@
 <a href="#711" id="711">711</a>
 <a href="#712" id="712">712</a>
 <a href="#713" id="713">713</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::core::client::ClientModule;
+<span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
-<span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+<span class="kw">use </span>fedimint_core::epoch::{EpochHistory, SerdeEpochHistory};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
 <span class="kw">use </span>fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
-<span class="kw">use </span>fedimint_core::transaction::Transaction;
+<span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction};
 <span class="kw">use </span>fedimint_core::CoreError;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
@@ -745,6 +789,7 @@
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::module_decode_stubs;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
     ValidHistory,
@@ -752,7 +797,7 @@
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">pub trait </span>IFederationApi: Send + Sync {
+</span><span class="kw">pub trait </span>IFederationApi: Debug + Send + Sync {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt;;
 
@@ -809,7 +854,12 @@
                         outputs_len,
                         out_point.out_idx <span class="kw">as </span>usize,
                     ))
-                    .and_then(|output| output.try_into_variant().map_err(ApiError::CoreError))
+                    .and_then(|output| {
+                        output
+                            .try_into_inner(<span class="kw-2">&amp;</span>module_decode_stubs())<span class="question-mark">? </span><span class="comment">// FIXME: modularize
+                            </span>.try_into_variant()
+                            .map_err(ApiError::CoreError)
+                    })
             }
         }
     }
@@ -848,6 +898,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
     members: Vec&lt;FederationMember&lt;C&gt;&gt;,
+    module_registry: ModuleRegistry&lt;fedimint_api::core::client::ClientModule&gt;,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -885,6 +936,8 @@
 </span><span class="kw">pub enum </span>ApiError {
     <span class="attr">#[error(<span class="string">&quot;Rpc error: {0}&quot;</span>)]
     </span>RpcError(<span class="attr">#[from] </span>JsonRpcError),
+    <span class="attr">#[error(<span class="string">&quot;Decode error: {0}&quot;</span>)]
+    </span>DecodeError(<span class="attr">#[from] </span>fedimint_api::encoding::DecodeError),
     <span class="attr">#[error(<span class="string">&quot;Error retrieving the transaction: {0}&quot;</span>)]
     </span>TransactionError(String),
     <span class="attr">#[error(<span class="string">&quot;The transaction was rejected by consensus processing: {0}&quot;</span>)]
@@ -912,7 +965,7 @@
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Send + Sync&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
+</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + Send + Sync&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt; {
         <span class="self">self</span>.request(
@@ -928,20 +981,48 @@
         <span class="comment">// TODO: check the id is correct
         </span><span class="self">self</span>.request(
             <span class="string">&quot;/transaction&quot;</span>,
-            tx,
+            SerdeTransaction::from(<span class="kw-2">&amp;</span>tx),
             CurrentConsensus::new(<span class="self">self</span>.peers().one_honest()),
         )
         .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64, epoch_pk: PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
-        <span class="self">self</span>.request(
-            <span class="string">&quot;/fetch_epoch_history&quot;</span>,
-            epoch,
-            ValidHistory::new(epoch_pk, <span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
+        <span class="kw">struct </span>ValidHistoryWrapper&lt;<span class="lifetime">&#39;a</span>&gt; {
+            modules: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleRegistry&lt;ClientModule&gt;,
+            strategy: ValidHistory,
+        }
+
+        <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; QueryStrategy&lt;SerdeEpochHistory&gt; <span class="kw">for </span>ValidHistoryWrapper&lt;<span class="lifetime">&#39;a</span>&gt; {
+            <span class="kw">fn </span>process(
+                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+                response: FedResponse&lt;SerdeEpochHistory&gt;,
+            ) -&gt; QueryStep&lt;SerdeEpochHistory&gt; {
+                <span class="kw">let </span>response = FedResponse {
+                    peer: response.peer,
+                    result: response.result.and_then(|hist| {
+                        hist.try_into_inner(<span class="self">self</span>.modules)
+                            .map_err(|e| jsonrpsee_core::Error::Custom(e.to_string()))
+                    }),
+                };
+                <span class="kw">match </span><span class="self">self</span>.strategy.process(response) {
+                    QueryStep::Finished(res) =&gt; QueryStep::Finished(res.map(|val| (<span class="kw-2">&amp;</span>val).into())),
+                    QueryStep::Request(r) =&gt; QueryStep::Request(r),
+                    QueryStep::Continue =&gt; QueryStep::Continue,
+                }
+            }
+        }
+
+        <span class="kw">let </span>qs = ValidHistoryWrapper {
+            modules: <span class="kw-2">&amp;</span><span class="self">self</span>.module_registry,
+            strategy: ValidHistory::new(epoch_pk, <span class="self">self</span>.peers().one_honest()),
+        };
+
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.request::&lt;<span class="kw">_</span>, SerdeEpochHistory&gt;(<span class="string">&quot;/fetch_epoch_history&quot;</span>, epoch, qs)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.module_registry)<span class="question-mark">?</span>)
+    }
 
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
         <span class="self">self</span>.request(
@@ -1075,6 +1156,7 @@
                     }
                 })
                 .collect(),
+            module_registry: module_decode_stubs(),
         }
     }
 }
@@ -1425,4 +1507,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (b833ad56f 2022-11-18)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7e1cf5cc683233f7.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (c5d82ed7a 2022-11-19)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7e1cf5cc683233f7.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

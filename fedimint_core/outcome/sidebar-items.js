@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["OutputOutcome",""],["TransactionStatus",""]],"trait":[["Final",""],["TryIntoOutcome",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["OutputOutcome",""],["TransactionStatus",""]],"struct":[["SerdeOutputOutcome",""]],"trait":[["TryIntoOutcome",""]]};

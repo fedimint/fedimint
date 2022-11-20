@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-bfda650e0f1b8d97.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-73ec76ce6fb6d670.css"><link rel="stylesheet" disabled href="../../../static.files/dark-505cdfdf9d48c666.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-de5a1c2641418e5f.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-2da75ee0e1909b3a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1d6438e53893d4f5.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-b8db113b98e15459.css"><link rel="stylesheet" disabled href="../../../static.files/dark-4b64df8497ac42b0.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-4939169e939b96f8.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-8f89a77f33748381.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -752,13 +752,24 @@
 <a href="#752" id="752">752</a>
 <a href="#753" id="753">753</a>
 <a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
+<span class="kw">pub mod </span>decode_stub;
 
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
@@ -780,12 +791,13 @@
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::LastECashNoteIndexKey;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use crate</span>::{ChildId, Client, DerivableSecret, ModuleClient};
+<span class="kw">use crate</span>::{ChildId, Client, DerivableSecret};
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="kw">pub </span>config: MintClientConfig,
     <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
@@ -822,8 +834,10 @@
     </span><span class="kw">pub </span>spend_key: KeyPair,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ModuleClient <span class="kw">for </span>MintClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ClientModulePlugin <span class="kw">for </span>MintClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">type </span>Decoder = &lt;Mint <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
     <span class="kw">type </span>Module = Mint;
+    <span class="kw">const </span>MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
 
     <span class="kw">fn </span>input_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1200,7 +1214,8 @@
 
     <span class="kw">type </span>Fed = FakeFed&lt;Mint&gt;;
 
-    <span class="kw">struct </span>FakeApi {
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">struct </span>FakeApi {
         mint: Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
     }
 
@@ -1213,13 +1228,14 @@
             <span class="kw">let </span>mint = <span class="self">self</span>.mint.lock().<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
                 epoch: <span class="number">0</span>,
-                outputs: <span class="macro">vec!</span>[OutputOutcome::Mint(
+                outputs: <span class="macro">vec!</span>[(<span class="kw-2">&amp;</span>OutputOutcome::Mint(
                     mint.output_outcome(OutPoint {
                         txid: tx,
                         out_idx: <span class="number">0</span>,
                     })
                     .unwrap(),
-                )],
+                ))
+                    .into()],
             })
         }
 
@@ -1507,4 +1523,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (b833ad56f 2022-11-18)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7e1cf5cc683233f7.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (c5d82ed7a 2022-11-19)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7e1cf5cc683233f7.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
