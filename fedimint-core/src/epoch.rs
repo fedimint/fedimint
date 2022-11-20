@@ -38,7 +38,7 @@ pub struct EpochHistory {
 
 serde_module_encoding_wrapper!(SerdeEpochHistory, EpochHistory);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct OutcomeHistory {
     pub epoch: u64,
     pub last_hash: Option<Sha256>,
