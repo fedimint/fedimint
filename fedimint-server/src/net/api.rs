@@ -23,7 +23,7 @@ use tracing::{debug, error};
 
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
-use crate::transaction::Transaction;
+use crate::transaction::SerdeTransaction;
 
 /// A state of fedimint server passed to each rpc handler callback
 #[derive(Clone)]
@@ -199,7 +199,9 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
                 // deserializing Transaction from json Value always fails
                 // we need to convert it to string first
                 let string = serde_json::to_string(&transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;
-                let transaction: Transaction = serde_json::from_str(&string).map_err(|e| ApiError::bad_request(e.to_string()))?;
+                let serde_transaction: SerdeTransaction = serde_json::from_str(&string).map_err(|e| ApiError::bad_request(e.to_string()))?;
+                let transaction = serde_transaction.try_into_inner(&fedimint.modules).map_err(|e| ApiError::bad_request(e.to_string()))?;
+
                 let tx_id = transaction.tx_hash();
 
                 fedimint.submit_transaction(transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;

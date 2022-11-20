@@ -16,7 +16,7 @@ use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
 use fedimint_core::modules::wallet::PegOutFees;
 use fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{SerdeTransaction, Transaction};
 use fedimint_core::CoreError;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -222,7 +222,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
         // TODO: check the id is correct
         self.request(
             "/transaction",
-            tx,
+            SerdeTransaction::from(&tx),
             CurrentConsensus::new(self.peers().one_honest()),
         )
         .await

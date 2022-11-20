@@ -23,7 +23,6 @@ use fedimint_wallet::Wallet;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info, info_span, instrument, trace, warn};
@@ -91,7 +90,7 @@ pub struct FedimintConsensus {
     pub transaction_notify: Arc<Notify>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct AcceptedTransaction {
     pub epoch: u64,
     pub transaction: Transaction,
