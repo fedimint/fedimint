@@ -4,7 +4,10 @@ use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
+use fedimint_core::modules::ln::contracts::ContractOutcome;
+use fedimint_core::modules::ln::LightningOutputOutcome;
 use fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput, SignRequest};
+use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use rand::{CryptoRng, RngCore};
 use tbs::AggregatePublicKey;
@@ -12,13 +15,52 @@ use tracing::debug;
 
 use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
 use crate::mint::{NoteIssuanceRequest, NoteIssuanceRequests};
-use crate::{Client, MintClientError, SpendableNote};
+use crate::{
+    module_decode_stubs, Client, DecryptedPreimage, MintClientError, MintOutputOutcome,
+    SpendableNote,
+};
+
+pub trait Final {
+    fn is_final(&self) -> bool;
+}
 
 pub struct TransactionBuilder {
     input_notes: TieredMulti<SpendableNote>,
     output_notes: Vec<(u64, NoteIssuanceRequests)>,
     keys: Vec<KeyPair>,
     tx: Transaction,
+}
+
+impl Final for OutputOutcome {
+    fn is_final(&self) -> bool {
+        match self {
+            OutputOutcome::Mint(MintOutputOutcome(Some(_))) => true,
+            OutputOutcome::Mint(MintOutputOutcome(None)) => false,
+            OutputOutcome::Wallet(_) => true,
+            OutputOutcome::LN(LightningOutputOutcome::Offer { .. }) => true,
+            OutputOutcome::LN(LightningOutputOutcome::Contract { outcome, .. }) => match outcome {
+                ContractOutcome::Account(_) => true,
+                ContractOutcome::Incoming(DecryptedPreimage::Some(_)) => true,
+                ContractOutcome::Incoming(_) => false,
+                ContractOutcome::Outgoing(_) => true,
+            },
+        }
+    }
+}
+
+impl Final for TransactionStatus {
+    fn is_final(&self) -> bool {
+        let modules = module_decode_stubs();
+
+        match self {
+            TransactionStatus::Rejected(_) => true,
+            TransactionStatus::Accepted { outputs, .. } => outputs.iter().all(|out| {
+                out.try_into_inner(&modules)
+                    .expect("Federation sent invalid data") // FIXME: don't crash here
+                    .is_final()
+            }),
+        }
+    }
 }
 
 impl Default for TransactionBuilder {

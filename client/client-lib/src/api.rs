@@ -100,7 +100,12 @@ impl FederationApi {
                         outputs_len,
                         out_point.out_idx as usize,
                     ))
-                    .and_then(|output| output.try_into_variant().map_err(ApiError::CoreError))
+                    .and_then(|output| {
+                        output
+                            .try_into_inner(&module_decode_stubs())? // FIXME: modularize
+                            .try_into_variant()
+                            .map_err(ApiError::CoreError)
+                    })
             }
         }
     }

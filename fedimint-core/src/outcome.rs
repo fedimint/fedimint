@@ -1,4 +1,5 @@
-use fedimint_api::ServerModulePlugin;
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::{serde_module_encoding_wrapper, ServerModulePlugin};
 use fedimint_ln::contracts::incoming::OfferId;
 use fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 use fedimint_ln::contracts::{DecryptedPreimage, Preimage};
@@ -18,20 +19,18 @@ pub enum TransactionStatus {
     /// The transaction was accepted and is now being processed
     Accepted {
         epoch: u64,
-        outputs: Vec<OutputOutcome>,
+        outputs: Vec<SerdeOutputOutcome>,
     },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub enum OutputOutcome {
     Mint(<Mint as ServerModulePlugin>::OutputOutcome),
     Wallet(<Wallet as ServerModulePlugin>::OutputOutcome),
     LN(<LightningModule as ServerModulePlugin>::OutputOutcome),
 }
 
-pub trait Final {
-    fn is_final(&self) -> bool;
-}
+serde_module_encoding_wrapper!(SerdeOutputOutcome, OutputOutcome);
 
 pub trait TryIntoOutcome: Sized {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError>;
@@ -40,34 +39,6 @@ pub trait TryIntoOutcome: Sized {
 impl OutputOutcome {
     pub fn try_into_variant<T: TryIntoOutcome>(self) -> Result<T, CoreError> {
         T::try_into_outcome(self)
-    }
-}
-
-impl Final for OutputOutcome {
-    fn is_final(&self) -> bool {
-        match self {
-            OutputOutcome::Mint(MintOutputOutcome(Some(_))) => true,
-            OutputOutcome::Mint(MintOutputOutcome(None)) => false,
-            OutputOutcome::Wallet(_) => true,
-            OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Offer { .. }) => true,
-            OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
-                outcome, ..
-            }) => match outcome {
-                ContractOutcome::Account(_) => true,
-                ContractOutcome::Incoming(DecryptedPreimage::Some(_)) => true,
-                ContractOutcome::Incoming(_) => false,
-                ContractOutcome::Outgoing(_) => true,
-            },
-        }
-    }
-}
-
-impl Final for TransactionStatus {
-    fn is_final(&self) -> bool {
-        match self {
-            TransactionStatus::Rejected(_) => true,
-            TransactionStatus::Accepted { outputs, .. } => outputs.iter().all(|out| out.is_final()),
-        }
     }
 }
 

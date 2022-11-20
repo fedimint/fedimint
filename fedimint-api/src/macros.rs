@@ -155,7 +155,7 @@ macro_rules! serde_module_encoding_wrapper {
         impl From<&$wrapped> for $wrapper_name {
             fn from(eh: &$wrapped) -> Self {
                 let mut bytes = vec![];
-                eh.consensus_encode(&mut bytes)
+                fedimint_api::encoding::Encodable::consensus_encode(eh, &mut bytes)
                     .expect("Writing to buffer can never fail");
                 $wrapper_name(bytes)
             }
@@ -163,11 +163,11 @@ macro_rules! serde_module_encoding_wrapper {
 
         impl $wrapper_name {
             pub fn try_into_inner<M: fedimint_api::core::ModuleDecode>(
-                self,
+                &self,
                 modules: &fedimint_api::encoding::ModuleRegistry<M>,
             ) -> Result<$wrapped, fedimint_api::encoding::DecodeError> {
-                let mut reader = std::io::Cursor::new(self.0);
-                Decodable::consensus_decode(&mut reader, modules)
+                let mut reader = std::io::Cursor::new(&self.0);
+                fedimint_api::encoding::Decodable::consensus_decode(&mut reader, modules)
             }
         }
     };

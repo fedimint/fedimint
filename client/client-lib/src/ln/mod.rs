@@ -359,13 +359,14 @@ mod tests {
             let mint = self.mint.lock().await;
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![OutputOutcome::LN(
+                outputs: vec![(&OutputOutcome::LN(
                     mint.output_outcome(OutPoint {
                         txid: tx,
                         out_idx: 0,
                     })
                     .unwrap(),
-                )],
+                ))
+                    .into()],
             })
         }
 

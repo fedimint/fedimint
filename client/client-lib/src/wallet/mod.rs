@@ -222,9 +222,10 @@ mod tests {
         ) -> crate::api::Result<TransactionStatus> {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![OutputOutcome::Wallet(WalletOutputOutcome(
+                outputs: vec![(&OutputOutcome::Wallet(WalletOutputOutcome(
                     Txid::from_slice([0; 32].as_slice()).unwrap(),
-                ))],
+                )))
+                    .into()],
             })
         }
 

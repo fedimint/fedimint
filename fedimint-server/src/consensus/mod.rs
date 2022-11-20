@@ -535,41 +535,41 @@ impl FedimintConsensus {
             .expect("DB error");
 
         if let Some(accepted_tx) = accepted {
-            let outputs = accepted_tx
-                .transaction
-                .outputs
-                .iter()
-                .enumerate()
-                .map(|(out_idx, output)| {
-                    let outpoint = OutPoint {
-                        txid,
-                        out_idx: out_idx as u64,
-                    };
-                    match output {
-                        Output::Mint(_) => {
-                            let outcome = self
-                                .mint
-                                .output_status(outpoint)
-                                .expect("the transaction was processed, so should be known");
-                            OutputOutcome::Mint(outcome)
-                        }
-                        Output::Wallet(_) => {
-                            let outcome = self
-                                .wallet
-                                .output_status(outpoint)
-                                .expect("the transaction was processed, so should be known");
-                            OutputOutcome::Wallet(outcome)
-                        }
-                        Output::LN(_) => {
-                            let outcome = self
-                                .ln
-                                .output_status(outpoint)
-                                .expect("the transaction was processed, so should be known");
-                            OutputOutcome::LN(outcome)
-                        }
-                    }
-                })
-                .collect();
+            let outputs =
+                accepted_tx
+                    .transaction
+                    .outputs
+                    .iter()
+                    .enumerate()
+                    .map(|(out_idx, output)| {
+                        let outpoint = OutPoint {
+                            txid,
+                            out_idx: out_idx as u64,
+                        };
+                        let outcome =
+                            match output {
+                                Output::Mint(_) => {
+                                    let outcome = self.mint.output_status(outpoint).expect(
+                                        "the transaction was processed, so should be known",
+                                    );
+                                    OutputOutcome::Mint(outcome)
+                                }
+                                Output::Wallet(_) => {
+                                    let outcome = self.wallet.output_status(outpoint).expect(
+                                        "the transaction was processed, so should be known",
+                                    );
+                                    OutputOutcome::Wallet(outcome)
+                                }
+                                Output::LN(_) => {
+                                    let outcome = self.ln.output_status(outpoint).expect(
+                                        "the transaction was processed, so should be known",
+                                    );
+                                    OutputOutcome::LN(outcome)
+                                }
+                            };
+                        (&outcome).into()
+                    })
+                    .collect();
 
             return Some(crate::outcome::TransactionStatus::Accepted {
                 epoch: accepted_tx.epoch,
