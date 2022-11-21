@@ -203,7 +203,7 @@ async fn test_incoming() {
 
     fed.consensus_round(&[], &[(offer_out_point, offer_output)])
         .await;
-    let offers = fed.fetch_from_all(|m, _| m.get_offers());
+    let offers = fed.fetch_from_all(|m, db| m.get_offers(&db.begin_transaction()));
     assert_eq!(offers, vec![offer.clone()]);
 
     let contract = Contract::Incoming(IncomingContract {
