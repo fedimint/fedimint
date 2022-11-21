@@ -421,7 +421,11 @@ impl ServerModulePlugin for Mint {
         Ok(meta)
     }
 
-    fn validate_output(&self, output: &Self::Output) -> Result<TransactionItemAmount, ModuleError> {
+    fn validate_output(
+        &self,
+        _dbtx: &DatabaseTransaction,
+        output: &Self::Output,
+    ) -> Result<TransactionItemAmount, ModuleError> {
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
             if self.pub_key.get(&amount).is_none() {
                 Some(amount)
@@ -444,7 +448,7 @@ impl ServerModulePlugin for Mint {
         output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(output)?;
+        let amount = self.validate_output(dbtx, output)?;
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone

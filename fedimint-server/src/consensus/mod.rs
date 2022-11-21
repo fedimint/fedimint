@@ -190,15 +190,15 @@ impl FedimintConsensus {
             let amount = match output {
                 Output::Mint(coins) => self
                     .mint
-                    .validate_output(coins)
+                    .validate_output(&dbtx, coins)
                     .map_err(TransactionSubmissionError::OutputCoinError)?,
                 Output::Wallet(peg_out) => self
                     .wallet
-                    .validate_output(peg_out)
+                    .validate_output(&dbtx, peg_out)
                     .map_err(TransactionSubmissionError::OutputPegOut)?,
                 Output::LN(output) => self
                     .ln
-                    .validate_output(output)
+                    .validate_output(&dbtx, output)
                     .map_err(TransactionSubmissionError::ContractOutputError)?,
             };
             funding_verifier.add_output(amount);

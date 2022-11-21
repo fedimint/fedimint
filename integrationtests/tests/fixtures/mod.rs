@@ -770,7 +770,11 @@ impl FederationTest {
 
     /// Returns true if the fed would produce an empty epoch proposal (no new information)
     fn empty_proposal(server: &FedimintServer) -> bool {
-        let height = server.consensus.wallet.consensus_height().unwrap_or(0);
+        let height = server
+            .consensus
+            .wallet
+            .consensus_height(&server.consensus.db.begin_transaction())
+            .unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
         for item in proposal.items {

@@ -407,7 +407,11 @@ impl ServerModulePlugin for LightningModule {
         Ok(meta)
     }
 
-    fn validate_output(&self, output: &Self::Output) -> Result<TransactionItemAmount, ModuleError> {
+    fn validate_output(
+        &self,
+        _dbtx: &DatabaseTransaction,
+        output: &Self::Output,
+    ) -> Result<TransactionItemAmount, ModuleError> {
         match output {
             LightningOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
@@ -486,7 +490,7 @@ impl ServerModulePlugin for LightningModule {
         output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(output)?;
+        let amount = self.validate_output(dbtx, output)?;
 
         match output {
             LightningOutput::Contract(contract) => {
