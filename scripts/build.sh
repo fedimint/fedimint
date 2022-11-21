@@ -34,7 +34,7 @@ for ((ID=0; ID<FM_FED_SIZE; ID++));
 do
   mkdir $FM_CFG_DIR/server-$ID
   base_port=$(echo "4000 + $ID * 10" | bc -l)
-  $FM_BIN_DIR/distributedgen create-cert --out-dir $FM_CFG_DIR/server-$ID --base-port $base_port --name "Server-$ID" --password "pass$ID"
+  $FM_BIN_DIR/distributedgen create-cert --announce-address localhost --out-dir $FM_CFG_DIR/server-$ID --base-port $base_port --name "Server-$ID" --password "pass$ID"
   CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
 done
 CERTS=${CERTS:1}

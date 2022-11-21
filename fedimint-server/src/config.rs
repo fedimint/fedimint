@@ -432,6 +432,7 @@ impl ServerConfigParams {
     }
 
     pub fn gen_params(
+        bind_address: String,
         key: rustls::PrivateKey,
         our_id: PeerId,
         amount_tiers: Vec<Amount>,
@@ -458,9 +459,9 @@ impl ServerConfigParams {
 
         ServerConfigParams {
             tls,
-            hbbft: Self::gen_network(&our_id, 0, peers),
-            api: Self::gen_network(&our_id, 1, peers),
-            server_dkg: Self::gen_network(&our_id, 2, peers),
+            hbbft: Self::gen_network(&bind_address, &our_id, 0, peers),
+            api: Self::gen_network(&bind_address, &our_id, 1, peers),
+            server_dkg: Self::gen_network(&bind_address, &our_id, 2, peers),
             amount_tiers,
             federation_name,
             bitcoind_rpc,
@@ -469,17 +470,14 @@ impl ServerConfigParams {
     }
 
     fn gen_network(
+        bind_address: &str,
         our_id: &PeerId,
         offset: u16,
         peers: &BTreeMap<PeerId, PeerServerParams>,
     ) -> NetworkConfig {
         NetworkConfig {
             identity: *our_id,
-            bind_addr: format!(
-                "{}:{}",
-                peers[our_id].address,
-                peers[our_id].base_port + offset
-            ),
+            bind_addr: format!("{}:{}", bind_address, peers[our_id].base_port + offset),
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
@@ -525,6 +523,7 @@ impl ServerConfigParams {
             .iter()
             .map(|peer| {
                 let params: ServerConfigParams = Self::gen_params(
+                    "127.0.0.1".to_string(),
                     keys[peer].1.clone(),
                     *peer,
                     amount_tiers.clone(),
