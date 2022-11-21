@@ -79,15 +79,25 @@
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::mint::Nonce;
+<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::{NoteIssuanceRequests, SpendableNote};
 
 <span class="attr">#[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     Coin = <span class="number">0x20</span>,
     OutputFinalizationData = <span class="number">0x21</span>,
@@ -95,7 +105,13 @@
     LastECashNoteIndex = <span class="number">0x2a</span>,
 }
 
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>CoinKey {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>nonce: Nonce,
@@ -116,7 +132,7 @@
     <span class="kw">type </span>Value = SpendableNote;
 }
 
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>PendingCoinsKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingCoinsKey {
@@ -134,7 +150,7 @@
     <span class="kw">type </span>Value = TieredMulti&lt;SpendableNote&gt;;
 }
 
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>OutputFinalizationKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputFinalizationKey {
@@ -152,7 +168,7 @@
     <span class="kw">type </span>Value = NoteIssuanceRequests;
 }
 
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>LastECashNoteIndexKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LastECashNoteIndexKey {

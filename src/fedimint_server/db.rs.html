@@ -90,18 +90,55 @@
 <a href="#90" id="90">90</a>
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::AcceptedTransaction;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 
 <span class="attr">#[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     ProposedTransaction = <span class="number">0x01</span>,
     AcceptedTransaction = <span class="number">0x02</span>,
@@ -111,7 +148,13 @@
     LastEpoch = <span class="number">0x06</span>,
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)
+    }
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ProposedTransactionKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedTransactionKey {
@@ -129,7 +172,7 @@
     <span class="kw">type </span>Value = Transaction;
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>AcceptedTransactionKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AcceptedTransactionKey {
@@ -139,6 +182,15 @@
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>AcceptedTransactionKeyPrefix;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AcceptedTransactionKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::AcceptedTransaction <span class="kw">as </span>u8;
+    <span class="kw">type </span>Key = AcceptedTransactionKey;
+    <span class="kw">type </span>Value = AcceptedTransaction;
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>RejectedTransactionKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RejectedTransactionKey {
@@ -148,6 +200,15 @@
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RejectedTransactionKeyPrefix;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RejectedTransactionKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::RejectedTransaction <span class="kw">as </span>u8;
+    <span class="kw">type </span>Key = RejectedTransactionKey;
+    <span class="kw">type </span>Value = String;
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>DropPeerKey(<span class="kw">pub </span>PeerId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>DropPeerKey {
@@ -165,7 +226,7 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>EpochHistoryKey(<span class="kw">pub </span>u64);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>EpochHistoryKey {
@@ -175,6 +236,15 @@
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>EpochHistoryKeyPrefix;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>EpochHistoryKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::EpochHistory <span class="kw">as </span>u8;
+    <span class="kw">type </span>Key = EpochHistoryKey;
+    <span class="kw">type </span>Value = EpochHistory;
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>LastEpochKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LastEpochKey {

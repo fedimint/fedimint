@@ -719,6 +719,7 @@
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
 <a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">mod </span>conflictfilter;
@@ -744,6 +745,7 @@
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>hbbft::honey_badger::Batch;
 <span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tracing::{debug, error, info_span, instrument, trace, warn};
@@ -811,7 +813,7 @@
     </span><span class="kw">pub </span>transaction_notify: Arc&lt;Notify&gt;,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>AcceptedTransaction {
     <span class="kw">pub </span>epoch: u64,
     <span class="kw">pub </span>transaction: Transaction,

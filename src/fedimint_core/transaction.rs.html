@@ -197,7 +197,7 @@
 <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
 ///
 /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>Transaction {
     <span class="doccomment">/// [`Input`]s consumed by the transaction
     </span><span class="kw">pub </span>inputs: Vec&lt;Input&gt;,

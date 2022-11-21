@@ -27,17 +27,33 @@
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
 <a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Script;
 <span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="attr">#[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     PegIn = <span class="number">0x22</span>,
 }
 
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>PegInKey {
     <span class="kw">pub </span>peg_in_script: Script,
 }
@@ -48,7 +64,7 @@
     <span class="kw">type </span>Value = [u8; <span class="number">32</span>]; <span class="comment">// TODO: introduce newtype
 </span>}
 
-<span class="attr">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegInPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegInPrefixKey {

@@ -97,17 +97,36 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::ln::LightningGateway;
+<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">super</span>::incoming::ConfirmedInvoice;
 <span class="kw">use </span><span class="kw">super</span>::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractData;
 
 <span class="attr">#[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     OutgoingPayment = <span class="number">0x23</span>,
     OutgoingPaymentClaim = <span class="number">0x24</span>,
@@ -116,7 +135,13 @@
     LightningGateway = <span class="number">0x28</span>,
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)
+    }
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>OutgoingPaymentKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKey {
@@ -134,7 +159,7 @@
     <span class="kw">type </span>Value = OutgoingContractData;
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>OutgoingPaymentClaimKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKey {
@@ -152,7 +177,7 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>OutgoingContractAccountKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKey {
@@ -170,7 +195,7 @@
     <span class="kw">type </span>Value = OutgoingContractAccount;
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ConfirmedInvoiceKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKey {
@@ -188,12 +213,21 @@
     <span class="kw">type </span>Value = ConfirmedInvoice;
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>LightningGatewayKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LightningGateway <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = LightningGateway;
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>LightningGatewayKeyPrefix;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LightningGateway <span class="kw">as </span>u8;
+    <span class="kw">type </span>Key = LightningGatewayKey;
     <span class="kw">type </span>Value = LightningGateway;
 }
 </code></pre></div>

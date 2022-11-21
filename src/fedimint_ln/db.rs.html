@@ -119,16 +119,35 @@
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{OutPoint, PeerId};
 <span class="kw">use </span>secp256k1::PublicKey;
+<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
 <span class="kw">use crate</span>::{ContractAccount, LightningGateway, LightningOutputOutcome};
 
 <span class="attr">#[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     Contract = <span class="number">0x40</span>,
     Offer = <span class="number">0x41</span>,
@@ -138,7 +157,13 @@
     LightningGateway = <span class="number">0x45</span>,
 }
 
-<span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ContractKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractKey {
@@ -156,7 +181,7 @@
     <span class="kw">type </span>Value = ContractAccount;
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ContractUpdateKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractUpdateKey {
@@ -165,7 +190,16 @@
     <span class="kw">type </span>Value = LightningOutputOutcome;
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ContractUpdateKeyPrefix;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractUpdateKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate <span class="kw">as </span>u8;
+    <span class="kw">type </span>Key = ContractUpdateKey;
+    <span class="kw">type </span>Value = LightningOutputOutcome;
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>OfferKey(<span class="kw">pub </span>bitcoin_hashes::sha256::Hash);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OfferKey {
@@ -184,7 +218,7 @@
 }
 
 <span class="comment">// TODO: remove redundancy
-</span><span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ProposeDecryptionShareKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposeDecryptionShareKey {
@@ -204,7 +238,7 @@
 }
 
 <span class="doccomment">/// Preimage decryption shares we received
-</span><span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>AgreedDecryptionShareKey(<span class="kw">pub </span>ContractId, <span class="kw">pub </span>PeerId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AgreedDecryptionShareKey {
@@ -223,7 +257,7 @@
     <span class="kw">type </span>Value = PreimageDecryptionShare;
 }
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>LightningGatewayKey(<span class="kw">pub </span>PublicKey);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
