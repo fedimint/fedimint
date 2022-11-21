@@ -92,9 +92,10 @@ pub trait IServerModule: Debug {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input(
+    fn validate_input<'a>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        dbtx: &DatabaseTransaction<'a>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -286,15 +287,17 @@ where
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input(
+    fn validate_input<'a>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        dbtx: &DatabaseTransaction<'a>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModulePlugin>::validate_input(
             self,
             interconnect,
+            dbtx,
             verification_cache
                 .as_any()
                 .downcast_ref::<<Self as ServerModulePlugin>::VerificationCache>()

@@ -311,10 +311,11 @@ impl ServerModulePlugin for LightningModule {
         LightningVerificationCache
     }
 
-    fn validate_input<'a>(
+    fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
-        _cache: &Self::VerificationCache,
+        _dbtx: &DatabaseTransaction<'b>,
+        _verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
         let account: ContractAccount = self
@@ -390,7 +391,7 @@ impl ServerModulePlugin for LightningModule {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, cache, input)?;
+        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
 
         let account_db_key = ContractKey(input.contract_id);
         let mut contract_account = self
@@ -748,7 +749,7 @@ impl ServerModulePlugin for LightningModule {
     }
 
     fn audit(&self, audit: &mut Audit) {
-        audit.add_items(&self.db, &ContractKeyPrefix, |_, v| {
+        audit.add_items(&self.db.begin_transaction(), &ContractKeyPrefix, |_, v| {
             -(v.amount.milli_sat as i64)
         });
     }
