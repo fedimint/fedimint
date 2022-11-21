@@ -245,9 +245,10 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input<'a>(
+    fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        dbtx: &DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError>;

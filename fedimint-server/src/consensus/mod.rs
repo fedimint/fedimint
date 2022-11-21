@@ -154,12 +154,16 @@ impl FedimintConsensus {
         let mut funding_verifier = FundingVerifier::default();
 
         let mut pub_keys = Vec::new();
+
+        // Create read-only DB tx so that the read state is consistent
+        let dbtx = self.db.begin_transaction();
+
         for input in &transaction.inputs {
             let meta = match input {
                 Input::Mint(coins) => {
                     let cache = self.mint.build_verification_cache(std::iter::once(coins));
                     self.mint
-                        .validate_input(&self.build_interconnect(), &cache, coins)
+                        .validate_input(&self.build_interconnect(), &dbtx, &cache, coins)
                         .map_err(TransactionSubmissionError::InputCoinError)?
                 }
                 Input::Wallet(peg_in) => {
@@ -167,13 +171,13 @@ impl FedimintConsensus {
                         .wallet
                         .build_verification_cache(std::iter::once(peg_in));
                     self.wallet
-                        .validate_input(&self.build_interconnect(), &cache, peg_in)
+                        .validate_input(&self.build_interconnect(), &dbtx, &cache, peg_in)
                         .map_err(TransactionSubmissionError::InputPegIn)?
                 }
                 Input::LN(input) => {
                     let cache = self.ln.build_verification_cache(std::iter::once(input));
                     self.ln
-                        .validate_input(&self.build_interconnect(), &cache, input)
+                        .validate_input(&self.build_interconnect(), &dbtx, &cache, input)
                         .map_err(TransactionSubmissionError::ContractInputError)?
                 }
             };

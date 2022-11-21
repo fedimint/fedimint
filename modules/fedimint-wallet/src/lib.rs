@@ -441,10 +441,11 @@ impl ServerModulePlugin for Wallet {
         WalletVerificationCache
     }
 
-    fn validate_input<'a>(
+    fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        _cache: &Self::VerificationCache,
+        _dbtx: &DatabaseTransaction<'b>,
+        _verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(input.proof_block()) {
@@ -482,7 +483,7 @@ impl ServerModulePlugin for Wallet {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, cache, input)?;
+        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
         debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
         dbtx.insert_new_entry(
@@ -656,13 +657,14 @@ impl ServerModulePlugin for Wallet {
     }
 
     fn audit(&self, audit: &mut Audit) {
-        audit.add_items(&self.db, &UTXOPrefixKey, |_, v| {
+        let dbtx = self.db.begin_transaction();
+        audit.add_items(&dbtx, &UTXOPrefixKey, |_, v| {
             v.amount.to_sat() as i64 * 1000
         });
-        audit.add_items(&self.db, &UnsignedTransactionPrefixKey, |_, v| {
+        audit.add_items(&dbtx, &UnsignedTransactionPrefixKey, |_, v| {
             v.change.to_sat() as i64 * 1000
         });
-        audit.add_items(&self.db, &PendingTransactionPrefixKey, |_, v| {
+        audit.add_items(&dbtx, &PendingTransactionPrefixKey, |_, v| {
             v.change.to_sat() as i64 * 1000
         });
     }

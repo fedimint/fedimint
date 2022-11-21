@@ -73,12 +73,12 @@ where
     pub fn verify_input(&self, input: &Module::Input) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
-        let results = self.members.iter().map(|(_, member, _)| {
+        let results = self.members.iter().map(|(_, member, db)| {
             let cache = member.build_verification_cache(std::iter::once(input));
             let InputMeta {
                 amount,
                 puk_keys: pub_keys,
-            } = member.validate_input(&fake_ic, &cache, input)?;
+            } = member.validate_input(&fake_ic, &db.begin_transaction(), &cache, input)?;
             Ok(TestInputMeta {
                 amount,
                 keys: pub_keys,

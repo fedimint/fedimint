@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::db::{Database, DatabaseKeyPrefix, DatabaseKeyPrefixConst};
+use crate::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
 
 #[derive(Default)]
 pub struct Audit {
@@ -20,13 +20,12 @@ impl Audit {
         }
     }
 
-    pub fn add_items<KP, F>(&mut self, db: &Database, key_prefix: &KP, to_milli_sat: F)
+    pub fn add_items<KP, F>(&mut self, dbtx: &DatabaseTransaction, key_prefix: &KP, to_milli_sat: F)
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + 'static,
         F: Fn(KP::Key, KP::Value) -> i64,
     {
-        let mut new_items = db
-            .begin_transaction()
+        let mut new_items = dbtx
             .find_by_prefix(key_prefix)
             .map(|res| {
                 let (key, value) = res.expect("DB error");

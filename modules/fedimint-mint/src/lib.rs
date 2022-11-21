@@ -62,7 +62,7 @@ pub struct Mint {
     sec_key: Tiered<SecretKeyShare>,
     pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
-    db: Database,
+    non_consensus_db: Database,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -307,7 +307,7 @@ impl ServerModulePlugin for Mint {
     }
 
     async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
-        self.db
+        self.non_consensus_db
             .begin_transaction()
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
@@ -358,16 +358,17 @@ impl ServerModulePlugin for Mint {
         VerificationCache { valid_coins }
     }
 
-    fn validate_input<'a>(
+    fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        cache: &Self::VerificationCache,
+        dbtx: &DatabaseTransaction<'b>,
+        verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
         input
             .iter_items()
             .try_for_each(|(amount, coin)| {
-                let coin_valid = cache
+                let coin_valid = verification_cache
                     .valid_coins
                     .get(coin) // We validated the coin
                     .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
@@ -377,9 +378,7 @@ impl ServerModulePlugin for Mint {
                     return Err(MintError::InvalidSignature);
                 }
 
-                if self
-                    .db
-                    .begin_transaction()
+                if dbtx
                     .get_value(&NonceKey(coin.0.clone()))
                     .expect("DB error")
                     .is_some()
@@ -410,7 +409,7 @@ impl ServerModulePlugin for Mint {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, cache, input)?;
+        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
 
         input.iter_items().for_each(|(amount, coin)| {
             let key = NonceKey(coin.0.clone());
@@ -475,9 +474,7 @@ impl ServerModulePlugin for Mint {
         dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Finalize partial signatures for which we now have enough shares
-        let req_psigs = self
-            .db
-            .begin_transaction()
+        let req_psigs = dbtx
             .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
@@ -490,15 +487,12 @@ impl ServerModulePlugin for Mint {
             .into_iter()
             .map(|(issuance_id, shares)| async move {
                 let mut drop_peers = Vec::<PeerId>::new();
-                let mut dbtx = self.db.begin_transaction();
+                // FIXME: this specific instance is safe, but we should never directly read from the DB
+                let mut dbtx = self.non_consensus_db.begin_transaction();
                 let proposal_key = ProposedPartialSignatureKey {
                     request_id: issuance_id,
                 };
-                let our_contribution = self
-                    .db
-                    .begin_transaction()
-                    .get_value(&proposal_key)
-                    .expect("DB error");
+                let our_contribution = dbtx.get_value(&proposal_key).expect("DB error");
                 let (bsig, errors) = self.combine(our_contribution, shares.clone());
 
                 // FIXME: validate shares before writing to DB to make combine infallible
@@ -546,10 +540,9 @@ impl ServerModulePlugin for Mint {
 
         let mut redemptions = Amount::from_sat(0);
         let mut issuances = Amount::from_sat(0);
-        self.db
-            .begin_transaction()
+        let remove_audit_keys = dbtx
             .find_by_prefix(&MintAuditItemKeyPrefix)
-            .for_each(|res| {
+            .map(|res| {
                 let (key, amount) = res.expect("DB error");
                 match key {
                     MintAuditItemKey::Issuance(_) => issuances += amount,
@@ -557,8 +550,14 @@ impl ServerModulePlugin for Mint {
                     MintAuditItemKey::Redemption(_) => redemptions += amount,
                     MintAuditItemKey::RedemptionTotal => redemptions += amount,
                 }
-                dbtx.remove_entry(&key).expect("DB Error");
-            });
+                key
+            })
+            .collect::<Vec<_>>();
+
+        for key in remove_audit_keys {
+            dbtx.remove_entry(&key).expect("DB Error");
+        }
+
         dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
             .expect("DB Error");
         dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
@@ -568,25 +567,20 @@ impl ServerModulePlugin for Mint {
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
-        let we_proposed = self
-            .db
-            .begin_transaction()
+        let dbtx = self.non_consensus_db.begin_transaction();
+        let we_proposed = dbtx
             .get_value(&ProposedPartialSignatureKey {
                 request_id: out_point,
             })
             .expect("DB error")
             .is_some();
-        let was_consensus_outcome = self
-            .db
-            .begin_transaction()
+        let was_consensus_outcome = dbtx
             .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix {
                 request_id: out_point,
             })
             .any(|res| res.is_ok());
 
-        let final_sig = self
-            .db
-            .begin_transaction()
+        let final_sig = dbtx
             .get_value(&OutputOutcomeKey(out_point))
             .expect("DB error");
 
@@ -600,12 +594,16 @@ impl ServerModulePlugin for Mint {
     }
 
     fn audit(&self, audit: &mut Audit) {
-        audit.add_items(&self.db, &MintAuditItemKeyPrefix, |k, v| match k {
-            MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
-            MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
-            MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
-            MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
-        });
+        audit.add_items(
+            &self.non_consensus_db.begin_transaction(),
+            &MintAuditItemKeyPrefix,
+            |k, v| match k {
+                MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
+                MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
+                MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
+                MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
+            },
+        );
     }
 
     fn api_base_name(&self) -> &'static str {
@@ -669,7 +667,7 @@ impl Mint {
             sec_key: cfg.tbs_sks,
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
-            db,
+            non_consensus_db: db,
         }
     }
 
@@ -824,9 +822,7 @@ impl Mint {
         output_id: OutPoint,
         partial_sig: PartialSigResponse,
     ) {
-        if self
-            .db
-            .begin_transaction()
+        if dbtx
             .get_value(&OutputOutcomeKey(output_id))
             .expect("DB error")
             .is_some()
