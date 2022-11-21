@@ -10,7 +10,7 @@ use thiserror::Error;
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///
 /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
 pub struct Transaction {
     /// [`Input`]s consumed by the transaction
     pub inputs: Vec<Input>,

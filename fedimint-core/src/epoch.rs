@@ -11,7 +11,7 @@ use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
 use crate::transaction::Transaction;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable, Serialize)]
 pub enum ConsensusItem {
     EpochInfo(EpochSignatureShare),
     Transaction(Transaction),
@@ -28,7 +28,7 @@ pub struct EpochSignatureShare(pub SignatureShare);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EpochSignature(pub Signature);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
 pub struct EpochHistory {
     pub outcome: OutcomeHistory,
     pub hash: Sha256,
@@ -37,7 +37,7 @@ pub struct EpochHistory {
 
 serde_module_encoding_wrapper!(SerdeEpochHistory, EpochHistory);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
 pub struct OutcomeHistory {
     pub epoch: u64,
     pub last_hash: Option<Sha256>,

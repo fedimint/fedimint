@@ -58,7 +58,7 @@ pub struct ContractUpdateKeyPrefix;
 impl DatabaseKeyPrefixConst for ContractUpdateKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate as u8;
     type Key = ContractUpdateKey;
-    type Value = OutputOutcome;
+    type Value = LightningOutputOutcome;
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]

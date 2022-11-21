@@ -118,7 +118,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl IDatabaseTransaction<'_> for RocksDbReadOnly {
     fn raw_insert_bytes(&mut self, _key: &[u8], _value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         panic!("Cannot insert into a read only transaction");

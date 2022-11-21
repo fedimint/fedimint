@@ -141,5 +141,5 @@ pub struct PegOutBitcoinTransactionPrefix;
 impl DatabaseKeyPrefixConst for PegOutBitcoinTransactionPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::PegOutBitcoinOutPoint as u8;
     type Key = PegOutBitcoinTransaction;
-    type Value = PegOutOutcome;
+    type Value = WalletOutputOutcome;
 }

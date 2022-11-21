@@ -259,7 +259,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         WalletRange::PegOutBitcoinTransactionPrefix,
                         WalletRange::PegOutBitcoinTransaction,
-                        fedimint_wallet::PegOutOutcome,
+                        fedimint_wallet::WalletOutputOutcome,
                         wallet,
                         "Peg Out Bitcoin Transaction"
                     );
@@ -353,7 +353,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         LightningRange::ContractUpdateKeyPrefix,
                         LightningRange::ContractUpdateKey,
-                        fedimint_ln::OutputOutcome,
+                        fedimint_ln::LightningOutputOutcome,
                         lightning,
                         "Contract Updates"
                     );
@@ -617,11 +617,16 @@ fn main() {
         .map(|s| s.to_string().to_lowercase())
         .collect::<Vec<String>>();
 
-    let read_only: DatabaseTransaction = RocksDbReadOnly::open_read_only(db_path).unwrap().into();
+    let read_only_res = RocksDbReadOnly::open_read_only(db_path);
+    if read_only_res.is_err() {
+        eprintln!("Error reading RocksDB database. Quitting...");
+        return;
+    }
+
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
     let mut dbdump = DatabaseDump {
         serialized,
-        read_only,
+        read_only: read_only_res.unwrap().into(),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == "All",
