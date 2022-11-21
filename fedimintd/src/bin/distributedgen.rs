@@ -118,7 +118,7 @@ async fn main() {
             password,
         } => {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
-            let (pk_bytes, nonce) = encrypted_read(&key, dir_out_path.join(TLS_PK));
+            let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK));
             let (server, client) = if let Ok(v) = run_dkg(
                 &dir_out_path,
                 denominations,
@@ -138,7 +138,7 @@ async fn main() {
 
             let server_path = dir_out_path.join(CONFIG_FILE);
             let config_bytes = serde_json::to_string(&server).unwrap().into_bytes();
-            encrypted_write(config_bytes, &key, nonce, server_path);
+            encrypted_write(config_bytes, &key, server_path);
 
             let client_path: PathBuf = dir_out_path.join("client.json");
             let client_file = fs::File::create(client_path).expect("Could not create cfg file");
@@ -213,7 +213,7 @@ fn gen_tls(
     key: &LessSafeKey,
 ) -> String {
     let (cert, pk) = fedimint_server::config::gen_cert_and_key(&name).expect("TLS gen failed");
-    encrypted_write(pk.0, key, zero_nonce(), dir_out_path.join(TLS_PK));
+    encrypted_write(pk.0, key, dir_out_path.join(TLS_PK));
 
     rustls::ServerName::try_from(name.as_str()).expect("Valid DNS name");
     // TODO Base64 encode name, hash fingerprint cert_string
