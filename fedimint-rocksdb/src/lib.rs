@@ -51,7 +51,7 @@ impl IDatabase for RocksDb {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.0.get(key).unwrap();

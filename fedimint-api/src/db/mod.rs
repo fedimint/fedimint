@@ -96,7 +96,7 @@ dyn_newtype_define! {
 /// | MemoryDB | Prevented          | Prevented  | Prevented           | Prevented      | Possible    |
 /// | SledDB   | Prevented          | Prevented  | Possible            | Possible       | Possible    |
 /// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
-#[async_trait(?Send)]
+#[async_trait]
 pub trait IDatabaseTransaction<'a>: 'a + Send {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
