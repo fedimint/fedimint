@@ -43,5 +43,30 @@ async fn test_gateway_authentication() -> Result<()> {
     assert_eq!(client.get_info(gw_password).await?.status(), 200);
     assert_eq!(client.get_info("getinfo".to_string()).await?.status(), 401);
 
+    // TODO:
+    // Test gateway authentication on `get_balance` function
+    // *  `get_balance` with correct password succeeds
+    // *  `get_balance` with incorrect password fails
+
+    // TODO:
+    // Test gateway authentication on `get_deposit_address` function
+    // *  `get_deposit_address` with correct password succeeds
+    // *  `get_deposit_address` with incorrect password fails
+
+    // TODO:
+    // Test gateway authentication on `deposit` function
+    // *  `deposit` with correct password succeeds
+    // *  `deposit` with incorrect password fails
+
+    // TODO:
+    // Test gateway authentication on `withdraw` function
+    // *  `withdraw` with correct password succeeds
+    // *  `withdraw` with incorrect password fails
+
+    // TODO:
+    // Test gateway authentication on `register_federation` function
+    // *  `register_federation` with correct password succeeds
+    // *  `register_federation` with incorrect password fails
+
     task_group.shutdown_join_all().await
 }
