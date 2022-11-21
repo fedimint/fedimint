@@ -171,6 +171,7 @@ impl FedimintServer {
             };
 
             for outcome in outcomes {
+                info!("{}", consensus::debug::epoch_message(&outcome));
                 self.consensus.process_consensus_outcome(outcome).await;
             }
         }
@@ -280,13 +281,6 @@ impl FedimintServer {
     ) -> Cancellable<(Vec<PeerMessage>, u64)> {
         let mut msg_buffer: Vec<PeerMessage> = vec![];
 
-        self.connections
-            .send(
-                &Target::AllExcept(BTreeSet::new()).peers(&self.peers),
-                EpochMessage::RejoinRequest,
-            )
-            .await?;
-
         let mut consensus_peers = BTreeMap::<PeerId, u64>::new();
         let pks = self.cfg.epoch_pk_set.public_key();
         // last signed epoch is at most 3 epochs before the next epoch + faulty nodes because
@@ -304,6 +298,13 @@ impl FedimintServer {
         consensus_peers.insert(self.cfg.identity, next_epoch);
 
         loop {
+            self.connections
+                .send(
+                    &Target::AllExcept(consensus_peers.keys().cloned().collect())
+                        .peers(&self.peers),
+                    EpochMessage::RejoinRequest,
+                )
+                .await?;
             // if a threshold of peers agree on an epoch, go with that
             for epoch in consensus_peers.values() {
                 if consensus_peers.values().filter(|e| *e == epoch).count() >= threshold {
