@@ -25,7 +25,7 @@ use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
 use thiserror::Error;
 use tokio::sync::Notify;
-use tracing::{debug, error, info, info_span, instrument, trace, warn};
+use tracing::{debug, error, info_span, instrument, trace, warn};
 
 use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
@@ -219,7 +219,6 @@ impl FedimintConsensus {
 
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     pub async fn process_consensus_outcome(&self, consensus_outcome: ConsensusOutcome) {
-        info!("{}", debug::epoch_message(&consensus_outcome));
         let epoch = consensus_outcome.epoch;
         let epoch_peers: HashSet<PeerId> =
             consensus_outcome.contributions.keys().copied().collect();
