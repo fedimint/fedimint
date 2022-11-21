@@ -341,7 +341,7 @@
             password,
         } =&gt; {
             <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
-            <span class="kw">let </span>(pk_bytes, nonce) = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK));
+            <span class="kw">let </span>pk_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK));
             <span class="kw">let </span>(server, client) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = run_dkg(
                 <span class="kw-2">&amp;</span>dir_out_path,
                 denominations,
@@ -361,7 +361,7 @@
 
             <span class="kw">let </span>server_path = dir_out_path.join(CONFIG_FILE);
             <span class="kw">let </span>config_bytes = serde_json::to_string(<span class="kw-2">&amp;</span>server).unwrap().into_bytes();
-            encrypted_write(config_bytes, <span class="kw-2">&amp;</span>key, nonce, server_path);
+            encrypted_write(config_bytes, <span class="kw-2">&amp;</span>key, server_path);
 
             <span class="kw">let </span>client_path: PathBuf = dir_out_path.join(<span class="string">&quot;client.json&quot;</span>);
             <span class="kw">let </span>client_file = fs::File::create(client_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
@@ -436,7 +436,7 @@
     key: <span class="kw-2">&amp;</span>LessSafeKey,
 ) -&gt; String {
     <span class="kw">let </span>(cert, pk) = fedimint_server::config::gen_cert_and_key(<span class="kw-2">&amp;</span>name).expect(<span class="string">&quot;TLS gen failed&quot;</span>);
-    encrypted_write(pk.<span class="number">0</span>, key, zero_nonce(), dir_out_path.join(TLS_PK));
+    encrypted_write(pk.<span class="number">0</span>, key, dir_out_path.join(TLS_PK));
 
     rustls::ServerName::try_from(name.as_str()).expect(<span class="string">&quot;Valid DNS name&quot;</span>);
     <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string

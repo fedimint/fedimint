@@ -81,17 +81,6 @@
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Encrypt and authenticate data stored on the filesystem with a user-supplied password.
 ///
 /// We encrypt the configs to prevent attackers from learning the private keys if they gain
@@ -124,26 +113,28 @@
 <span class="kw">pub const </span>TLS_PK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-pk&quot;</span>;
 <span class="kw">pub const </span>TLS_CERT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-cert&quot;</span>;
 
-<span class="doccomment">/// Write `data` encrypted to a `file` with an unused `nonce` that will be encoded in the file
-</span><span class="kw">pub fn </span>encrypted_write(<span class="kw-2">mut </span>data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, nonce: Nonce, file: PathBuf) {
-    <span class="kw">let </span><span class="kw-2">mut </span>bytes = nonce.as_ref().to_vec();
+<span class="doccomment">/// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
+</span><span class="kw">pub fn </span>encrypted_write(<span class="kw-2">mut </span>data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) {
+    <span class="kw">let </span>nonce_bytes: [u8; NONCE_LEN] = rand::random();
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = nonce_bytes.to_vec();
+    <span class="kw">let </span>nonce = Nonce::assume_unique_for_key(nonce_bytes);
     key.seal_in_place_append_tag(nonce, Aad::empty(), <span class="kw-2">&amp;mut </span>data)
         .expect(<span class="string">&quot;encrypted&quot;</span>);
     bytes.append(<span class="kw-2">&amp;mut </span>data);
     fs::write(file, <span class="kw-2">&amp;</span>hex::encode(bytes)).expect(<span class="string">&quot;Can&#39;t write file.&quot;</span>);
 }
 
-<span class="doccomment">/// Reads encrypted data from a file, returns an incremented nonce for encrypting the next file
-</span><span class="kw">pub fn </span>encrypted_read(key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; (Vec&lt;u8&gt;, Nonce) {
+<span class="doccomment">/// Reads encrypted data from a file
+</span><span class="kw">pub fn </span>encrypted_read(key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; Vec&lt;u8&gt; {
     <span class="kw">let </span>hex = fs::read_to_string(file).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>bytes = hex::decode(hex).expect(<span class="string">&quot;not hex encoded&quot;</span>);
     <span class="kw">let </span>(nonce_bytes, encrypted_bytes) = bytes.split_at_mut(NONCE_LEN);
-    <span class="kw">let </span>(nonce, incremented) = increment_nonce(nonce_bytes);
+    <span class="kw">let </span>nonce = Nonce::assume_unique_for_key(nonce_bytes.try_into().expect(<span class="string">&quot;right len&quot;</span>));
     key.open_in_place(nonce, Aad::empty(), encrypted_bytes)
         .expect(<span class="string">&quot;decrypts&quot;</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>encrypted_bytes = encrypted_bytes.to_vec();
     encrypted_bytes.truncate(encrypted_bytes.len() - key.algorithm().tag_len());
-    (encrypted_bytes, incremented)
+    encrypted_bytes
 }
 
 <span class="kw">pub fn </span>get_key(password: <span class="prelude-ty">Option</span>&lt;String&gt;, salt_path: PathBuf) -&gt; LessSafeKey {
@@ -172,19 +163,6 @@
     );
     <span class="kw">let </span>key = UnboundKey::new(<span class="kw-2">&amp;</span>aead::CHACHA20_POLY1305, <span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;created key&quot;</span>);
     LessSafeKey::new(key)
-}
-
-<span class="doccomment">/// returns a nonce from bytes and an incremented nonce for encrpyting the next message
-</span><span class="kw">fn </span>increment_nonce(nonce: <span class="kw-2">&amp;</span>[u8]) -&gt; (Nonce, Nonce) {
-    <span class="kw">let </span><span class="kw-2">mut </span>bytes = nonce.to_vec();
-    bytes[<span class="number">0</span>] += <span class="number">1</span>;
-    <span class="kw">let </span>n1 = Nonce::assume_unique_for_key(nonce.try_into().expect(<span class="string">&quot;right len&quot;</span>));
-    <span class="kw">let </span>n2 = Nonce::assume_unique_for_key(bytes.try_into().expect(<span class="string">&quot;right len&quot;</span>));
-    (n1, n2)
-}
-
-<span class="kw">pub fn </span>zero_nonce() -&gt; Nonce {
-    Nonce::assume_unique_for_key([<span class="number">0</span>; NONCE_LEN])
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (a28f3c88e 2022-11-20)" data-search-js="search-df80cc3cb87b6482.js" data-settings-js="settings-7e1cf5cc683233f7.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
