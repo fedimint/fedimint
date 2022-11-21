@@ -51,7 +51,7 @@ use crate::db::{
 pub mod config;
 
 mod common;
-mod db;
+pub mod db;
 
 /// Data structures taking into account different amount tiers
 

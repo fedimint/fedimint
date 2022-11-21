@@ -1,14 +1,22 @@
 use bitcoin::Script;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
+use serde::Serialize;
+use strum_macros::EnumIter;
 
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     PegIn = 0x22,
 }
 
-#[derive(Debug, Clone, Encodable, Decodable)]
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct PegInKey {
     pub peg_in_script: Script,
 }
@@ -19,7 +27,7 @@ impl DatabaseKeyPrefixConst for PegInKey {
     type Value = [u8; 32]; // TODO: introduce newtype
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encodable, Decodable)]
 pub struct PegInPrefixKey;
 
 impl DatabaseKeyPrefixConst for PegInPrefixKey {

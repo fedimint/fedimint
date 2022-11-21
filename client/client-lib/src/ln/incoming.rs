@@ -5,6 +5,7 @@ use fedimint_core::modules::ln::contracts::incoming::IncomingContract;
 use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
 use fedimint_core::modules::ln::LightningInput;
 use lightning_invoice::Invoice;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct IncomingContractAccount {
@@ -30,6 +31,15 @@ pub struct ConfirmedInvoice {
     pub invoice: Invoice,
     /// Keypair that will be able to sweep contract once it has received payment
     pub keypair: KeyPair,
+}
+
+impl Serialize for ConfirmedInvoice {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.invoice.to_string().as_str())
+    }
 }
 
 impl ConfirmedInvoice {

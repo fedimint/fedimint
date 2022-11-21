@@ -741,6 +741,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "docopt"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f3f119846c823f9eafcf953a8f6ffb6ed69bf6240883261a7f13b634579a51f"
+dependencies = [
+ "lazy_static",
+ "regex",
+ "serde",
+ "strsim",
+]
+
+[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -766,6 +778,15 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "erased-serde"
+version = "0.3.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54558e0ba96fbe24280072642eceb9d7d442e32c7ec0ea9e7ecd7b4ea2cf4e11"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -907,6 +928,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-dbdump"
+version = "0.1.0"
+dependencies = [
+ "docopt",
+ "erased-serde",
+ "fedimint-api",
+ "fedimint-core",
+ "fedimint-ln",
+ "fedimint-mint",
+ "fedimint-rocksdb",
+ "fedimint-server",
+ "fedimint-wallet",
+ "mint-client",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
 name = "fedimint-derive"
 version = "0.1.0"
 dependencies = [
@@ -935,6 +977,8 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
  "test-log",
  "thiserror",
  "threshold_crypto",
@@ -960,6 +1004,8 @@ dependencies = [
  "rayon",
  "secp256k1-zkp",
  "serde",
+ "strum",
+ "strum_macros",
  "tbs",
  "test-log",
  "thiserror",
@@ -1009,6 +1055,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
+ "strum",
+ "strum_macros",
  "tbs",
  "test-log",
  "thiserror",
@@ -1100,6 +1148,8 @@ dependencies = [
  "rand",
  "secp256k1",
  "serde",
+ "strum",
+ "strum_macros",
  "test-log",
  "thiserror",
  "tokio",
@@ -2251,6 +2301,8 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
  "tbs",
  "tempfile",
  "test-log",
@@ -2986,6 +3038,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustversion"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97477e48b4cf8603ad5f7aaf897467cf42ab4218a38ef76fb14c2d6773a6d6a8"
+
+[[package]]
 name = "ryu"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3260,6 +3318,25 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
+
+[[package]]
+name = "strum"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
+
+[[package]]
+name = "strum_macros"
+version = "0.24.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e385be0d24f186b4ce2f9982191e7101bb737312ad61c1f2f984f34bcf85d59"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote 1.0.21",
+ "rustversion",
+ "syn 1.0.103",
+]
 
 [[package]]
 name = "subtle"

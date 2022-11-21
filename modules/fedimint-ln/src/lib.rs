@@ -13,7 +13,7 @@ extern crate core;
 mod common;
 pub mod config;
 pub mod contracts;
-mod db;
+pub mod db;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Sub;
