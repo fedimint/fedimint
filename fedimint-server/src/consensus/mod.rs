@@ -1,6 +1,5 @@
 #![allow(clippy::let_unit_value)]
 
-mod conflictfilter;
 pub mod debug;
 mod interconnect;
 
@@ -29,7 +28,6 @@ use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 
 use crate::config::ServerConfig;
-use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
@@ -254,32 +252,10 @@ impl FedimintConsensus {
 
         // Process transactions
         {
-            // Since the changes to the database will happen all at once we won't be able to handle
-            // conflicts between consensus items in one batch there. Thus we need to make sure that
-            // all items in a batch are consistent/deterministically filter out inconsistent ones.
-            // There are two item types that need checking:
-            //  * peg-ins that each peg-in tx is only used to issue coins once
-            //  * coin spends to avoid double spends in one batch
-            //  * only one peg-out allowed per epoch
-            let (ok_tx, err_tx) = transaction_cis
-                .into_iter()
-                .filter_conflicts(|(_, tx)| tx)
-                .partitioned();
-
             let mut dbtx = self.db.begin_transaction();
 
-            for transaction in err_tx {
-                dbtx.insert_entry(
-                    &RejectedTransactionKey(transaction.tx_hash()),
-                    &format!("{:?}", TransactionSubmissionError::TransactionConflictError),
-                )
-                .expect("DB Error");
-                dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
-                    .expect("DB Error");
-            }
-
-            let caches = self.build_verification_caches(ok_tx.iter());
-            for transaction in ok_tx {
+            let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
+            for (_, transaction) in transaction_cis {
                 let span = info_span!("Processing transaction");
                 // in_scope to make sure that no await is in the middle of the span
                 let _enter = span.in_scope(|| {
@@ -287,6 +263,7 @@ impl FedimintConsensus {
                     dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
                         .expect("DB Error");
 
+                    dbtx.set_tx_savepoint();
                     // TODO: use borrowed transaction
                     match self.process_transaction(&mut dbtx, transaction.clone(), &caches) {
                         Ok(()) => {
