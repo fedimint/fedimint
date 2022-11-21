@@ -622,7 +622,6 @@
 <a href="#622" id="622">622</a>
 <a href="#623" id="623">623</a>
 <a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -1057,6 +1056,7 @@
     }
 
     <span class="kw">pub fn </span>gen_params(
+        bind_address: String,
         key: rustls::PrivateKey,
         our_id: PeerId,
         amount_tiers: Vec&lt;Amount&gt;,
@@ -1083,9 +1083,9 @@
 
         ServerConfigParams {
             tls,
-            hbbft: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">0</span>, peers),
-            api: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">1</span>, peers),
-            server_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">2</span>, peers),
+            hbbft: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">0</span>, peers),
+            api: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">1</span>, peers),
+            server_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">2</span>, peers),
             amount_tiers,
             federation_name,
             bitcoind_rpc,
@@ -1094,17 +1094,14 @@
     }
 
     <span class="kw">fn </span>gen_network(
+        bind_address: <span class="kw-2">&amp;</span>str,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         offset: u16,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
     ) -&gt; NetworkConfig {
         NetworkConfig {
             identity: <span class="kw-2">*</span>our_id,
-            bind_addr: <span class="macro">format!</span>(
-                <span class="string">&quot;{}:{}&quot;</span>,
-                peers[our_id].address,
-                peers[our_id].base_port + offset
-            ),
+            bind_addr: <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, bind_address, peers[our_id].base_port + offset),
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
@@ -1150,6 +1147,7 @@
             .iter()
             .map(|peer| {
                 <span class="kw">let </span>params: ServerConfigParams = <span class="self">Self</span>::gen_params(
+                    <span class="string">&quot;127.0.0.1&quot;</span>.to_string(),
                     keys[peer].<span class="number">1</span>.clone(),
                     <span class="kw-2">*</span>peer,
                     amount_tiers.clone(),

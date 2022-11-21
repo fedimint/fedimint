@@ -221,6 +221,15 @@
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -257,9 +266,9 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
         </span>dir_out_path: PathBuf,
 
-        <span class="doccomment">/// Our external address
-        </span><span class="attr">#[arg(long = <span class="string">&quot;address&quot;</span>, default_value = <span class="string">&quot;127.0.0.1&quot;</span>)]
-        </span>address: String,
+        <span class="doccomment">/// Our external address to announce to peers in our connection string
+        </span><span class="attr">#[arg(long = <span class="string">&quot;announce-address&quot;</span>)]
+        </span>announce_address: String,
 
         <span class="doccomment">/// Our base port, ports may be used from base_port to base_port+10
         </span><span class="attr">#[arg(long = <span class="string">&quot;base-port&quot;</span>, default_value = <span class="string">&quot;4000&quot;</span>)]
@@ -286,6 +295,10 @@
         <span class="doccomment">/// Comma-separated list of connection certs from all peers (including ours)
         </span><span class="attr">#[arg(long = <span class="string">&quot;certs&quot;</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
         </span>certs: Vec&lt;String&gt;,
+
+        <span class="doccomment">/// Address we bind to for running key gen
+        </span><span class="attr">#[arg(long = <span class="string">&quot;bind_address&quot;</span>, default_value = <span class="string">&quot;127.0.0.1&quot;</span>)]
+        </span>bind_address: String,
 
         <span class="doccomment">/// `bitcoind` json rpc endpoint
         </span><span class="attr">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:18443&quot;</span>)]
@@ -321,7 +334,7 @@
     <span class="kw">match </span>command {
         Command::CreateCert {
             dir_out_path,
-            address,
+            announce_address,
             base_port,
             name,
             password,
@@ -329,13 +342,14 @@
             <span class="kw">let </span>salt: [u8; <span class="number">16</span>] = rand::random();
             fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect(<span class="string">&quot;write error&quot;</span>);
             <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
-            <span class="kw">let </span>config_str = gen_tls(<span class="kw-2">&amp;</span>dir_out_path, address, base_port, name, <span class="kw-2">&amp;</span>key);
+            <span class="kw">let </span>config_str = gen_tls(<span class="kw-2">&amp;</span>dir_out_path, announce_address, base_port, name, <span class="kw-2">&amp;</span>key);
             <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, config_str);
         }
         Command::Run {
             dir_out_path,
             federation_name,
             certs,
+            bind_address,
             bitcoind_rpc,
             denominations,
             password,
@@ -343,6 +357,7 @@
             <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
             <span class="kw">let </span>pk_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK));
             <span class="kw">let </span>(server, client) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = run_dkg(
+                bind_address,
                 <span class="kw-2">&amp;</span>dir_out_path,
                 denominations,
                 federation_name,
@@ -373,7 +388,9 @@
     }
 }
 
-<span class="kw">async fn </span>run_dkg(
+<span class="attr">#[allow(clippy::too_many_arguments)]
+</span><span class="kw">async fn </span>run_dkg(
+    bind_address: String,
     dir_out_path: <span class="kw-2">&amp;</span>Path,
     denominations: Vec&lt;Amount&gt;,
     federation_name: String,
@@ -398,6 +415,7 @@
         .map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer)
         .expect(<span class="string">&quot;could not find our cert among peers&quot;</span>);
     <span class="kw">let </span>params = ServerConfigParams::gen_params(
+        bind_address,
         pk,
         our_id,
         denominations,
