@@ -19,7 +19,7 @@ clap = { version = "4.0.26", features = ["derive"] }
 fedimint-server = { path = "../../fedimint-server/" }
 ln-gateway = { path= "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
-reqwest = { version = "0.11.12", features = [ "json" ], default-features = false }
+reqwest = { version = "0.11.13", features = [ "json" ], default-features = false }
 rpassword = "7.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.86"
