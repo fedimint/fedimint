@@ -562,6 +562,7 @@
 <a href="#562" id="562">562</a>
 <a href="#563" id="563">563</a>
 <a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -735,6 +736,7 @@
             };
 
             <span class="kw">for </span>outcome <span class="kw">in </span>outcomes {
+                <span class="macro">info!</span>(<span class="string">&quot;{}&quot;</span>, consensus::debug::epoch_message(<span class="kw-2">&amp;</span>outcome));
                 <span class="self">self</span>.consensus.process_consensus_outcome(outcome).<span class="kw">await</span>;
             }
         }
@@ -844,13 +846,6 @@
     ) -&gt; Cancellable&lt;(Vec&lt;PeerMessage&gt;, u64)&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>msg_buffer: Vec&lt;PeerMessage&gt; = <span class="macro">vec!</span>[];
 
-        <span class="self">self</span>.connections
-            .send(
-                <span class="kw-2">&amp;</span>Target::AllExcept(BTreeSet::new()).peers(<span class="kw-2">&amp;</span><span class="self">self</span>.peers),
-                EpochMessage::RejoinRequest,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
         <span class="kw">let </span><span class="kw-2">mut </span>consensus_peers = BTreeMap::&lt;PeerId, u64&gt;::new();
         <span class="kw">let </span>pks = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
         <span class="comment">// last signed epoch is at most 3 epochs before the next epoch + faulty nodes because
@@ -868,6 +863,13 @@
         consensus_peers.insert(<span class="self">self</span>.cfg.identity, next_epoch);
 
         <span class="kw">loop </span>{
+            <span class="self">self</span>.connections
+                .send(
+                    <span class="kw-2">&amp;</span>Target::AllExcept(consensus_peers.keys().cloned().collect())
+                        .peers(<span class="kw-2">&amp;</span><span class="self">self</span>.peers),
+                    EpochMessage::RejoinRequest,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="comment">// if a threshold of peers agree on an epoch, go with that
             </span><span class="kw">for </span>epoch <span class="kw">in </span>consensus_peers.values() {
                 <span class="kw">if </span>consensus_peers.values().filter(|e| <span class="kw-2">*</span>e == epoch).count() &gt;= threshold {
