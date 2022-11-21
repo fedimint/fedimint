@@ -34,9 +34,9 @@ enum Command {
         #[arg(long = "out-dir")]
         dir_out_path: PathBuf,
 
-        /// Our external address
-        #[arg(long = "address", default_value = "127.0.0.1")]
-        address: String,
+        /// Our external address to announce to peers in our connection string
+        #[arg(long = "announce-address")]
+        announce_address: String,
 
         /// Our base port, ports may be used from base_port to base_port+10
         #[arg(long = "base-port", default_value = "4000")]
@@ -63,6 +63,10 @@ enum Command {
         /// Comma-separated list of connection certs from all peers (including ours)
         #[arg(long = "certs", value_delimiter = ',')]
         certs: Vec<String>,
+
+        /// Address we bind to for running key gen
+        #[arg(long = "bind_address", default_value = "127.0.0.1")]
+        bind_address: String,
 
         /// `bitcoind` json rpc endpoint
         #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
@@ -98,7 +102,7 @@ async fn main() {
     match command {
         Command::CreateCert {
             dir_out_path,
-            address,
+            announce_address,
             base_port,
             name,
             password,
@@ -106,13 +110,14 @@ async fn main() {
             let salt: [u8; 16] = rand::random();
             fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect("write error");
             let key = get_key(password, dir_out_path.join(SALT_FILE));
-            let config_str = gen_tls(&dir_out_path, address, base_port, name, &key);
+            let config_str = gen_tls(&dir_out_path, announce_address, base_port, name, &key);
             println!("{}", config_str);
         }
         Command::Run {
             dir_out_path,
             federation_name,
             certs,
+            bind_address,
             bitcoind_rpc,
             denominations,
             password,
@@ -120,6 +125,7 @@ async fn main() {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
             let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK));
             let (server, client) = if let Ok(v) = run_dkg(
+                bind_address,
                 &dir_out_path,
                 denominations,
                 federation_name,
@@ -150,7 +156,9 @@ async fn main() {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_dkg(
+    bind_address: String,
     dir_out_path: &Path,
     denominations: Vec<Amount>,
     federation_name: String,
@@ -175,6 +183,7 @@ async fn run_dkg(
         .map(|(peer, _)| *peer)
         .expect("could not find our cert among peers");
     let params = ServerConfigParams::gen_params(
+        bind_address,
         pk,
         our_id,
         denominations,
