@@ -382,7 +382,7 @@ mod tests {
                 .mint
                 .lock()
                 .await
-                .fetch_from_all(|m, _| m.get_contract_account(contract))
+                .fetch_from_all(|m, db| m.get_contract_account(&db.begin_transaction(), contract))
                 .unwrap())
         }
 
