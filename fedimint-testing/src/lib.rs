@@ -88,10 +88,11 @@ where
     }
 
     pub fn verify_output(&self, output: &Module::Output) -> bool {
-        let results = self
-            .members
-            .iter()
-            .map(|(_, member, _)| member.validate_output(output).is_err());
+        let results = self.members.iter().map(|(_, member, db)| {
+            member
+                .validate_output(&db.begin_transaction(), output)
+                .is_err()
+        });
         assert_all_equal(results)
     }
 
@@ -182,9 +183,13 @@ where
     pub fn fetch_from_all<O, F>(&mut self, fetch: F) -> O
     where
         O: Debug + Eq,
-        F: Fn(&mut Module) -> O,
+        F: Fn(&mut Module, &Database) -> O,
     {
-        assert_all_equal(self.members.iter_mut().map(|(_, member, _)| fetch(member)))
+        assert_all_equal(
+            self.members
+                .iter_mut()
+                .map(|(_, member, db)| fetch(member, db)),
+        )
     }
 }
 

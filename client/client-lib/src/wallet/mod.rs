@@ -410,7 +410,7 @@ mod tests {
         let wallet_value = fed
             .lock()
             .await
-            .fetch_from_all(|wallet| wallet.get_wallet_value());
+            .fetch_from_all(|wallet, db| wallet.get_wallet_value(&db.begin_transaction()));
         assert_eq!(wallet_value, bitcoin::Amount::from_sat(0));
 
         // test change recognition, wallet should hold some sats
@@ -421,7 +421,7 @@ mod tests {
         let wallet_value = fed
             .lock()
             .await
-            .fetch_from_all(|wallet| wallet.get_wallet_value());
+            .fetch_from_all(|wallet, db| wallet.get_wallet_value(&db.begin_transaction()));
         assert!(wallet_value > bitcoin::Amount::from_sat(0));
     }
 }
