@@ -72,9 +72,6 @@ jobs:
       - name: CLI Tests
         run: nix build -L .#debug.cli-test.cli
 
-      - name: Clientd and clientd-cli tests
-        run: nix build -L .#debug.cli-test.clientd
-
       - name: Integration Tests (no fixtures)
         run: nix build -L .#debug.cli-test.rust-tests
 

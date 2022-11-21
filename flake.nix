@@ -429,11 +429,6 @@
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";
         });
 
-        cliTestClientd = craneLib.cargoBuild (commonCliTestArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/clientd-tests.sh";
-        });
-
         cliRustTests = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
@@ -579,7 +574,6 @@
           name = "fedimint-cli";
           bin = "fedimint-cli";
           dirs = [
-            "client/clientd"
             "client/client-lib"
             "client/cli"
             "crypto/tbs"
@@ -620,33 +614,11 @@
           ];
         };
 
-        clientd = pkg {
-          name = "clientd";
-          bin = "clientd";
-          dirs = [
-            "client/cli"
-            "client/client-lib"
-            "client/clientd"
-            "crypto/tbs"
-            "crypto/hkdf"
-            "fedimint-api"
-            "fedimint-core"
-            "fedimint-derive"
-            "fedimint-dbdump"
-            "fedimint-rocksdb"
-            "fedimint-build"
-            "modules/fedimint-ln"
-            "modules/fedimint-mint"
-            "modules/fedimint-wallet"
-          ];
-        };
-
         fedimint-tests = pkg {
           name = "fedimint-tests";
           dirs = [
             "client/cli"
             "client/client-lib"
-            "client/clientd"
             "crypto/tbs"
             "crypto/hkdf"
             "gateway/ln-gateway"
@@ -718,7 +690,7 @@
         outputsPackages = {
           default = fedimintd;
 
-          inherit fedimintd ln-gateway gateway-cli clientd fedimint-cli fedimint-tests;
+          inherit fedimintd ln-gateway gateway-cli fedimint-cli fedimint-tests;
 
         };
       in
@@ -755,7 +727,6 @@
             reconnect = cliTestReconnect;
             latency = cliTestLatency;
             cli = cliTestCli;
-            clientd = cliTestClientd;
             rust-tests = cliRustTests;
           };
 
