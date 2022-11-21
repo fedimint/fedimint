@@ -30,26 +30,28 @@ pub const DB_FILE: &str = "database";
 pub const TLS_PK: &str = "tls-pk";
 pub const TLS_CERT: &str = "tls-cert";
 
-/// Write `data` encrypted to a `file` with an unused `nonce` that will be encoded in the file
-pub fn encrypted_write(mut data: Vec<u8>, key: &LessSafeKey, nonce: Nonce, file: PathBuf) {
-    let mut bytes = nonce.as_ref().to_vec();
+/// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
+pub fn encrypted_write(mut data: Vec<u8>, key: &LessSafeKey, file: PathBuf) {
+    let nonce_bytes: [u8; NONCE_LEN] = rand::random();
+    let mut bytes = nonce_bytes.to_vec();
+    let nonce = Nonce::assume_unique_for_key(nonce_bytes);
     key.seal_in_place_append_tag(nonce, Aad::empty(), &mut data)
         .expect("encrypted");
     bytes.append(&mut data);
     fs::write(file, &hex::encode(bytes)).expect("Can't write file.");
 }
 
-/// Reads encrypted data from a file, returns an incremented nonce for encrypting the next file
-pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> (Vec<u8>, Nonce) {
+/// Reads encrypted data from a file
+pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Vec<u8> {
     let hex = fs::read_to_string(file).expect("Can't read file.");
     let mut bytes = hex::decode(hex).expect("not hex encoded");
     let (nonce_bytes, encrypted_bytes) = bytes.split_at_mut(NONCE_LEN);
-    let (nonce, incremented) = increment_nonce(nonce_bytes);
+    let nonce = Nonce::assume_unique_for_key(nonce_bytes.try_into().expect("right len"));
     key.open_in_place(nonce, Aad::empty(), encrypted_bytes)
         .expect("decrypts");
     let mut encrypted_bytes = encrypted_bytes.to_vec();
     encrypted_bytes.truncate(encrypted_bytes.len() - key.algorithm().tag_len());
-    (encrypted_bytes, incremented)
+    encrypted_bytes
 }
 
 pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
@@ -78,17 +80,4 @@ pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
     );
     let key = UnboundKey::new(&aead::CHACHA20_POLY1305, &key).expect("created key");
     LessSafeKey::new(key)
-}
-
-/// returns a nonce from bytes and an incremented nonce for encrpyting the next message
-fn increment_nonce(nonce: &[u8]) -> (Nonce, Nonce) {
-    let mut bytes = nonce.to_vec();
-    bytes[0] += 1;
-    let n1 = Nonce::assume_unique_for_key(nonce.try_into().expect("right len"));
-    let n2 = Nonce::assume_unique_for_key(bytes.try_into().expect("right len"));
-    (n1, n2)
-}
-
-pub fn zero_nonce() -> Nonce {
-    Nonce::assume_unique_for_key([0; NONCE_LEN])
 }

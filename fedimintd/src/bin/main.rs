@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
 
     let salt_path = opts.cfg_path.join(SALT_FILE);
     let key = get_key(opts.password, salt_path);
-    let (decrypted, _) = encrypted_read(&key, opts.cfg_path.join(CONFIG_FILE));
+    let decrypted = encrypted_read(&key, opts.cfg_path.join(CONFIG_FILE));
     let cfg_string = String::from_utf8(decrypted).expect("is not correctly encoded");
     let cfg: ServerConfig = serde_json::from_str(&cfg_string).expect("could not parse config");
 
