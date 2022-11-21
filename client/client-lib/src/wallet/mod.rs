@@ -344,6 +344,11 @@ mod tests {
             context: &client_context,
         };
 
+        // Set fees low forever
+        btc_rpc
+            .set_fee_rate(Some(Feerate { sats_per_kvb: 0 }))
+            .await;
+
         // generate fake UTXO
         fed.lock()
             .await
