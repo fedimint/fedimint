@@ -51,7 +51,7 @@ jsonrpsee-wasm-client = "0.16.0"
 
 [dev-dependencies]
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
-tokio = { version = "1.21.2", features = ["full"] }
+tokio = { version = "1.22.0", features = ["full"] }
 tempfile = "3.3.0"
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }

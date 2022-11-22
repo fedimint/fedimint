@@ -23,7 +23,7 @@ reqwest = { version = "0.11.13", features = [ "json" ], default-features = false
 rpassword = "7.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.86"
-tokio = {version = "1.21", features = ["full"]}
+tokio = {version = "1.22", features = ["full"]}
 tracing = { version = "0.1.37", default-features = false, features= ["log", "attributes", "std"] }
 url = { version = "2.3.1", features = ["serde"] }
 

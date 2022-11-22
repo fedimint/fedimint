@@ -40,7 +40,7 @@ gloo-timers = { version = "0.2.4", features = ["futures"] }
 wasm-bindgen-futures = "0.4.33"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { version = "1.21.2", features = ["rt", "rt-multi-thread", "sync", "time", "signal"] }
+tokio = { version = "1.22.0", features = ["rt", "rt-multi-thread", "sync", "time", "signal"] }
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
