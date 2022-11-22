@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, PeerId};
@@ -140,9 +142,14 @@ impl DatabaseKeyPrefixConst for MintAuditItemKeyPrefix {
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]
 pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
 
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct EcashBackupValue {
+    pub timestamp: SystemTime,
+    pub data: Vec<u8>,
+}
 impl DatabaseKeyPrefixConst for EcashBackupKey {
     const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
     type Key = Self;
     // timestamp, payload
-    type Value = (u64, Vec<u8>);
+    type Value = EcashBackupValue;
 }

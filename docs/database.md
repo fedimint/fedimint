@@ -37,6 +37,7 @@ The Database is split into different key spaces based on prefixing that can be u
 | ReceivedPartialSig | `0x12` | mint outpoint (40 bytes), peer (2 bytes)            | blind signature share |
 | OutputOutcome      | `0x13` | mint outpoint (40 bytes)                            | blind signature       |
 | MintAuditItem      | `0x14` | AuditItem                                           | Amount                |
+| EcashBackup        | `0x15` | backup id (public key)                              | ts + encrypted data   |
 
 ### Wallet
 

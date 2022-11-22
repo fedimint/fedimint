@@ -5,7 +5,7 @@ use std::ops::Sub;
 
 use async_trait::async_trait;
 use config::{FeeConsensus, MintClientConfig};
-use db::EcashBackupKey;
+use db::{EcashBackupKey, EcashBackupValue};
 use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
@@ -33,6 +33,7 @@ use impl_tools::autoimpl;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use rayon::iter::{ParallelBridge, ParallelIterator};
+use secp256k1_zkp::SECP256K1;
 use serde::{Deserialize, Serialize};
 use tbs::{
     combine_valid_shares, dealer_keygen, sign_blinded_msg, verify_blind_share, Aggregatable,
@@ -651,27 +652,30 @@ impl ServerModulePlugin for Mint {
 impl Mint {
     async fn handle_backup_request(&self, request: SignedBackupRequest) -> Result<(), ApiError> {
         let request = request
-            .verify_valid()
+            .verify_valid(SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
 
-        if let Some((prev_ts, _prev_payload)) = self
+        let mut dbtx = self
             .non_consensus_db
-            .begin_transaction(self.decoders.clone())
+            .begin_transaction(self.decoders.clone());
+
+        if let Some(prev) = dbtx
             .get_value(&EcashBackupKey(request.id))
             .expect("DB error")
         {
-            if request.timestamp <= prev_ts {
+            if request.timestamp <= prev.timestamp {
                 return Err(ApiError::bad_request("timestamp too small".into()));
             }
         }
 
-        self.non_consensus_db
-            .begin_transaction(self.decoders.clone())
-            .insert_entry(
-                &EcashBackupKey(request.id),
-                &(request.timestamp, request.payload.to_vec()),
-            )
-            .expect("DB error");
+        dbtx.insert_entry(
+            &EcashBackupKey(request.id),
+            &EcashBackupValue {
+                timestamp: request.timestamp,
+                data: request.payload.to_vec(),
+            },
+        )
+        .expect("DB error");
 
         Ok(())
     }
@@ -681,7 +685,7 @@ impl Mint {
             .begin_transaction(self.decoders.clone())
             .get_value(&EcashBackupKey(id))
             .expect("DB error")
-            .map(|res| res.1)
+            .map(|res| res.data)
     }
 }
 

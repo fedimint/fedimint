@@ -7,11 +7,13 @@
 //! them with federation. A successfully recovered snapshot can be used
 //! to avoid having to scan the whole history.
 
-use std::time::UNIX_EPOCH;
+use std::collections::BTreeMap;
 
 use anyhow::Result;
-use bincode::Options;
-use fedimint_api::backup::{BackupRequest, SignedBackupRequest};
+use fedimint_api::{
+    backup::{BackupRequest, SignedBackupRequest},
+    core::Decoder,
+};
 
 use super::*;
 
@@ -141,7 +143,7 @@ impl<'c> MintClient<'c> {
 ///
 /// Used to speed up and improve privacy of ecash recovery,
 /// by avoiding scanning the whole history.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct PlaintextEcashBackup {
     notes: TieredMulti<SpendableNote>,
     last_idx: NoteIndex,
@@ -155,20 +157,11 @@ impl PlaintextEcashBackup {
         ((len.saturating_sub(1) / padding_alignment) + 1) * padding_alignment
     }
 
-    fn bincode_options() -> impl bincode::Options {
-        bincode::DefaultOptions::new()
-            // Prefer fixed integer encodings (worse size, but better privacy properties(?))
-            .with_fixint_encoding()
-            // Since we're padding the plaintext, we can conviniently have bincode take care of it.
-            .allow_trailing_bytes()
-            // 1MB limit should be enough for any backup
-            .with_limit(1_000_000)
-    }
-
     /// Encode `self` to a padded (but still plaintext) message
     fn encode(&self) -> Result<Vec<u8>> {
-        let opts = Self::bincode_options();
-        let mut bytes = opts.serialize(&self)?;
+        let mut bytes = vec![];
+        self.consensus_encode(&mut bytes)?;
+
         let padding_size = Self::get_alignment_size(bytes.len()) - bytes.len();
 
         bytes.extend(std::iter::repeat(0u8).take(padding_size));
@@ -178,9 +171,10 @@ impl PlaintextEcashBackup {
 
     /// Decode from a plaintext (possibly aligned) message
     fn decode(msg: &[u8]) -> Result<Self> {
-        let opts = Self::bincode_options();
-
-        Ok(opts.deserialize(msg)?)
+        Ok(Decodable::consensus_decode::<Decoder, _>(
+            &mut &msg[..],
+            &BTreeMap::new(),
+        )?)
     }
 
     pub fn encrypt_to(&self, key: &aead::LessSafeKey) -> Result<EcashBackup> {
@@ -203,10 +197,7 @@ impl EcashBackup {
     pub fn into_backup_request(self, keypair: &KeyPair) -> Result<SignedBackupRequest> {
         let request = BackupRequest {
             id: keypair.x_only_public_key().0,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Can't fail")
-                .as_secs(),
+            timestamp: std::time::SystemTime::now(),
             payload: self.0,
         };
 

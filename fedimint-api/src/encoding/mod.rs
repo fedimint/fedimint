@@ -9,6 +9,7 @@ mod tbs;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use thiserror::Error;
@@ -334,10 +335,51 @@ impl Decodable for String {
     }
 }
 
+impl Encodable for SystemTime {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let duration = self.duration_since(UNIX_EPOCH).expect("valid duration");
+
+        let mut count = 0;
+        count += duration.as_secs().consensus_encode(writer)?;
+        count += duration.subsec_nanos().consensus_encode(writer)?;
+
+        Ok(count)
+    }
+}
+
+impl Decodable for SystemTime {
+    fn consensus_decode<M, D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
+        let secs = Decodable::consensus_decode(d, modules)?;
+        let nsecs = Decodable::consensus_decode(d, modules)?;
+        Ok(UNIX_EPOCH + Duration::new(secs, nsecs))
+    }
+}
+
 impl Encodable for lightning_invoice::Invoice {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.to_string().consensus_encode(writer)
     }
+}
+
+#[test]
+fn encode_decode_systemtime() {
+    let t = SystemTime::now();
+
+    let mut buf = vec![];
+
+    t.consensus_encode(&mut buf).unwrap();
+
+    assert_eq!(
+        t,
+        Decodable::consensus_decode::<Decoder, _>(&mut buf.as_slice(), &BTreeMap::default())
+            .unwrap()
+    );
 }
 
 impl Decodable for lightning_invoice::Invoice {

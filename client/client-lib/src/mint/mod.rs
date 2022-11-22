@@ -49,7 +49,7 @@ pub struct MintClient<'c> {
 /// We allow converting it to u64 and incrementing it, but
 /// messing with it should be somewhat restricted to prevent
 /// silly errors.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable, Decodable)]
 pub struct NoteIndex(u64);
 
 impl NoteIndex {
