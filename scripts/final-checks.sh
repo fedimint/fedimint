@@ -14,7 +14,6 @@ cargo test
 if [ "$1" == "nix" ]; then
   ./scripts/cli-test.sh
   ./scripts/rust-tests.sh
-  ./scripts/clientd-tests.sh
 fi
 
 echo "Tests succeeded"

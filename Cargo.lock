@@ -511,34 +511,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clientd"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.5.17",
- "bitcoin",
- "bitcoin_hashes",
- "clap",
- "fedimint-api",
- "fedimint-build",
- "fedimint-core",
- "fedimint-rocksdb",
- "futures",
- "mint-client",
- "rand",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tower",
- "tower-http 0.3.4",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "cln-plugin"
 version = "0.1.0"
 source = "git+https://github.com/ElementsProject/lightning?rev=42783aa#42783aaa928da79e1295dcdc53123a66cb2433cc"
@@ -3701,7 +3673,6 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
- "tracing",
 ]
 
 [[package]]
