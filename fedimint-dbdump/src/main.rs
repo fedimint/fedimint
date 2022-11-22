@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use docopt::Docopt;
 use erased_serde::Serialize;
 use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::encoding::Encodable;
 use fedimint_ln::db as LightningRange;
 use fedimint_mint::db as MintRange;
 use fedimint_rocksdb::RocksDbReadOnly;
@@ -31,6 +32,30 @@ macro_rules! push_db_pair_items {
         let mut items: Vec<($key_type, $value_type)> = Vec::new();
         for item in db_items {
             items.push(item.unwrap());
+        }
+        $map.insert($key_literal.to_string(), Box::new(items));
+    };
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SerdeWrapper(#[serde(with = "hex::serde")] Vec<u8>);
+
+impl SerdeWrapper {
+    fn from_encodable<T: Encodable>(e: T) -> SerdeWrapper {
+        let mut bytes = vec![];
+        e.consensus_encode(&mut bytes)
+            .expect("Write to vec can't fail");
+        SerdeWrapper(bytes)
+    }
+}
+
+macro_rules! push_db_pair_items_no_serde {
+    ($self:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
+        let db_items = $self.read_only.find_by_prefix(&$prefix_type);
+        let mut items: Vec<($key_type, SerdeWrapper)> = Vec::new();
+        for item in db_items {
+            let (k, v) = item.unwrap();
+            items.push((k, SerdeWrapper::from_encodable(v)));
         }
         $map.insert($key_literal.to_string(), Box::new(items));
     };
@@ -110,7 +135,7 @@ impl<'a> DatabaseDump<'a> {
 
             match table {
                 ConsensusRange::DbKeyPrefix::ProposedTransaction => {
-                    push_db_pair_items!(
+                    push_db_pair_items_no_serde!(
                         self,
                         ConsensusRange::ProposedTransactionKeyPrefix,
                         ConsensusRange::ProposedTransactionKey,
@@ -120,7 +145,7 @@ impl<'a> DatabaseDump<'a> {
                     );
                 }
                 ConsensusRange::DbKeyPrefix::AcceptedTransaction => {
-                    push_db_pair_items!(
+                    push_db_pair_items_no_serde!(
                         self,
                         ConsensusRange::AcceptedTransactionKeyPrefix,
                         ConsensusRange::AcceptedTransactionKey,
@@ -149,7 +174,7 @@ impl<'a> DatabaseDump<'a> {
                     );
                 }
                 ConsensusRange::DbKeyPrefix::EpochHistory => {
-                    push_db_pair_items!(
+                    push_db_pair_items_no_serde!(
                         self,
                         ConsensusRange::EpochHistoryKeyPrefix,
                         ConsensusRange::EpochHistoryKey,
