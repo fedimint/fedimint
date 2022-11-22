@@ -20,6 +20,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
     let orig = PlaintextEcashBackup {
         notes: TieredMulti::from_iter([]),
         last_idx: NoteIndex::from_u64(3),
+        epoch: 0,
     };
 
     let encoded = orig.encode()?;
@@ -34,6 +35,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
     let orig = PlaintextEcashBackup {
         notes: TieredMulti::from_iter([]),
         last_idx: NoteIndex::from_u64(3),
+        epoch: 1,
     };
 
     let secret = DerivableSecret::new(&[1; 32], &[1, 32]);

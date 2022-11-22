@@ -115,17 +115,23 @@ impl<'c> MintClient<'c> {
         Self::get_derived_backup_signing_key_static(&self.secret)
     }
 
-    async fn prepare_plaintext_ecash_backup(&self) -> PlaintextEcashBackup {
-        let mut dbtx = self.start_dbtx();
+    async fn prepare_plaintext_ecash_backup(&self) -> Result<PlaintextEcashBackup> {
+        // fetch consensus height first - so we dont miss anything when scanning
+        let epoch = self.context.api.fetch_last_epoch().await?;
 
+        let mut dbtx = self.start_dbtx();
         let notes = self.get_available_notes(&mut dbtx);
         let last_idx = self.get_last_note_index(&mut dbtx);
 
-        PlaintextEcashBackup { notes, last_idx }
+        Ok(PlaintextEcashBackup {
+            notes,
+            last_idx,
+            epoch,
+        })
     }
 
     async fn prepare_ecash_backup(&self) -> Result<EcashBackup> {
-        let plaintext = self.prepare_plaintext_ecash_backup().await;
+        let plaintext = self.prepare_plaintext_ecash_backup().await?;
         plaintext.encrypt_to(&self.get_derived_backup_encryption_key())
     }
 
@@ -146,6 +152,7 @@ impl<'c> MintClient<'c> {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct PlaintextEcashBackup {
     notes: TieredMulti<SpendableNote>,
+    epoch: u64,
     last_idx: NoteIndex,
 }
 
