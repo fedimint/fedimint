@@ -138,18 +138,27 @@ impl DatabaseKeyPrefixConst for MintAuditItemKeyPrefix {
     type Value = Amount;
 }
 
+#[derive(Debug, Encodable, Decodable)]
+pub struct EcashBackupKeyPrefix;
+
 /// Key used to store user's ecash backups
-#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
 
-#[derive(Debug, Clone, Encodable, Decodable)]
+impl DatabaseKeyPrefixConst for EcashBackupKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
+    type Key = EcashBackupKey;
+    type Value = EcashBackupValue;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct EcashBackupValue {
     pub timestamp: SystemTime,
     pub data: Vec<u8>,
 }
+
 impl DatabaseKeyPrefixConst for EcashBackupKey {
     const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
     type Key = Self;
-    // timestamp, payload
     type Value = EcashBackupValue;
 }
