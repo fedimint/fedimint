@@ -11,7 +11,8 @@ use url::Url;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_authentication() -> Result<()> {
     let gw_password = "password".to_string();
-    let gw_address = SocketAddr::from(([127, 0, 0, 1], 10000));
+    let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
+    let gw_address = SocketAddr::from(([127, 0, 0, 1], gw_port));
     let federation_id = FederationId("test_fed".into());
 
     let cfg = GatewayConfig {
