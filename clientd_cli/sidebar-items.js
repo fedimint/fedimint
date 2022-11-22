@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":[["Commands",""]],"fn":[["main",""],["print_response",""]],"struct":[["Cli",""]]};

@@ -1,5 +1,4 @@
 (function() {var implementors = {
-"clientd_cli":[["impl Parser for <a class=\"struct\" href=\"clientd_cli/struct.Cli.html\" title=\"struct clientd_cli::Cli\">Cli</a>"]],
 "configgen":[["impl Parser for <a class=\"struct\" href=\"configgen/struct.Cli.html\" title=\"struct configgen::Cli\">Cli</a>"]],
 "distributedgen":[["impl Parser for <a class=\"struct\" href=\"distributedgen/struct.Cli.html\" title=\"struct distributedgen::Cli\">Cli</a>"]],
 "fedimint_cli":[["impl Parser for <a class=\"struct\" href=\"fedimint_cli/struct.Cli.html\" title=\"struct fedimint_cli::Cli\">Cli</a>"],["impl Parser for <a class=\"struct\" href=\"fedimint_cli/struct.CliNoWorkdir.html\" title=\"struct fedimint_cli::CliNoWorkdir\">CliNoWorkdir</a>"]],
