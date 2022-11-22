@@ -19,6 +19,7 @@ fedimint-ln = { path = "../../modules/fedimint-ln" }
 lightning-invoice = "0.20.0"
 ln-gateway = { path = "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
+portpicker = "0.1.1"
 rand = "0.8"
 tokio = { version = "1.22.0", features = ["full"] }
 url = { version = "2.3.1", features = ["serde"] }
