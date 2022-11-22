@@ -32,7 +32,7 @@ fedimint-wallet = { path = "../modules/fedimint-wallet" }
 mint-client = { path = "../client/client-lib" }
 rand = "0.8"
 serde = { version = "1.0.147", features = [ "derive" ] }
-tokio = { version = "1.21.2", features = ["full"] }
+tokio = { version = "1.22.0", features = ["full"] }
 tracing ="0.1.37"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 url = "2.3.1"
