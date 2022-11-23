@@ -101,7 +101,7 @@ pub struct OutputOutcome(pub TieredMulti<tbs::BlindedSignature>);
 ///
 /// In this form it can only be validated, not spent since for that the corresponding secret
 /// spend key is required.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Note(pub Nonce, pub tbs::Signature);
 
 /// Unique ID of a mint note.
@@ -119,7 +119,7 @@ pub struct Nonce(pub secp256k1_zkp::XOnlyPublicKey);
 ///
 /// By signing it, the mint commits to the underlying (unblinded) [`Nonce`] as valid
 /// (until eventually spent).
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindNonce(pub tbs::BlindedMessage);
 
 #[derive(Debug, Clone)]

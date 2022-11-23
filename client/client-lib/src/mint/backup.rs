@@ -136,6 +136,12 @@ impl MintClient {
         let mut dbtx = self.start_dbtx().await;
         let notes = self.get_available_notes(&mut dbtx).await;
 
+        let pending_notes: Vec<_> = dbtx
+            .find_by_prefix(&OutputFinalizationKeyPrefix)
+            .await
+            .map(|res| res.expect("DB error"))
+            .collect();
+
         let mut idxes = vec![];
         for &amount in self.config.tbs_pks.tiers() {
             idxes.push((amount, self.get_next_note_index(&mut dbtx, amount).await));
@@ -144,6 +150,7 @@ impl MintClient {
 
         Ok(PlaintextEcashBackup {
             notes,
+            pending_notes,
             next_note_idx,
             epoch,
         })
@@ -231,7 +238,7 @@ impl MintClient {
             })
             .await;
 
-        let mut nonce_tracker = EcashRecoveryNonceTracker::from_backup(
+        let mut nonce_tracker = EcashRecoveryTracker::from_backup(
             backup,
             self.secret.clone(),
             1000,
@@ -252,7 +259,7 @@ impl MintClient {
             for (peer_id, items) in &epoch_history.outcome.items {
                 // TODO: epoch history to contain rejected items, we should skip them here
                 for item in items {
-                    nonce_tracker.handle_consensus_item(peer_id, item);
+                    nonce_tracker.handle_consensus_item(*peer_id, item);
                 }
             }
         }
@@ -268,6 +275,7 @@ impl MintClient {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct PlaintextEcashBackup {
     notes: TieredMulti<SpendableNote>,
+    pending_notes: Vec<(OutputFinalizationKey, NoteIssuanceRequests)>,
     epoch: u64,
     next_note_idx: Tiered<NoteIndex>,
 }
@@ -292,7 +300,7 @@ impl PlaintextEcashBackup {
         Ok(bytes)
     }
 
-    /// Decode from a plaintext (possibly aligned) message
+    /// Decode from a plaintexet (possibly aligned) message
     fn decode(msg: &[u8]) -> Result<Self> {
         Ok(Decodable::consensus_decode(
             &mut &msg[..],
@@ -329,8 +337,14 @@ impl EcashBackup {
     }
 }
 
-/// The state machine used for fast-fowarding backup from point when it was taken to the present time.
-struct EcashRecoveryNonceTracker {
+/// The state machine used for fast-fowarding backup from point when it was taken to the present time
+/// by following epoch history items from the time the snapshot was taken.
+///
+/// The caller is responsible for creating it, and then feeding it in order all valid
+/// consensus items from the epoch history between time taken (or even somewhat before it) and
+/// present time.
+#[derive(Debug)]
+struct EcashRecoveryTracker {
     /// Nonces that we track that are currently spendable.
     spendable_note_by_nonce: HashMap<Nonce, (Amount, SpendableNote)>,
 
@@ -387,7 +401,7 @@ struct EcashRecoveryNonceTracker {
     gap_limit: usize,
 }
 
-impl EcashRecoveryNonceTracker {
+impl EcashRecoveryTracker {
     pub fn from_backup(
         backup: PlaintextEcashBackup,
         mint_secret: DerivableSecret,
@@ -403,7 +417,25 @@ impl EcashRecoveryNonceTracker {
                 .map(|(amount, note)| (note.note.0, (amount, note)))
                 .collect(),
             // TODO: needs to get these in a backup as well
-            pending_outputs: HashMap::default(),
+            pending_outputs: backup
+                .pending_notes
+                .into_iter()
+                .map(|(finalization_key, issuance_requests)| {
+                    (
+                        finalization_key.0,
+                        (
+                            issuance_requests
+                                .coins
+                                .iter_items()
+                                .map(|(amount, iss_req)| {
+                                    (amount, (iss_req.recover_blind_nonce().0, Some(*iss_req)))
+                                })
+                                .collect(),
+                            HashMap::default(),
+                        ),
+                    )
+                })
+                .collect(),
             pending_nonces: HashMap::default(),
             next_pending_note_idx: backup.next_note_idx.clone(),
             last_mined_nonce_idx: backup.next_note_idx,
@@ -482,8 +514,6 @@ impl EcashRecoveryNonceTracker {
 
                         if pending_amount == amount_from_output {
                             found.push((amount_from_output, (nonce.0, Some(issuance_request))));
-                            // replenish pending pool with the nonce of the same amount
-
                             (found, missing, wrong)
                         } else {
                             // put it back, incorrect amount
@@ -552,14 +582,11 @@ impl EcashRecoveryNonceTracker {
     /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the pending pool
     /// to always maintain at least `gap_limit` of pending onces in each amount tier.
     fn observe_nonce_idx_being_used(&mut self, amount: Amount, note_idx: NoteIndex) {
-        *self
-            .last_mined_nonce_idx
-            .get_mut(amount)
-            .expect("must have all amounts") = max(
-            *self
-                .last_mined_nonce_idx
+        *self.last_mined_nonce_idx.entry(amount).or_default() = max(
+            self.last_mined_nonce_idx
                 .get(amount)
-                .expect("must have all amounts"),
+                .copied()
+                .unwrap_or_default(),
             note_idx,
         );
 
@@ -671,7 +698,7 @@ impl EcashRecoveryNonceTracker {
         }
     }
 
-    pub(crate) fn handle_consensus_item(&mut self, peer_id: &PeerId, item: &ConsensusItem) {
+    pub(crate) fn handle_consensus_item(&mut self, peer_id: PeerId, item: &ConsensusItem) {
         match item {
             ConsensusItem::EpochInfo(_) => {}
             ConsensusItem::Transaction(tx) => {
@@ -710,7 +737,7 @@ impl EcashRecoveryNonceTracker {
                         .downcast_ref::<MintOutputConfirmation>()
                         .expect("mint key just checked");
 
-                    self.handle_output_confirmation(*peer_id, mint_item);
+                    self.handle_output_confirmation(peer_id, mint_item);
                 }
             }
         }

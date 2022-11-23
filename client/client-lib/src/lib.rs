@@ -188,6 +188,12 @@ impl PaymentParameters {
     }
 }
 
+impl<T> Client<T> {
+    pub fn mint_secret_static(root_secret: &DerivableSecret) -> DerivableSecret {
+        root_secret.child_key(MINT_SECRET_CHILD_ID)
+    }
+}
+
 // TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
 impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn api_client(&self) -> &FederationApi {
@@ -218,7 +224,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .expect("needs mint module client config"),
             epoch_pk: self.config.as_ref().epoch_pk,
             context: self.context.clone(),
-            secret: self.root_secret.child_key(MINT_SECRET_CHILD_ID),
+            secret: Self::mint_secret_static(&self.root_secret),
         }
     }
 
