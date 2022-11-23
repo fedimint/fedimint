@@ -6,12 +6,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+use fedimint_api::core::Decoder;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
+use fedimint_api::encoding::ModuleRegistry;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
     ApiError, FederationModuleConfigGen, InputMeta, ModuleError, TransactionItemAmount,
 };
+use fedimint_api::server::IServerModule;
 use fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
 
 pub mod bitcoind;
@@ -32,9 +35,10 @@ pub struct TestInputMeta {
 
 impl<Module> FakeFed<Module>
 where
-    Module: ServerModulePlugin,
+    Module: ServerModulePlugin + 'static,
     Module::ConsensusItem: Clone,
     Module::OutputOutcome: Eq + Debug,
+    Module::Decoder: Sync + Send + 'static,
 {
     pub async fn new<ConfGen, F, FF>(
         members: usize,
@@ -73,12 +77,17 @@ where
     pub fn verify_input(&self, input: &Module::Input) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
-        let results = self.members.iter().map(|(_, member, _)| {
+        let results = self.members.iter().map(|(_, member, db)| {
             let cache = member.build_verification_cache(std::iter::once(input));
             let InputMeta {
                 amount,
                 puk_keys: pub_keys,
-            } = member.validate_input(&fake_ic, &cache, input)?;
+            } = member.validate_input(
+                &fake_ic,
+                &db.begin_transaction(self.decoders()),
+                &cache,
+                input,
+            )?;
             Ok(TestInputMeta {
                 amount,
                 keys: pub_keys,
@@ -88,11 +97,17 @@ where
     }
 
     pub fn verify_output(&self, output: &Module::Output) -> bool {
-        let results = self
-            .members
-            .iter()
-            .map(|(_, member, _)| member.validate_output(output).is_err());
+        let results = self.members.iter().map(|(_, member, db)| {
+            member
+                .validate_output(&db.begin_transaction(self.decoders()), output)
+                .is_err()
+        });
         assert_all_equal(results)
+    }
+
+    fn decoders(&self) -> ModuleRegistry<Decoder> {
+        let module = &self.members.first().unwrap().1;
+        std::iter::once((module.module_key(), IServerModule::decoder(module))).collect()
     }
 
     // TODO: add expected result to inputs/outputs
@@ -118,9 +133,10 @@ where
         }
 
         let peers: HashSet<PeerId> = self.members.iter().map(|p| p.0).collect();
+        let decoders = self.decoders();
         for (_peer, member, db) in &mut self.members {
             let database = db as &mut Database;
-            let mut dbtx = database.begin_transaction();
+            let mut dbtx = database.begin_transaction(decoders.clone());
 
             member
                 .begin_consensus_epoch(&mut dbtx, consensus.clone())
@@ -141,7 +157,7 @@ where
 
             dbtx.commit_tx().await.expect("DB Error");
 
-            let mut dbtx = database.begin_transaction();
+            let mut dbtx = database.begin_transaction(decoders.clone());
             member.end_consensus_epoch(&peers, &mut dbtx).await;
 
             dbtx.commit_tx().await.expect("DB Error");
@@ -164,8 +180,9 @@ where
     where
         U: Fn(&mut DatabaseTransaction),
     {
+        let decoders = self.decoders();
         for (_, _, db) in &mut self.members {
-            let mut dbtx = db.begin_transaction();
+            let mut dbtx = db.begin_transaction(decoders.clone());
             update(&mut dbtx);
             dbtx.commit_tx().await.expect("DB Error");
         }
@@ -182,9 +199,13 @@ where
     pub fn fetch_from_all<O, F>(&mut self, fetch: F) -> O
     where
         O: Debug + Eq,
-        F: Fn(&mut Module) -> O,
+        F: Fn(&mut Module, &Database) -> O,
     {
-        assert_all_equal(self.members.iter_mut().map(|(_, member, _)| fetch(member)))
+        assert_all_equal(
+            self.members
+                .iter_mut()
+                .map(|(_, member, db)| fetch(member, db)),
+        )
     }
 }
 

@@ -197,7 +197,7 @@ impl FedimintServer {
         let last_saved_response = self
             .consensus
             .db
-            .begin_transaction()
+            .begin_transaction(self.consensus.decoders())
             .get_value(&LastEpochKey)
             .expect("DB error");
         let last_saved_epoch = last_saved_response.map(|e| e.0);
@@ -234,13 +234,18 @@ impl FedimintServer {
         let saved_epoch_key = self
             .consensus
             .db
-            .begin_transaction()
+            .begin_transaction(self.consensus.decoders())
             .get_value(&LastEpochKey)
             .unwrap();
 
         let download_epoch_num = saved_epoch_key.map(|e| e.0 + 1).unwrap_or(0);
-        let mut prev_epoch = saved_epoch_key
-            .and_then(|e| self.consensus.db.begin_transaction().get_value(&e).unwrap());
+        let mut prev_epoch = saved_epoch_key.and_then(|e| {
+            self.consensus
+                .db
+                .begin_transaction(self.consensus.decoders())
+                .get_value(&e)
+                .unwrap()
+        });
 
         for epoch_num in download_epoch_num..=last_outcome.epoch {
             let current_epoch = if epoch_num == last_outcome.epoch {
@@ -292,7 +297,7 @@ impl FedimintServer {
         let last_saved = self
             .consensus
             .db
-            .begin_transaction()
+            .begin_transaction(self.consensus.decoders())
             .get_value(&LastEpochKey);
         let next_epoch = last_saved.expect("DB error").map(|e| e.0 + 1).unwrap_or(0);
         consensus_peers.insert(self.cfg.identity, next_epoch);
@@ -510,7 +515,7 @@ impl FedimintServer {
             let query = self
                 .consensus
                 .db
-                .begin_transaction()
+                .begin_transaction(self.consensus.decoders())
                 .get_value(&EpochHistoryKey(epoch));
             match query.expect("DB error") {
                 Some(result) if result.signature.is_some() => break Some(result),

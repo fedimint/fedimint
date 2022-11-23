@@ -6,6 +6,8 @@
 //! and functionality that is used on both client and sever side.
 use std::fmt::Debug;
 use std::io;
+use std::io::Read;
+use std::sync::Arc;
 use std::{any::Any, collections::BTreeMap};
 
 pub use bitcoin::KeyPair;
@@ -201,7 +203,9 @@ macro_rules! newtype_impl_eq_passthrough {
 ///
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleKey`]s
-pub trait PluginDecode {
+pub trait PluginDecode: Debug {
+    fn clone_decoder() -> Decoder;
+
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
@@ -215,7 +219,9 @@ pub trait PluginDecode {
     fn decode_consensus_item(r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
 }
 
-pub trait ModuleDecode {
+pub trait ModuleDecode: Debug {
+    fn clone_decoder(&self) -> Decoder;
+
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
@@ -229,21 +235,80 @@ pub trait ModuleDecode {
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
 }
 
-impl ModuleDecode for () {
-    fn decode_input(&self, _r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+// TODO: use macro again
+#[doc = " Decoder for module associated types"]
+pub struct Decoder(Arc<dyn ModuleDecode + Send + Sync + 'static>);
+
+impl std::ops::Deref for Decoder {
+    type Target = dyn ModuleDecode + Send + Sync + 'static;
+
+    fn deref(&self) -> &<Self as std::ops::Deref>::Target {
+        &*self.0
+    }
+}
+
+impl std::fmt::Debug for Decoder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl Clone for Decoder {
+    fn clone(&self) -> Self {
+        self.clone_decoder()
+    }
+}
+
+impl<T> ModuleDecode for T
+where
+    T: PluginDecode + 'static,
+{
+    fn clone_decoder(&self) -> Decoder {
+        <Self as PluginDecode>::clone_decoder()
     }
 
-    fn decode_output(&self, _r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
+        <Self as PluginDecode>::decode_input(r)
     }
 
-    fn decode_output_outcome(&self, _r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    fn decode_output(&self, r: &mut dyn Read) -> Result<Output, DecodeError> {
+        <Self as PluginDecode>::decode_output(r)
     }
 
-    fn decode_consensus_item(&self, _r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    fn decode_output_outcome(&self, r: &mut dyn Read) -> Result<OutputOutcome, DecodeError> {
+        <Self as PluginDecode>::decode_output_outcome(r)
+    }
+
+    fn decode_consensus_item(&self, r: &mut dyn Read) -> Result<ConsensusItem, DecodeError> {
+        <Self as PluginDecode>::decode_consensus_item(r)
+    }
+}
+
+impl ModuleDecode for Decoder {
+    fn clone_decoder(&self) -> Decoder {
+        self.0.clone_decoder()
+    }
+
+    fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
+        self.0.decode_input(r)
+    }
+
+    fn decode_output(&self, r: &mut dyn Read) -> Result<Output, DecodeError> {
+        self.0.decode_output(r)
+    }
+
+    fn decode_output_outcome(&self, r: &mut dyn Read) -> Result<OutputOutcome, DecodeError> {
+        self.0.decode_output_outcome(r)
+    }
+
+    fn decode_consensus_item(&self, r: &mut dyn Read) -> Result<ConsensusItem, DecodeError> {
+        self.0.decode_consensus_item(r)
+    }
+}
+
+impl Decoder {
+    pub fn from_typed(decoder: impl PluginDecode + Send + Sync + 'static) -> Decoder {
+        Decoder(Arc::new(decoder))
     }
 }
 

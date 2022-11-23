@@ -2,22 +2,20 @@ use std::collections::{BTreeMap, HashSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use fedimint_api::core::ModuleDecode;
+use fedimint_api::core::{ConsensusItem as ModuleConsensusItem, ModuleDecode};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
-use fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId, ServerModulePlugin};
+use fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
 use crate::transaction::Transaction;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
 pub enum ConsensusItem {
     EpochInfo(EpochSignatureShare),
     Transaction(Transaction),
-    Mint(<fedimint_mint::Mint as ServerModulePlugin>::ConsensusItem),
-    Wallet(<fedimint_wallet::Wallet as ServerModulePlugin>::ConsensusItem),
-    LN(<fedimint_ln::LightningModule as ServerModulePlugin>::ConsensusItem),
+    Module(ModuleConsensusItem),
 }
 
 serde_module_encoding_wrapper!(SerdeConsensusItem, ConsensusItem);
@@ -28,7 +26,7 @@ pub struct EpochSignatureShare(pub SignatureShare);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EpochSignature(pub Signature);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct EpochHistory {
     pub outcome: OutcomeHistory,
     pub hash: Sha256,
@@ -37,7 +35,7 @@ pub struct EpochHistory {
 
 serde_module_encoding_wrapper!(SerdeEpochHistory, EpochHistory);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct OutcomeHistory {
     pub epoch: u64,
     pub last_hash: Option<Sha256>,

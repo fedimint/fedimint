@@ -7,14 +7,16 @@ use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_api::cancellable::Cancellable;
+use fedimint_api::core::MODULE_KEY_LN;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
 use fedimint_mint::config::MintClientConfig;
 use fedimint_mint::{MintConsensusItem, PartialSigResponse, PartiallySignedRequest};
+use fedimint_server::all_decoders;
 use fedimint_server::epoch::ConsensusItem;
-use fedimint_server::transaction::Output;
+use fedimint_server::transaction::legacy::Output;
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
@@ -25,7 +27,7 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use tokio::time::timeout;
 use tracing::debug;
 
-use crate::fixtures::{create_user_client, peers, FederationTest, UserTest};
+use crate::fixtures::{assert_ci, create_user_client, peers, FederationTest, UserTest};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {
@@ -53,8 +55,8 @@ async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {
     fed.run_consensus_epochs(2).await; // peg-out tx + peg out signing epoch
 
     assert_matches!(
-        fed.last_consensus_items().first(),
-        Some(ConsensusItem::Wallet(PegOutSignature(_)))
+        assert_ci(fed.last_consensus_items().first().unwrap()),
+        PegOutSignature(_)
     );
 
     let outcome_txid = user
@@ -64,11 +66,11 @@ async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {
         .await
         .unwrap();
     assert!(matches!(
-            fed.last_consensus_items().first(), 
-            Some(ConsensusItem::Wallet(PegOutSignature(PegOutSignatureItem {
+            assert_ci(fed.last_consensus_items().first().unwrap()), 
+            PegOutSignature(PegOutSignatureItem {
                 txid,
-             ..
-            }))) if *txid == outcome_txid));
+                ..
+            }) if *txid == outcome_txid));
 
     fed.broadcast_transactions().await;
     assert_eq!(
@@ -377,10 +379,13 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
     let share = SecretKeyShare::default()
         .decrypt_share_no_verify(&SecretKey::random().public_key().encrypt(""));
     fed.subset_peers(&[3])
-        .override_proposal(vec![ConsensusItem::LN(LightningConsensusItem {
-            contract_id,
-            share: PreimageDecryptionShare(share),
-        })]);
+        .override_proposal(vec![ConsensusItem::Module(
+            LightningConsensusItem {
+                contract_id,
+                share: PreimageDecryptionShare(share),
+            }
+            .into(),
+        )]);
     drop_peer_3_during_epoch(&fed).await.unwrap(); // preimage decryption
 
     user.client
@@ -430,12 +435,13 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
     fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
         .await;
     let out_point = fed.database_add_coins_for_user(&user, sats(2000)).await;
-    let bad_proposal = vec![ConsensusItem::Mint(MintConsensusItem(
-        PartiallySignedRequest {
+    let bad_proposal = vec![ConsensusItem::Module(
+        MintConsensusItem(PartiallySignedRequest {
             out_point,
             partial_signature: PartialSigResponse(TieredMulti::default()),
-        },
-    ))];
+        })
+        .into(),
+    )];
 
     fed.subset_peers(&[3]).override_proposal(bad_proposal);
     drop_peer_3_during_epoch(&fed).await.unwrap();
@@ -809,7 +815,12 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         .0
         .get_module::<MintClientConfig>("mint")?
         .tbs_pks;
-    let mut dbtx = user.client.mint_client().context.db.begin_transaction();
+    let mut dbtx = user
+        .client
+        .mint_client()
+        .context
+        .db
+        .begin_transaction(all_decoders());
     let tx = builder.build(
         sats(0),
         &mut dbtx,
@@ -818,7 +829,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         tbs_pks,
         rng(),
     );
-    fed.submit_transaction(tx);
+    fed.submit_transaction(tx.into_type_erased());
     fed.run_consensus_epochs(1).await; // process offer
 
     // Gateway escrows ecash to trigger preimage decryption by the federation
@@ -895,7 +906,10 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
     let ln_items = fed
         .last_consensus_items()
         .iter()
-        .filter(|item| matches!(item, ConsensusItem::LN(_)))
+        .filter(|item| match item {
+            ConsensusItem::Module(mci) => mci.module_key() == MODULE_KEY_LN,
+            _ => false,
+        })
         .count();
     assert_eq!(ln_items, 0);
     assert_eq!(fed.max_balance_sheet(), 0);

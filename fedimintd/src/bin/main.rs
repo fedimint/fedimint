@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use fedimint_api::db::Database;
 use fedimint_api::task::TaskGroup;
+use fedimint_core::all_decoders;
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::FedimintConsensus;
@@ -95,20 +96,28 @@ async fn main() -> anyhow::Result<()> {
 
     task_group.install_kill_handler();
 
-    let mint = fedimint_core::modules::mint::Mint::new(cfg.get_module_config("mint")?, db.clone());
+    let mint = fedimint_core::modules::mint::Mint::new(
+        cfg.get_module_config("mint")?,
+        db.clone(),
+        all_decoders(),
+    );
 
     let wallet = Wallet::new_with_bitcoind(
         cfg.get_module_config("wallet")?,
         db.clone(),
         btc_rpc,
         &mut task_group,
+        all_decoders(),
     )
     .await
     .expect("Couldn't create wallet");
 
-    let ln = LightningModule::new(cfg.get_module_config("ln")?, db.clone());
+    let ln = LightningModule::new(cfg.get_module_config("ln")?, db.clone(), all_decoders());
 
-    let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
+    let mut consensus = FedimintConsensus::new(cfg.clone(), db);
+    consensus.register_module(mint.into());
+    consensus.register_module(ln.into());
+    consensus.register_module(wallet.into());
 
     FedimintServer::run(cfg, consensus, &mut task_group).await?;
 

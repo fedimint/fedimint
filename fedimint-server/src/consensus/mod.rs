@@ -1,43 +1,37 @@
 #![allow(clippy::let_unit_value)]
 
-mod conflictfilter;
 pub mod debug;
 mod interconnect;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
 
 use fedimint_api::core::ModuleKey;
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::{ModuleError, TransactionItemAmount};
-use fedimint_api::server::ServerModule;
-use fedimint_api::{Amount, OutPoint, PeerId, ServerModulePlugin, TransactionId};
+use fedimint_api::server::{ServerModule, VerificationCache};
+use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
-use fedimint_core::modules::ln::LightningModule;
-use fedimint_core::modules::mint::Mint;
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_wallet::Wallet;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
+use itertools::Itertools;
 use rand::rngs::OsRng;
-use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 
 use crate::config::ServerConfig;
-use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
     ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
 };
-use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
-use crate::transaction::{Input, Output, Transaction, TransactionError};
+use crate::transaction::{Transaction, TransactionError};
 use crate::OsRngGen;
 
 pub type SerdeConsensusOutcome = Batch<Vec<SerdeConsensusItem>, PeerId>;
@@ -78,11 +72,6 @@ pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
-    /// Our local mint
-    pub wallet: Wallet,
-    pub ln: LightningModule,
-    pub mint: Mint,
-
     pub modules: BTreeMap<ModuleKey, ServerModule>,
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
@@ -91,7 +80,7 @@ pub struct FedimintConsensus {
     pub transaction_notify: Arc<Notify>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct AcceptedTransaction {
     pub epoch: u64,
     pub transaction: Transaction,
@@ -99,9 +88,7 @@ pub struct AcceptedTransaction {
 
 #[derive(Debug)]
 struct VerificationCaches {
-    mint: <Mint as ServerModulePlugin>::VerificationCache,
-    wallet: <Wallet as ServerModulePlugin>::VerificationCache,
-    ln: <LightningModule as ServerModulePlugin>::VerificationCache,
+    caches: HashMap<ModuleKey, VerificationCache>,
 }
 
 struct FundingVerifier {
@@ -111,19 +98,10 @@ struct FundingVerifier {
 }
 
 impl FedimintConsensus {
-    pub fn new(
-        cfg: ServerConfig,
-        mint: Mint,
-        wallet: Wallet,
-        ln: LightningModule,
-        db: Database,
-    ) -> Self {
+    pub fn new(cfg: ServerConfig, db: Database) -> Self {
         Self {
             rng_gen: Box::new(OsRngGen),
             cfg,
-            mint,
-            wallet,
-            ln,
             modules: BTreeMap::default(),
             db,
             transaction_notify: Arc::new(Notify::new()),
@@ -138,7 +116,22 @@ impl FedimintConsensus {
     }
 }
 
+impl VerificationCaches {
+    fn get_cache(&self, modue_key: ModuleKey) -> &VerificationCache {
+        self.caches
+            .get(&modue_key)
+            .expect("Verification caches were built for all modules")
+    }
+}
+
 impl FedimintConsensus {
+    pub fn decoders(&self) -> ModuleRegistry {
+        self.modules
+            .iter()
+            .map(|(module_id, module)| (*module_id, module.decoder()))
+            .collect()
+    }
+
     pub fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -154,56 +147,37 @@ impl FedimintConsensus {
         let mut funding_verifier = FundingVerifier::default();
 
         let mut pub_keys = Vec::new();
+
+        // Create read-only DB tx so that the read state is consistent
+        let dbtx = self.db.begin_transaction(self.decoders());
+
         for input in &transaction.inputs {
-            let meta = match input {
-                Input::Mint(coins) => {
-                    let cache = self.mint.build_verification_cache(std::iter::once(coins));
-                    self.mint
-                        .validate_input(&self.build_interconnect(), &cache, coins)
-                        .map_err(TransactionSubmissionError::InputCoinError)?
-                }
-                Input::Wallet(peg_in) => {
-                    let cache = self
-                        .wallet
-                        .build_verification_cache(std::iter::once(peg_in));
-                    self.wallet
-                        .validate_input(&self.build_interconnect(), &cache, peg_in)
-                        .map_err(TransactionSubmissionError::InputPegIn)?
-                }
-                Input::LN(input) => {
-                    let cache = self.ln.build_verification_cache(std::iter::once(input));
-                    self.ln
-                        .validate_input(&self.build_interconnect(), &cache, input)
-                        .map_err(TransactionSubmissionError::ContractInputError)?
-                }
-            };
+            let module = self
+                .modules
+                .get(&input.module_key())
+                .expect("Parsing the input should fail if the module doesn't exist");
+
+            let cache = module.build_verification_cache(&[input.clone()]);
+            let meta = module.validate_input(&self.build_interconnect(), &dbtx, &cache, input)?;
+
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
         }
         transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
         for output in &transaction.outputs {
-            let amount = match output {
-                Output::Mint(coins) => self
-                    .mint
-                    .validate_output(coins)
-                    .map_err(TransactionSubmissionError::OutputCoinError)?,
-                Output::Wallet(peg_out) => self
-                    .wallet
-                    .validate_output(peg_out)
-                    .map_err(TransactionSubmissionError::OutputPegOut)?,
-                Output::LN(output) => self
-                    .ln
-                    .validate_output(output)
-                    .map_err(TransactionSubmissionError::ContractOutputError)?,
-            };
+            let module = self
+                .modules
+                .get(&output.module_key())
+                .expect("Parsing the input should fail if the module doesn't exist");
+            let amount = module.validate_output(&dbtx, output)?;
             funding_verifier.add_output(amount);
         }
 
         funding_verifier.verify_funding()?;
 
         futures::executor::block_on(async {
-            let mut dbtx = self.db.begin_transaction();
+            let mut dbtx = self.db.begin_transaction(self.decoders());
             let new = dbtx
                 .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
                 .expect("DB error");
@@ -228,9 +202,7 @@ impl FedimintConsensus {
         let UnzipConsensusItem {
             epoch_info: _epoch_info_cis,
             transaction: transaction_cis,
-            wallet: wallet_cis,
-            mint: mint_cis,
-            ln: ln_cis,
+            module: module_cis,
         } = consensus_outcome
             .contributions
             .into_iter()
@@ -239,43 +211,31 @@ impl FedimintConsensus {
 
         // Begin consensus epoch
         {
-            let mut dbtx = self.db.begin_transaction();
-            self.wallet
-                .begin_consensus_epoch(&mut dbtx, wallet_cis)
-                .await;
-            self.mint.begin_consensus_epoch(&mut dbtx, mint_cis).await;
-            self.ln.begin_consensus_epoch(&mut dbtx, ln_cis).await;
+            let per_module_cis: HashMap<
+                ModuleKey,
+                Vec<(PeerId, fedimint_api::core::ConsensusItem)>,
+            > = module_cis
+                .into_iter()
+                .into_group_map_by(|(_peer, mci)| mci.module_key());
+
+            let mut dbtx = self.db.begin_transaction(self.decoders());
+            for (module_key, module_cis) in per_module_cis {
+                let module = self
+                    .modules
+                    .get(&module_key)
+                    .expect("CIs were decoded, so the module exists");
+                module.begin_consensus_epoch(&mut dbtx, module_cis).await;
+            }
+
             dbtx.commit_tx().await.expect("DB Error");
         }
 
         // Process transactions
         {
-            // Since the changes to the database will happen all at once we won't be able to handle
-            // conflicts between consensus items in one batch there. Thus we need to make sure that
-            // all items in a batch are consistent/deterministically filter out inconsistent ones.
-            // There are two item types that need checking:
-            //  * peg-ins that each peg-in tx is only used to issue coins once
-            //  * coin spends to avoid double spends in one batch
-            //  * only one peg-out allowed per epoch
-            let (ok_tx, err_tx) = transaction_cis
-                .into_iter()
-                .filter_conflicts(|(_, tx)| tx)
-                .partitioned();
+            let mut dbtx = self.db.begin_transaction(self.decoders());
 
-            let mut dbtx = self.db.begin_transaction();
-
-            for transaction in err_tx {
-                dbtx.insert_entry(
-                    &RejectedTransactionKey(transaction.tx_hash()),
-                    &format!("{:?}", TransactionSubmissionError::TransactionConflictError),
-                )
-                .expect("DB Error");
-                dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
-                    .expect("DB Error");
-            }
-
-            let caches = self.build_verification_caches(ok_tx.iter());
-            for transaction in ok_tx {
+            let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
+            for (_, transaction) in transaction_cis {
                 let span = info_span!("Processing transaction");
                 // in_scope to make sure that no await is in the middle of the span
                 let _enter = span.in_scope(|| {
@@ -283,6 +243,7 @@ impl FedimintConsensus {
                     dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
                         .expect("DB Error");
 
+                    dbtx.set_tx_savepoint();
                     // TODO: use borrowed transaction
                     match self.process_transaction(&mut dbtx, transaction.clone(), &caches) {
                         Ok(()) => {
@@ -309,23 +270,15 @@ impl FedimintConsensus {
 
         // End consensus epoch
         {
-            let mut dbtx = self.db.begin_transaction();
+            let mut dbtx = self.db.begin_transaction(self.decoders());
             let mut drop_peers = Vec::<PeerId>::new();
 
             self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers);
 
-            let mut drop_wallet = self
-                .wallet
-                .end_consensus_epoch(&epoch_peers, &mut dbtx)
-                .await;
-
-            let mut drop_mint = self.mint.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
-
-            let mut drop_ln = self.ln.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
-
-            drop_peers.append(&mut drop_wallet);
-            drop_peers.append(&mut drop_mint);
-            drop_peers.append(&mut drop_ln);
+            for module in self.modules.values() {
+                let module_drop_peers = module.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
+                drop_peers.extend(module_drop_peers);
+            }
 
             for peer in drop_peers {
                 dbtx.insert_entry(&DropPeerKey(peer), &())
@@ -346,7 +299,7 @@ impl FedimintConsensus {
 
     pub fn epoch_history(&self, epoch: u64) -> Option<EpochHistory> {
         self.db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&EpochHistoryKey(epoch))
             .unwrap()
     }
@@ -361,7 +314,7 @@ impl FedimintConsensus {
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&prev_epoch_key)
             .expect("DB error");
 
@@ -396,18 +349,19 @@ impl FedimintConsensus {
     }
 
     pub async fn await_consensus_proposal(&self) {
-        select_all(vec![
-            self.wallet.await_consensus_proposal(),
-            self.ln.await_consensus_proposal(),
-            self.mint.await_consensus_proposal(),
-        ])
-        .await;
+        let proposal_futures = self
+            .modules
+            .iter()
+            .map(|(_, module)| module.await_consensus_proposal())
+            .collect::<Vec<_>>();
+
+        select_all(proposal_futures).await;
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
         let drop_peers = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .find_by_prefix(&DropPeerKeyPrefix)
             .map(|res| {
                 let key = res.expect("DB error").0;
@@ -417,44 +371,33 @@ impl FedimintConsensus {
 
         let mut items: Vec<ConsensusItem> = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
                 ConsensusItem::Transaction(value)
             })
-            .chain(
-                self.wallet
-                    .consensus_proposal()
-                    .await
-                    .into_iter()
-                    .map(ConsensusItem::Wallet),
-            )
-            .chain(
-                self.mint
-                    .consensus_proposal()
-                    .await
-                    .into_iter()
-                    .map(ConsensusItem::Mint),
-            )
-            .chain(
-                self.ln
-                    .consensus_proposal()
-                    .await
-                    .into_iter()
-                    .map(ConsensusItem::LN),
-            )
             .collect();
+
+        for module in self.modules.values() {
+            items.extend(
+                module
+                    .consensus_proposal()
+                    .await
+                    .into_iter()
+                    .map(ConsensusItem::Module),
+            );
+        }
 
         if let Some(epoch) = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&LastEpochKey)
             .unwrap()
         {
             let last_epoch = self
                 .db
-                .begin_transaction()
+                .begin_transaction(self.decoders())
                 .get_value(&epoch)
                 .unwrap()
                 .unwrap();
@@ -478,20 +421,16 @@ impl FedimintConsensus {
 
         let mut pub_keys = Vec::new();
         for input in transaction.inputs.iter() {
-            let meta = match input {
-                Input::Mint(coins) => self
-                    .mint
-                    .apply_input(&self.build_interconnect(), dbtx, coins, &caches.mint)
-                    .map_err(TransactionSubmissionError::InputCoinError)?,
-                Input::Wallet(peg_in) => self
-                    .wallet
-                    .apply_input(&self.build_interconnect(), dbtx, peg_in, &caches.wallet)
-                    .map_err(TransactionSubmissionError::InputPegIn)?,
-                Input::LN(input) => self
-                    .ln
-                    .apply_input(&self.build_interconnect(), dbtx, input, &caches.ln)
-                    .map_err(TransactionSubmissionError::ContractInputError)?,
-            };
+            let module = self
+                .modules
+                .get(&input.module_key())
+                .expect("Parsing the input should fail if the module doesn't exist");
+            let meta = module.apply_input(
+                &self.build_interconnect(),
+                dbtx,
+                input,
+                caches.get_cache(input.module_key()),
+            )?;
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
         }
@@ -502,20 +441,12 @@ impl FedimintConsensus {
                 txid: tx_hash,
                 out_idx: idx as u64,
             };
-            let amount = match output {
-                Output::Mint(new_tokens) => self
-                    .mint
-                    .apply_output(dbtx, &new_tokens, out_point)
-                    .map_err(TransactionSubmissionError::OutputCoinError)?,
-                Output::Wallet(peg_out) => self
-                    .wallet
-                    .apply_output(dbtx, &peg_out, out_point)
-                    .map_err(TransactionSubmissionError::OutputPegOut)?,
-                Output::LN(output) => self
-                    .ln
-                    .apply_output(dbtx, &output, out_point)
-                    .map_err(TransactionSubmissionError::ContractOutputError)?,
-            };
+            let module = self
+                .modules
+                .get(&output.module_key())
+                .expect("Parsing the input should fail if the module doesn't exist");
+
+            let amount = module.apply_output(dbtx, &output, out_point)?;
             funding_verifier.add_output(amount);
         }
 
@@ -530,46 +461,30 @@ impl FedimintConsensus {
     ) -> Option<crate::outcome::TransactionStatus> {
         let accepted: Option<AcceptedTransaction> = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&AcceptedTransactionKey(txid))
             .expect("DB error");
 
         if let Some(accepted_tx) = accepted {
-            let outputs =
-                accepted_tx
-                    .transaction
-                    .outputs
-                    .iter()
-                    .enumerate()
-                    .map(|(out_idx, output)| {
-                        let outpoint = OutPoint {
-                            txid,
-                            out_idx: out_idx as u64,
-                        };
-                        let outcome =
-                            match output {
-                                Output::Mint(_) => {
-                                    let outcome = self.mint.output_status(outpoint).expect(
-                                        "the transaction was processed, so should be known",
-                                    );
-                                    OutputOutcome::Mint(outcome)
-                                }
-                                Output::Wallet(_) => {
-                                    let outcome = self.wallet.output_status(outpoint).expect(
-                                        "the transaction was processed, so should be known",
-                                    );
-                                    OutputOutcome::Wallet(outcome)
-                                }
-                                Output::LN(_) => {
-                                    let outcome = self.ln.output_status(outpoint).expect(
-                                        "the transaction was processed, so should be known",
-                                    );
-                                    OutputOutcome::LN(outcome)
-                                }
-                            };
-                        (&outcome).into()
-                    })
-                    .collect();
+            let outputs = accepted_tx
+                .transaction
+                .outputs
+                .iter()
+                .enumerate()
+                .map(|(out_idx, output)| {
+                    let outpoint = OutPoint {
+                        txid,
+                        out_idx: out_idx as u64,
+                    };
+                    let outcome = self
+                        .modules
+                        .get(&output.module_key())
+                        .expect("Module exists because parsing succeeded")
+                        .output_status(outpoint)
+                        .expect("the transaction was processed, so should be known");
+                    (&outcome).into()
+                })
+                .collect();
 
             return Some(crate::outcome::TransactionStatus::Accepted {
                 epoch: accepted_tx.epoch,
@@ -579,7 +494,7 @@ impl FedimintConsensus {
 
         let rejected: Option<String> = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&RejectedTransactionKey(txid))
             .expect("DB error");
 
@@ -592,49 +507,33 @@ impl FedimintConsensus {
 
     fn build_verification_caches<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a Transaction> + Clone + Send,
+        transactions: impl Iterator<Item = &'a Transaction> + Send,
     ) -> VerificationCaches {
-        let mint_input_iter = transactions
-            .clone()
+        let module_inputs = transactions
             .flat_map(|tx| tx.inputs.iter())
-            .filter_map(|input| match input {
-                Input::Mint(input) => Some(input),
-                Input::Wallet(_) => None,
-                Input::LN(_) => None,
-            });
-        let mint_cache = self.mint.build_verification_cache(mint_input_iter);
+            .cloned()
+            .into_group_map_by(|input| input.module_key());
 
-        let wallet_input_iter = transactions
-            .clone()
-            .flat_map(|tx| tx.inputs.iter())
-            .filter_map(|input| match input {
-                Input::Mint(_) => None,
-                Input::Wallet(input) => Some(input),
-                Input::LN(_) => None,
-            });
-        let wallet_cache = self.wallet.build_verification_cache(wallet_input_iter);
+        // TODO: should probably run in parallel, but currently only the mint does anything at all
+        let caches = module_inputs
+            .into_iter()
+            .map(|(module_key, inputs)| {
+                let module = self
+                    .modules
+                    .get(&module_key)
+                    .expect("Inputs were parsed so module exists");
+                (module_key, module.build_verification_cache(&inputs))
+            })
+            .collect();
 
-        let ln_input_iter = transactions
-            .flat_map(|tx| tx.inputs.iter())
-            .filter_map(|input| match input {
-                Input::Mint(_) => None,
-                Input::Wallet(_) => None,
-                Input::LN(input) => Some(input),
-            });
-        let ln_cache = self.ln.build_verification_cache(ln_input_iter);
-
-        VerificationCaches {
-            mint: mint_cache,
-            wallet: wallet_cache,
-            ln: ln_cache,
-        }
+        VerificationCaches { caches }
     }
 
     pub fn audit(&self) -> Audit {
         let mut audit = Audit::default();
-        self.mint.audit(&mut audit);
-        self.ln.audit(&mut audit);
-        self.wallet.audit(&mut audit);
+        for module in self.modules.values() {
+            module.audit(&mut audit)
+        }
         audit
     }
 
@@ -677,46 +576,12 @@ impl Default for FundingVerifier {
     }
 }
 
-impl AsRef<Wallet> for FedimintConsensus {
-    fn as_ref(&self) -> &Wallet {
-        &self.wallet
-    }
-}
-
-impl AsRef<Mint> for FedimintConsensus {
-    fn as_ref(&self) -> &Mint {
-        &self.mint
-    }
-}
-
-impl AsRef<LightningModule> for FedimintConsensus {
-    fn as_ref(&self) -> &LightningModule {
-        &self.ln
-    }
-}
-
-impl AsRef<FedimintConsensus> for FedimintConsensus {
-    fn as_ref(&self) -> &FedimintConsensus {
-        self
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum TransactionSubmissionError {
     #[error("High level transaction error: {0}")]
     TransactionError(#[from] TransactionError),
-    #[error("Input coin error: {0}")]
-    InputCoinError(ModuleError),
-    #[error("Input peg-in error: {0}")]
-    InputPegIn(ModuleError),
-    #[error("LN contract input error: {0}")]
-    ContractInputError(ModuleError),
-    #[error("Output coin error: {0}")]
-    OutputCoinError(ModuleError),
-    #[error("Output coin error: {0}")]
-    OutputPegOut(ModuleError),
-    #[error("LN contract output error: {0}")]
-    ContractOutputError(ModuleError),
+    #[error("Module input or output error: {0}")]
+    ModuleError(#[from] ModuleError),
     #[error("Transaction conflict error")]
     TransactionConflictError,
 }

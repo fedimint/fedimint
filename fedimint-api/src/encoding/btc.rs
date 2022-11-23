@@ -115,7 +115,9 @@ mod tests {
 
     use bitcoin::hashes::Hash as BitcoinHash;
 
+    use crate::core::Decoder;
     use crate::encoding::{Decodable, Encodable};
+    use crate::ModuleRegistry;
 
     #[test_log::test]
     fn sha256_roundtrip() {
@@ -124,7 +126,7 @@ mod tests {
         hash.consensus_encode(&mut encoded).unwrap();
         let hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
             &mut Cursor::new(encoded),
-            &BTreeMap::<_, ()>::new(),
+            &ModuleRegistry::<Decoder>::default(),
         )
         .unwrap();
         assert_eq!(hash, hash_decoded);
@@ -150,7 +152,7 @@ mod tests {
                 .expect("Encoding to vec can't fail");
             let mut cursor = Cursor::new(encoding);
             let parsed_address =
-                bitcoin::Address::consensus_decode(&mut cursor, &BTreeMap::<_, ()>::new())
+                bitcoin::Address::consensus_decode(&mut cursor, &BTreeMap::<_, Decoder>::new())
                     .expect("Decoding address failed");
 
             assert_eq!(address, parsed_address);

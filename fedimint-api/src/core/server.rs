@@ -56,6 +56,8 @@ where
 pub trait IServerModule: Debug {
     fn module_key(&self) -> ModuleKey;
 
+    fn decoder(&self) -> Decoder;
+
     fn as_any(&self) -> &(dyn Any + 'static);
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
@@ -92,9 +94,10 @@ pub trait IServerModule: Debug {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input(
+    fn validate_input<'a>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        dbtx: &DatabaseTransaction<'a>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -118,7 +121,11 @@ pub trait IServerModule: Debug {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(&self, output: &Output) -> Result<TransactionItemAmount, ModuleError>;
+    fn validate_output(
+        &self,
+        dbtx: &DatabaseTransaction,
+        output: &Output,
+    ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
@@ -177,6 +184,10 @@ dyn_newtype_define!(
 );
 
 impl ModuleDecode for ServerModule {
+    fn clone_decoder(&self) -> Decoder {
+        self.decoder()
+    }
+
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
         (**self).decode_input(r)
     }
@@ -198,9 +209,14 @@ impl ModuleDecode for ServerModule {
 impl<T> IServerModule for T
 where
     T: ServerModulePlugin + 'static,
+    <T as ServerModulePlugin>::Decoder: Sync + Send + 'static,
 {
     fn module_key(&self) -> ModuleKey {
         <Self as ServerModulePlugin>::module_key(self)
+    }
+
+    fn decoder(&self) -> Decoder {
+        Decoder::from_typed(ServerModulePlugin::decoder(self))
     }
 
     fn as_any(&self) -> &(dyn Any + 'static) {
@@ -208,19 +224,19 @@ where
     }
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_input(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_output(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_output_outcome(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_output_outcome(r)
     }
 
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_consensus_item(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_consensus_item(r)
     }
 
     /// Blocks until a new `consensus_proposal` is available.
@@ -286,15 +302,17 @@ where
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input(
+    fn validate_input<'a>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        dbtx: &DatabaseTransaction<'a>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModulePlugin>::validate_input(
             self,
             interconnect,
+            dbtx,
             verification_cache
                 .as_any()
                 .downcast_ref::<<Self as ServerModulePlugin>::VerificationCache>()
@@ -341,9 +359,14 @@ where
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(&self, output: &Output) -> Result<TransactionItemAmount, ModuleError> {
+    fn validate_output(
+        &self,
+        dbtx: &DatabaseTransaction,
+        output: &Output,
+    ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModulePlugin>::validate_output(
             self,
+            dbtx,
             output
                 .as_any()
                 .downcast_ref::<<Self as ServerModulePlugin>::Output>()

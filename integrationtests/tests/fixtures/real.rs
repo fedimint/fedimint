@@ -12,6 +12,7 @@ use cln_rpc::model::requests;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{ClnRpc, Request, Response};
 use fedimint_api::config::BitcoindRpcCfg;
+use fedimint_api::core::Decoder;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::Amount;
 use fedimint_wallet::txoproof::TxOutProof;
@@ -165,7 +166,7 @@ impl BitcoinTest for RealBitcoinTest {
                     .get_tx_out_proof(&[id], None)
                     .expect(Self::ERROR),
             ),
-            &BTreeMap::<_, ()>::new(),
+            &BTreeMap::<_, Decoder>::new(),
         )
         .expect(Self::ERROR);
 

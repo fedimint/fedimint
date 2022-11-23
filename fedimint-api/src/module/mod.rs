@@ -216,6 +216,8 @@ pub trait ServerModulePlugin: Debug + Sized {
 
     fn module_key(&self) -> ModuleKey;
 
+    fn decoder(&self) -> Self::Decoder;
+
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self);
 
@@ -245,9 +247,10 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input<'a>(
+    fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        dbtx: &DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -271,7 +274,11 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(&self, output: &Self::Output) -> Result<TransactionItemAmount, ModuleError>;
+    fn validate_output(
+        &self,
+        dbtx: &DatabaseTransaction,
+        output: &Self::Output,
+    ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is

@@ -10,6 +10,7 @@ use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::encoding::ModuleRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::{Amount, ServerModulePlugin};
@@ -193,7 +194,7 @@ impl<'c> LnClient<'c> {
         // TODO: unify block height type
         self.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .filter_map(|res| {
                 let (_key, outgoing_data) = res.expect("DB error");
@@ -256,7 +257,7 @@ impl<'c> LnClient<'c> {
     }
 
     pub async fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .expect("Db error");
         dbtx.commit_tx().await.expect("DB Error");
@@ -266,7 +267,7 @@ impl<'c> LnClient<'c> {
         let confirmed_invoice = self
             .context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .get_value(&ConfirmedInvoiceKey(contract_id))
             .expect("Db error")
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
@@ -323,17 +324,19 @@ mod tests {
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
     use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::core::{Decoder, OutputOutcome, MODULE_KEY_LN};
     use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::encoding::ModuleRegistry;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
+    use fedimint_core::modules::ln::common::LightningModuleDecoder;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
     use fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
     use fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     use fedimint_core::modules::wallet::PegOutFees;
-    use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
-    use fedimint_core::transaction::Transaction;
+    use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
     use threshold_crypto::PublicKey;
@@ -341,7 +344,7 @@ mod tests {
 
     use crate::api::IFederationApi;
     use crate::ln::LnClient;
-    use crate::ClientContext;
+    use crate::{ClientContext, LegacyTransaction};
 
     type Fed = FakeFed<LightningModule>;
 
@@ -359,18 +362,20 @@ mod tests {
             let mint = self.mint.lock().await;
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![(&OutputOutcome::LN(
+                outputs: vec![SerdeOutputOutcome::from(&OutputOutcome::from(
                     mint.output_outcome(OutPoint {
                         txid: tx,
                         out_idx: 0,
                     })
                     .unwrap(),
-                ))
-                    .into()],
+                ))],
             })
         }
 
-        async fn submit_transaction(&self, _tx: Transaction) -> crate::api::Result<TransactionId> {
+        async fn submit_transaction(
+            &self,
+            _tx: LegacyTransaction,
+        ) -> crate::api::Result<TransactionId> {
             unimplemented!()
         }
 
@@ -382,7 +387,12 @@ mod tests {
                 .mint
                 .lock()
                 .await
-                .fetch_from_all(|m| m.get_contract_account(contract))
+                .fetch_from_all(|m, db| {
+                    m.get_contract_account(
+                        &db.begin_transaction(ModuleRegistry::default()),
+                        contract,
+                    )
+                })
                 .unwrap())
         }
 
@@ -429,21 +439,30 @@ mod tests {
         }
     }
 
+    fn ln_decoders() -> ModuleRegistry {
+        vec![(MODULE_KEY_LN, Decoder::from_typed(LightningModuleDecoder))]
+            .into_iter()
+            .collect()
+    }
+
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         LightningModuleClientConfig,
         ClientContext,
     ) {
-        let fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::<LightningModule>::new(
-                4,
-                |cfg, db| async move { Ok(LightningModule::new(cfg.to_typed()?, db)) },
-                &ModuleConfigGenParams::fake_config_gen_params(),
-                &LightningModuleConfigGen,
-            )
-            .await
-            .unwrap(),
-        ));
+        let fed =
+            Arc::new(tokio::sync::Mutex::new(
+                FakeFed::<LightningModule>::new(
+                    4,
+                    |cfg, db| async move {
+                        Ok(LightningModule::new(cfg.to_typed()?, db, ln_decoders()))
+                    },
+                    &ModuleConfigGenParams::fake_config_gen_params(),
+                    &LightningModuleConfigGen,
+                )
+                .await
+                .unwrap(),
+            ));
         let api = FakeApi { mint: fed.clone() };
         let client_config = fed.lock().await.client_cfg().clone();
 
@@ -493,7 +512,10 @@ mod tests {
         };
         let timelock = 42;
 
-        let mut dbtx = client.context.db.begin_transaction();
+        let mut dbtx = client
+            .context
+            .db
+            .begin_transaction(ModuleRegistry::default());
         let output = client
             .create_outgoing_output(&mut dbtx, invoice.clone(), &gateway, timelock, &mut rng)
             .unwrap();

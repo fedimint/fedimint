@@ -10,9 +10,9 @@ use fedimint_api::config::{
     scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
+use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -40,7 +40,7 @@ use thiserror::Error;
 use threshold_crypto::group::Curve;
 use tracing::{debug, error, warn};
 
-use crate::common::{MintModuleDecoder, MINT_MODULE_KEY};
+use crate::common::MintModuleDecoder;
 use crate::config::MintConfig;
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -50,7 +50,7 @@ use crate::db::{
 
 pub mod config;
 
-mod common;
+pub mod common;
 pub mod db;
 
 /// Data structures taking into account different amount tiers
@@ -62,7 +62,8 @@ pub struct Mint {
     sec_key: Tiered<SecretKeyShare>,
     pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
-    db: Database,
+    non_consensus_db: Database,
+    decoders: ModuleRegistry<Decoder>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -297,7 +298,11 @@ impl ServerModulePlugin for Mint {
     type VerificationCache = VerificationCache;
 
     fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
-        MINT_MODULE_KEY
+        MODULE_KEY_MINT
+    }
+
+    fn decoder(&self) -> Self::Decoder {
+        MintModuleDecoder
     }
 
     async fn await_consensus_proposal(&self) {
@@ -307,8 +312,8 @@ impl ServerModulePlugin for Mint {
     }
 
     async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
-        self.db
-            .begin_transaction()
+        self.non_consensus_db
+            .begin_transaction(self.decoders.clone())
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 let (key, partial_signature) = res.expect("DB error");
@@ -358,16 +363,17 @@ impl ServerModulePlugin for Mint {
         VerificationCache { valid_coins }
     }
 
-    fn validate_input<'a>(
+    fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        cache: &Self::VerificationCache,
+        dbtx: &DatabaseTransaction<'b>,
+        verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
         input
             .iter_items()
             .try_for_each(|(amount, coin)| {
-                let coin_valid = cache
+                let coin_valid = verification_cache
                     .valid_coins
                     .get(coin) // We validated the coin
                     .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
@@ -377,9 +383,7 @@ impl ServerModulePlugin for Mint {
                     return Err(MintError::InvalidSignature);
                 }
 
-                if self
-                    .db
-                    .begin_transaction()
+                if dbtx
                     .get_value(&NonceKey(coin.0.clone()))
                     .expect("DB error")
                     .is_some()
@@ -410,7 +414,7 @@ impl ServerModulePlugin for Mint {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, cache, input)?;
+        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
 
         input.iter_items().for_each(|(amount, coin)| {
             let key = NonceKey(coin.0.clone());
@@ -422,7 +426,11 @@ impl ServerModulePlugin for Mint {
         Ok(meta)
     }
 
-    fn validate_output(&self, output: &Self::Output) -> Result<TransactionItemAmount, ModuleError> {
+    fn validate_output(
+        &self,
+        _dbtx: &DatabaseTransaction,
+        output: &Self::Output,
+    ) -> Result<TransactionItemAmount, ModuleError> {
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
             if self.pub_key.get(&amount).is_none() {
                 Some(amount)
@@ -445,7 +453,7 @@ impl ServerModulePlugin for Mint {
         output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(output)?;
+        let amount = self.validate_output(dbtx, output)?;
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
@@ -475,9 +483,7 @@ impl ServerModulePlugin for Mint {
         dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Finalize partial signatures for which we now have enough shares
-        let req_psigs = self
-            .db
-            .begin_transaction()
+        let req_psigs = dbtx
             .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
@@ -490,15 +496,14 @@ impl ServerModulePlugin for Mint {
             .into_iter()
             .map(|(issuance_id, shares)| async move {
                 let mut drop_peers = Vec::<PeerId>::new();
-                let mut dbtx = self.db.begin_transaction();
+                // FIXME: this specific instance is safe, but we should never directly read from the DB
+                let mut dbtx = self
+                    .non_consensus_db
+                    .begin_transaction(self.decoders.clone());
                 let proposal_key = ProposedPartialSignatureKey {
                     request_id: issuance_id,
                 };
-                let our_contribution = self
-                    .db
-                    .begin_transaction()
-                    .get_value(&proposal_key)
-                    .expect("DB error");
+                let our_contribution = dbtx.get_value(&proposal_key).expect("DB error");
                 let (bsig, errors) = self.combine(our_contribution, shares.clone());
 
                 // FIXME: validate shares before writing to DB to make combine infallible
@@ -546,10 +551,9 @@ impl ServerModulePlugin for Mint {
 
         let mut redemptions = Amount::from_sat(0);
         let mut issuances = Amount::from_sat(0);
-        self.db
-            .begin_transaction()
+        let remove_audit_keys = dbtx
             .find_by_prefix(&MintAuditItemKeyPrefix)
-            .for_each(|res| {
+            .map(|res| {
                 let (key, amount) = res.expect("DB error");
                 match key {
                     MintAuditItemKey::Issuance(_) => issuances += amount,
@@ -557,8 +561,14 @@ impl ServerModulePlugin for Mint {
                     MintAuditItemKey::Redemption(_) => redemptions += amount,
                     MintAuditItemKey::RedemptionTotal => redemptions += amount,
                 }
-                dbtx.remove_entry(&key).expect("DB Error");
-            });
+                key
+            })
+            .collect::<Vec<_>>();
+
+        for key in remove_audit_keys {
+            dbtx.remove_entry(&key).expect("DB Error");
+        }
+
         dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
             .expect("DB Error");
         dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
@@ -568,25 +578,22 @@ impl ServerModulePlugin for Mint {
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
-        let we_proposed = self
-            .db
-            .begin_transaction()
+        let dbtx = self
+            .non_consensus_db
+            .begin_transaction(self.decoders.clone());
+        let we_proposed = dbtx
             .get_value(&ProposedPartialSignatureKey {
                 request_id: out_point,
             })
             .expect("DB error")
             .is_some();
-        let was_consensus_outcome = self
-            .db
-            .begin_transaction()
+        let was_consensus_outcome = dbtx
             .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix {
                 request_id: out_point,
             })
             .any(|res| res.is_ok());
 
-        let final_sig = self
-            .db
-            .begin_transaction()
+        let final_sig = dbtx
             .get_value(&OutputOutcomeKey(out_point))
             .expect("DB error");
 
@@ -600,12 +607,18 @@ impl ServerModulePlugin for Mint {
     }
 
     fn audit(&self, audit: &mut Audit) {
-        audit.add_items(&self.db, &MintAuditItemKeyPrefix, |k, v| match k {
-            MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
-            MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
-            MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
-            MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
-        });
+        audit.add_items(
+            &self
+                .non_consensus_db
+                .begin_transaction(self.decoders.clone()),
+            &MintAuditItemKeyPrefix,
+            |k, v| match k {
+                MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
+                MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
+                MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
+                MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
+            },
+        );
     }
 
     fn api_base_name(&self) -> &'static str {
@@ -624,7 +637,7 @@ impl Mint {
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(cfg: MintConfig, db: Database) -> Mint {
+    pub fn new(cfg: MintConfig, db: Database, decoders: ModuleRegistry<Decoder>) -> Mint {
         assert!(cfg.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -669,7 +682,8 @@ impl Mint {
             sec_key: cfg.tbs_sks,
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
-            db,
+            non_consensus_db: db,
+            decoders,
         }
     }
 
@@ -824,9 +838,7 @@ impl Mint {
         output_id: OutPoint,
         partial_sig: PartialSigResponse,
     ) {
-        if self
-            .db
-            .begin_transaction()
+        if dbtx
             .get_value(&OutputOutcomeKey(output_id))
             .expect("DB error")
             .is_some()
@@ -896,7 +908,7 @@ impl Extend<(Amount, BlindNonce)> for SignRequest {
 }
 
 plugin_types_trait_impl!(
-    MINT_MODULE_KEY,
+    fedimint_api::core::MODULE_KEY_MINT,
     MintInput,
     MintOutput,
     MintOutputOutcome,
@@ -953,13 +965,18 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+    use fedimint_api::core::{Decoder, MODULE_KEY_MINT};
     use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::encoding::ModuleRegistry;
     use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, PeerErrorType};
+    use crate::{
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, MintModuleDecoder,
+        PeerErrorType,
+    };
 
     const THRESHOLD: usize = 1;
     const MINTS: usize = 5;
@@ -981,7 +998,15 @@ mod test {
         let (mint_cfg, client_cfg) = build_configs();
         let mints = mint_cfg
             .into_iter()
-            .map(|config| Mint::new(config.to_typed().unwrap(), MemDatabase::new().into()))
+            .map(|config| {
+                Mint::new(
+                    config.to_typed().unwrap(),
+                    MemDatabase::new().into(),
+                    vec![(MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder))]
+                        .into_iter()
+                        .collect(),
+                )
+            })
             .collect::<Vec<_>>();
 
         let agg_pk = *client_cfg
@@ -1157,6 +1182,7 @@ mod test {
                 fee_consensus: FeeConsensus::default(),
             },
             MemDatabase::new().into(),
+            ModuleRegistry::default(),
         );
     }
 }
