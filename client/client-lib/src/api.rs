@@ -15,8 +15,10 @@ use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
 use fedimint_core::modules::wallet::PegOutFees;
-use fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
-use fedimint_core::transaction::{SerdeTransaction, Transaction};
+use fedimint_core::outcome::legacy::{OutputOutcome, TryIntoOutcome};
+use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::transaction::legacy::Transaction as LegacyTransaction;
+use fedimint_core::transaction::SerdeTransaction;
 use fedimint_core::CoreError;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -48,7 +50,7 @@ pub trait IFederationApi: Debug + Send + Sync {
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
 
     /// Submit a transaction to all federation members
-    async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId>;
+    async fn submit_transaction(&self, tx: LegacyTransaction) -> Result<TransactionId>;
 
     async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory>;
 
@@ -101,10 +103,10 @@ impl FederationApi {
                         out_point.out_idx as usize,
                     ))
                     .and_then(|output| {
-                        output
-                            .try_into_inner(&module_decode_stubs())? // FIXME: modularize
-                            .try_into_variant()
-                            .map_err(ApiError::CoreError)
+                        let legacy_oo: OutputOutcome =
+                            output.try_into_inner(&module_decode_stubs())?.into();
+
+                        legacy_oo.try_into_variant().map_err(ApiError::CoreError)
                     })
             }
         }
@@ -223,11 +225,11 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
     }
 
     /// Submit a transaction to all federation members
-    async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
+    async fn submit_transaction(&self, tx: LegacyTransaction) -> Result<TransactionId> {
         // TODO: check the id is correct
         self.request(
             "/transaction",
-            SerdeTransaction::from(&tx),
+            SerdeTransaction::from(&tx.into_type_erased()),
             CurrentConsensus::new(self.peers().one_honest()),
         )
         .await

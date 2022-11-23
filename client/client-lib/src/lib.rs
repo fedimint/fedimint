@@ -33,7 +33,7 @@ use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::legacy::Transaction as LegacyTransaction;
 use fedimint_core::{
     modules::{
         ln::{
@@ -47,7 +47,7 @@ use fedimint_core::{
         mint::BlindNonce,
         wallet::txoproof::TxOutProof,
     },
-    transaction::{Input, Output},
+    transaction::legacy::{Input, Output},
 };
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -1033,7 +1033,7 @@ impl Client<GatewayClientConfig> {
         let cancel_output = self
             .ln_client()
             .create_cancel_outgoing_output(contract_id, cancel_signature);
-        let cancel_tx = Transaction {
+        let cancel_tx = LegacyTransaction {
             inputs: vec![],
             outputs: vec![Output::LN(cancel_output)],
             signature: None,
@@ -1112,11 +1112,12 @@ impl Client<GatewayClientConfig> {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output =
-            fedimint_core::transaction::Output::LN(LightningOutput::Contract(ContractOutput {
+        let incoming_output = fedimint_core::transaction::legacy::Output::LN(
+            LightningOutput::Contract(ContractOutput {
                 amount: offer.amount,
                 contract: contract.clone(),
-            }));
+            }),
+        );
 
         // Submit transaction
         builder.output(incoming_output);

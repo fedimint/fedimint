@@ -1,10 +1,6 @@
 use std::fmt::Write;
 
-use fedimint_core::modules::ln::contracts::Contract;
-use fedimint_core::modules::ln::{ContractOutput, LightningConsensusItem, LightningOutput};
-use fedimint_core::modules::mint::{MintConsensusItem, PartiallySignedRequest};
-use fedimint_core::transaction::{Input, Output, Transaction};
-use fedimint_wallet::{PegOutSignatureItem, RoundConsensusItem, WalletConsensusItem};
+use fedimint_core::transaction::Transaction;
 
 use crate::{ConsensusItem, ConsensusOutcome};
 
@@ -25,70 +21,20 @@ pub fn epoch_message(consensus: &ConsensusOutcome) -> String {
 fn item_message(item: &ConsensusItem) -> String {
     match item {
         ConsensusItem::EpochInfo(_) => "Outcome Signature".to_string(),
-        ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(RoundConsensusItem {
-            block_height,
-            ..
-        })) => format!("Wallet Block Height {}", block_height),
-        ConsensusItem::Wallet(WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
-            txid,
-            ..
-        })) => format!("Wallet Peg Out PSBT {}", txid),
-        ConsensusItem::Mint(MintConsensusItem(PartiallySignedRequest {
-            out_point,
-            partial_signature,
-        })) => {
-            format!(
-                "Mint Signed Coins {} with TxId {}",
-                partial_signature.0.total_amount(),
-                out_point.txid
-            )
-        }
-        ConsensusItem::LN(LightningConsensusItem { contract_id, .. }) => {
-            format!("LN Decryption Share for contract {}", contract_id)
+        // TODO: make this nice again
+        ConsensusItem::Module(mci) => {
+            format!("Module CI: module={} ci={:?}", mci.module_key(), mci)
         }
         ConsensusItem::Transaction(Transaction {
             inputs, outputs, ..
         }) => {
             let mut tx_debug = "Transaction".to_string();
             for input in inputs.iter() {
-                let input_debug = match input {
-                    Input::Mint(t) => format!("Mint Coins {}", t.total_amount()),
-                    Input::Wallet(t) => {
-                        format!("Wallet PegIn with TxId {}", t.outpoint().txid)
-                    }
-                    Input::LN(t) => {
-                        format!("LN Contract {} with id {}", t.amount, t.contract_id)
-                    }
-                };
-                write!(tx_debug, "\n    Input: {}", input_debug).unwrap();
+                // TODO: add pretty print fn to interface
+                write!(tx_debug, "\n    Input: {:?}", input).unwrap();
             }
             for output in outputs.iter() {
-                let output_debug = match output {
-                    Output::Mint(t) => format!("Mint Coins {}", t.total_amount()),
-                    Output::Wallet(t) => {
-                        format!("Wallet PegOut {} to address {}", t.amount, t.recipient)
-                    }
-                    Output::LN(LightningOutput::Offer(o)) => {
-                        format!("LN Offer for {} with hash {}", o.amount, o.hash)
-                    }
-                    Output::LN(LightningOutput::CancelOutgoing { contract, .. }) => {
-                        format!("LN Outgoing contract {} cancellation", contract)
-                    }
-                    Output::LN(LightningOutput::Contract(ContractOutput { amount, contract })) => {
-                        match contract {
-                            Contract::Account(a) => {
-                                format!("LN Account Contract for {} key {}", amount, a.key)
-                            }
-                            Contract::Incoming(a) => {
-                                format!("LN Incoming Contract for {} hash {}", amount, a.hash)
-                            }
-                            Contract::Outgoing(a) => {
-                                format!("LN Outgoing Contract for {} hash {}", amount, a.hash)
-                            }
-                        }
-                    }
-                };
-                write!(tx_debug, "\n    Output: {}", output_debug).unwrap();
+                write!(tx_debug, "\n    Output: {:?}", output).unwrap();
             }
             tx_debug
         }

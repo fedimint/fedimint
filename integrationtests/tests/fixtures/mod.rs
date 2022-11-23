@@ -18,14 +18,18 @@ use cln_rpc::ClnRpc;
 use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
+use fedimint_api::core::{
+    ConsensusItem as PerModuleConsensusItem, PluginConsensusItem, MODULE_KEY_MINT,
+    MODULE_KEY_WALLET,
+};
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
+use fedimint_api::Amount;
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
-use fedimint_api::{Amount, ServerModulePlugin};
 use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
@@ -34,12 +38,10 @@ use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::consensus::{ConsensusOutcome, ConsensusProposal};
-use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
-use fedimint_server::transaction::Output;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
@@ -72,6 +74,7 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 
 use crate::fixtures::utils::LnRpcAdapter;
+use crate::ConsensusItem;
 
 mod fake;
 mod real;
@@ -696,7 +699,7 @@ impl FederationTest {
                     let mut dbtx = svr.database.begin_transaction();
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
-                        outputs: vec![Output::Mint(MintOutput(tokens.clone()))],
+                        outputs: vec![MintOutput(tokens.clone()).into()],
                         signature: None,
                     };
 
@@ -711,8 +714,10 @@ impl FederationTest {
 
                     svr.fedimint
                         .consensus
-                        .mint
-                        .apply_output(&mut dbtx, &MintOutput(tokens.clone()), out_point)
+                        .modules
+                        .get(&MODULE_KEY_MINT)
+                        .unwrap()
+                        .apply_output(&mut dbtx, &MintOutput(tokens.clone()).into(), out_point)
                         .unwrap();
                     dbtx.commit_tx().await.expect("DB Error");
                 }
@@ -772,7 +777,12 @@ impl FederationTest {
     fn empty_proposal(server: &FedimintServer) -> bool {
         let height = server
             .consensus
-            .wallet
+            .modules
+            .get(&MODULE_KEY_WALLET)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<Wallet>()
+            .unwrap()
             .consensus_height(&server.consensus.db.begin_transaction())
             .unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
@@ -780,10 +790,18 @@ impl FederationTest {
         for item in proposal.items {
             match item {
                 // ignore items that get automatically generated
-                ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(r))
-                    if r.block_height == height =>
-                {
-                    continue
+                ConsensusItem::Module(mci) => {
+                    if mci.module_key() != MODULE_KEY_WALLET {
+                        return false;
+                    }
+
+                    let wci = assert_module_ci(&mci);
+                    if let WalletConsensusItem::RoundConsensus(rci) = wci {
+                        if rci.block_height == height {
+                            continue;
+                        }
+                    }
+                    return false;
                 }
                 ConsensusItem::EpochInfo(_) => continue,
                 _ => return false,
@@ -899,7 +917,11 @@ impl FederationTest {
 
             let ln = LightningModule::new(cfg.get_module_config("ln").unwrap(), db.clone());
 
-            let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db.clone());
+            let mut consensus = FedimintConsensus::new(cfg.clone(), db.clone());
+            consensus.register_module(mint.into());
+            consensus.register_module(wallet.into());
+            consensus.register_module(ln.into());
+
             let fedimint =
                 FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg), &mut task_group)
                     .await;
@@ -940,4 +962,16 @@ impl FederationTest {
             wallet,
         }
     }
+}
+
+pub fn assert_ci<M: PluginConsensusItem>(ci: &ConsensusItem) -> &M {
+    if let ConsensusItem::Module(mci) = ci {
+        assert_module_ci(mci)
+    } else {
+        panic!("Not a module consensus item");
+    }
+}
+
+pub fn assert_module_ci<M: PluginConsensusItem>(mci: &PerModuleConsensusItem) -> &M {
+    mci.as_any().downcast_ref().unwrap()
 }

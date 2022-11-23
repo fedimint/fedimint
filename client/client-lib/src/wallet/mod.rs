@@ -195,15 +195,14 @@ mod tests {
         PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet, WalletConfigGenerator,
         WalletOutput, WalletOutputOutcome,
     };
-    use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
-    use fedimint_core::transaction::Transaction;
+    use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
     use threshold_crypto::PublicKey;
 
     use crate::api::IFederationApi;
     use crate::wallet::WalletClient;
-    use crate::ClientContext;
+    use crate::{ClientContext, LegacyTransaction};
 
     type Fed = FakeFed<Wallet>;
     type SharedFed = Arc<tokio::sync::Mutex<Fed>>;
@@ -222,14 +221,16 @@ mod tests {
         ) -> crate::api::Result<TransactionStatus> {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![(&OutputOutcome::Wallet(WalletOutputOutcome(
-                    Txid::from_slice([0; 32].as_slice()).unwrap(),
-                )))
-                    .into()],
+                outputs: vec![SerdeOutputOutcome::from(
+                    &(WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()).into()),
+                )],
             })
         }
 
-        async fn submit_transaction(&self, _tx: Transaction) -> crate::api::Result<TransactionId> {
+        async fn submit_transaction(
+            &self,
+            _tx: LegacyTransaction,
+        ) -> crate::api::Result<TransactionId> {
             unimplemented!()
         }
 

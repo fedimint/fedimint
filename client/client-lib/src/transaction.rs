@@ -7,8 +7,9 @@ use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_core::modules::ln::contracts::ContractOutcome;
 use fedimint_core::modules::ln::LightningOutputOutcome;
 use fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput, SignRequest};
-use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
-use fedimint_core::transaction::{Input, Output, Transaction};
+use fedimint_core::outcome::legacy::OutputOutcome;
+use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::transaction::legacy::{Input, Output, Transaction};
 use rand::{CryptoRng, RngCore};
 use tbs::AggregatePublicKey;
 use tracing::debug;
@@ -55,9 +56,12 @@ impl Final for TransactionStatus {
         match self {
             TransactionStatus::Rejected(_) => true,
             TransactionStatus::Accepted { outputs, .. } => outputs.iter().all(|out| {
-                out.try_into_inner(&modules)
+                let legacy_oo: OutputOutcome = out
+                    .try_into_inner(&modules)
                     .expect("Federation sent invalid data") // FIXME: don't crash here
-                    .is_final()
+                    .into();
+
+                legacy_oo.is_final()
             }),
         }
     }

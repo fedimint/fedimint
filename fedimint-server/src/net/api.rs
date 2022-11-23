@@ -9,7 +9,7 @@ use fedimint_api::{
     config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
-    ServerModulePlugin, TransactionId,
+    TransactionId,
 };
 use fedimint_core::epoch::SerdeEpochHistory;
 use fedimint_core::outcome::TransactionStatus;
@@ -53,18 +53,6 @@ pub async fn run_server(
         attach_endpoints_erased(&mut rpc_module, module);
     }
 
-    attach_endpoints(
-        &mut rpc_module,
-        fedimint.wallet.api_endpoints(),
-        Some(fedimint.wallet.api_base_name()),
-    );
-
-    attach_endpoints(
-        &mut rpc_module,
-        fedimint.ln.api_endpoints(),
-        Some(fedimint.ln.api_base_name()),
-    );
-
     debug!(addr = cfg.api_bind_addr, "Starting WSServer");
     let server = ServerBuilder::new()
         .build(&cfg.api_bind_addr)
@@ -89,14 +77,11 @@ pub async fn run_server(
 }
 
 // TODO: remove once modularized
-fn attach_endpoints<M>(
+fn attach_endpoints(
     rpc_module: &mut RpcModule<RpcHandlerCtx>,
-    endpoints: Vec<ApiEndpoint<M>>,
+    endpoints: Vec<ApiEndpoint<FedimintConsensus>>,
     base_name: Option<&str>,
-) where
-    FedimintConsensus: AsRef<M>,
-    M: Sync + 'static,
-{
+) {
     for endpoint in endpoints {
         let path = if let Some(base_name) = base_name {
             // This memory leak is fine because it only happens on server startup
@@ -117,7 +102,7 @@ fn attach_endpoints<M>(
                     // end up with an inconsistent state in theory. In practice most API functions
                     // are only reading and the few that do write anything are atomic. Lastly, this
                     // is only the last line of defense
-                    AssertUnwindSafe((handler)((*state.fedimint).as_ref(), params))
+                    AssertUnwindSafe((handler)(&state.fedimint, params))
                         .catch_unwind()
                         .await
                         .map_err(|_| {

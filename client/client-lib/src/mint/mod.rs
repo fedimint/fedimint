@@ -439,8 +439,7 @@ mod tests {
     use fedimint_core::modules::mint::config::MintClientConfig;
     use fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
     use fedimint_core::modules::wallet::PegOutFees;
-    use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
-    use fedimint_core::transaction::Transaction;
+    use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::FakeFed;
     use futures::executor::block_on;
     use threshold_crypto::PublicKey;
@@ -448,7 +447,9 @@ mod tests {
     use crate::api::{IFederationApi, WsFederationApi};
     use crate::mint::db::LastECashNoteIndexKey;
     use crate::mint::MintClient;
-    use crate::{BlindNonce, ClientContext, DerivableSecret, TransactionBuilder};
+    use crate::{
+        BlindNonce, ClientContext, DerivableSecret, LegacyTransaction, TransactionBuilder,
+    };
 
     type Fed = FakeFed<Mint>;
 
@@ -466,18 +467,22 @@ mod tests {
             let mint = self.mint.lock().await;
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![(&OutputOutcome::Mint(
-                    mint.output_outcome(OutPoint {
-                        txid: tx,
-                        out_idx: 0,
-                    })
-                    .unwrap(),
-                ))
-                    .into()],
+                outputs: vec![SerdeOutputOutcome::from(
+                    &(mint
+                        .output_outcome(OutPoint {
+                            txid: tx,
+                            out_idx: 0,
+                        })
+                        .unwrap()
+                        .into()),
+                )],
             })
         }
 
-        async fn submit_transaction(&self, _tx: Transaction) -> crate::api::Result<TransactionId> {
+        async fn submit_transaction(
+            &self,
+            _tx: LegacyTransaction,
+        ) -> crate::api::Result<TransactionId> {
             unimplemented!()
         }
 

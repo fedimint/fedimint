@@ -108,7 +108,10 @@ async fn main() -> anyhow::Result<()> {
 
     let ln = LightningModule::new(cfg.get_module_config("ln")?, db.clone());
 
-    let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
+    let mut consensus = FedimintConsensus::new(cfg.clone(), db);
+    consensus.register_module(mint.into());
+    consensus.register_module(ln.into());
+    consensus.register_module(wallet.into());
 
     FedimintServer::run(cfg, consensus, &mut task_group).await?;
 

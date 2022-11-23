@@ -40,7 +40,7 @@ use thiserror::Error;
 use threshold_crypto::group::Curve;
 use tracing::{debug, error, warn};
 
-use crate::common::{MintModuleDecoder, MINT_MODULE_KEY};
+use crate::common::MintModuleDecoder;
 use crate::config::MintConfig;
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -297,7 +297,7 @@ impl ServerModulePlugin for Mint {
     type VerificationCache = VerificationCache;
 
     fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
-        MINT_MODULE_KEY
+        MODULE_KEY_MINT
     }
 
     async fn await_consensus_proposal(&self) {
@@ -896,7 +896,7 @@ impl Extend<(Amount, BlindNonce)> for SignRequest {
 }
 
 plugin_types_trait_impl!(
-    MINT_MODULE_KEY,
+    fedimint_api::core::MODULE_KEY_MINT,
     MintInput,
     MintOutput,
     MintOutputOutcome,

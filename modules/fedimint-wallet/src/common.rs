@@ -6,8 +6,6 @@ use fedimint_api::encoding::{Decodable, DecodeError};
 
 use crate::{WalletConsensusItem, WalletInput, WalletOutput, WalletOutputOutcome};
 
-pub const WALLET_MODULE_KEY: u16 = 0;
-
 #[derive(Default, Clone)]
 pub struct WalletModuleDecoder;
 

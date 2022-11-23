@@ -48,7 +48,7 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
-use crate::common::{LightningModuleDecoder, LIGHTNING_MODULE_KEY};
+use crate::common::LightningModuleDecoder;
 use crate::config::LightningModuleConfig;
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
@@ -266,7 +266,7 @@ impl ServerModulePlugin for LightningModule {
     type VerificationCache = LightningVerificationCache;
 
     fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
-        LIGHTNING_MODULE_KEY
+        MODULE_KEY_LN
     }
 
     async fn await_consensus_proposal(&self) {
@@ -850,7 +850,7 @@ impl LightningModule {
 }
 
 plugin_types_trait_impl!(
-    common::LIGHTNING_MODULE_KEY,
+    fedimint_api::core::MODULE_KEY_LN,
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,

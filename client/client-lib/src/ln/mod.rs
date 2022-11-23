@@ -323,6 +323,7 @@ mod tests {
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
     use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::core::OutputOutcome;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
@@ -332,8 +333,7 @@ mod tests {
     use fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
     use fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     use fedimint_core::modules::wallet::PegOutFees;
-    use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
-    use fedimint_core::transaction::Transaction;
+    use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
     use threshold_crypto::PublicKey;
@@ -341,7 +341,7 @@ mod tests {
 
     use crate::api::IFederationApi;
     use crate::ln::LnClient;
-    use crate::ClientContext;
+    use crate::{ClientContext, LegacyTransaction};
 
     type Fed = FakeFed<LightningModule>;
 
@@ -359,18 +359,20 @@ mod tests {
             let mint = self.mint.lock().await;
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![(&OutputOutcome::LN(
+                outputs: vec![SerdeOutputOutcome::from(&OutputOutcome::from(
                     mint.output_outcome(OutPoint {
                         txid: tx,
                         out_idx: 0,
                     })
                     .unwrap(),
-                ))
-                    .into()],
+                ))],
             })
         }
 
-        async fn submit_transaction(&self, _tx: Transaction) -> crate::api::Result<TransactionId> {
+        async fn submit_transaction(
+            &self,
+            _tx: LegacyTransaction,
+        ) -> crate::api::Result<TransactionId> {
             unimplemented!()
         }
 

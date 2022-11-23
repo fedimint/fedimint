@@ -7,8 +7,6 @@ use fedimint_api::encoding::DecodeError;
 
 use crate::{LightningConsensusItem, LightningInput, LightningOutput, LightningOutputOutcome};
 
-pub const LIGHTNING_MODULE_KEY: u16 = 1;
-
 #[derive(Default, Clone)]
 pub struct LightningModuleDecoder;
 

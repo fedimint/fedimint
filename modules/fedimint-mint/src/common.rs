@@ -7,8 +7,6 @@ use fedimint_api::encoding::DecodeError;
 
 use crate::{MintConsensusItem, MintInput, MintOutput, MintOutputOutcome};
 
-pub const MINT_MODULE_KEY: u16 = 0;
-
 #[derive(Default, Clone)]
 pub struct MintModuleDecoder;
 

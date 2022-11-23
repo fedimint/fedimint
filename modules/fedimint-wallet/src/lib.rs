@@ -325,7 +325,7 @@ impl ServerModulePlugin for Wallet {
     type VerificationCache = WalletVerificationCache;
 
     fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
-        todo!()
+        MODULE_KEY_WALLET
     }
 
     async fn await_consensus_proposal(&self) {
@@ -1404,7 +1404,7 @@ impl PartialEq for PegOutSignatureItem {
 impl Eq for PegOutSignatureItem {}
 
 plugin_types_trait_impl!(
-    common::WALLET_MODULE_KEY,
+    fedimint_api::core::MODULE_KEY_WALLET,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,
