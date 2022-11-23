@@ -6,7 +6,7 @@ use fedimint_api::encoding::{Decodable, DecodeError};
 
 use crate::{WalletConsensusItem, WalletInput, WalletOutput, WalletOutputOutcome};
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct WalletModuleDecoder;
 
 impl PluginDecode for WalletModuleDecoder {

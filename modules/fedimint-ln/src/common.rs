@@ -7,7 +7,7 @@ use fedimint_api::encoding::DecodeError;
 
 use crate::{LightningConsensusItem, LightningInput, LightningOutput, LightningOutputOutcome};
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct LightningModuleDecoder;
 
 impl PluginDecode for LightningModuleDecoder {

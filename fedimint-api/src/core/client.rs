@@ -63,19 +63,19 @@ where
     }
 
     fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
-        <T as ClientModulePlugin>::Decoder::decode_input(r)
+        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn Read) -> Result<Output, DecodeError> {
-        <T as ClientModulePlugin>::Decoder::decode_output(r)
+        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn Read) -> Result<OutputOutcome, DecodeError> {
-        <T as ClientModulePlugin>::Decoder::decode_output_outcome(r)
+        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_output_outcome(r)
     }
 
     fn decode_consensus_item(&self, r: &mut dyn Read) -> Result<ConsensusItem, DecodeError> {
-        <T as ClientModulePlugin>::Decoder::decode_consensus_item(r)
+        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_consensus_item(r)
     }
 }
 

@@ -216,6 +216,8 @@ pub trait ServerModulePlugin: Debug + Sized {
 
     fn module_key(&self) -> ModuleKey;
 
+    fn decoder(&self) -> Self::Decoder;
+
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self);
 

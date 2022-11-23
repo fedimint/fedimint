@@ -56,6 +56,8 @@ where
 pub trait IServerModule: Debug {
     fn module_key(&self) -> ModuleKey;
 
+    fn decoder(&self) -> Decoder;
+
     fn as_any(&self) -> &(dyn Any + 'static);
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
@@ -203,9 +205,14 @@ impl ModuleDecode for ServerModule {
 impl<T> IServerModule for T
 where
     T: ServerModulePlugin + 'static,
+    <T as ServerModulePlugin>::Decoder: Sync + Send + 'static,
 {
     fn module_key(&self) -> ModuleKey {
         <Self as ServerModulePlugin>::module_key(self)
+    }
+
+    fn decoder(&self) -> Decoder {
+        Decoder::from_typed(ServerModulePlugin::decoder(self))
     }
 
     fn as_any(&self) -> &(dyn Any + 'static) {
@@ -213,19 +220,19 @@ where
     }
 
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_input(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_input(r)
     }
 
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_output(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_output(r)
     }
 
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_output_outcome(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_output_outcome(r)
     }
 
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
-        <Self as ServerModulePlugin>::Decoder::decode_consensus_item(r)
+        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_consensus_item(r)
     }
 
     /// Blocks until a new `consensus_proposal` is available.

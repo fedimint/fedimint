@@ -328,6 +328,10 @@ impl ServerModulePlugin for Wallet {
         MODULE_KEY_WALLET
     }
 
+    fn decoder(&self) -> Self::Decoder {
+        WalletModuleDecoder
+    }
+
     async fn await_consensus_proposal(&self) {
         let mut our_target_height = self.target_height().await;
         let last_consensus_height = self

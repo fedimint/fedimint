@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::io;
 
 use fedimint_api::core::{ConsensusItem, Input, Output, OutputOutcome, PluginDecode};
@@ -7,7 +8,7 @@ use fedimint_api::encoding::DecodeError;
 
 use crate::{MintConsensusItem, MintInput, MintOutput, MintOutputOutcome};
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct MintModuleDecoder;
 
 impl PluginDecode for MintModuleDecoder {

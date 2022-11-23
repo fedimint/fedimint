@@ -300,6 +300,10 @@ impl ServerModulePlugin for Mint {
         MODULE_KEY_MINT
     }
 
+    fn decoder(&self) -> Self::Decoder {
+        MintModuleDecoder
+    }
+
     async fn await_consensus_proposal(&self) {
         if self.consensus_proposal().await.is_empty() {
             std::future::pending().await

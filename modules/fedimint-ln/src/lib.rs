@@ -269,6 +269,10 @@ impl ServerModulePlugin for LightningModule {
         MODULE_KEY_LN
     }
 
+    fn decoder(&self) -> Self::Decoder {
+        LightningModuleDecoder
+    }
+
     async fn await_consensus_proposal(&self) {
         if self.consensus_proposal().await.is_empty() {
             std::future::pending().await
