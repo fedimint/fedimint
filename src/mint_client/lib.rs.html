@@ -1343,6 +1343,7 @@
 <a href="#1343" id="1343">1343</a>
 <a href="#1344" id="1344">1344</a>
 <a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1378,7 +1379,7 @@
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
-<span class="kw">use </span>fedimint_core::transaction::Transaction;
+<span class="kw">use </span>fedimint_core::transaction::legacy::Transaction <span class="kw">as </span>LegacyTransaction;
 <span class="kw">use </span>fedimint_core::{
     modules::{
         ln::{
@@ -1392,7 +1393,7 @@
         mint::BlindNonce,
         wallet::txoproof::TxOutProof,
     },
-    transaction::{Input, Output},
+    transaction::legacy::{Input, Output},
 };
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
@@ -1605,7 +1606,7 @@
 
     <span class="doccomment">/// Fetches the client secret from the database or generates a new one if none is present
     </span><span class="kw">fn </span>get_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret {
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span>secret = tx
             .get_value(<span class="kw-2">&amp;</span>ClientSecretKey)
             .expect(<span class="string">&quot;DB error&quot;</span>)
@@ -1722,7 +1723,7 @@
         </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
         Fut: futures::Future&lt;Output = OutPoint&gt;,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="self">self</span>.mint_client()
             .receive_coins(
                 amount,
@@ -1788,7 +1789,7 @@
     ///
     /// read more on fedimints address derivation: &lt;https://fedimint.org/Fedimint/wallet/&gt;
     </span><span class="kw">pub async fn </span>get_new_pegin_address&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; Address {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span>address = <span class="self">self</span>.wallet_client().get_new_pegin_address(<span class="kw-2">&amp;mut </span>dbtx, rng);
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         address
@@ -1815,7 +1816,7 @@
                     <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::SpendReusedNote);
                 }
 
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
                 <span class="kw">let </span>dbtx_mutref = <span class="kw-2">&amp;mut </span>dbtx;
                 tx.input_coins(coins.clone())<span class="question-mark">?</span>;
                 tx.output_coins(
@@ -1844,7 +1845,7 @@
             <span class="string">&quot;should have exact change&quot;
         </span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         final_coins.iter_items().for_each(|(amount, coin)| {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>CoinKey {
                 amount,
@@ -1861,7 +1862,7 @@
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
     </span><span class="kw">pub async fn </span>fetch_coins&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="self">self</span>.mint_client().fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, outpoint).<span class="kw">await</span><span class="question-mark">?</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         <span class="prelude-val">Ok</span>(())
@@ -1870,7 +1871,7 @@
     <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any coin
     /// inputs back.
     </span><span class="kw">pub async fn </span>reissue_pending_coins&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
-        <span class="kw">let </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span>pending = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>PendingCoinsKeyPrefix)
             .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>));
@@ -1887,7 +1888,7 @@
             })
             .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>all_coins = TieredMulti::&lt;SpendableNote&gt;::default();
         <span class="kw">for </span>result <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
             <span class="kw">let </span>(key, coins) = result<span class="question-mark">?</span>;
@@ -1956,7 +1957,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
             </span>.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .get_value(<span class="kw-2">&amp;</span>LightningGatewayKey)
             .expect(<span class="string">&quot;DB error&quot;</span>)
         {
@@ -1992,7 +1993,7 @@
                 gateways[<span class="number">0</span>].clone()
             }
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway)
             .expect(<span class="string">&quot;DB error&quot;</span>);
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -2005,7 +2006,7 @@
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(ContractId, OutPoint)&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
         <span class="kw">let </span>consensus_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2054,7 +2055,7 @@
         <span class="kw">let </span>contract_data = <span class="self">self
             </span>.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .get_value(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .ok_or(ClientError::RefundUnknownOutgoingContract)<span class="question-mark">?</span>;
@@ -2069,7 +2070,7 @@
             .submit_tx_with_change(<span class="self">self</span>, tx, rng)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .ok_or(ClientError::DeleteUnknownOutgoingContract)<span class="question-mark">?</span>;
@@ -2343,7 +2344,7 @@
     /// Note though that extended periods of staying offline will result in loss of funds anyway if
     /// the client can not claim the respective contract in time.
     </span><span class="kw">pub async fn </span>save_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: OutgoingContractAccount) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract.contract.contract_id()),
             <span class="kw-2">&amp;</span>contract,
@@ -2356,7 +2357,7 @@
     </span><span class="kw">pub fn </span>list_pending_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutgoingContractAccount&gt; {
         <span class="self">self</span>.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingContractAccountKeyPrefix)
             .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .collect()
@@ -2364,7 +2365,7 @@
 
     <span class="doccomment">/// Abort payment if our node can&#39;t route it and give money back to user
     </span><span class="kw">pub async fn </span>abort_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span>contract_account = dbtx
             .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract_id))
             .expect(<span class="string">&quot;DB error&quot;</span>)
@@ -2378,7 +2379,7 @@
         <span class="kw">let </span>cancel_output = <span class="self">self
             </span>.ln_client()
             .create_cancel_outgoing_output(contract_id, cancel_signature);
-        <span class="kw">let </span>cancel_tx = Transaction {
+        <span class="kw">let </span>cancel_tx = LegacyTransaction {
             inputs: <span class="macro">vec!</span>[],
             outputs: <span class="macro">vec!</span>[Output::LN(cancel_output)],
             signature: <span class="prelude-val">None</span>,
@@ -2402,7 +2403,7 @@
         preimage: Preimage,
         rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
         <span class="kw">let </span>contract = <span class="self">self</span>.ln_client().get_outgoing_contract(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2457,11 +2458,12 @@
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        <span class="kw">let </span>incoming_output =
-            fedimint_core::transaction::Output::LN(LightningOutput::Contract(ContractOutput {
+        <span class="kw">let </span>incoming_output = fedimint_core::transaction::legacy::Output::LN(
+            LightningOutput::Contract(ContractOutput {
                 amount: offer.amount,
                 contract: contract.clone(),
-            }));
+            }),
+        );
 
         <span class="comment">// Submit transaction
         </span>builder.output(incoming_output);
@@ -2496,7 +2498,7 @@
     </span><span class="kw">pub fn </span>list_pending_claimed_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ContractId&gt; {
         <span class="self">self</span>.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKeyPrefix)
             .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0 </span>.<span class="number">0</span>)
             .collect()
@@ -2528,7 +2530,7 @@
         // to fetch the blind signatures for the newly issued tokens, but as long as the
         // federation is honest as a whole they will produce the signatures, so we don&#39;t
         // have to worry
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction();
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKey(contract_id))
             .expect(<span class="string">&quot;DB error&quot;</span>);
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);

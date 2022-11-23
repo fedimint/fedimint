@@ -518,6 +518,7 @@
 <a href="#518" id="518">518</a>
 <a href="#519" id="519">519</a>
 <a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for consensus critical
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
@@ -534,7 +535,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::core::ModuleDecode;
+<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, ModuleDecode};
 
 <span class="doccomment">/// Object-safe trait for things that can encode themselves
 ///
@@ -583,7 +584,7 @@
 <span class="comment">// TODO: unify and/or make a newtype?
 </span><span class="kw">pub type </span>ModuleKey = u16;
 
-<span class="kw">pub type </span>ModuleRegistry&lt;M&gt; = BTreeMap&lt;ModuleKey, M&gt;;
+<span class="kw">pub type </span>ModuleRegistry&lt;M = Decoder&gt; = BTreeMap&lt;ModuleKey, M&gt;;
 
 <span class="doccomment">/// Data which can be encoded in a consensus-consistent way
 </span><span class="kw">pub trait </span>Decodable: Sized {
@@ -935,6 +936,7 @@
     <span class="kw">use </span>std::io::Cursor;
     <span class="kw">use </span>std::{collections::BTreeMap, fmt::Debug};
 
+    <span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_roundtrip&lt;T&gt;(value: T)
@@ -946,7 +948,7 @@
         <span class="macro">assert_eq!</span>(len, bytes.len());
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
-        <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new()).unwrap();
+        <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new()).unwrap();
         <span class="macro">assert_eq!</span>(value, decoded);
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }
@@ -961,7 +963,7 @@
         <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>expected, <span class="kw-2">&amp;</span>bytes);
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
-        <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new()).unwrap();
+        <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new()).unwrap();
         <span class="macro">assert_eq!</span>(value, decoded);
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }

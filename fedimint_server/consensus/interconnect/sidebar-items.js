@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["call_internal",""]],"struct":[["FedimintInterconnect",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["FedimintInterconnect",""]]};

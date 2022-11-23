@@ -273,6 +273,10 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
@@ -282,8 +286,9 @@
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractOutcome;
 <span class="kw">use </span>fedimint_core::modules::ln::LightningOutputOutcome;
 <span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput, SignRequest};
-<span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
-<span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
+<span class="kw">use </span>fedimint_core::outcome::legacy::OutputOutcome;
+<span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::transaction::legacy::{Input, Output, Transaction};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>tbs::AggregatePublicKey;
 <span class="kw">use </span>tracing::debug;
@@ -330,9 +335,12 @@
         <span class="kw">match </span><span class="self">self </span>{
             TransactionStatus::Rejected(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             TransactionStatus::Accepted { outputs, .. } =&gt; outputs.iter().all(|out| {
-                out.try_into_inner(<span class="kw-2">&amp;</span>modules)
+                <span class="kw">let </span>legacy_oo: OutputOutcome = out
+                    .try_into_inner(<span class="kw-2">&amp;</span>modules)
                     .expect(<span class="string">&quot;Federation sent invalid data&quot;</span>) <span class="comment">// FIXME: don&#39;t crash here
-                    </span>.is_final()
+                    </span>.into();
+
+                legacy_oo.is_final()
             }),
         }
     }

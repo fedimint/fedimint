@@ -205,17 +205,22 @@
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::ModuleRegistry;
 
 <span class="kw">use super</span>::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     IDatabase, IDatabaseTransaction,
 };
+<span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
 <span class="kw">use </span><span class="kw">crate</span>::db::PrefixIter;
 
 <span class="attr">#[derive(Debug, Default)]
@@ -251,17 +256,18 @@
 }
 
 <span class="kw">impl </span>IDatabase <span class="kw">for </span>MemDatabase {
-    <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction {
+    <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
         <span class="kw">let </span>db_copy = <span class="self">self</span>.data.lock().unwrap().clone();
-        <span class="kw">let </span><span class="kw-2">mut </span>tx: DatabaseTransaction = MemTransaction {
+        <span class="kw">let </span>memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
             db: <span class="self">self</span>,
             savepoint: db_copy,
             num_pending_operations: <span class="number">0</span>,
             num_savepoint_operations: <span class="number">0</span>,
-        }
-        .into();
+        };
+
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = DatabaseTransaction::new(memtx, decoders);
         tx.set_tx_savepoint();
         tx
     }

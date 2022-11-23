@@ -220,21 +220,6 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -246,7 +231,7 @@
     config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
-    ServerModulePlugin, TransactionId,
+    TransactionId,
 };
 <span class="kw">use </span>fedimint_core::epoch::SerdeEpochHistory;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
@@ -290,18 +275,6 @@
         attach_endpoints_erased(<span class="kw-2">&amp;mut </span>rpc_module, module);
     }
 
-    attach_endpoints(
-        <span class="kw-2">&amp;mut </span>rpc_module,
-        fedimint.wallet.api_endpoints(),
-        <span class="prelude-val">Some</span>(fedimint.wallet.api_base_name()),
-    );
-
-    attach_endpoints(
-        <span class="kw-2">&amp;mut </span>rpc_module,
-        fedimint.ln.api_endpoints(),
-        <span class="prelude-val">Some</span>(fedimint.ln.api_base_name()),
-    );
-
     <span class="macro">debug!</span>(addr = cfg.api_bind_addr, <span class="string">&quot;Starting WSServer&quot;</span>);
     <span class="kw">let </span>server = ServerBuilder::new()
         .build(<span class="kw-2">&amp;</span>cfg.api_bind_addr)
@@ -326,14 +299,11 @@
 </span>}
 
 <span class="comment">// TODO: remove once modularized
-</span><span class="kw">fn </span>attach_endpoints&lt;M&gt;(
+</span><span class="kw">fn </span>attach_endpoints(
     rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&gt;,
-    endpoints: Vec&lt;ApiEndpoint&lt;M&gt;&gt;,
+    endpoints: Vec&lt;ApiEndpoint&lt;FedimintConsensus&gt;&gt;,
     base_name: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
-) <span class="kw">where
-    </span>FedimintConsensus: AsRef&lt;M&gt;,
-    M: Sync + <span class="lifetime">&#39;static</span>,
-{
+) {
     <span class="kw">for </span>endpoint <span class="kw">in </span>endpoints {
         <span class="kw">let </span>path = <span class="kw">if let </span><span class="prelude-val">Some</span>(base_name) = base_name {
             <span class="comment">// This memory leak is fine because it only happens on server startup
@@ -354,7 +324,7 @@
                     // end up with an inconsistent state in theory. In practice most API functions
                     // are only reading and the few that do write anything are atomic. Lastly, this
                     // is only the last line of defense
-                    </span>AssertUnwindSafe((handler)((<span class="kw-2">*</span>state.fedimint).as_ref(), params))
+                    </span>AssertUnwindSafe((handler)(<span class="kw-2">&amp;</span>state.fedimint, params))
                         .catch_unwind()
                         .<span class="kw">await
                         </span>.map_err(|<span class="kw">_</span>| {

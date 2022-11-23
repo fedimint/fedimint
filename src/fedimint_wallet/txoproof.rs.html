@@ -370,6 +370,7 @@
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::convert::Infallible;
@@ -378,7 +379,7 @@
 
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
-<span class="kw">use </span>fedimint_api::core::ModuleDecode;
+<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleDecode};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
 <span class="kw">use </span>secp256k1::{Secp256k1, Verification};
@@ -602,7 +603,7 @@
     <span class="kw">where
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
-        <span class="kw">let </span>empty_module_registry = BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new();
+        <span class="kw">let </span>empty_module_registry = BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new();
         <span class="kw">if </span>deserializer.is_human_readable() {
             <span class="comment">// TODO: Try Cow
             </span><span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
@@ -702,6 +703,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::{collections::BTreeMap, io::Cursor};
 
+    <span class="kw">use </span>fedimint_api::core::Decoder;
     <span class="kw">use </span>fedimint_api::encoding::Decodable;
 
     <span class="kw">use </span><span class="kw">super</span>::TxOutProof;
@@ -721,7 +723,7 @@
         9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
         58a30f7ae5b909ffdd020073f04ff370000&quot;</span>;
 
-        <span class="kw">let </span>empty_module_registry = BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new();
+        <span class="kw">let </span>empty_module_registry = BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new();
         <span class="kw">let </span>txoutproof = TxOutProof::consensus_decode(
             <span class="kw-2">&amp;mut </span>Cursor::new(hex::decode(txoutproof_hex).unwrap()),
             <span class="kw-2">&amp;</span>empty_module_registry,

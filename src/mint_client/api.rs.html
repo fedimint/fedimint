@@ -752,6 +752,8 @@
 <a href="#752" id="752">752</a>
 <a href="#753" id="753">753</a>
 <a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -769,8 +771,10 @@
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
-<span class="kw">use </span>fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
-<span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction};
+<span class="kw">use </span>fedimint_core::outcome::legacy::{OutputOutcome, TryIntoOutcome};
+<span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::transaction::legacy::Transaction <span class="kw">as </span>LegacyTransaction;
+<span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
 <span class="kw">use </span>fedimint_core::CoreError;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
@@ -802,7 +806,7 @@
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt;;
 
     <span class="doccomment">/// Submit a transaction to all federation members
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;;
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;;
 
     <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64, epoch_pk: PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt;;
 
@@ -855,10 +859,10 @@
                         out_point.out_idx <span class="kw">as </span>usize,
                     ))
                     .and_then(|output| {
-                        output
-                            .try_into_inner(<span class="kw-2">&amp;</span>module_decode_stubs())<span class="question-mark">? </span><span class="comment">// FIXME: modularize
-                            </span>.try_into_variant()
-                            .map_err(ApiError::CoreError)
+                        <span class="kw">let </span>legacy_oo: OutputOutcome =
+                            output.try_into_inner(<span class="kw-2">&amp;</span>module_decode_stubs())<span class="question-mark">?</span>.into();
+
+                        legacy_oo.try_into_variant().map_err(ApiError::CoreError)
                     })
             }
         }
@@ -977,11 +981,11 @@
     </span>}
 
     <span class="doccomment">/// Submit a transaction to all federation members
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
         <span class="comment">// TODO: check the id is correct
         </span><span class="self">self</span>.request(
             <span class="string">&quot;/transaction&quot;</span>,
-            SerdeTransaction::from(<span class="kw-2">&amp;</span>tx),
+            SerdeTransaction::from(<span class="kw-2">&amp;</span>tx.into_type_erased()),
             CurrentConsensus::new(<span class="self">self</span>.peers().one_honest()),
         )
         .<span class="kw">await

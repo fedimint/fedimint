@@ -96,6 +96,10 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::io;
@@ -104,7 +108,7 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 
-<span class="kw">use </span><span class="kw">crate</span>::core::{ConsensusItem, Input, Output, OutputOutcome};
+<span class="kw">use </span><span class="kw">crate</span>::core::{ConsensusItem, Decoder, Input, Output, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::core::{ModuleKey, PluginDecode};
 <span class="kw">use </span><span class="kw">crate</span>::module::TransactionItemAmount;
 <span class="kw">use crate</span>::{dyn_newtype_define, DecodeError, ModuleDecode, ServerModulePlugin};
@@ -161,23 +165,27 @@
     </span>}
 
     <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
-        &lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_input(r)
+        &lt;&lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder <span class="kw">as </span>PluginDecode&gt;::decode_input(r)
     }
 
     <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
-        &lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_output(r)
+        &lt;&lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder <span class="kw">as </span>PluginDecode&gt;::decode_output(r)
     }
 
     <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
-        &lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_output_outcome(r)
+        &lt;&lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder <span class="kw">as </span>PluginDecode&gt;::decode_output_outcome(r)
     }
 
     <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
-        &lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder::decode_consensus_item(r)
+        &lt;&lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder <span class="kw">as </span>PluginDecode&gt;::decode_consensus_item(r)
     }
 }
 
 <span class="kw">impl </span>ModuleDecode <span class="kw">for </span>ClientModule {
+    <span class="kw">fn </span>clone_decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
+        <span class="macro">unimplemented!</span>()
+    }
+
     <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
         (<span class="kw-2">**</span><span class="self">self</span>).decode_input(r)
     }

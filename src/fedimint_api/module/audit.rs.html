@@ -59,10 +59,9 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 
-<span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseKeyPrefix, DatabaseKeyPrefixConst};
+<span class="kw">use </span><span class="kw">crate</span>::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
 
 <span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>Audit {
@@ -82,13 +81,12 @@
         }
     }
 
-    <span class="kw">pub fn </span>add_items&lt;KP, F&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Database, key_prefix: <span class="kw-2">&amp;</span>KP, to_milli_sat: F)
+    <span class="kw">pub fn </span>add_items&lt;KP, F&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction, key_prefix: <span class="kw-2">&amp;</span>KP, to_milli_sat: F)
     <span class="kw">where
         </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="lifetime">&#39;static</span>,
         F: Fn(KP::Key, KP::Value) -&gt; i64,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>new_items = db
-            .begin_transaction()
+        <span class="kw">let </span><span class="kw-2">mut </span>new_items = dbtx
             .find_by_prefix(key_prefix)
             .map(|res| {
                 <span class="kw">let </span>(key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);

@@ -275,6 +275,27 @@
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -283,12 +304,15 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+<span class="kw">use </span>fedimint_api::core::Decoder;
 <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
     ApiError, FederationModuleConfigGen, InputMeta, ModuleError, TransactionItemAmount,
 };
+<span class="kw">use </span>fedimint_api::server::IServerModule;
 <span class="kw">use </span>fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
 
 <span class="kw">pub mod </span>bitcoind;
@@ -309,9 +333,10 @@
 
 <span class="kw">impl</span>&lt;Module&gt; FakeFed&lt;Module&gt;
 <span class="kw">where
-    </span>Module: ServerModulePlugin,
+    </span>Module: ServerModulePlugin + <span class="lifetime">&#39;static</span>,
     Module::ConsensusItem: Clone,
     Module::OutputOutcome: Eq + Debug,
+    Module::Decoder: Sync + Send + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">pub async fn </span>new&lt;ConfGen, F, FF&gt;(
         members: usize,
@@ -350,12 +375,17 @@
     <span class="kw">pub fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>Module::Input) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
-        <span class="kw">let </span>results = <span class="self">self</span>.members.iter().map(|(<span class="kw">_</span>, member, <span class="kw">_</span>)| {
+        <span class="kw">let </span>results = <span class="self">self</span>.members.iter().map(|(<span class="kw">_</span>, member, db)| {
             <span class="kw">let </span>cache = member.build_verification_cache(std::iter::once(input));
             <span class="kw">let </span>InputMeta {
                 amount,
                 puk_keys: pub_keys,
-            } = member.validate_input(<span class="kw-2">&amp;</span>fake_ic, <span class="kw-2">&amp;</span>cache, input)<span class="question-mark">?</span>;
+            } = member.validate_input(
+                <span class="kw-2">&amp;</span>fake_ic,
+                <span class="kw-2">&amp;</span>db.begin_transaction(<span class="self">self</span>.decoders()),
+                <span class="kw-2">&amp;</span>cache,
+                input,
+            )<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(TestInputMeta {
                 amount,
                 keys: pub_keys,
@@ -365,11 +395,17 @@
     }
 
     <span class="kw">pub fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>Module::Output) -&gt; bool {
-        <span class="kw">let </span>results = <span class="self">self
-            </span>.members
-            .iter()
-            .map(|(<span class="kw">_</span>, member, <span class="kw">_</span>)| member.validate_output(output).is_err());
+        <span class="kw">let </span>results = <span class="self">self</span>.members.iter().map(|(<span class="kw">_</span>, member, db)| {
+            member
+                .validate_output(<span class="kw-2">&amp;</span>db.begin_transaction(<span class="self">self</span>.decoders()), output)
+                .is_err()
+        });
         assert_all_equal(results)
+    }
+
+    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleRegistry&lt;Decoder&gt; {
+        <span class="kw">let </span>module = <span class="kw-2">&amp;</span><span class="self">self</span>.members.first().unwrap().<span class="number">1</span>;
+        std::iter::once((module.module_key(), IServerModule::decoder(module))).collect()
     }
 
     <span class="comment">// TODO: add expected result to inputs/outputs
@@ -395,9 +431,10 @@
         }
 
         <span class="kw">let </span>peers: HashSet&lt;PeerId&gt; = <span class="self">self</span>.members.iter().map(|p| p.<span class="number">0</span>).collect();
+        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
         <span class="kw">for </span>(_peer, member, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             <span class="kw">let </span>database = db <span class="kw">as </span><span class="kw-2">&amp;mut </span>Database;
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction();
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction(decoders.clone());
 
             member
                 .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, consensus.clone())
@@ -418,7 +455,7 @@
 
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction();
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction(decoders.clone());
             member.end_consensus_epoch(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
 
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -441,8 +478,9 @@
     <span class="kw">where
         </span>U: Fn(<span class="kw-2">&amp;mut </span>DatabaseTransaction),
     {
+        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
         <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction();
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(decoders.clone());
             update(<span class="kw-2">&amp;mut </span>dbtx);
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
@@ -459,9 +497,13 @@
     <span class="kw">pub fn </span>fetch_from_all&lt;O, F&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fetch: F) -&gt; O
     <span class="kw">where
         </span>O: Debug + Eq,
-        F: Fn(<span class="kw-2">&amp;mut </span>Module) -&gt; O,
+        F: Fn(<span class="kw-2">&amp;mut </span>Module, <span class="kw-2">&amp;</span>Database) -&gt; O,
     {
-        assert_all_equal(<span class="self">self</span>.members.iter_mut().map(|(<span class="kw">_</span>, member, <span class="kw">_</span>)| fetch(member)))
+        assert_all_equal(
+            <span class="self">self</span>.members
+                .iter_mut()
+                .map(|(<span class="kw">_</span>, member, db)| fetch(member, db)),
+        )
     }
 }
 

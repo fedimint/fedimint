@@ -157,6 +157,8 @@
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
@@ -274,7 +276,9 @@
 
     <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 
+    <span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+    <span class="kw">use </span><span class="kw">crate</span>::ModuleRegistry;
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>sha256_roundtrip() {
@@ -283,7 +287,7 @@
         hash.consensus_encode(<span class="kw-2">&amp;mut </span>encoded).unwrap();
         <span class="kw">let </span>hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
             <span class="kw-2">&amp;mut </span>Cursor::new(encoded),
-            <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new(),
+            <span class="kw-2">&amp;</span>ModuleRegistry::&lt;Decoder&gt;::default(),
         )
         .unwrap();
         <span class="macro">assert_eq!</span>(hash, hash_decoded);
@@ -309,7 +313,7 @@
                 .expect(<span class="string">&quot;Encoding to vec can&#39;t fail&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(encoding);
             <span class="kw">let </span>parsed_address =
-                bitcoin::Address::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new())
+                bitcoin::Address::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new())
                     .expect(<span class="string">&quot;Decoding address failed&quot;</span>);
 
             <span class="macro">assert_eq!</span>(address, parsed_address);
