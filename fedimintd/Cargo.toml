@@ -35,7 +35,7 @@ clap = { version = "4.0.26", features = ["derive"] }
 futures = "0.3.24"
 hex = "0.4.2"
 itertools = "0.10.5"
-jsonrpsee = { version = "0.16.0", features = ["server"] }
+jsonrpsee = { version = "0.16.1", features = ["server"] }
 mint-client = { path = "../client/client-lib" }
 fedimint-api = { path = "../fedimint-api" }
 fedimint-core = { path = "../fedimint-core" }
