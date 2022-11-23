@@ -4,11 +4,13 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use fedimint_api::ModuleRegistry;
 
 use super::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     IDatabase, IDatabaseTransaction,
 };
+use crate::core::Decoder;
 use crate::db::PrefixIter;
 
 #[derive(Debug, Default)]
@@ -44,17 +46,18 @@ impl MemDatabase {
 }
 
 impl IDatabase for MemDatabase {
-    fn begin_transaction(&self) -> DatabaseTransaction {
+    fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
         let db_copy = self.data.lock().unwrap().clone();
-        let mut tx: DatabaseTransaction = MemTransaction {
+        let memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
             db: self,
             savepoint: db_copy,
             num_pending_operations: 0,
             num_savepoint_operations: 0,
-        }
-        .into();
+        };
+
+        let mut tx = DatabaseTransaction::new(memtx, decoders);
         tx.set_tx_savepoint();
         tx
     }

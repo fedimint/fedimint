@@ -2,8 +2,10 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use fedimint_api::core::Decoder;
 use fedimint_api::db::{DatabaseTransaction, PrefixIter};
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
+use fedimint_api::encoding::ModuleRegistry;
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 use tracing::warn;
@@ -48,14 +50,14 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
 }
 
 impl IDatabase for RocksDb {
-    fn begin_transaction(&self) -> DatabaseTransaction {
+    fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
-        let mut tx: DatabaseTransaction = RocksDbTransaction(
+        let rocksdb_tx = RocksDbTransaction(
             self.0
                 .transaction_opt(&WriteOptions::default(), &optimistic_options),
-        )
-        .into();
+        );
+        let mut tx = DatabaseTransaction::new(rocksdb_tx, decoders);
         tx.set_tx_savepoint();
         tx
     }

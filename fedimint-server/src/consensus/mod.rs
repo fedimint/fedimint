@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use fedimint_api::core::ModuleKey;
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::{ModuleError, TransactionItemAmount};
 use fedimint_api::server::{ServerModule, VerificationCache};
@@ -125,6 +125,13 @@ impl VerificationCaches {
 }
 
 impl FedimintConsensus {
+    pub fn decoders(&self) -> ModuleRegistry {
+        self.modules
+            .iter()
+            .map(|(module_id, module)| (*module_id, module.decoder()))
+            .collect()
+    }
+
     pub fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -142,7 +149,7 @@ impl FedimintConsensus {
         let mut pub_keys = Vec::new();
 
         // Create read-only DB tx so that the read state is consistent
-        let dbtx = self.db.begin_transaction();
+        let dbtx = self.db.begin_transaction(self.decoders());
 
         for input in &transaction.inputs {
             let module = self
@@ -170,7 +177,7 @@ impl FedimintConsensus {
         funding_verifier.verify_funding()?;
 
         futures::executor::block_on(async {
-            let mut dbtx = self.db.begin_transaction();
+            let mut dbtx = self.db.begin_transaction(self.decoders());
             let new = dbtx
                 .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
                 .expect("DB error");
@@ -211,7 +218,7 @@ impl FedimintConsensus {
                 .into_iter()
                 .into_group_map_by(|(_peer, mci)| mci.module_key());
 
-            let mut dbtx = self.db.begin_transaction();
+            let mut dbtx = self.db.begin_transaction(self.decoders());
             for (module_key, module_cis) in per_module_cis {
                 let module = self
                     .modules
@@ -225,7 +232,7 @@ impl FedimintConsensus {
 
         // Process transactions
         {
-            let mut dbtx = self.db.begin_transaction();
+            let mut dbtx = self.db.begin_transaction(self.decoders());
 
             let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
             for (_, transaction) in transaction_cis {
@@ -263,7 +270,7 @@ impl FedimintConsensus {
 
         // End consensus epoch
         {
-            let mut dbtx = self.db.begin_transaction();
+            let mut dbtx = self.db.begin_transaction(self.decoders());
             let mut drop_peers = Vec::<PeerId>::new();
 
             self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers);
@@ -292,7 +299,7 @@ impl FedimintConsensus {
 
     pub fn epoch_history(&self, epoch: u64) -> Option<EpochHistory> {
         self.db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&EpochHistoryKey(epoch))
             .unwrap()
     }
@@ -307,7 +314,7 @@ impl FedimintConsensus {
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&prev_epoch_key)
             .expect("DB error");
 
@@ -354,7 +361,7 @@ impl FedimintConsensus {
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
         let drop_peers = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .find_by_prefix(&DropPeerKeyPrefix)
             .map(|res| {
                 let key = res.expect("DB error").0;
@@ -364,7 +371,7 @@ impl FedimintConsensus {
 
         let mut items: Vec<ConsensusItem> = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
@@ -384,13 +391,13 @@ impl FedimintConsensus {
 
         if let Some(epoch) = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&LastEpochKey)
             .unwrap()
         {
             let last_epoch = self
                 .db
-                .begin_transaction()
+                .begin_transaction(self.decoders())
                 .get_value(&epoch)
                 .unwrap()
                 .unwrap();
@@ -454,7 +461,7 @@ impl FedimintConsensus {
     ) -> Option<crate::outcome::TransactionStatus> {
         let accepted: Option<AcceptedTransaction> = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&AcceptedTransactionKey(txid))
             .expect("DB error");
 
@@ -487,7 +494,7 @@ impl FedimintConsensus {
 
         let rejected: Option<String> = self
             .db
-            .begin_transaction()
+            .begin_transaction(self.decoders())
             .get_value(&RejectedTransactionKey(txid))
             .expect("DB error");
 

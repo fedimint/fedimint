@@ -42,7 +42,7 @@ use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
-use fedimint_server::{consensus, EpochMessage, FedimintServer};
+use fedimint_server::{all_decoders, consensus, EpochMessage, FedimintServer};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::txoproof::TxOutProof;
@@ -646,7 +646,7 @@ impl FederationTest {
         for server in &self.servers {
             block_on(async {
                 let svr = server.borrow_mut();
-                let mut dbtx = svr.database.begin_transaction();
+                let mut dbtx = svr.database.begin_transaction(all_decoders());
 
                 dbtx.insert_new_entry(
                     &UTXOKey(input.outpoint()),
@@ -696,7 +696,7 @@ impl FederationTest {
             .receive_coins(amount, |tokens| async move {
                 for server in &self.servers {
                     let svr = server.borrow_mut();
-                    let mut dbtx = svr.database.begin_transaction();
+                    let mut dbtx = svr.database.begin_transaction(all_decoders());
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![MintOutput(tokens.clone()).into()],
@@ -732,7 +732,7 @@ impl FederationTest {
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
             block_on(fedimint_wallet::broadcast_pending_tx(
-                &server.borrow().database,
+                server.borrow().database.begin_transaction(all_decoders()),
                 &server.borrow().bitcoin_rpc,
             ));
         }
@@ -783,7 +783,7 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap()
-            .consensus_height(&server.consensus.db.begin_transaction())
+            .consensus_height(&server.consensus.db.begin_transaction(all_decoders()))
             .unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
@@ -904,18 +904,27 @@ impl FederationTest {
             let db = database_gen();
             let mut task_group = task_group.clone();
 
-            let mint = Mint::new(cfg.get_module_config("mint").unwrap(), db.clone());
+            let mint = Mint::new(
+                cfg.get_module_config("mint").unwrap(),
+                db.clone(),
+                all_decoders(),
+            );
 
             let wallet = Wallet::new_with_bitcoind(
                 cfg.get_module_config("wallet").unwrap(),
                 db.clone(),
                 btc_rpc.clone(),
                 &mut task_group.clone(),
+                all_decoders(),
             )
             .await
             .expect("Couldn't create wallet");
 
-            let ln = LightningModule::new(cfg.get_module_config("ln").unwrap(), db.clone());
+            let ln = LightningModule::new(
+                cfg.get_module_config("ln").unwrap(),
+                db.clone(),
+                all_decoders(),
+            );
 
             let mut consensus = FedimintConsensus::new(cfg.clone(), db.clone());
             consensus.register_module(mint.into());

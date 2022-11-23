@@ -260,7 +260,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Fetches the client secret from the database or generates a new one if none is present
     fn get_secret(db: &Database) -> DerivableSecret {
-        let mut tx = db.begin_transaction();
+        let mut tx = db.begin_transaction(ModuleRegistry::default());
         let secret = tx
             .get_value(&ClientSecretKey)
             .expect("DB error")
@@ -377,7 +377,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
     {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         self.mint_client()
             .receive_coins(
                 amount,
@@ -443,7 +443,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ///
     /// read more on fedimints address derivation: <https://fedimint.org/Fedimint/wallet/>
     pub async fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, rng: R) -> Address {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let address = self.wallet_client().get_new_pegin_address(&mut dbtx, rng);
         dbtx.commit_tx().await.expect("DB Error");
         address
@@ -470,7 +470,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                     return Err(ClientError::SpendReusedNote);
                 }
 
-                let mut dbtx = self.context.db.begin_transaction();
+                let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
                 let dbtx_mutref = &mut dbtx;
                 tx.input_coins(coins.clone())?;
                 tx.output_coins(
@@ -499,7 +499,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             "should have exact change"
         );
 
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         final_coins.iter_items().for_each(|(amount, coin)| {
             dbtx.remove_entry(&CoinKey {
                 amount,
@@ -516,7 +516,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
     pub async fn fetch_coins<'a>(&self, outpoint: OutPoint) -> Result<()> {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         self.mint_client().fetch_coins(&mut dbtx, outpoint).await?;
         dbtx.commit_tx().await.expect("DB Error");
         Ok(())
@@ -525,7 +525,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// Should be called after any transaction that might have failed in order to get any coin
     /// inputs back.
     pub async fn reissue_pending_coins<R: RngCore + CryptoRng>(&self, rng: R) -> Result<OutPoint> {
-        let dbtx = self.context.db.begin_transaction();
+        let dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let pending = dbtx
             .find_by_prefix(&PendingCoinsKeyPrefix)
             .map(|res| res.expect("DB error"));
@@ -542,7 +542,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             })
             .collect::<FuturesUnordered<_>>();
 
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let mut all_coins = TieredMulti::<SpendableNote>::default();
         for result in stream.collect::<Vec<_>>().await {
             let (key, coins) = result?;
@@ -611,7 +611,7 @@ impl Client<UserClientConfig> {
         if let Some(gateway) = self
             .context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .get_value(&LightningGatewayKey)
             .expect("DB error")
         {
@@ -647,7 +647,7 @@ impl Client<UserClientConfig> {
                 gateways[0].clone()
             }
         };
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(&LightningGatewayKey, &gateway)
             .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");
@@ -660,7 +660,7 @@ impl Client<UserClientConfig> {
         mut rng: R,
     ) -> Result<(ContractId, OutPoint)> {
         let gateway = self.fetch_active_gateway().await?;
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let mut tx = TransactionBuilder::default();
 
         let consensus_height = self.context.api.fetch_consensus_block_height().await?;
@@ -709,7 +709,7 @@ impl Client<UserClientConfig> {
         let contract_data = self
             .context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .get_value(&OutgoingPaymentKey(contract_id))
             .expect("DB error")
             .ok_or(ClientError::RefundUnknownOutgoingContract)?;
@@ -724,7 +724,7 @@ impl Client<UserClientConfig> {
             .submit_tx_with_change(self, tx, rng)
             .await?;
 
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
             .expect("DB error")
             .ok_or(ClientError::DeleteUnknownOutgoingContract)?;
@@ -998,7 +998,7 @@ impl Client<GatewayClientConfig> {
     /// Note though that extended periods of staying offline will result in loss of funds anyway if
     /// the client can not claim the respective contract in time.
     pub async fn save_outgoing_payment(&self, contract: OutgoingContractAccount) {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(
             &OutgoingContractAccountKey(contract.contract.contract_id()),
             &contract,
@@ -1011,7 +1011,7 @@ impl Client<GatewayClientConfig> {
     pub fn list_pending_outgoing(&self) -> Vec<OutgoingContractAccount> {
         self.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(&OutgoingContractAccountKeyPrefix)
             .map(|res| res.expect("DB error").1)
             .collect()
@@ -1019,7 +1019,7 @@ impl Client<GatewayClientConfig> {
 
     /// Abort payment if our node can't route it and give money back to user
     pub async fn abort_outgoing_payment(&self, contract_id: ContractId) -> Result<()> {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let contract_account = dbtx
             .remove_entry(&OutgoingContractAccountKey(contract_id))
             .expect("DB error")
@@ -1057,7 +1057,7 @@ impl Client<GatewayClientConfig> {
         preimage: Preimage,
         rng: impl RngCore + CryptoRng,
     ) -> Result<OutPoint> {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let mut tx = TransactionBuilder::default();
 
         let contract = self.ln_client().get_outgoing_contract(contract_id).await?;
@@ -1152,7 +1152,7 @@ impl Client<GatewayClientConfig> {
     pub fn list_pending_claimed_outgoing(&self) -> Vec<ContractId> {
         self.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(&OutgoingPaymentClaimKeyPrefix)
             .map(|res| res.expect("DB error").0 .0)
             .collect()
@@ -1184,7 +1184,7 @@ impl Client<GatewayClientConfig> {
         // to fetch the blind signatures for the newly issued tokens, but as long as the
         // federation is honest as a whole they will produce the signatures, so we don't
         // have to worry
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(&OutgoingPaymentClaimKey(contract_id))
             .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");

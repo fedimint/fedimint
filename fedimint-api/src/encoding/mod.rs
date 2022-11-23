@@ -14,7 +14,7 @@ pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use thiserror::Error;
 use url::Url;
 
-use crate::core::ModuleDecode;
+use crate::core::{Decoder, ModuleDecode};
 
 /// Object-safe trait for things that can encode themselves
 ///
@@ -63,7 +63,7 @@ pub trait Encodable {
 // TODO: unify and/or make a newtype?
 pub type ModuleKey = u16;
 
-pub type ModuleRegistry<M> = BTreeMap<ModuleKey, M>;
+pub type ModuleRegistry<M = Decoder> = BTreeMap<ModuleKey, M>;
 
 /// Data which can be encoded in a consensus-consistent way
 pub trait Decodable: Sized {
@@ -415,6 +415,7 @@ mod tests {
     use std::io::Cursor;
     use std::{collections::BTreeMap, fmt::Debug};
 
+    use crate::core::Decoder;
     use crate::encoding::{Decodable, Encodable};
 
     pub(crate) fn test_roundtrip<T>(value: T)
@@ -426,7 +427,7 @@ mod tests {
         assert_eq!(len, bytes.len());
 
         let mut cursor = Cursor::new(bytes);
-        let decoded = T::consensus_decode(&mut cursor, &BTreeMap::<_, ()>::new()).unwrap();
+        let decoded = T::consensus_decode(&mut cursor, &BTreeMap::<_, Decoder>::new()).unwrap();
         assert_eq!(value, decoded);
         assert_eq!(cursor.position(), len as u64);
     }
@@ -441,7 +442,7 @@ mod tests {
         assert_eq!(&expected, &bytes);
 
         let mut cursor = Cursor::new(bytes);
-        let decoded = T::consensus_decode(&mut cursor, &BTreeMap::<_, ()>::new()).unwrap();
+        let decoded = T::consensus_decode(&mut cursor, &BTreeMap::<_, Decoder>::new()).unwrap();
         assert_eq!(value, decoded);
         assert_eq!(cursor.position(), len as u64);
     }

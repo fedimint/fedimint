@@ -204,6 +204,8 @@ macro_rules! newtype_impl_eq_passthrough {
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleKey`]s
 pub trait PluginDecode: Debug {
+    fn clone_decoder() -> Decoder;
+
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
@@ -218,6 +220,8 @@ pub trait PluginDecode: Debug {
 }
 
 pub trait ModuleDecode: Debug {
+    fn clone_decoder(&self) -> Decoder;
+
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
@@ -231,24 +235,7 @@ pub trait ModuleDecode: Debug {
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
 }
 
-impl ModuleDecode for () {
-    fn decode_input(&self, _r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
-    }
-
-    fn decode_output(&self, _r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
-    }
-
-    fn decode_output_outcome(&self, _r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
-    }
-
-    fn decode_consensus_item(&self, _r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
-        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
-    }
-}
-
+// TODO: use macro again
 #[doc = " Decoder for module associated types"]
 pub struct Decoder(Arc<dyn ModuleDecode + Send + Sync + 'static>);
 
@@ -266,10 +253,20 @@ impl std::fmt::Debug for Decoder {
     }
 }
 
+impl Clone for Decoder {
+    fn clone(&self) -> Self {
+        self.clone_decoder()
+    }
+}
+
 impl<T> ModuleDecode for T
 where
     T: PluginDecode + 'static,
 {
+    fn clone_decoder(&self) -> Decoder {
+        <Self as PluginDecode>::clone_decoder()
+    }
+
     fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
         <Self as PluginDecode>::decode_input(r)
     }
@@ -288,6 +285,10 @@ where
 }
 
 impl ModuleDecode for Decoder {
+    fn clone_decoder(&self) -> Decoder {
+        self.0.clone_decoder()
+    }
+
     fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
         self.0.decode_input(r)
     }

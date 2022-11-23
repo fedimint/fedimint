@@ -4,6 +4,7 @@ use db::PegInKey;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::encoding::ModuleRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModulePlugin};
 use fedimint_core::modules::wallet::config::WalletClientConfig;
@@ -107,7 +108,7 @@ impl<'c> WalletClient<'c> {
                 debug!(output_script = ?out.script_pubkey);
                 self.context
                     .db
-                    .begin_transaction()
+                    .begin_transaction(ModuleRegistry::default())
                     .get_value(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
@@ -182,13 +183,16 @@ mod tests {
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
     use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::encoding::ModuleRegistry;
     use fedimint_api::task::TaskGroup;
     use fedimint_api::{Feerate, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+    use fedimint_core::modules::wallet::common::WalletModuleDecoder;
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     use fedimint_core::modules::wallet::{
@@ -284,6 +288,12 @@ mod tests {
         }
     }
 
+    fn wallet_decoders() -> ModuleRegistry {
+        vec![(MODULE_KEY_WALLET, Decoder::from_typed(WalletModuleDecoder))]
+            .into_iter()
+            .collect()
+    }
+
     async fn new_mint_and_client(
         task_group: &mut TaskGroup,
     ) -> (
@@ -307,6 +317,7 @@ mod tests {
                             db,
                             btc_rpc_clone.clone().into(),
                             &mut task_group,
+                            wallet_decoders(),
                         )
                         .await?)
                     }
@@ -413,10 +424,9 @@ mod tests {
         fedimint_api::task::sleep(Duration::from_secs(12)).await;
         assert!(btc_rpc.is_btc_sent_to(amount, addr).await);
 
-        let wallet_value = fed
-            .lock()
-            .await
-            .fetch_from_all(|wallet, db| wallet.get_wallet_value(&db.begin_transaction()));
+        let wallet_value = fed.lock().await.fetch_from_all(|wallet, db| {
+            wallet.get_wallet_value(&db.begin_transaction(ModuleRegistry::default()))
+        });
         assert_eq!(wallet_value, bitcoin::Amount::from_sat(0));
 
         // test change recognition, wallet should hold some sats
@@ -424,10 +434,9 @@ mod tests {
         btc_rpc.set_block_height(301).await;
         fed.lock().await.consensus_round(&[], &[]).await;
 
-        let wallet_value = fed
-            .lock()
-            .await
-            .fetch_from_all(|wallet, db| wallet.get_wallet_value(&db.begin_transaction()));
+        let wallet_value = fed.lock().await.fetch_from_all(|wallet, db| {
+            wallet.get_wallet_value(&db.begin_transaction(ModuleRegistry::default()))
+        });
         assert!(wallet_value > bitcoin::Amount::from_sat(0));
     }
 }

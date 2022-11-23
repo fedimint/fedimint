@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use bitcoin::{secp256k1, Network};
+use fedimint_api::core::Decoder;
 use fedimint_api::db::Database;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::{ParseAmountError, TieredMulti};
@@ -24,7 +25,7 @@ pub fn from_hex<D: Decodable>(s: &str) -> Result<D, anyhow::Error> {
     let bytes = hex::decode(s)?;
     Ok(D::consensus_decode(
         &mut std::io::Cursor::new(bytes),
-        &BTreeMap::<_, ()>::new(),
+        &BTreeMap::<_, Decoder>::new(),
     )?)
 }
 

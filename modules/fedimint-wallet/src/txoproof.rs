@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
-use fedimint_api::core::ModuleDecode;
+use fedimint_api::core::{Decoder, ModuleDecode};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 use miniscript::{Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Verification};
@@ -230,7 +230,7 @@ impl<'de> Deserialize<'de> for TxOutProof {
     where
         D: Deserializer<'de>,
     {
-        let empty_module_registry = BTreeMap::<_, ()>::new();
+        let empty_module_registry = BTreeMap::<_, Decoder>::new();
         if deserializer.is_human_readable() {
             // TODO: Try Cow
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
@@ -330,6 +330,7 @@ pub enum PegInProofError {
 mod tests {
     use std::{collections::BTreeMap, io::Cursor};
 
+    use fedimint_api::core::Decoder;
     use fedimint_api::encoding::Decodable;
 
     use super::TxOutProof;
@@ -349,7 +350,7 @@ mod tests {
         9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
         58a30f7ae5b909ffdd020073f04ff370000";
 
-        let empty_module_registry = BTreeMap::<_, ()>::new();
+        let empty_module_registry = BTreeMap::<_, Decoder>::new();
         let txoutproof = TxOutProof::consensus_decode(
             &mut Cursor::new(hex::decode(txoutproof_hex).unwrap()),
             &empty_module_registry,

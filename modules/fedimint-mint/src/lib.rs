@@ -10,9 +10,9 @@ use fedimint_api::config::{
     scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
+use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -50,7 +50,7 @@ use crate::db::{
 
 pub mod config;
 
-mod common;
+pub mod common;
 pub mod db;
 
 /// Data structures taking into account different amount tiers
@@ -63,6 +63,7 @@ pub struct Mint {
     pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
     non_consensus_db: Database,
+    decoders: ModuleRegistry<Decoder>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -312,7 +313,7 @@ impl ServerModulePlugin for Mint {
 
     async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
         self.non_consensus_db
-            .begin_transaction()
+            .begin_transaction(self.decoders.clone())
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 let (key, partial_signature) = res.expect("DB error");
@@ -496,7 +497,9 @@ impl ServerModulePlugin for Mint {
             .map(|(issuance_id, shares)| async move {
                 let mut drop_peers = Vec::<PeerId>::new();
                 // FIXME: this specific instance is safe, but we should never directly read from the DB
-                let mut dbtx = self.non_consensus_db.begin_transaction();
+                let mut dbtx = self
+                    .non_consensus_db
+                    .begin_transaction(self.decoders.clone());
                 let proposal_key = ProposedPartialSignatureKey {
                     request_id: issuance_id,
                 };
@@ -575,7 +578,9 @@ impl ServerModulePlugin for Mint {
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
-        let dbtx = self.non_consensus_db.begin_transaction();
+        let dbtx = self
+            .non_consensus_db
+            .begin_transaction(self.decoders.clone());
         let we_proposed = dbtx
             .get_value(&ProposedPartialSignatureKey {
                 request_id: out_point,
@@ -603,7 +608,9 @@ impl ServerModulePlugin for Mint {
 
     fn audit(&self, audit: &mut Audit) {
         audit.add_items(
-            &self.non_consensus_db.begin_transaction(),
+            &self
+                .non_consensus_db
+                .begin_transaction(self.decoders.clone()),
             &MintAuditItemKeyPrefix,
             |k, v| match k {
                 MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
@@ -630,7 +637,7 @@ impl Mint {
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(cfg: MintConfig, db: Database) -> Mint {
+    pub fn new(cfg: MintConfig, db: Database, decoders: ModuleRegistry<Decoder>) -> Mint {
         assert!(cfg.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -676,6 +683,7 @@ impl Mint {
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
             non_consensus_db: db,
+            decoders,
         }
     }
 
@@ -957,13 +965,18 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+    use fedimint_api::core::{Decoder, MODULE_KEY_MINT};
     use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::encoding::ModuleRegistry;
     use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, PeerErrorType};
+    use crate::{
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, MintModuleDecoder,
+        PeerErrorType,
+    };
 
     const THRESHOLD: usize = 1;
     const MINTS: usize = 5;
@@ -985,7 +998,15 @@ mod test {
         let (mint_cfg, client_cfg) = build_configs();
         let mints = mint_cfg
             .into_iter()
-            .map(|config| Mint::new(config.to_typed().unwrap(), MemDatabase::new().into()))
+            .map(|config| {
+                Mint::new(
+                    config.to_typed().unwrap(),
+                    MemDatabase::new().into(),
+                    vec![(MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder))]
+                        .into_iter()
+                        .collect(),
+                )
+            })
             .collect::<Vec<_>>();
 
         let agg_pk = *client_cfg
@@ -1161,6 +1182,7 @@ mod test {
                 fee_consensus: FeeConsensus::default(),
             },
             MemDatabase::new().into(),
+            ModuleRegistry::default(),
         );
     }
 }

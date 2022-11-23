@@ -4,6 +4,7 @@ use docopt::Docopt;
 use erased_serde::Serialize;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
+use fedimint_core::all_decoders;
 use fedimint_ln::db as LightningRange;
 use fedimint_mint::db as MintRange;
 use fedimint_rocksdb::RocksDbReadOnly;
@@ -642,16 +643,18 @@ fn main() {
         .map(|s| s.to_string().to_lowercase())
         .collect::<Vec<String>>();
 
-    let read_only_res = RocksDbReadOnly::open_read_only(db_path);
-    if read_only_res.is_err() {
-        eprintln!("Error reading RocksDB database. Quitting...");
-        return;
-    }
+    let read_only = match RocksDbReadOnly::open_read_only(db_path) {
+        Ok(db) => db,
+        Err(_) => {
+            eprintln!("Error reading RocksDB database. Quitting...");
+            return;
+        }
+    };
 
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
     let mut dbdump = DatabaseDump {
         serialized,
-        read_only: read_only_res.unwrap().into(),
+        read_only: DatabaseTransaction::new(read_only, all_decoders()),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == "All",

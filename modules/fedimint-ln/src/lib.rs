@@ -10,7 +10,7 @@
 
 extern crate core;
 
-mod common;
+pub mod common;
 pub mod config;
 pub mod contracts;
 pub mod db;
@@ -27,9 +27,9 @@ use fedimint_api::config::{
     ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
+use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
@@ -85,6 +85,7 @@ pub struct LightningModule {
     cfg: LightningModuleConfig,
     // TODO: remove DB all together
     non_consensus_db: Database,
+    decoders: ModuleRegistry<Decoder>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -281,7 +282,7 @@ impl ServerModulePlugin for LightningModule {
 
     async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
         self.non_consensus_db
-            .begin_transaction()
+            .begin_transaction(self.decoders.clone())
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
             .map(|res| {
                 let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
@@ -734,14 +735,16 @@ impl ServerModulePlugin for LightningModule {
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
         self.non_consensus_db
-            .begin_transaction()
+            .begin_transaction(self.decoders.clone())
             .get_value(&ContractUpdateKey(out_point))
             .expect("DB error")
     }
 
     fn audit(&self, audit: &mut Audit) {
         audit.add_items(
-            &self.non_consensus_db.begin_transaction(),
+            &self
+                .non_consensus_db
+                .begin_transaction(self.decoders.clone()),
             &ContractKeyPrefix,
             |_, v| -(v.amount.milli_sat as i64),
         );
@@ -757,21 +760,21 @@ impl ServerModulePlugin for LightningModule {
                 "/account",
                 async |module: &LightningModule, contract_id: ContractId| -> ContractAccount {
                     module
-                        .get_contract_account(&module.non_consensus_db.begin_transaction(), contract_id)
+                        .get_contract_account(&module.non_consensus_db.begin_transaction(module.decoders.clone()), contract_id)
                         .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
                 }
             },
             api_endpoint! {
                 "/offers",
                 async |module: &LightningModule, _params: ()| -> Vec<IncomingContractOffer> {
-                    Ok(module.get_offers(&module.non_consensus_db.begin_transaction()))
+                    Ok(module.get_offers(&module.non_consensus_db.begin_transaction(module.decoders.clone())))
                 }
             },
             api_endpoint! {
                 "/offer",
                 async |module: &LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     let offer = module
-                        .get_offer(&module.non_consensus_db.begin_transaction(), payment_hash)
+                        .get_offer(&module.non_consensus_db.begin_transaction(module.decoders.clone()), payment_hash)
                         .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
 
                     debug!(%payment_hash, "Sending offer info");
@@ -781,7 +784,7 @@ impl ServerModulePlugin for LightningModule {
             api_endpoint! {
                 "/list_gateways",
                 async |module: &LightningModule, _v: ()| -> Vec<LightningGateway> {
-                    Ok(module.list_gateways(&module.non_consensus_db.begin_transaction()))
+                    Ok(module.list_gateways(&module.non_consensus_db.begin_transaction(module.decoders.clone())))
                 }
             },
             api_endpoint! {
@@ -798,10 +801,15 @@ impl ServerModulePlugin for LightningModule {
 }
 
 impl LightningModule {
-    pub fn new(cfg: LightningModuleConfig, db: Database) -> Self {
+    pub fn new(
+        cfg: LightningModuleConfig,
+        db: Database,
+        decoders: ModuleRegistry<Decoder>,
+    ) -> Self {
         LightningModule {
             cfg,
             non_consensus_db: db,
+            decoders,
         }
     }
 
@@ -846,7 +854,9 @@ impl LightningModule {
     }
 
     pub async fn register_gateway(&self, gateway: LightningGateway) {
-        let mut dbtx = self.non_consensus_db.begin_transaction();
+        let mut dbtx = self
+            .non_consensus_db
+            .begin_transaction(self.decoders.clone());
         dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
             .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");

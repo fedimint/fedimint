@@ -22,9 +22,9 @@ use fedimint_api::config::{
     ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedClientModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
+use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -59,7 +59,7 @@ use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 
-mod common;
+pub mod common;
 pub mod config;
 pub mod db;
 pub mod keys;
@@ -108,6 +108,7 @@ pub struct Wallet {
     // TODO: remove DB altogether
     // Only to be used for non-consensus read operations
     non_consensus_db: Database,
+    decoders: ModuleRegistry<Decoder>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -335,7 +336,11 @@ impl ServerModulePlugin for Wallet {
     async fn await_consensus_proposal(&self) {
         let mut our_target_height = self.target_height().await;
         let last_consensus_height = self
-            .consensus_height(&self.non_consensus_db.begin_transaction())
+            .consensus_height(
+                &self
+                    .non_consensus_db
+                    .begin_transaction(self.decoders.clone()),
+            )
             .unwrap_or(0);
 
         if self.consensus_proposal().await.len() == 1 {
@@ -347,7 +352,9 @@ impl ServerModulePlugin for Wallet {
     }
 
     async fn consensus_proposal<'a>(&'a self) -> Vec<Self::ConsensusItem> {
-        let dbtx = self.non_consensus_db.begin_transaction();
+        let dbtx = self
+            .non_consensus_db
+            .begin_transaction(self.decoders.clone());
 
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
@@ -659,13 +666,15 @@ impl ServerModulePlugin for Wallet {
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
         self.non_consensus_db
-            .begin_transaction()
+            .begin_transaction(self.decoders.clone())
             .get_value(&PegOutBitcoinTransaction(out_point))
             .expect("DB error")
     }
 
     fn audit(&self, audit: &mut Audit) {
-        let dbtx = self.non_consensus_db.begin_transaction();
+        let dbtx = self
+            .non_consensus_db
+            .begin_transaction(self.decoders.clone());
         audit.add_items(&dbtx, &UTXOPrefixKey, |_, v| {
             v.amount.to_sat() as i64 * 1000
         });
@@ -686,13 +695,13 @@ impl ServerModulePlugin for Wallet {
             api_endpoint! {
                 "/block_height",
                 async |module: &Wallet, _params: ()| -> u32 {
-                    Ok(module.consensus_height(&module.non_consensus_db.begin_transaction()).unwrap_or(0))
+                    Ok(module.consensus_height(&module.non_consensus_db.begin_transaction(module.decoders.clone())).unwrap_or(0))
                 }
             },
             api_endpoint! {
                 "/peg_out_fees",
                 async |module: &Wallet, params: (Address, u64)| -> Option<PegOutFees> {
-                    let dbtx = module.non_consensus_db.begin_transaction();
+                    let dbtx = module.non_consensus_db.begin_transaction(module.decoders.clone());
                     let (address, sats) = params;
                     let consensus = module.current_round_consensus(&dbtx).unwrap();
                     let tx = module.offline_wallet().create_tx(
@@ -717,12 +726,20 @@ impl Wallet {
         db: Database,
         bitcoind: BitcoindRpc,
         task_group: &mut TaskGroup,
+        decoders: ModuleRegistry<Decoder>,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
         let broadcaster_db = db.clone();
+        let broadcast_decoder = decoders.clone();
         task_group
             .spawn("broadcast pending", |handle| async move {
-                run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, &handle).await;
+                run_broadcast_pending_tx(
+                    broadcaster_db,
+                    broadcaster_bitcoind_rpc,
+                    broadcast_decoder,
+                    &handle,
+                )
+                .await;
             })
             .await;
 
@@ -741,6 +758,7 @@ impl Wallet {
             secp: Default::default(),
             btc_rpc: bitcoind_rpc,
             non_consensus_db: db,
+            decoders,
         };
 
         Ok(wallet)
@@ -1365,16 +1383,20 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 }
 
 #[instrument(level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc, tg_handle: &TaskHandle) {
+pub async fn run_broadcast_pending_tx(
+    db: Database,
+    rpc: BitcoindRpc,
+    modules: ModuleRegistry<Decoder>,
+    tg_handle: &TaskHandle,
+) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(&db, &rpc).await;
+        broadcast_pending_tx(db.begin_transaction(modules.clone()), &rpc).await;
         fedimint_api::task::sleep(Duration::from_secs(10)).await;
     }
 }
 
-pub async fn broadcast_pending_tx(db: &Database, rpc: &BitcoindRpc) {
-    let pending_tx = db
-        .begin_transaction()
+pub async fn broadcast_pending_tx(dbtx: DatabaseTransaction<'_>, rpc: &BitcoindRpc) {
+    let pending_tx = dbtx
         .find_by_prefix(&PendingTransactionPrefixKey)
         .collect::<Result<Vec<_>, _>>()
         .expect("DB error");

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use thiserror::Error;
 use tracing::{trace, warn};
 
-use crate::core::ModuleDecode;
+use crate::core::{Decoder, ModuleDecode, ModuleKey};
 use crate::dyn_newtype_define;
 use crate::encoding::{Decodable, Encodable, ModuleRegistry};
 
@@ -44,7 +44,10 @@ pub trait DatabaseKeyPrefix: Debug {
 }
 
 pub trait DatabaseKey: Sized + DatabaseKeyPrefix {
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError>;
+    fn from_bytes<M: ModuleDecode>(
+        data: &[u8],
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodingError>;
 }
 
 pub trait SerializableDatabaseValue: Debug {
@@ -60,7 +63,7 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
 pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
 
 pub trait IDatabase: Debug + Send + Sync {
-    fn begin_transaction(&self) -> DatabaseTransaction;
+    fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction;
 }
 
 dyn_newtype_define! {
@@ -119,12 +122,34 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
     fn set_tx_savepoint(&mut self);
 }
 
-dyn_newtype_define! {
-    /// A handle to a type-erased database implementation
-    pub DatabaseTransaction<'a>(Box<IDatabaseTransaction>)
+// TODO: use macro again
+#[doc = " A handle to a type-erased database implementation"]
+pub struct DatabaseTransaction<'a>(
+    Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
+    BTreeMap<ModuleKey, Decoder>,
+);
+impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
+    type Target = dyn IDatabaseTransaction<'a> + Send + 'a;
+
+    fn deref(&self) -> &<Self as std::ops::Deref>::Target {
+        &*self.0
+    }
+}
+
+impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
+    fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
+        &mut *self.0
+    }
 }
 
 impl<'a> DatabaseTransaction<'a> {
+    pub fn new<I: IDatabaseTransaction<'a> + Send + 'a>(
+        dbtx: I,
+        decoders: ModuleRegistry<Decoder>,
+    ) -> DatabaseTransaction<'a> {
+        DatabaseTransaction(Box::new(dbtx), decoders)
+    }
+
     pub async fn commit_tx(self) -> Result<()> {
         self.0.commit_tx().await
     }
@@ -142,10 +167,7 @@ impl<'a> DatabaseTransaction<'a> {
                     std::any::type_name::<K::Value>(),
                     old_val_bytes
                 );
-                Ok(Some(K::Value::from_bytes(
-                    &old_val_bytes,
-                    &BTreeMap::<_, ()>::new(),
-                )?))
+                Ok(Some(K::Value::from_bytes(&old_val_bytes, &self.1)?))
             }
             None => Ok(None),
         }
@@ -182,10 +204,7 @@ impl<'a> DatabaseTransaction<'a> {
             std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(K::Value::from_bytes(
-            &value_bytes,
-            &BTreeMap::<_, ()>::new(),
-        )?))
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.1)?))
     }
 
     pub fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
@@ -198,10 +217,7 @@ impl<'a> DatabaseTransaction<'a> {
             None => return Ok(None),
         };
 
-        Ok(Some(K::Value::from_bytes(
-            &value_bytes,
-            &BTreeMap::<_, ()>::new(),
-        )?))
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.1)?))
     }
 
     pub fn find_by_prefix<KP>(
@@ -211,16 +227,17 @@ impl<'a> DatabaseTransaction<'a> {
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
+        let decoders = &self.1;
         let prefix_bytes = key_prefix.to_bytes();
         self.raw_find_by_prefix(&prefix_bytes).map(|res| {
             res.and_then(|(key_bytes, value_bytes)| {
-                let key = KP::Key::from_bytes(&key_bytes)?;
+                let key = KP::Key::from_bytes(&key_bytes, decoders)?;
                 trace!(
                     "find by prefix: Decoding {} from bytes {:?}",
                     std::any::type_name::<KP::Value>(),
                     value_bytes
                 );
-                let value = KP::Value::from_bytes(&value_bytes, &BTreeMap::<_, ()>::new())?;
+                let value = KP::Value::from_bytes(&value_bytes, decoders)?;
                 Ok((key, value))
             })
         })
@@ -244,7 +261,10 @@ where
     // Note: key can only be `T` that can be decoded without modules (even if module type is `()`)
     T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + crate::encoding::Decodable + Sized,
 {
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+    fn from_bytes<M: ModuleDecode>(
+        data: &[u8],
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodingError> {
         if data.is_empty() {
             // TODO: build better coding errors, pretty useless right now
             return Err(DecodingError::wrong_length(1, 0));
@@ -256,7 +276,7 @@ where
 
         <Self as crate::encoding::Decodable>::consensus_decode(
             &mut std::io::Cursor::new(&data[1..]),
-            &BTreeMap::<_, ()>::new(),
+            modules,
         )
         .map_err(|decode_error| DecodingError::Other(decode_error.0))
     }
@@ -315,6 +335,7 @@ mod tests {
     use super::Database;
     use crate::db::DatabaseKeyPrefixConst;
     use crate::encoding::{Decodable, Encodable};
+    use crate::ModuleRegistry;
 
     #[repr(u8)]
     #[derive(Clone)]
@@ -363,7 +384,7 @@ mod tests {
     struct TestVal(u64);
 
     pub async fn verify_insert_elements(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
             .unwrap()
@@ -378,14 +399,14 @@ mod tests {
     }
 
     pub fn verify_remove_nonexisting(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
         assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), None);
         let removed = dbtx.remove_entry(&TestKey(1));
         assert!(removed.is_ok());
     }
 
     pub fn verify_remove_existing(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -401,7 +422,7 @@ mod tests {
     }
 
     pub fn verify_read_own_writes(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -412,7 +433,7 @@ mod tests {
     }
 
     pub fn verify_prevent_dirty_reads(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -420,12 +441,12 @@ mod tests {
             .is_none());
 
         // dbtx2 should not be able to see uncommitted changes
-        let dbtx2 = db.begin_transaction();
+        let dbtx2 = db.begin_transaction(ModuleRegistry::default());
         assert_eq!(dbtx2.get_value(&TestKey(1)).unwrap(), None);
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
         assert!(dbtx.insert_entry(&TestKey(55), &TestVal(9999)).is_ok());
         assert!(dbtx.insert_entry(&TestKey(54), &TestVal(8888)).is_ok());
 
@@ -434,7 +455,7 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         // Verify finding by prefix returns the correct set of key pairs
-        let dbtx = db.begin_transaction();
+        let dbtx = db.begin_transaction(ModuleRegistry::default());
         let mut returned_keys = 0;
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix) {
@@ -477,7 +498,7 @@ mod tests {
     }
 
     pub async fn verify_commit(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -486,12 +507,12 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         // Verify dbtx2 can see committed transactions
-        let dbtx2 = db.begin_transaction();
+        let dbtx2 = db.begin_transaction(ModuleRegistry::default());
         assert_eq!(dbtx2.get_value(&TestKey(1)).unwrap(), Some(TestVal(2)));
     }
 
     pub fn verify_rollback_to_savepoint(db: Database) {
-        let mut dbtx_rollback = db.begin_transaction();
+        let mut dbtx_rollback = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx_rollback
             .insert_entry(&TestKey(20), &TestVal(2000))
@@ -523,10 +544,10 @@ mod tests {
     }
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
-        let dbtx = db.begin_transaction();
+        let dbtx = db.begin_transaction(ModuleRegistry::default());
         assert_eq!(dbtx.get_value(&TestKey(100)).unwrap(), None);
 
-        let mut dbtx2 = db.begin_transaction();
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx2.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
 
@@ -556,7 +577,7 @@ mod tests {
     }
 
     pub async fn verify_phantom_entry(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
 
@@ -564,7 +585,7 @@ mod tests {
 
         dbtx.commit_tx().await.expect("DB Error");
 
-        let dbtx = db.begin_transaction();
+        let dbtx = db.begin_transaction(ModuleRegistry::default());
         let mut returned_keys = 0;
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix) {
@@ -585,7 +606,7 @@ mod tests {
 
         assert_eq!(returned_keys, expected_keys);
 
-        let mut dbtx2 = db.begin_transaction();
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx2.insert_entry(&TestKey(102), &TestVal(103)).is_ok());
 
@@ -612,12 +633,12 @@ mod tests {
     }
 
     pub async fn expect_write_conflict(db: Database) {
-        let mut dbtx = db.begin_transaction();
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
         assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
         dbtx.commit_tx().await.expect("DB Error");
 
-        let mut dbtx2 = db.begin_transaction();
-        let mut dbtx3 = db.begin_transaction();
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx3 = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx2.insert_entry(&TestKey(100), &TestVal(102)).is_ok());
 

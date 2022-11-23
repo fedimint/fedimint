@@ -9,7 +9,7 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, ServerModulePlugin, Tiered, TieredMulti, TransactionId};
@@ -102,7 +102,7 @@ impl<'c> MintClient<'c> {
     pub fn coins(&self) -> TieredMulti<SpendableNote> {
         self.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(&CoinKeyPrefix)
             .map(|res| {
                 let (key, spendable_coin) = res.expect("DB error");
@@ -152,7 +152,7 @@ impl<'c> MintClient<'c> {
         C: AsRef<ClientConfig> + Clone,
         R: RngCore + CryptoRng,
     {
-        let mut dbtx = self.context.db.begin_transaction();
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let change_required = tx.change_required(client);
         let final_tx = tx.build(
             change_required,
@@ -200,7 +200,7 @@ impl<'c> MintClient<'c> {
         let issuance = self
             .context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .get_value(&OutputFinalizationKey(outpoint))
             .expect("DB error")
             .ok_or(MintClientError::FinalizationError(
@@ -237,7 +237,7 @@ impl<'c> MintClient<'c> {
     pub fn list_active_issuances(&self) -> Vec<(OutPoint, NoteIssuanceRequests)> {
         self.context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .map(|res| {
                 let (OutputFinalizationKey(outpoint), cfd) = res.expect("DB error");
@@ -255,7 +255,7 @@ impl<'c> MintClient<'c> {
         let stream = active_issuances
             .into_iter()
             .map(|(out_point, _)| async move {
-                let mut dbtx = self.context.db.begin_transaction();
+                let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
                 loop {
                     match self.fetch_coins(&mut dbtx, out_point).await {
                         Ok(_) => {
@@ -429,13 +429,16 @@ mod tests {
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
     use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::core::{Decoder, MODULE_KEY_MINT};
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
+    use fedimint_api::encoding::ModuleRegistry;
     use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+    use fedimint_core::modules::mint::common::MintModuleDecoder;
     use fedimint_core::modules::mint::config::MintClientConfig;
     use fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
     use fedimint_core::modules::wallet::PegOutFees;
@@ -536,24 +539,35 @@ mod tests {
         }
     }
 
+    fn mint_decoders() -> ModuleRegistry {
+        vec![(MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder))]
+            .into_iter()
+            .collect()
+    }
+
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         MintClientConfig,
         ClientContext,
     ) {
-        let fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::<Mint>::new(
-                4,
-                |cfg, db| async move { Ok(Mint::new(cfg.to_typed().unwrap(), db)) },
-                &ModuleConfigGenParams {
-                    mint_amounts: vec![Amount::from_sat(1), Amount::from_sat(10)],
-                    ..ModuleConfigGenParams::fake_config_gen_params()
-                },
-                &MintConfigGenerator,
-            )
-            .await
-            .unwrap(),
-        ));
+        let fed =
+            Arc::new(
+                tokio::sync::Mutex::new(
+                    FakeFed::<Mint>::new(
+                        4,
+                        |cfg, db| async move {
+                            Ok(Mint::new(cfg.to_typed().unwrap(), db, mint_decoders()))
+                        },
+                        &ModuleConfigGenParams {
+                            mint_amounts: vec![Amount::from_sat(1), Amount::from_sat(10)],
+                            ..ModuleConfigGenParams::fake_config_gen_params()
+                        },
+                        &MintConfigGenerator,
+                    )
+                    .await
+                    .unwrap(),
+                ),
+            );
 
         let api = FakeApi { mint: fed.clone() };
 
@@ -577,7 +591,7 @@ mod tests {
         let txid = TransactionId::from_inner([0x42; 32]);
         let out_point = OutPoint { txid, out_idx: 0 };
 
-        let mut dbtx = client_db.begin_transaction();
+        let mut dbtx = client_db.begin_transaction(ModuleRegistry::default());
         client
             .receive_coins(
                 amt,
@@ -629,7 +643,10 @@ mod tests {
         issue_tokens(&fed, &client, &client_context.db, SPEND_AMOUNT * 2).await;
 
         // Spending works
-        let mut dbtx = client.context.db.begin_transaction();
+        let mut dbtx = client
+            .context
+            .db
+            .begin_transaction(ModuleRegistry::default());
         let mut builder = TransactionBuilder::default();
         let secp = &client.context.secp;
         let tbs_pks = &client.config.tbs_pks;
@@ -669,7 +686,10 @@ mod tests {
         assert!(fed.lock().await.verify_input(&input).is_err());
 
         // We can exactly spend the remainder
-        let mut dbtx = client.context.db.begin_transaction();
+        let mut dbtx = client
+            .context
+            .db
+            .begin_transaction(ModuleRegistry::default());
         let mut builder = TransactionBuilder::default();
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let rng = rand::rngs::OsRng;
@@ -725,7 +745,10 @@ mod tests {
             (0..ITERATIONS)
                 .filter_map(|_| {
                     block_on(async {
-                        let mut tx = client_ref.context.db.begin_transaction();
+                        let mut tx = client_ref
+                            .context
+                            .db
+                            .begin_transaction(ModuleRegistry::default());
                         let (_, nonce) =
                             client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, &mut tx);
                         tx.commit_tx().await.map(|_| nonce).ok()
@@ -757,7 +780,7 @@ mod tests {
         let last_idx = client_ref
             .context
             .db
-            .begin_transaction()
+            .begin_transaction(ModuleRegistry::default())
             .get_value(&LastECashNoteIndexKey)
             .expect("DB error")
             .unwrap_or(0);
