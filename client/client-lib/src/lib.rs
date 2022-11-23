@@ -17,7 +17,7 @@ use std::fmt::{Debug, Formatter};
 use std::iter::once;
 use std::ops::Add;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
@@ -833,6 +833,11 @@ impl Client<UserClientConfig> {
 
         let consensus_height = self.context.api.fetch_consensus_block_height().await?;
         let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
+        let consensus_clock_time = self.context.api.fetch_consensus_clock_time().await?;
+
+        if invoice.would_expire(consensus_clock_time.duration_since(UNIX_EPOCH).unwrap()) {
+            return Err(ClientError::LnClientError(LnClientError::ExpiredInvoice));
+        }
 
         let contract = self
             .ln_client()

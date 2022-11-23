@@ -323,6 +323,8 @@ pub enum LnClientError {
     WrongAccountType,
     #[error("No ConfirmedOffer found for contract ID {0}")]
     NoConfirmedInvoice(ContractId),
+    #[error("Expired invoice")]
+    ExpiredInvoice,
 }
 
 #[cfg(test)]
