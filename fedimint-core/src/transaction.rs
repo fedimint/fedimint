@@ -221,11 +221,28 @@ pub mod legacy {
 
         /// Generate the transaction hash.
         pub fn tx_hash_from_parts(inputs: &[Input], outputs: &[Output]) -> TransactionId {
+            let erased_inputs = inputs
+                .iter()
+                .map(|input| match input.clone() {
+                    Input::Mint(i) => i.into(),
+                    Input::Wallet(i) => i.into(),
+                    Input::LN(i) => i.into(),
+                })
+                .collect::<Vec<fedimint_api::core::Input>>();
+            let erased_outputs = outputs
+                .iter()
+                .map(|output| match output.clone() {
+                    Output::Mint(o) => o.into(),
+                    Output::Wallet(o) => o.into(),
+                    Output::LN(o) => o.into(),
+                })
+                .collect::<Vec<fedimint_api::core::Output>>();
+
             let mut engine = TransactionId::engine();
-            inputs
+            erased_inputs
                 .consensus_encode(&mut engine)
                 .expect("write to hash engine can't fail");
-            outputs
+            erased_outputs
                 .consensus_encode(&mut engine)
                 .expect("write to hash engine can't fail");
             TransactionId::from_engine(engine)
