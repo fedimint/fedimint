@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::ops::Sub;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::{
@@ -800,6 +800,12 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
+                "/clock_time",
+                async |module: &LightningModule, dbtx, _params: ()| -> SystemTime {
+                   Ok(module.consensus_clock_time(&mut dbtx).await.unwrap_or(UNIX_EPOCH))
+                }
+            },
+            api_endpoint! {
                 "/offer",
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     let offer = module
@@ -916,6 +922,22 @@ impl Lightning {
             _ => proposals[proposals.len() / 2],
         };
         median_proposal
+    }
+
+    pub async fn current_round_consensus(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Option<RoundConsensus> {
+        dbtx.get_value(&RoundConsensusKey).await.expect("DB error")
+    }
+
+    pub async fn consensus_clock_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Option<SystemTime> {
+        self.current_round_consensus(dbtx)
+            .await
+            .map(|rc| rc.clock_time)
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
