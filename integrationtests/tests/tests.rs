@@ -821,15 +821,16 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         .context
         .db
         .begin_transaction(all_decoders());
-    let tx = builder.build(
-        sats(0),
-        &mut dbtx,
-        |dbtx| user.client.mint_client().new_ecash_note(&secp(), dbtx),
-        &secp(),
-        tbs_pks,
-        rng(),
-    )
-    .await;
+    let tx = builder
+        .build(
+            sats(0),
+            &mut dbtx,
+            |dbtx| user.client.mint_client().new_ecash_note(&secp(), dbtx),
+            &secp(),
+            tbs_pks,
+            rng(),
+        )
+        .await;
     fed.submit_transaction(tx.into_type_erased());
     fed.run_consensus_epochs(1).await; // process offer
 
