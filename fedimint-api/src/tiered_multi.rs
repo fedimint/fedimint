@@ -82,6 +82,7 @@ impl<T> TieredMulti<T> {
         self.0.iter()
     }
 
+    // Note: order of the elements is important here: from lowest tiers to highest, then in order of elements in the Vec
     pub fn iter_items(&self) -> impl Iterator<Item = (Amount, &T)> + DoubleEndedIterator {
         self.0
             .iter()

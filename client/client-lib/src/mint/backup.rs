@@ -7,15 +7,30 @@
 //! them with federation. A successfully recovered snapshot can be used
 //! to avoid having to scan the whole history.
 
-use std::collections::BTreeMap;
+use std::{
+    cmp::max,
+    collections::{BTreeMap, HashMap},
+    ops::RangeInclusive,
+};
 
 use anyhow::Result;
 use fedimint_api::{
     backup::{BackupRequest, SignedBackupRequest},
+    cancellable::{Cancellable, Cancelled},
     core::Decoder,
+    task::{TaskGroup, TaskHandle},
+    NumPeers, PeerId,
 };
+use fedimint_core::{
+    epoch::{ConsensusItem, EpochHistory},
+    modules::mint::{MintInput, MintOutput, MintOutputConfirmation},
+};
+use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
+use tokio::sync::mpsc;
+use tracing::error;
 
 use super::*;
+use crate::api;
 
 const BACKUP_CHILD_ID: u64 = 0;
 
@@ -121,15 +136,16 @@ impl MintClient {
 
         let mut dbtx = self.start_dbtx();
         let notes = self.get_available_notes(&mut dbtx).await;
-        let mut note_idxs = Vec::new();
+
+        let mut idxes = vec![];
         for &amount in self.config.tbs_pks.tiers() {
-            note_idxs.push((amount, self.get_next_note_index(&mut dbtx, amount).await));
+            idxes.push((amount, self.get_next_note_index(&mut dbtx, amount).await));
         }
-        let last_idx = Tiered::from_iter(note_idxs.into_iter());
+        let next_note_idx = Tiered::from_iter(idxes);
 
         Ok(PlaintextEcashBackup {
             notes,
-            last_idx,
+            next_note_idx,
             epoch,
         })
     }
@@ -147,6 +163,103 @@ impl MintClient {
             .await?;
         Ok(())
     }
+
+    /// Fetch epochs in a given range and send them over `sender`
+    ///
+    /// Since WASM's `spawn` does not support join handles, we indicate
+    /// errors via `sender` itself.
+    ///
+    /// TODO: could be internal to recovery_loop?
+    async fn fetch_epochs(
+        &self,
+        epoch_range: RangeInclusive<u64>,
+        sender: mpsc::Sender<api::Result<EpochHistory>>,
+        task_handle: &TaskHandle,
+    ) {
+        for epoch in epoch_range {
+            if task_handle.is_shutting_down() {
+                break;
+            }
+
+            match self
+                .context
+                .api
+                .fetch_epoch_history(epoch, self.epoch_pk)
+                .await
+            {
+                Ok(epoch_history) => {
+                    assert_eq!(epoch_history.outcome.epoch, epoch);
+                    // If the other side disconnected (probably due to an error),
+                    // we don't need to keep trying
+                    if sender.send(Ok(epoch_history)).await.is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if sender.send(Err(e)).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn recovery_loop(
+        &self,
+        task_group: &mut TaskGroup,
+        backup: PlaintextEcashBackup,
+        pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    ) -> Cancellable<Result<()>> {
+        let end_epoch = match self.context.api.fetch_consensus_block_height().await {
+            Ok(v) => v,
+            Err(e) => {
+                return Ok(Err(e.into()));
+            }
+        };
+        let epoch_range = backup.epoch..=end_epoch;
+
+        // Since fetching epochs will be slow, we start a dedicated task to do it
+        let (tx, mut rx) = mpsc::channel(10);
+        let self_clone = self.clone();
+        task_group
+            .spawn("fetch epochs", {
+                let epoch_range = epoch_range.clone();
+                |task_handle| async move {
+                    self_clone
+                        .fetch_epochs(epoch_range, tx, &task_handle)
+                        .await
+                }
+            })
+            .await;
+
+        let mut nonce_tracker = EcashRecoveryNonceTracker::from_backup(
+            backup,
+            self.secret.clone(),
+            1000,
+            self.config.tbs_pks.clone(),
+            pub_key_shares,
+        );
+
+        for epoch in epoch_range {
+            // if `recv` returned `None` that means fetch_epoch finished prematurelly,
+            // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
+            let epoch_history = match rx.recv().await {
+                Some(Ok(o)) => o,
+                Some(Err(e)) => return Ok(Err(e.into())),
+                None => return Err(Cancelled),
+            };
+            assert_eq!(epoch_history.outcome.epoch, epoch);
+
+            for (peer_id, items) in &epoch_history.outcome.items {
+                // TODO: epoch history to contain rejected items, we should skip them here
+                for item in items {
+                    nonce_tracker.handle_consensus_item(peer_id, item);
+                }
+            }
+        }
+
+        Ok(Ok(()))
+    }
 }
 
 /// Snapshot of a ecash state (notes)
@@ -157,7 +270,7 @@ impl MintClient {
 pub struct PlaintextEcashBackup {
     notes: TieredMulti<SpendableNote>,
     epoch: u64,
-    last_idx: Tiered<NoteIndex>,
+    next_note_idx: Tiered<NoteIndex>,
 }
 
 impl PlaintextEcashBackup {
@@ -188,6 +301,7 @@ impl PlaintextEcashBackup {
         )?)
     }
 
+    /// Encrypt with a key and turn into [`EcashBackup`]
     pub fn encrypt_to(&self, key: &aead::LessSafeKey) -> Result<EcashBackup> {
         let encoded = self.encode()?;
 
@@ -213,6 +327,394 @@ impl EcashBackup {
         };
 
         request.sign(keypair)
+    }
+}
+
+/// The state machine used for fast-fowarding backup from point when it was taken to the present time.
+struct EcashRecoveryNonceTracker {
+    /// Nonces that we track that are currently spendable.
+    spendable_note_by_nonce: HashMap<Nonce, (Amount, SpendableNote)>,
+
+    /// Outputs (by `OutPoint`) we track federation member confirmations for blind nonces.
+    ///
+    /// Once we get enough confirmation (valid shares), these become new spendable notes.
+    ///
+    /// Note that `NoteIssuanceRequest` is optional, as sometimes we might need
+    /// to handle a tx where only some of the blind nonces were in the pool.
+    /// A `None` means tha this blind nonce/message is there only for validation
+    /// purposes, and will actually not create a `spendable_note_by_nonce`
+    #[allow(clippy::type_complexity)]
+    pending_outputs: HashMap<
+        OutPoint,
+        (
+            TieredMulti<(BlindedMessage, Option<NoteIssuanceRequest>)>,
+            HashMap<PeerId, Vec<tbs::BlindedSignatureShare>>,
+        ),
+    >,
+
+    /// Next nonces that we expect might soon get used.
+    /// Once we see them, we move the tracking to `pending_outputs`
+    ///
+    /// Note: since looking up nonces is going to be the most common operation
+    /// the pool is kept shared (so only one lookup is enough), and replenishment
+    /// is done each time a note is consumed.
+    pending_nonces: HashMap<BlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)>,
+
+    /// Tail of `pending`. `pending_notes` is filled by generating note with this index
+    /// and incrementing it.
+    next_pending_note_idx: Tiered<NoteIndex>,
+
+    /// `LastECashNoteIndex` but tracked in flight. Basically max index of any note that got
+    /// a partial sig from the federation (initialled from the backup value).
+    /// TODO: One could imagine a case where the note was issued but not get any partial sigs yet.
+    /// Very unlikely in real life scenario, but worth considering.
+    last_mined_nonce_idx: Tiered<NoteIndex>,
+
+    /// Threshold
+    threshold: usize,
+
+    /// The **mint** (not root) derived secret used to derive notes
+    secret: DerivableSecret,
+
+    /// Public key shares for each peer
+    ///
+    /// Used to validate contributed consensus items
+    pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+
+    /// Aggregate public key for each amount tier
+    tbs_pks: Tiered<AggregatePublicKey>,
+
+    /// The number of nonces we look-ahead when looking for mints (per each amount).
+    gap_limit: usize,
+}
+
+impl EcashRecoveryNonceTracker {
+    pub fn from_backup(
+        backup: PlaintextEcashBackup,
+        mint_secret: DerivableSecret,
+        gap_limit: usize,
+        tbs_pks: Tiered<AggregatePublicKey>,
+        pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    ) -> Self {
+        let amount_tiers: Vec<_> = tbs_pks.tiers().copied().collect();
+        let mut s = Self {
+            spendable_note_by_nonce: backup
+                .notes
+                .into_iter()
+                .map(|(amount, note)| (note.note.0, (amount, note)))
+                .collect(),
+            // TODO: needs to get these in a backup as well
+            pending_outputs: HashMap::default(),
+            pending_nonces: HashMap::default(),
+            next_pending_note_idx: backup.next_note_idx.clone(),
+            last_mined_nonce_idx: backup.next_note_idx,
+            secret: mint_secret,
+            threshold: pub_key_shares.threshold(),
+            gap_limit,
+            tbs_pks,
+            pub_key_shares,
+        };
+
+        for amount in amount_tiers {
+            s.fill_initial_pending_nonces(amount);
+        }
+
+        s
+    }
+
+    /// Fill each tier pool to the gap limit
+    fn fill_initial_pending_nonces(&mut self, amount: Amount) {
+        for _ in 0..self.gap_limit {
+            self.add_next_pending_nonce_in_pending_pool(amount);
+        }
+    }
+
+    /// Add next nonce from `amount` tier to the `next_pending_note_idx`
+    fn add_next_pending_nonce_in_pending_pool(&mut self, amount: Amount) {
+        let note_idx_ref = self.next_pending_note_idx.get_mut_or_default(amount);
+
+        let (note_issuance_request, blind_nonce) = NoteIssuanceRequest::new(
+            secp256k1::SECP256K1,
+            MintClient::new_note_secret_static(&self.secret, amount, *note_idx_ref),
+        );
+        assert!(self
+            .pending_nonces
+            .insert(
+                blind_nonce.0,
+                (note_issuance_request, *note_idx_ref, amount)
+            )
+            .is_none());
+
+        note_idx_ref.advance();
+    }
+
+    pub fn handle_input(&mut self, input: &MintInput) {
+        // We attempt to delete any nonce we see as spent, simple
+        for (_amt, note) in input.0.iter_items() {
+            self.spendable_note_by_nonce.remove(&note.0);
+        }
+    }
+
+    pub fn handle_output(&mut self, out_point: OutPoint, output: &MintOutput) {
+        // There is nothing preventing other users from creating valid transactions
+        // mining coins to our own blind nonce, possibly even racing with us.
+        // Including amount in blind nonce derivation helps us avoid accidentally using
+        // a nonce mined for as smaller amount, but it doesn't eliminate completely
+        // the possibility that we might use a note mined in a different transaction,
+        // that our original one.
+        // While it is harmless to us, as such duplicated blind nonces are effective as good
+        // the as the original ones (same amount), it breaks the assumption that all our
+        // blind nonces in an our output need to be in the pending pool. It forces us to be
+        // greedy no matter what and take what we can, and just report anything suspicious.
+        //
+        // found - all nonces that we found in the pool with the correct amount
+        // missing - all the nonces we have not found in the pool, either because they are not ours
+        //           or were consumed by a previous transaction using this nonce, or possibly gap
+        //           buffer was too small
+        // wrong - nonces that were ours but were mined to a wrong
+        let (found, missing, wrong) = output.0.iter_items().fold(
+            (vec![], vec![], vec![]),
+            |(mut found, mut missing, mut wrong), (amount_from_output, nonce)| {
+                match self.pending_nonces.get(&nonce.0).cloned() {
+                    Some((issuance_request, note_idx, pending_amount)) => {
+                        // the moment we see our blind nonce in the epoch history, correctly or incorrectly used,
+                        // we know that we must have used already
+                        self.observe_nonce_idx_being_used(pending_amount, note_idx);
+
+                        if pending_amount == amount_from_output {
+                            found.push((amount_from_output, (nonce.0, Some(issuance_request))));
+                            // replenish pending pool with the nonce of the same amount
+
+                            (found, missing, wrong)
+                        } else {
+                            // put it back, incorrect amount
+                            self.pending_nonces
+                                .insert(nonce.0, (issuance_request, note_idx, pending_amount));
+                            // report problem
+                            wrong.push((
+                                out_point,
+                                nonce.0,
+                                pending_amount,
+                                amount_from_output,
+                                note_idx,
+                            ));
+                            (found, missing, wrong)
+                        }
+                    }
+                    None => {
+                        missing.push((amount_from_output, (nonce.0, None)));
+                        (found, missing, wrong)
+                    }
+                }
+            },
+        );
+
+        for wrong in &wrong {
+            warn!(output = ?out_point,
+                 blind_nonce = ?wrong.1,
+                 expected_amount = %wrong.2,
+                 found_amount = %wrong.3,
+                 "Transaction output contains blind nonce that looks like ours but is of the wrong amount. Ignoring.");
+            // Any blind nonce mined with a wrong amount means that this transaction can't be ours
+        }
+
+        if !wrong.is_empty() {
+            return;
+        }
+
+        if found.is_empty() {
+            // If we found nothing, this is not our output
+            return;
+        }
+
+        for &(_amount, (nonce, _)) in &missing {
+            warn!(output = ?out_point,
+                 nonce = ?nonce,
+                 "Missing nonce in pending pool for a transaction with other valid nonces that belong to us. This indicate an issue.");
+        }
+
+        // ok, now that we know we track this output as ours and use the nonces we've found
+        // delete them from the pool and replace them
+        for &(_amount, (nonce, _)) in &found {
+            assert!(self.pending_nonces.remove(&nonce).is_some());
+        }
+
+        self.pending_outputs.insert(
+            out_point,
+            (
+                TieredMulti::from_iter(found.into_iter().chain(missing.into_iter())),
+                HashMap::new(),
+            ),
+        );
+    }
+
+    /// React to a valid pending nonce being tracked being used in the epoch history
+    ///
+    /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the pending pool
+    /// to always maintain at least `gap_limit` of pending onces in each amount tier.
+    fn observe_nonce_idx_being_used(&mut self, amount: Amount, note_idx: NoteIndex) {
+        *self
+            .last_mined_nonce_idx
+            .get_mut(amount)
+            .expect("must have all amounts") = max(
+            *self
+                .last_mined_nonce_idx
+                .get(amount)
+                .expect("must have all amounts"),
+            note_idx,
+        );
+
+        while self.next_pending_note_idx.get_mut_or_default(amount).0
+            < self.gap_limit as u64
+                + self
+                    .last_mined_nonce_idx
+                    .get(amount)
+                    .expect("must be there already")
+                    .0
+        {
+            self.add_next_pending_nonce_in_pending_pool(amount);
+        }
+    }
+
+    pub fn handle_output_confirmation(&mut self, peer_id: PeerId, sigs: &MintOutputConfirmation) {
+        let enough_shares = if let Some((output_data, peer_shares)) =
+            self.pending_outputs.get_mut(&sigs.out_point)
+        {
+            if !sigs.signatures.0.structural_eq(output_data) {
+                warn!(
+                    peer = %peer_id,
+                    "Peer proposed a sig share of wrong structure (different than out_point)",
+                );
+                return;
+            }
+
+            for ((share_amt, share_sig), (output_item_amt, output_data_item)) in
+                sigs.signatures.0.iter_items().zip(output_data.iter_items())
+            {
+                // Guaranteed by the structural_eq check above
+                assert_eq!(share_amt, output_item_amt);
+
+                let amount_key = match self.pub_key_shares[&peer_id].tier(&share_amt) {
+                    Ok(key) => key,
+                    Err(_) => {
+                        error!(
+                            ?peer_id,
+                            amount = ?share_amt,
+                            "Missing public key for the amount. This should not happen."
+                        );
+                        return;
+                    }
+                };
+
+                if !verify_blind_share(output_data_item.0, share_sig.1, *amount_key) {
+                    warn!(?peer_id, "Ignoring invalid contribution share from peer");
+                    return;
+                }
+            }
+
+            if let Some(_prev) = peer_shares.insert(
+                peer_id,
+                // We compact the shares to a `Vec<BlindedSignatureShare>` like
+                // we eventually want in the consensus itself: https://github.com/fedimint/fedimint/issues/1053#issue-1477111966
+                sigs.signatures
+                    .0
+                    .iter_items()
+                    .map(|(_, (_, sig_share))| *sig_share)
+                    .collect(),
+            ) {
+                warn!(
+                    out_point = %sigs.out_point,
+                    ?peer_id,
+                    "Duplicate signature share for out_point",
+                );
+            }
+
+            self.threshold <= peer_shares.len()
+        } else {
+            false
+        };
+
+        if enough_shares {
+            let (output_data, sig_shares) = self
+                .pending_outputs
+                .remove(&sigs.out_point)
+                .expect("must be in the map already");
+
+            for (item_i, (item_amt, item)) in output_data.iter_items().enumerate() {
+                let iss_request = if let Some(iss_request) = item.1.clone() {
+                    iss_request
+                } else {
+                    // Items without issuance request are ones we don't consider ours
+                    // for some reason, so there's no point combining sigs for them.
+                    continue;
+                };
+
+                let sig = combine_valid_shares(
+                    sig_shares
+                        .iter()
+                        .map(|(peer, shares)| (peer.to_usize(), shares[item_i])),
+                    self.threshold,
+                );
+
+                let note = iss_request
+                    .finalize(
+                        sig,
+                        *self
+                            .tbs_pks
+                            .tier(&item_amt)
+                            .expect("must have keys for all amounts here"),
+                    )
+                    .expect("We can assume all data valid at this point");
+
+                self.spendable_note_by_nonce
+                    .insert(iss_request.nonce(), (item_amt, note));
+            }
+        }
+    }
+
+    pub(crate) fn handle_consensus_item(&mut self, peer_id: &PeerId, item: &ConsensusItem) {
+        match item {
+            ConsensusItem::EpochInfo(_) => {}
+            ConsensusItem::Transaction(tx) => {
+                let txid = tx.tx_hash();
+
+                for input in &tx.inputs {
+                    if input.module_key() == MODULE_KEY_MINT {
+                        let input = input
+                            .as_any()
+                            .downcast_ref::<MintInput>()
+                            .expect("mint key just checked");
+
+                        self.handle_input(input);
+                    }
+                }
+
+                for (out_idx, output) in tx.outputs.iter().enumerate() {
+                    let output = output
+                        .as_any()
+                        .downcast_ref::<MintOutput>()
+                        .expect("mint key just checked");
+
+                    self.handle_output(
+                        OutPoint {
+                            txid,
+                            out_idx: out_idx as u64,
+                        },
+                        output,
+                    );
+                }
+            }
+            ConsensusItem::Module(module_item) => {
+                if module_item.module_key() == MODULE_KEY_MINT {
+                    let mint_item = module_item
+                        .as_any()
+                        .downcast_ref::<MintOutputConfirmation>()
+                        .expect("mint key just checked");
+
+                    self.handle_output_confirmation(*peer_id, mint_item);
+                }
+            }
+        }
     }
 }
 

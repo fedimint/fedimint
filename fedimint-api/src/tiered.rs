@@ -23,6 +23,12 @@ impl std::fmt::Display for InvalidAmountTierError {
 #[serde(transparent)]
 pub struct Tiered<T>(BTreeMap<Amount, T>);
 
+impl<T> Default for Tiered<T> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
 impl<T> Tiered<T> {
     pub fn structural_eq<O>(&self, other: &Tiered<O>) -> bool {
         self.0.keys().eq(other.0.keys())
@@ -43,6 +49,28 @@ impl<T> Tiered<T> {
 
     pub fn get(&self, amt: Amount) -> Option<&T> {
         self.0.get(&amt)
+    }
+
+    pub fn get_mut(&mut self, amt: Amount) -> Option<&mut T> {
+        self.0.get_mut(&amt)
+    }
+
+    pub fn insert(&mut self, amt: Amount, v: T) -> Option<T> {
+        self.0.insert(amt, v)
+    }
+
+    pub fn get_mut_or_default(&mut self, amt: Amount) -> &mut T
+    where
+        T: Default,
+    {
+        self.0.entry(amt).or_default()
+    }
+
+    pub fn entry(&mut self, amt: Amount) -> std::collections::btree_map::Entry<'_, Amount, T>
+    where
+        T: Default,
+    {
+        self.0.entry(amt)
     }
 
     pub fn as_map(&self) -> &BTreeMap<Amount, T> {

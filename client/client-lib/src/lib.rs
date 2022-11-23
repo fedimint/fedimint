@@ -327,7 +327,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         for (amount, note) in notes.clone() {
             let key = CoinKey {
                 amount,
-                nonce: note.note.0.clone(),
+                nonce: note.note.0,
             };
             dbtx.insert_entry(&key, &note).await.expect("DB error");
         }
@@ -496,7 +496,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         for (amount, coin) in final_coins.iter_items() {
             dbtx.remove_entry(&CoinKey {
                 amount,
-                nonce: coin.note.0.clone(),
+                nonce: coin.note.0,
             })
             .await
             .expect("DB Error");

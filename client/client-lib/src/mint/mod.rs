@@ -51,7 +51,20 @@ pub struct MintClient {
 /// We allow converting it to u64 and incrementing it, but
 /// messing with it should be somewhat restricted to prevent
 /// silly errors.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable, Decodable)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Encodable,
+    Decodable,
+    Default,
+    PartialOrd,
+    Ord,
+)]
 pub struct NoteIndex(u64);
 
 impl NoteIndex {
@@ -69,6 +82,10 @@ impl NoteIndex {
     #[allow(unused)]
     fn from_u64(v: u64) -> Self {
         Self(v)
+    }
+
+    pub fn advance(&mut self) {
+        *self = self.next()
     }
 }
 
@@ -308,10 +325,22 @@ impl MintClient {
             }
         }
 
-        self.secret
+        Self::new_note_secret_static(&self.secret, amount, new_idx)
+    }
+
+    /// Derive the note `DerivableSecret` from the Mint's `secret` the `amount` tier and `note_idx`
+    ///
+    /// Static to help re-use in other places, that don't have a whole [`Self`] available
+    pub fn new_note_secret_static(
+        secret: &DerivableSecret,
+        amount: Amount,
+        note_idx: NoteIndex,
+    ) -> DerivableSecret {
+        secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
             .child_key(ChildId(amount.milli_sat))
-            .child_key(ChildId(new_idx.as_u64()))
+            .child_key(ChildId(note_idx.as_u64()))
+            .child_key(ChildId(amount.milli_sat))
     }
 
     pub async fn new_ecash_note<C: Signing>(
@@ -379,7 +408,7 @@ impl MintClient {
         for (amount, coin) in coins.into_iter() {
             let key = CoinKey {
                 amount,
-                nonce: coin.note.0.clone(),
+                nonce: coin.note.0,
             };
             let value = coin;
             dbtx.insert_new_entry(&key, &value).await.expect("DB Error");
