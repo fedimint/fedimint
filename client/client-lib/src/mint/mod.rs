@@ -154,14 +154,16 @@ impl<'c> MintClient<'c> {
     {
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let change_required = tx.change_required(client);
-        let final_tx = tx.build(
-            change_required,
-            &mut dbtx,
-            |tx| self.new_ecash_note(&self.context.secp, tx),
-            &self.context.secp,
-            &self.config.tbs_pks,
-            rng,
-        );
+        let final_tx = tx
+            .build(
+                change_required,
+                &mut dbtx,
+                |tx| self.new_ecash_note(&self.context.secp, tx),
+                &self.context.secp,
+                &self.config.tbs_pks,
+                rng,
+            )
+            .await;
         let txid = final_tx.tx_hash();
         let mint_tx_id = self.context.api.submit_transaction(final_tx).await?;
         assert_eq!(
@@ -229,6 +231,7 @@ impl<'c> MintClient<'c> {
                 dbtx.insert_new_entry(&key, &value).expect("DB Error");
             });
         dbtx.remove_entry(&OutputFinalizationKey(outpoint))
+            .await
             .expect("DB Error");
 
         Ok(())
@@ -654,14 +657,16 @@ mod tests {
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
-        builder.build(
-            Amount::from_sat(0),
-            &mut dbtx,
-            |dbtx| client.new_ecash_note(secp, dbtx),
-            secp,
-            tbs_pks,
-            rng,
-        );
+        builder
+            .build(
+                Amount::from_sat(0),
+                &mut dbtx,
+                |dbtx| client.new_ecash_note(secp, dbtx),
+                secp,
+                tbs_pks,
+                rng,
+            )
+            .await;
         dbtx.commit_tx().await.expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
@@ -695,14 +700,16 @@ mod tests {
         let rng = rand::rngs::OsRng;
         let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
-        builder.build(
-            Amount::from_sat(0),
-            &mut dbtx,
-            |dbtx| client.new_ecash_note(secp, dbtx),
-            secp,
-            tbs_pks,
-            rng,
-        );
+        builder
+            .build(
+                Amount::from_sat(0),
+                &mut dbtx,
+                |dbtx| client.new_ecash_note(secp, dbtx),
+                secp,
+                tbs_pks,
+                rng,
+            )
+            .await;
         dbtx.commit_tx().await.expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();

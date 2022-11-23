@@ -22,7 +22,7 @@ use itertools::Itertools;
 use rand::rngs::OsRng;
 use thiserror::Error;
 use tokio::sync::Notify;
-use tracing::{debug, error, info_span, instrument, trace, warn};
+use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
@@ -237,15 +237,18 @@ impl FedimintConsensus {
             let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
             for (_, transaction) in transaction_cis {
                 let span = info_span!("Processing transaction");
-                // in_scope to make sure that no await is in the middle of the span
-                let _enter = span.in_scope(|| {
+                async {
                     trace!(?transaction);
                     dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
+                        .await
                         .expect("DB Error");
 
                     dbtx.set_tx_savepoint();
                     // TODO: use borrowed transaction
-                    match self.process_transaction(&mut dbtx, transaction.clone(), &caches) {
+                    match self
+                        .process_transaction(&mut dbtx, transaction.clone(), &caches)
+                        .await
+                    {
                         Ok(()) => {
                             dbtx.insert_entry(
                                 &AcceptedTransactionKey(transaction.tx_hash()),
@@ -254,7 +257,7 @@ impl FedimintConsensus {
                             .expect("DB Error");
                         }
                         Err(error) => {
-                            dbtx.rollback_tx_to_savepoint();
+                            dbtx.rollback_tx_to_savepoint().await;
                             warn!(%error, "Transaction failed");
                             dbtx.insert_entry(
                                 &RejectedTransactionKey(transaction.tx_hash()),
@@ -263,7 +266,9 @@ impl FedimintConsensus {
                             .expect("DB Error");
                         }
                     }
-                });
+                }
+                .instrument(span)
+                .await;
             }
             dbtx.commit_tx().await.expect("DB Error");
         }
@@ -409,7 +414,7 @@ impl FedimintConsensus {
         ConsensusProposal { items, drop_peers }
     }
 
-    fn process_transaction<'a>(
+    async fn process_transaction<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         transaction: Transaction,
@@ -446,7 +451,7 @@ impl FedimintConsensus {
                 .get(&output.module_key())
                 .expect("Parsing the input should fail if the module doesn't exist");
 
-            let amount = module.apply_output(dbtx, &output, out_point)?;
+            let amount = module.apply_output(dbtx, &output, out_point).await?;
             funding_verifier.add_output(amount);
         }
 

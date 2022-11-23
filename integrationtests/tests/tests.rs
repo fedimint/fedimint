@@ -828,7 +828,8 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         &secp(),
         tbs_pks,
         rng(),
-    );
+    )
+    .await;
     fed.submit_transaction(tx.into_type_erased());
     fed.run_consensus_epochs(1).await; // process offer
 

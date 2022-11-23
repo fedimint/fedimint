@@ -173,7 +173,7 @@ impl TransactionBuilder {
         (coin_finalization_data, sig_req.0)
     }
 
-    pub fn build<'a, R: RngCore + CryptoRng>(
+    pub async fn build<'a, R: RngCore + CryptoRng>(
         mut self,
         change_required: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -194,14 +194,15 @@ impl TransactionBuilder {
 
         // move input coins to pending state, awaiting a transaction
         if !self.input_notes.item_count() != 0 {
-            self.input_notes.iter_items().for_each(|(amount, coin)| {
+            for (amount, coin) in self.input_notes.iter_items() {
                 // maybe_delete because coins might have been received from another user directly
                 dbtx.remove_entry(&CoinKey {
                     amount,
                     nonce: coin.note.0.clone(),
                 })
+                .await
                 .expect("DB Error");
-            });
+            }
             dbtx.insert_entry(&PendingCoinsKey(txid), &self.input_notes)
                 .expect("DB Error");
         }

@@ -105,13 +105,13 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
     fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
-    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
 
     async fn commit_tx(self: Box<Self>) -> Result<()>;
 
-    fn rollback_tx_to_savepoint(&mut self);
+    async fn rollback_tx_to_savepoint(&mut self);
 
     /// Create a savepoint during the transaction that can be rolled back to using
     /// rollback_tx_to_savepoint. Rolling back to the savepoint will atomically remove the writes
@@ -207,12 +207,12 @@ impl<'a> DatabaseTransaction<'a> {
         Ok(Some(K::Value::from_bytes(&value_bytes, &self.1)?))
     }
 
-    pub fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_remove_entry(&key_bytes)? {
+        let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -398,14 +398,14 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
     }
 
-    pub fn verify_remove_nonexisting(db: Database) {
+    pub async fn verify_remove_nonexisting(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
         assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), None);
-        let removed = dbtx.remove_entry(&TestKey(1));
+        let removed = dbtx.remove_entry(&TestKey(1)).await;
         assert!(removed.is_ok());
     }
 
-    pub fn verify_remove_existing(db: Database) {
+    pub async fn verify_remove_existing(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx
@@ -415,7 +415,7 @@ mod tests {
 
         assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), Some(TestVal(2)));
 
-        let removed = dbtx.remove_entry(&TestKey(1));
+        let removed = dbtx.remove_entry(&TestKey(1)).await;
         assert!(removed.is_ok());
         assert_eq!(removed.unwrap(), Some(TestVal(2)));
         assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), None);
@@ -511,7 +511,7 @@ mod tests {
         assert_eq!(dbtx2.get_value(&TestKey(1)).unwrap(), Some(TestVal(2)));
     }
 
-    pub fn verify_rollback_to_savepoint(db: Database) {
+    pub async fn verify_rollback_to_savepoint(db: Database) {
         let mut dbtx_rollback = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx_rollback
@@ -533,7 +533,7 @@ mod tests {
             Some(TestVal(2001))
         );
 
-        dbtx_rollback.rollback_tx_to_savepoint();
+        dbtx_rollback.rollback_tx_to_savepoint().await;
 
         assert_eq!(
             dbtx_rollback.get_value(&TestKey(20)).unwrap(),

@@ -137,7 +137,7 @@ pub trait IServerModule: Debug {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output<'a>(
+    async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
@@ -384,7 +384,7 @@ where
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output<'a>(
+    async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
@@ -399,6 +399,7 @@ where
                 .expect("incorrect output type passed to module plugin"),
             out_point,
         )
+        .await
     }
 
     /// This function is called once all transactions have been processed and changes were written
