@@ -297,6 +297,14 @@ impl FedimintConsensus {
         }
     }
 
+    pub fn get_last_epoch(&self) -> Option<u64> {
+        self.db
+            .begin_transaction(self.decoders())
+            .get_value(&LastEpochKey)
+            .expect("db query must not fail")
+            .map(|e| e.0)
+    }
+
     pub fn epoch_history(&self, epoch: u64) -> Option<EpochHistory> {
         self.db
             .begin_transaction(self.decoders())

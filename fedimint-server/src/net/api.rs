@@ -213,6 +213,12 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
             }
         },
         api_endpoint! {
+            "/epoch",
+            async |fedimint: &FedimintConsensus, _v: ()| -> u64 {
+                Ok(fedimint.get_last_epoch().ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?)
+            }
+        },
+        api_endpoint! {
             "/config",
             async |fedimint: &FedimintConsensus, _v: ()| -> ClientConfig {
                 Ok(fedimint.cfg.to_client_config())
