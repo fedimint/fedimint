@@ -961,7 +961,9 @@ impl Wallet {
         dbtx: &mut DatabaseTransaction<'a>,
         new_height: u32,
     ) {
-        let old_height = self.consensus_height(dbtx).unwrap_or(0);
+        let old_height = self
+            .consensus_height(dbtx)
+            .unwrap_or_else(|| new_height.saturating_sub(10));
         if new_height < old_height {
             info!(
                 new_height,
