@@ -55,6 +55,8 @@ pub trait IFederationApi: Debug + Send + Sync {
 
     async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory>;
 
+    async fn fetch_last_epoch(&self) -> Result<u64>;
+
     // TODO: more generic module API extensibility
     /// Fetch ln contract state
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount>;
@@ -279,6 +281,15 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
             .request::<_, SerdeEpochHistory>("/fetch_epoch_history", epoch, qs)
             .await?
             .try_into_inner(&self.module_registry)?)
+    }
+
+    async fn fetch_last_epoch(&self) -> Result<u64> {
+        self.request(
+            "/epoch",
+            (),
+            EventuallyConsistent::new(self.peers().one_honest()),
+        )
+        .await
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {

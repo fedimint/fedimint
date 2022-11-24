@@ -432,6 +432,10 @@ mod tests {
             unimplemented!()
         }
 
+        async fn fetch_last_epoch(&self) -> crate::api::Result<u64> {
+            unimplemented!()
+        }
+
         async fn offer_exists(
             &self,
             _payment_hash: bitcoin::hashes::sha256::Hash,
