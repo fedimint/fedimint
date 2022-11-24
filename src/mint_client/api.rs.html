@@ -765,6 +765,37 @@
 <a href="#765" id="765">765</a>
 <a href="#766" id="766">766</a>
 <a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -772,6 +803,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
+<span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::core::client::ClientModule;
 <span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
@@ -806,8 +838,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::module_decode_stubs;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
-    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
-    ValidHistory,
+    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, TrustAllPeers,
+    UnionResponses, ValidHistory,
 };
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
@@ -849,6 +881,12 @@
 
     <span class="doccomment">/// Register a gateway with the federation
     </span><span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+
+    <span class="doccomment">/// Upload ecash (encrypted) backup for mint to safekeep
+    </span><span class="kw">async fn </span>upload_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+
+    <span class="doccomment">/// Download ecash (encrypted) backup from mint to safekeep
+    </span><span class="kw">async fn </span>download_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -955,6 +993,8 @@
     </span>RpcError(<span class="attr">#[from] </span>JsonRpcError),
     <span class="attr">#[error(<span class="string">&quot;Decode error: {0}&quot;</span>)]
     </span>DecodeError(<span class="attr">#[from] </span>fedimint_api::encoding::DecodeError),
+    <span class="attr">#[error(<span class="string">&quot;Invalid response: {0}&quot;</span>)]
+    </span>InvalidResponse(String),
     <span class="attr">#[error(<span class="string">&quot;Error retrieving the transaction: {0}&quot;</span>)]
     </span>TransactionError(String),
     <span class="attr">#[error(<span class="string">&quot;The transaction was rejected by consensus processing: {0}&quot;</span>)]
@@ -1122,6 +1162,28 @@
             <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
         }
+    }
+
+    <span class="kw">async fn </span>upload_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.request(
+            <span class="string">&quot;/mint/backup&quot;</span>,
+            request,
+            CurrentConsensus::new(<span class="self">self</span>.peers().threshold()),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>download_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;&gt; {
+        <span class="kw">let </span>hex_str: String = <span class="self">self
+            </span>.request(
+                <span class="string">&quot;/mint/recover&quot;</span>,
+                id,
+                <span class="comment">// TODO: do we need a different strategy for this?
+                </span>TrustAllPeers,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(hex::decode(<span class="kw-2">&amp;</span>hex_str).map_err(|e| ApiError::InvalidResponse(e.to_string()))<span class="question-mark">?</span>)
     }
 }
 

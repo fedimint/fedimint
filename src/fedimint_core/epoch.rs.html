@@ -344,6 +344,11 @@
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
@@ -385,7 +390,12 @@
 </span><span class="kw">pub struct </span>OutcomeHistory {
     <span class="kw">pub </span>epoch: u64,
     <span class="kw">pub </span>last_hash: <span class="prelude-ty">Option</span>&lt;Sha256&gt;,
-    <span class="kw">pub </span>items: Vec&lt;(PeerId, Vec&lt;ConsensusItem&gt;)&gt;,
+    <span class="doccomment">/// All the consensus items along with the `PeerId` of the
+    /// peer that contributed them.
+    /// Some of the consensus items here might be invalid,
+    /// (eg. transaction double-spending) but they were still
+    /// submitted and considered as accepted.
+    </span><span class="kw">pub </span>items: Vec&lt;(PeerId, Vec&lt;ConsensusItem&gt;)&gt;,
 }
 
 <span class="kw">impl </span>OutcomeHistory {
