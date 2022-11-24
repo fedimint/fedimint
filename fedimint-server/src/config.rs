@@ -441,6 +441,7 @@ impl ServerConfigParams {
         federation_name: String,
         bitcoind_rpc: String,
         network: bitcoin::network::constants::Network,
+        finality_delay: u32,
     ) -> ServerConfigParams {
         let peer_certs: HashMap<PeerId, rustls::Certificate> = peers
             .iter()
@@ -467,9 +468,12 @@ impl ServerConfigParams {
             amount_tiers,
             federation_name,
             bitcoind_rpc,
-            other: vec![("network".into(), network.to_string().into())]
-                .into_iter()
-                .collect(),
+            other: vec![
+                ("network".into(), network.to_string().into()),
+                ("finality_delay".into(), finality_delay.into()),
+            ]
+            .into_iter()
+            .collect(),
         }
     }
 
@@ -535,6 +539,7 @@ impl ServerConfigParams {
                     federation_name.to_string(),
                     bitcoind_rpc.to_string(),
                     bitcoin::network::constants::Network::Regtest,
+                    10,
                 );
                 (*peer, params)
             })

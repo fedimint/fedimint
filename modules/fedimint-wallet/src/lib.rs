@@ -206,6 +206,8 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         peers: &[PeerId],
         params: &ModuleConfigGenParams,
     ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+        const FINALITY_DELAY: u32 = 10;
+
         let secp = secp256k1::Secp256k1::new();
 
         let btc_pegin_keys = peers
@@ -225,13 +227,18 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
                     peers.threshold(),
                     params.bitcoin_rpc.clone(),
                     bitcoin::network::constants::Network::Regtest,
+                    FINALITY_DELAY,
                 );
                 (*id, cfg)
             })
             .collect();
 
         let descriptor = wallet_cfg[&PeerId::from(0)].peg_in_descriptor.clone();
-        let client_cfg = WalletClientConfig::new(descriptor);
+        let client_cfg = WalletClientConfig::new(
+            descriptor,
+            bitcoin::network::constants::Network::Regtest,
+            FINALITY_DELAY,
+        );
 
         (
             wallet_cfg
@@ -286,21 +293,37 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
             }
         }
 
+        let network: bitcoin::network::constants::Network = params
+            .other
+            .get("network")
+            .ok_or_else(|| anyhow!("`network` parameter wasn't supplied"))?
+            .as_str()
+            .ok_or_else(|| anyhow!("`network` param has to be a string"))?
+            .parse()
+            .map_err(|e| anyhow!("Invalid network: {}", e))?;
+
+        let finality_delay: u32 = params
+            .other
+            .get("finality_delay")
+            .ok_or_else(|| anyhow!("`finality_delay` parameter wasn't supplied"))?
+            .as_i64()
+            .ok_or_else(|| anyhow!("`finality_delay` param has to be a number"))?
+            .try_into()
+            .map_err(|e| anyhow!("`finality_delay` out of range: {}", e))?;
+
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
             peers.threshold(),
             params.bitcoin_rpc.clone(),
-            params
-                .other
-                .get("network")
-                .ok_or_else(|| anyhow!("`network` parameter wasn't supplied"))?
-                .as_str()
-                .ok_or_else(|| anyhow!("`network` param has to be a string"))?
-                .parse()
-                .map_err(|e| anyhow!("Invalid network: {}", e))?,
+            network,
+            finality_delay,
         );
-        let client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
+        let client_cfg = WalletClientConfig::new(
+            wallet_cfg.peg_in_descriptor.clone(),
+            network,
+            finality_delay,
+        );
 
         Ok(Ok((wallet_cfg.to_erased(), client_cfg.to_erased())))
     }
