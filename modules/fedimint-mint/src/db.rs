@@ -45,7 +45,7 @@ impl DatabaseKeyPrefixConst for NonceKeyPrefix {
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ProposedPartialSignatureKey {
-    pub request_id: OutPoint, // tx + output idx
+    pub out_point: OutPoint, // tx + output idx
 }
 
 impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {

@@ -304,7 +304,7 @@ impl ServerModulePlugin for Mint {
             .map(|res| {
                 let (key, signatures) = res.expect("DB error");
                 MintOutputConfirmation {
-                    out_point: key.request_id,
+                    out_point: key.out_point,
                     signatures,
                 }
             })
@@ -449,14 +449,9 @@ impl ServerModulePlugin for Mint {
             .blind_sign(output.clone().0)
             .into_module_error_other()?;
 
-        dbtx.insert_new_entry(
-            &ProposedPartialSignatureKey {
-                request_id: out_point,
-            },
-            &partial_sig,
-        )
-        .await
-        .expect("DB Error");
+        dbtx.insert_new_entry(&ProposedPartialSignatureKey { out_point }, &partial_sig)
+            .await
+            .expect("DB Error");
         dbtx.insert_new_entry(
             &MintAuditItemKey::Issuance(out_point),
             &output.total_amount(),
@@ -476,8 +471,8 @@ impl ServerModulePlugin for Mint {
             out_point: OutPoint,
             // TODO: remove Option, make it mandatory
             // TODO: make it only the message, remove msg from PartialSigResponse
-            our_contribution: Option<PartialSigResponse>,
-            signature_shares: Vec<(PeerId, PartialSigResponse)>,
+            our_contribution: Option<OutputConfirmationSignatures>,
+            signature_shares: Vec<(PeerId, OutputConfirmationSignatures)>,
         }
 
         let mut drop_peers = BTreeSet::new();
@@ -492,9 +487,7 @@ impl ServerModulePlugin for Mint {
             .into_group_map()
             .into_iter()
             .map(|(out_point, signature_shares)| {
-                let proposal_key = ProposedPartialSignatureKey {
-                    request_id: out_point,
-                };
+                let proposal_key = ProposedPartialSignatureKey { out_point };
                 let our_contribution = dbtx.get_value(&proposal_key).expect("DB error");
 
                 IssuanceData {
@@ -540,7 +533,7 @@ impl ServerModulePlugin for Mint {
                     }
 
                     dbtx.remove_entry(&ProposedPartialSignatureKey {
-                        request_id: issuance_data.out_point,
+                        out_point: issuance_data.out_point,
                     })
                     .await
                     .expect("DB Error");
@@ -596,9 +589,7 @@ impl ServerModulePlugin for Mint {
             .non_consensus_db
             .begin_transaction(self.decoders.clone());
         let we_proposed = dbtx
-            .get_value(&ProposedPartialSignatureKey {
-                request_id: out_point,
-            })
+            .get_value(&ProposedPartialSignatureKey { out_point })
             .expect("DB error")
             .is_some();
         let was_consensus_outcome = dbtx
