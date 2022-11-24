@@ -230,6 +230,14 @@
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -314,6 +322,10 @@
         </span>)]
         </span>denominations: Vec&lt;Amount&gt;,
 
+        <span class="doccomment">/// The bitcoin network that fedimint will be running on
+        </span><span class="attr">#[arg(long = <span class="string">&quot;network&quot;</span>, default_value = <span class="string">&quot;regtest&quot;</span>)]
+        </span>network: bitcoin::network::constants::Network,
+
         <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
         </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>)]
         </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -352,6 +364,7 @@
             bind_address,
             bitcoind_rpc,
             denominations,
+            network,
             password,
         } =&gt; {
             <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
@@ -363,6 +376,7 @@
                 federation_name,
                 certs,
                 bitcoind_rpc,
+                network,
                 rustls::PrivateKey(pk_bytes),
                 <span class="kw-2">&amp;mut </span>task_group,
             )
@@ -396,6 +410,7 @@
     federation_name: String,
     certs: Vec&lt;String&gt;,
     bitcoind_rpc: String,
+    network: bitcoin::network::constants::Network,
     pk: rustls::PrivateKey,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
 ) -&gt; Cancellable&lt;(ServerConfig, ClientConfig)&gt; {
@@ -422,6 +437,7 @@
         <span class="kw-2">&amp;</span>peers,
         federation_name,
         bitcoind_rpc,
+        network,
     );
     <span class="kw">let </span>peer_ids: Vec&lt;PeerId&gt; = peers.keys().cloned().collect();
     <span class="kw">let </span>server_conn =

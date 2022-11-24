@@ -120,6 +120,7 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::bail;
@@ -214,13 +215,14 @@
         sk: SecretKey,
         threshold: usize,
         btc_rpc: BitcoindRpcCfg,
+        network: bitcoin::network::constants::Network,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.iter().map(|(<span class="kw">_</span>, pk)| <span class="kw-2">*</span>pk).collect()).unwrap(),
         );
 
         <span class="self">Self </span>{
-            network: Network::Regtest,
+            network,
             peg_in_descriptor,
             peer_peg_in_keys: pubkeys,
             peg_in_key: sk,

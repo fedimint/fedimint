@@ -1492,13 +1492,22 @@
 <a href="#1492" id="1492">1492</a>
 <a href="#1493" id="1493">1493</a>
 <a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
 <span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -1718,6 +1727,7 @@
                     <span class="kw-2">*</span>sk,
                     peers.threshold(),
                     params.bitcoin_rpc.clone(),
+                    bitcoin::network::constants::Network::Regtest,
                 );
                 (<span class="kw-2">*</span>id, cfg)
             })
@@ -1784,6 +1794,14 @@
             sk,
             peers.threshold(),
             params.bitcoin_rpc.clone(),
+            params
+                .other
+                .get(<span class="string">&quot;network&quot;</span>)
+                .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` parameter wasn&#39;t supplied&quot;</span>))<span class="question-mark">?
+                </span>.as_str()
+                .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` param has to be a string&quot;</span>))<span class="question-mark">?
+                </span>.parse()
+                .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Invalid network: {}&quot;</span>, e))<span class="question-mark">?</span>,
         );
         <span class="kw">let </span>client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
 
