@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, PeerId};
@@ -14,6 +16,7 @@ pub enum DbKeyPrefix {
     ReceivedPartialSig = 0x12,
     OutputOutcome = 0x13,
     MintAuditItem = 0x14,
+    EcashBackup = 0x15,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -133,4 +136,29 @@ impl DatabaseKeyPrefixConst for MintAuditItemKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
     type Key = MintAuditItemKey;
     type Value = Amount;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct EcashBackupKeyPrefix;
+
+/// Key used to store user's ecash backups
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
+
+impl DatabaseKeyPrefixConst for EcashBackupKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
+    type Key = EcashBackupKey;
+    type Value = EcashBackupValue;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct EcashBackupValue {
+    pub timestamp: SystemTime,
+    pub data: Vec<u8>,
+}
+
+impl DatabaseKeyPrefixConst for EcashBackupKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
+    type Key = Self;
+    type Value = EcashBackupValue;
 }

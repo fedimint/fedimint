@@ -5,6 +5,8 @@ use std::ops::Sub;
 
 use async_trait::async_trait;
 use config::{FeeConsensus, MintClientConfig};
+use db::{EcashBackupKey, EcashBackupValue};
+use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
@@ -17,8 +19,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    ApiEndpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, ModuleError,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, InputMeta, IntoModuleError,
+    ModuleError, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -31,6 +33,7 @@ use impl_tools::autoimpl;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use rayon::iter::{ParallelBridge, ParallelIterator};
+use secp256k1_zkp::SECP256K1;
 use serde::{Deserialize, Serialize};
 use tbs::{
     combine_valid_shares, dealer_keygen, sign_blinded_msg, verify_blind_share, Aggregatable,
@@ -628,7 +631,63 @@ impl ServerModulePlugin for Mint {
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
-        vec![]
+        vec![
+            api_endpoint! {
+                "/backup",
+                async |module: &Mint, request: SignedBackupRequest| -> () {
+                    module
+                        .handle_backup_request(request).await
+                }
+            },
+            api_endpoint! {
+                "/recover",
+                async |module: &Mint, id: secp256k1_zkp::XOnlyPublicKey| -> Vec<u8> {
+                    module
+                        .handle_recover_request(id).await
+                        .ok_or_else(|| ApiError::not_found(String::from("Backup not found")))
+                }
+            },
+        ]
+    }
+}
+
+impl Mint {
+    async fn handle_backup_request(&self, request: SignedBackupRequest) -> Result<(), ApiError> {
+        let request = request
+            .verify_valid(SECP256K1)
+            .map_err(|_| ApiError::bad_request("invalid request".into()))?;
+
+        let mut dbtx = self
+            .non_consensus_db
+            .begin_transaction(self.decoders.clone());
+
+        if let Some(prev) = dbtx
+            .get_value(&EcashBackupKey(request.id))
+            .expect("DB error")
+        {
+            if request.timestamp <= prev.timestamp {
+                return Err(ApiError::bad_request("timestamp too small".into()));
+            }
+        }
+
+        dbtx.insert_entry(
+            &EcashBackupKey(request.id),
+            &EcashBackupValue {
+                timestamp: request.timestamp,
+                data: request.payload.to_vec(),
+            },
+        )
+        .expect("DB error");
+
+        Ok(())
+    }
+
+    async fn handle_recover_request(&self, id: secp256k1_zkp::XOnlyPublicKey) -> Option<Vec<u8>> {
+        self.non_consensus_db
+            .begin_transaction(self.decoders.clone())
+            .get_value(&EcashBackupKey(id))
+            .expect("DB error")
+            .map(|res| res.data)
     }
 }
 

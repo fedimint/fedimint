@@ -5,6 +5,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin::{Address, Amount};
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::client::ClientModule;
 use fedimint_api::encoding::ModuleRegistry;
@@ -39,8 +40,8 @@ use url::Url;
 
 use crate::module_decode_stubs;
 use crate::query::{
-    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
-    ValidHistory,
+    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, TrustAllPeers,
+    UnionResponses, ValidHistory,
 };
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
@@ -82,6 +83,12 @@ pub trait IFederationApi: Debug + Send + Sync {
 
     /// Register a gateway with the federation
     async fn register_gateway(&self, gateway: LightningGateway) -> Result<()>;
+
+    /// Upload ecash (encrypted) backup for mint to safekeep
+    async fn upload_ecash_backup(&self, request: &SignedBackupRequest) -> Result<()>;
+
+    /// Download ecash (encrypted) backup from mint to safekeep
+    async fn download_ecash_backup(&self, id: &secp256k1::XOnlyPublicKey) -> Result<Vec<u8>>;
 }
 
 dyn_newtype_define! {
@@ -188,6 +195,8 @@ pub enum ApiError {
     RpcError(#[from] JsonRpcError),
     #[error("Decode error: {0}")]
     DecodeError(#[from] fedimint_api::encoding::DecodeError),
+    #[error("Invalid response: {0}")]
+    InvalidResponse(String),
     #[error("Error retrieving the transaction: {0}")]
     TransactionError(String),
     #[error("The transaction was rejected by consensus processing: {0}")]
@@ -355,6 +364,28 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
             Err(e) if e.is_retryable() => Ok(false),
             Err(e) => Err(e),
         }
+    }
+
+    async fn upload_ecash_backup(&self, request: &SignedBackupRequest) -> Result<()> {
+        self.request(
+            "/mint/backup",
+            request,
+            CurrentConsensus::new(self.peers().threshold()),
+        )
+        .await
+    }
+
+    async fn download_ecash_backup(&self, id: &secp256k1::XOnlyPublicKey) -> Result<Vec<u8>> {
+        let hex_str: String = self
+            .request(
+                "/mint/recover",
+                id,
+                // TODO: do we need a different strategy for this?
+                TrustAllPeers,
+            )
+            .await?;
+
+        Ok(hex::decode(&hex_str).map_err(|e| ApiError::InvalidResponse(e.to_string()))?)
     }
 }
 

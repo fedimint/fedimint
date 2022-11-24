@@ -31,6 +31,8 @@ use crate::transaction::TransactionBuilder;
 use crate::utils::ClientContext;
 use crate::{ChildId, Client, DerivableSecret};
 
+pub mod backup;
+
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
@@ -40,6 +42,32 @@ pub struct MintClient<'c> {
     pub config: MintClientConfig,
     pub context: &'c ClientContext,
     pub secret: DerivableSecret,
+}
+
+/// An index used to deterministically derive [`Note`]s
+///
+/// We allow converting it to u64 and incrementing it, but
+/// messing with it should be somewhat restricted to prevent
+/// silly errors.
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable, Decodable)]
+pub struct NoteIndex(u64);
+
+impl NoteIndex {
+    pub fn next(self) -> Self {
+        Self(self.0 + 1)
+    }
+
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    // Private. If it turns out it is useful outside,
+    // we can relax and convert to `From<u64>`
+    // Actually used in tests RN, so cargo complains in non-test builds.
+    #[allow(unused)]
+    fn from_u64(v: u64) -> Self {
+        Self(v)
+    }
 }
 
 /// Single [`Note`] issuance request to the mint.
@@ -99,10 +127,12 @@ impl<'a> ClientModulePlugin for MintClient<'a> {
 }
 
 impl<'c> MintClient<'c> {
+    pub fn start_dbtx(&self) -> DatabaseTransaction<'_> {
+        self.context.db.begin_transaction(ModuleRegistry::default())
+    }
+
     pub fn coins(&self) -> TieredMulti<SpendableNote> {
-        self.context
-            .db
-            .begin_transaction(ModuleRegistry::default())
+        self.start_dbtx()
             .find_by_prefix(&CoinKeyPrefix)
             .map(|res| {
                 let (key, spendable_coin) = res.expect("DB error");
@@ -111,17 +141,35 @@ impl<'c> MintClient<'c> {
             .collect()
     }
 
+    /// Get available spendable notes with a db transaction already opened
+    pub fn get_available_notes(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> TieredMulti<SpendableNote> {
+        dbtx.find_by_prefix(&CoinKeyPrefix)
+            .map(|res| {
+                let (key, spendable_coin) = res.expect("DB error");
+                (key.amount, spendable_coin)
+            })
+            .collect()
+    }
+
+    pub fn get_last_note_index(&self, dbtx: &mut DatabaseTransaction<'_>) -> NoteIndex {
+        NoteIndex(
+            dbtx.get_value(&LastECashNoteIndexKey)
+                .expect("DB error")
+                .unwrap_or(0),
+        )
+    }
+
     fn new_note_secret(&self, dbtx: &mut DatabaseTransaction<'_>) -> DerivableSecret {
-        let new_idx = dbtx
-            .get_value(&LastECashNoteIndexKey)
-            .expect("DB error")
-            .unwrap_or(0)
-            + 1;
-        dbtx.insert_entry(&LastECashNoteIndexKey, &new_idx)
+        let new_idx = self.get_last_note_index(dbtx).next();
+        dbtx.insert_entry(&LastECashNoteIndexKey, &new_idx.as_u64())
             .expect("DB error");
+
         self.secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
-            .child_key(ChildId(new_idx))
+            .child_key(ChildId(new_idx.as_u64()))
     }
 
     pub fn new_ecash_note<C: Signing>(
@@ -431,6 +479,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
+    use fedimint_api::backup::SignedBackupRequest;
     use fedimint_api::config::ModuleConfigGenParams;
     use fedimint_api::core::{Decoder, MODULE_KEY_MINT};
     use fedimint_api::db::mem_impl::MemDatabase;
@@ -542,6 +591,20 @@ mod tests {
             &self,
             _payment_hash: bitcoin::hashes::sha256::Hash,
         ) -> crate::api::Result<bool> {
+            unimplemented!()
+        }
+
+        async fn upload_ecash_backup(
+            &self,
+            _request: &SignedBackupRequest,
+        ) -> crate::api::Result<()> {
+            unimplemented!()
+        }
+
+        async fn download_ecash_backup(
+            &self,
+            _id: &secp256k1::XOnlyPublicKey,
+        ) -> crate::api::Result<Vec<u8>> {
             unimplemented!()
         }
     }

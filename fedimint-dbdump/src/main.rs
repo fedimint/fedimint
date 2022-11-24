@@ -254,6 +254,16 @@ impl<'a> DatabaseDump<'a> {
                         MintRange::ReceivedPartialSignatureKey,
                         fedimint_mint::PartialSigResponse,
                         mint,
+                        "User Ecash Backup"
+                    );
+                }
+                MintRange::DbKeyPrefix::EcashBackup => {
+                    push_db_pair_items!(
+                        self,
+                        MintRange::EcashBackupKeyPrefix,
+                        MintRange::EcashBackupKey,
+                        fedimint_mint::db::EcashBackupValue,
+                        mint,
                         "Received Signature Shares"
                     );
                 }
