@@ -500,13 +500,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         );
 
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
-        final_coins.iter_items().for_each(|(amount, coin)| {
+        for (amount, coin) in final_coins.iter_items() {
             dbtx.remove_entry(&CoinKey {
                 amount,
                 nonce: coin.note.0.clone(),
             })
+            .await
             .expect("DB Error");
-        });
+        }
         dbtx.commit_tx().await.expect("DB Error");
 
         Ok(final_coins)
@@ -547,7 +548,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         for result in stream.collect::<Vec<_>>().await {
             let (key, coins) = result?;
             all_coins.extend(coins);
-            dbtx.remove_entry(&key).expect("DB Error");
+            dbtx.remove_entry(&key).await.expect("DB Error");
         }
         dbtx.commit_tx().await.expect("DB Error");
 
@@ -726,6 +727,7 @@ impl Client<UserClientConfig> {
 
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
+            .await
             .expect("DB error")
             .ok_or(ClientError::DeleteUnknownOutgoingContract)?;
         dbtx.commit_tx().await.expect("DB Error");
@@ -1022,6 +1024,7 @@ impl Client<GatewayClientConfig> {
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         let contract_account = dbtx
             .remove_entry(&OutgoingContractAccountKey(contract_id))
+            .await
             .expect("DB error")
             .ok_or(ClientError::CancelUnknownOutgoingContract)?;
         dbtx.commit_tx().await.expect("DB Error");
@@ -1064,6 +1067,7 @@ impl Client<GatewayClientConfig> {
         let input = Input::LN(contract.claim(preimage));
 
         dbtx.remove_entry(&OutgoingContractAccountKey(contract_id))
+            .await
             .expect("DB Error");
         dbtx.insert_entry(&OutgoingPaymentClaimKey(contract_id), &())
             .expect("DB Error");
@@ -1186,6 +1190,7 @@ impl Client<GatewayClientConfig> {
         // have to worry
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(&OutgoingPaymentClaimKey(contract_id))
+            .await
             .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");
         Ok(())

@@ -540,7 +540,7 @@ impl ServerModulePlugin for Wallet {
         })
     }
 
-    fn apply_output<'a, 'b>(
+    async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::Output,
@@ -589,10 +589,11 @@ impl ServerModulePlugin for Wallet {
             .collect::<Vec<_>>();
 
         // Delete used UTXOs
-        tx.psbt.unsigned_tx.input.iter().for_each(|input| {
+        for input in tx.psbt.unsigned_tx.input.iter() {
             dbtx.remove_entry(&UTXOKey(input.previous_output))
+                .await
                 .expect("DB Error");
-        });
+        }
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
             .expect("DB Error");
@@ -653,8 +654,9 @@ impl ServerModulePlugin for Wallet {
                     dbtx.insert_new_entry(&PendingTransactionKey(key.0), &pending_tx)
                         .expect("DB Error");
                     dbtx.remove_entry(&PegOutTxSignatureCI(key.0))
+                        .await
                         .expect("DB Error");
-                    dbtx.remove_entry(&key).expect("DB Error");
+                    dbtx.remove_entry(&key).await.expect("DB Error");
                 }
                 Err(e) => {
                     warn!("Unable to finalize PSBT due to {:?}", e)

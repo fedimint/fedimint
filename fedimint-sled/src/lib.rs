@@ -113,7 +113,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let ret = self.raw_get_bytes(key);
         self.operations
             .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
@@ -182,7 +182,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
         ret
     }
 
-    fn rollback_tx_to_savepoint(&mut self) {
+    async fn rollback_tx_to_savepoint(&mut self) {
         // Remove any pending operations beyond the savepoint
         let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
         for _i in 0..removed_ops {
@@ -215,18 +215,20 @@ mod fedimint_sled_tests {
         .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_remove_nonexisting() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_nonexisting() {
         fedimint_api::db::verify_remove_nonexisting(
             open_temp_db("fcb-sled-test-remove-nonexisting").into(),
-        );
+        )
+        .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_remove_existing() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_existing() {
         fedimint_api::db::verify_remove_existing(
             open_temp_db("fcb-sled-test-remove-existing").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test]
@@ -256,10 +258,11 @@ mod fedimint_sled_tests {
         fedimint_api::db::verify_commit(open_temp_db("fcb-sled-test-commit").into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_rollback_to_savepoint() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_rollback_to_savepoint() {
         fedimint_api::db::verify_rollback_to_savepoint(
             open_temp_db("fcb-sled-test-rollback-to-savepoint").into(),
-        );
+        )
+        .await;
     }
 }

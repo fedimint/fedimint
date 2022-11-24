@@ -152,6 +152,7 @@ where
             for (out_point, output) in outputs {
                 member
                     .apply_output(&mut dbtx, output, *out_point)
+                    .await
                     .expect("Faulty output");
             }
 

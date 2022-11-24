@@ -718,6 +718,7 @@ impl FederationTest {
                         .get(&MODULE_KEY_MINT)
                         .unwrap()
                         .apply_output(&mut dbtx, &MintOutput(tokens.clone()).into(), out_point)
+                        .await
                         .unwrap();
                     dbtx.commit_tx().await.expect("DB Error");
                 }

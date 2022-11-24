@@ -447,7 +447,7 @@ impl ServerModulePlugin for Mint {
         }
     }
 
-    fn apply_output<'a, 'b>(
+    async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::Output,
@@ -519,14 +519,16 @@ impl ServerModulePlugin for Mint {
                             "Successfully combined signature shares",
                         );
 
-                        shares.into_iter().for_each(|(peer, _)| {
+                        for (peer, _) in shares.into_iter() {
                             dbtx.remove_entry(&ReceivedPartialSignatureKey {
                                 request_id: issuance_id,
                                 peer_id: peer,
                             })
+                            .await
                             .expect("DB Error");
-                        });
-                        dbtx.remove_entry(&proposal_key).expect("DB Error");
+                        }
+
+                        dbtx.remove_entry(&proposal_key).await.expect("DB Error");
 
                         dbtx.insert_entry(&OutputOutcomeKey(issuance_id), &blind_signature)
                             .expect("DB Error");
@@ -566,7 +568,7 @@ impl ServerModulePlugin for Mint {
             .collect::<Vec<_>>();
 
         for key in remove_audit_keys {
-            dbtx.remove_entry(&key).expect("DB Error");
+            dbtx.remove_entry(&key).await.expect("DB Error");
         }
 
         dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)

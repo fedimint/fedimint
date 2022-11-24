@@ -84,7 +84,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Ok(self.tx_data.get(key).cloned())
     }
 
-    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         // Remove data from copy so we can read our own writes
         let ret = self.tx_data.remove(&key.to_vec());
         self.operations
@@ -126,7 +126,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Ok(())
     }
 
-    fn rollback_tx_to_savepoint(&mut self) {
+    async fn rollback_tx_to_savepoint(&mut self) {
         self.tx_data = self.savepoint.clone();
 
         // Remove any pending operations beyond the savepoint
@@ -163,14 +163,14 @@ mod tests {
         fedimint_api::db::verify_insert_elements(MemDatabase::new().into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_nonexisting() {
+        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_existing() {
+        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into()).await;
     }
 
     #[test_log::test]
@@ -198,9 +198,9 @@ mod tests {
         fedimint_api::db::verify_prevent_nonrepeatable_reads(MemDatabase::new().into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_rollback_to_savepoint() {
+        fedimint_api::db::verify_rollback_to_savepoint(MemDatabase::new().into()).await;
     }
 
     #[test_log::test(tokio::test)]

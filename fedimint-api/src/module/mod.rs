@@ -290,7 +290,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output<'a, 'b>(
+    async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::Output,

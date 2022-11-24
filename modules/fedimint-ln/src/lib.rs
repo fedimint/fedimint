@@ -484,7 +484,7 @@ impl ServerModulePlugin for LightningModule {
         }
     }
 
-    fn apply_output<'a, 'b>(
+    async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::Output,
@@ -534,7 +534,9 @@ impl ServerModulePlugin for LightningModule {
                         &PreimageDecryptionShare(decryption_share),
                     )
                     .expect("DB Error");
-                    dbtx.remove_entry(&OfferKey(offer.hash)).expect("DB Error");
+                    dbtx.remove_entry(&OfferKey(offer.hash))
+                        .await
+                        .expect("DB Error");
                 }
             }
             LightningOutput::Offer(offer) => {
@@ -604,6 +606,7 @@ impl ServerModulePlugin for LightningModule {
                     warn!("Received decryption share for non-existent incoming contract");
                     for peer in peers {
                         dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
+                            .await
                             .expect("DB Error");
                     }
                     continue;
@@ -671,9 +674,11 @@ impl ServerModulePlugin for LightningModule {
 
             // Delete decryption shares once we've decrypted the preimage
             dbtx.remove_entry(&ProposeDecryptionShareKey(contract_id))
+                .await
                 .expect("DB Error");
             for peer in peers {
                 dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
+                    .await
                     .expect("DB Error");
             }
 

@@ -75,7 +75,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         Ok(self.0.snapshot().get(key)?)
     }
 
-    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let val = self.0.get(key).unwrap();
         self.0.delete(key)?;
         Ok(val)
@@ -106,7 +106,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         Ok(())
     }
 
-    fn rollback_tx_to_savepoint(&mut self) {
+    async fn rollback_tx_to_savepoint(&mut self) {
         match self.0.rollback_to_savepoint() {
             Ok(()) => {}
             _ => {
@@ -130,7 +130,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         Ok(self.0.get(key)?)
     }
 
-    fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
         panic!("Cannot remove from a read only transaction");
     }
 
@@ -154,7 +154,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         panic!("Cannot commit a read only transaction");
     }
 
-    fn rollback_tx_to_savepoint(&mut self) {
+    async fn rollback_tx_to_savepoint(&mut self) {
         panic!("Cannot rollback a read only transaction");
     }
 
@@ -184,18 +184,20 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_remove_nonexisting() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_nonexisting() {
         fedimint_api::db::verify_remove_nonexisting(
             open_temp_db("fcb-rocksdb-test-remove-nonexisting").into(),
-        );
+        )
+        .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_remove_existing() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_existing() {
         fedimint_api::db::verify_remove_existing(
             open_temp_db("fcb-rocksdb-test-remove-existing").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test]
@@ -233,11 +235,12 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_rollback_to_savepoint() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_rollback_to_savepoint() {
         fedimint_api::db::verify_rollback_to_savepoint(
             open_temp_db("fcb-rocksdb-test-rollback-to-savepoint").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test(tokio::test)]
