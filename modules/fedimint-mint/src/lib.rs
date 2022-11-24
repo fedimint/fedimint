@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Sub;
@@ -32,7 +32,7 @@ use fedimint_api::{
 use impl_tools::autoimpl;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use rayon::iter::{ParallelBridge, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use secp256k1_zkp::SECP256K1;
 use serde::{Deserialize, Serialize};
 use tbs::{
@@ -472,75 +472,94 @@ impl ServerModulePlugin for Mint {
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
+        struct IssuanceData {
+            out_point: OutPoint,
+            // TODO: remove Option, make it mandatory
+            // TODO: make it only the message, remove msg from PartialSigResponse
+            our_contribution: Option<PartialSigResponse>,
+            signature_shares: Vec<(PeerId, PartialSigResponse)>,
+        }
+
+        let mut drop_peers = BTreeSet::new();
+
         // Finalize partial signatures for which we now have enough shares
-        let req_psigs = dbtx
+        let issuance_requests = dbtx
             .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
                 (key.request_id, (key.peer_id, partial_sig))
             })
-            .into_group_map();
-
-        // TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn't need consensus)
-        let par_map = req_psigs
+            .into_group_map()
             .into_iter()
-            .map(|(issuance_id, shares)| async move {
-                let mut drop_peers = Vec::<PeerId>::new();
-                // FIXME: this specific instance is safe, but we should never directly read from the DB
-                let mut dbtx = self
-                    .non_consensus_db
-                    .begin_transaction(self.decoders.clone());
+            .map(|(out_point, signature_shares)| {
                 let proposal_key = ProposedPartialSignatureKey {
-                    request_id: issuance_id,
+                    request_id: out_point,
                 };
                 let our_contribution = dbtx.get_value(&proposal_key).expect("DB error");
-                let (bsig, errors) = self.combine(our_contribution, shares.clone());
 
-                // FIXME: validate shares before writing to DB to make combine infallible
-                errors.0.iter().for_each(|(peer, error)| {
-                    error!("Dropping {:?} for {:?}", peer, error);
-                    drop_peers.push(*peer);
-                });
-
-                match bsig {
-                    Ok(blind_signature) => {
-                        debug!(
-                            %issuance_id,
-                            "Successfully combined signature shares",
-                        );
-
-                        for (peer, _) in shares.into_iter() {
-                            dbtx.remove_entry(&ReceivedPartialSignatureKey {
-                                request_id: issuance_id,
-                                peer_id: peer,
-                            })
-                            .await
-                            .expect("DB Error");
-                        }
-
-                        dbtx.remove_entry(&proposal_key).await.expect("DB Error");
-
-                        dbtx.insert_entry(&OutputOutcomeKey(issuance_id), &blind_signature)
-                            .await
-                            .expect("DB Error");
-                    }
-                    Err(CombineError::TooFewShares(got, _)) => {
-                        for peer in consensus_peers.sub(&HashSet::from_iter(got)) {
-                            error!("Dropping {:?} for not contributing shares", peer);
-                            drop_peers.push(peer);
-                        }
-                    }
-                    Err(error) => {
-                        warn!(%error, "Could not combine shares");
-                    }
+                IssuanceData {
+                    out_point,
+                    our_contribution,
+                    signature_shares,
                 }
+            })
+            .collect::<Vec<_>>();
 
-                dbtx.commit_tx().await.expect("DB Error");
-                drop_peers
+        let issuance_results = issuance_requests
+            .into_par_iter()
+            .map(|issuance_data| {
+                let (bsig, errors) = self.combine(
+                    issuance_data.our_contribution.clone(),
+                    issuance_data.signature_shares.clone(),
+                );
+                (issuance_data, bsig, errors)
+            })
+            .collect::<Vec<_>>();
+
+        for (issuance_data, bsig_res, errors) in issuance_results {
+            // FIXME: validate shares before writing to DB to make combine infallible
+            errors.0.iter().for_each(|(peer, error)| {
+                error!("Dropping {:?} for {:?}", peer, error);
+                drop_peers.insert(*peer);
             });
 
-        let par_batches = futures::future::join_all(par_map).await;
-        let dropped_peers = par_batches.iter().flatten().copied().collect();
+            match bsig_res {
+                Ok(blind_signature) => {
+                    debug!(
+                        out_point = %issuance_data.out_point,
+                        "Successfully combined signature shares",
+                    );
+
+                    for (peer, _) in issuance_data.signature_shares.into_iter() {
+                        dbtx.remove_entry(&ReceivedPartialSignatureKey {
+                            request_id: issuance_data.out_point,
+                            peer_id: peer,
+                        })
+                        .await
+                        .expect("DB Error");
+                    }
+
+                    dbtx.remove_entry(&ProposedPartialSignatureKey {
+                        request_id: issuance_data.out_point,
+                    })
+                    .await
+                    .expect("DB Error");
+
+                    dbtx.insert_entry(&OutputOutcomeKey(issuance_data.out_point), &blind_signature)
+                        .await
+                        .expect("DB Error");
+                }
+                Err(CombineError::TooFewShares(got, _)) => {
+                    for peer in consensus_peers.sub(&HashSet::from_iter(got)) {
+                        error!("Dropping {:?} for not contributing shares", peer);
+                        drop_peers.insert(peer);
+                    }
+                }
+                Err(error) => {
+                    warn!(%error, "Could not combine shares");
+                }
+            }
+        }
 
         let mut redemptions = Amount::from_sat(0);
         let mut issuances = Amount::from_sat(0);
@@ -569,7 +588,7 @@ impl ServerModulePlugin for Mint {
             .await
             .expect("DB Error");
 
-        dropped_peers
+        drop_peers.into_iter().collect()
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
