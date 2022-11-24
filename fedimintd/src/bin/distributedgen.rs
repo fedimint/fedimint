@@ -82,6 +82,10 @@ enum Command {
         )]
         denominations: Vec<Amount>,
 
+        /// The bitcoin network that fedimint will be running on
+        #[arg(long = "network", default_value = "regtest")]
+        network: bitcoin::network::constants::Network,
+
         /// The password that encrypts the configs, will prompt if not passed in
         #[arg(long = "password")]
         password: Option<String>,
@@ -120,6 +124,7 @@ async fn main() {
             bind_address,
             bitcoind_rpc,
             denominations,
+            network,
             password,
         } => {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
@@ -131,6 +136,7 @@ async fn main() {
                 federation_name,
                 certs,
                 bitcoind_rpc,
+                network,
                 rustls::PrivateKey(pk_bytes),
                 &mut task_group,
             )
@@ -164,6 +170,7 @@ async fn run_dkg(
     federation_name: String,
     certs: Vec<String>,
     bitcoind_rpc: String,
+    network: bitcoin::network::constants::Network,
     pk: rustls::PrivateKey,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(ServerConfig, ClientConfig)> {
@@ -190,6 +197,7 @@ async fn run_dkg(
         &peers,
         federation_name,
         bitcoind_rpc,
+        network,
     );
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
     let server_conn =

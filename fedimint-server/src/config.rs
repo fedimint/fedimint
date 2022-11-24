@@ -431,6 +431,7 @@ impl ServerConfigParams {
             .collect::<BTreeMap<_, _>>()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn gen_params(
         bind_address: String,
         key: rustls::PrivateKey,
@@ -439,6 +440,7 @@ impl ServerConfigParams {
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
         bitcoind_rpc: String,
+        network: bitcoin::network::constants::Network,
     ) -> ServerConfigParams {
         let peer_certs: HashMap<PeerId, rustls::Certificate> = peers
             .iter()
@@ -465,7 +467,9 @@ impl ServerConfigParams {
             amount_tiers,
             federation_name,
             bitcoind_rpc,
-            other: BTreeMap::new(),
+            other: vec![("network".into(), network.to_string().into())]
+                .into_iter()
+                .collect(),
         }
     }
 
@@ -530,6 +534,7 @@ impl ServerConfigParams {
                     &peer_params,
                     federation_name.to_string(),
                     bitcoind_rpc.to_string(),
+                    bitcoin::network::constants::Network::Regtest,
                 );
                 (*peer, params)
             })

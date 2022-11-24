@@ -4,7 +4,7 @@ use std::hash::Hasher;
 use std::ops::Sub;
 use std::time::Duration;
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -224,6 +224,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
                     *sk,
                     peers.threshold(),
                     params.bitcoin_rpc.clone(),
+                    bitcoin::network::constants::Network::Regtest,
                 );
                 (*id, cfg)
             })
@@ -290,6 +291,14 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
             sk,
             peers.threshold(),
             params.bitcoin_rpc.clone(),
+            params
+                .other
+                .get("network")
+                .ok_or_else(|| anyhow!("`network` parameter wasn't supplied"))?
+                .as_str()
+                .ok_or_else(|| anyhow!("`network` param has to be a string"))?
+                .parse()
+                .map_err(|e| anyhow!("Invalid network: {}", e))?,
         );
         let client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
 

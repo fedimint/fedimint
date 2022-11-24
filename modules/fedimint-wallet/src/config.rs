@@ -92,13 +92,14 @@ impl WalletConfig {
         sk: SecretKey,
         threshold: usize,
         btc_rpc: BitcoindRpcCfg,
+        network: bitcoin::network::constants::Network,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.iter().map(|(_, pk)| *pk).collect()).unwrap(),
         );
 
         Self {
-            network: Network::Regtest,
+            network,
             peg_in_descriptor,
             peer_peg_in_keys: pubkeys,
             peg_in_key: sk,
