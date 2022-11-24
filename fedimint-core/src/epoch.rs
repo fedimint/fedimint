@@ -39,6 +39,11 @@ serde_module_encoding_wrapper!(SerdeEpochHistory, EpochHistory);
 pub struct OutcomeHistory {
     pub epoch: u64,
     pub last_hash: Option<Sha256>,
+    /// All the consensus items along with the `PeerId` of the
+    /// peer that contributed them.
+    /// Some of the consensus items here might be invalid,
+    /// (eg. transaction double-spending) but they were still
+    /// submitted and considered as accepted.
     pub items: Vec<(PeerId, Vec<ConsensusItem>)>,
 }
 
