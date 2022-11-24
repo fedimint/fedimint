@@ -754,6 +754,17 @@
 <a href="#754" id="754">754</a>
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -809,6 +820,8 @@
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;;
 
     <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64, epoch_pk: PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt;;
+
+    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;
 
     <span class="comment">// TODO: more generic module API extensibility
     </span><span class="doccomment">/// Fetch ln contract state
@@ -1027,6 +1040,15 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.module_registry)<span class="question-mark">?</span>)
     }
+
+    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="self">self</span>.request(
+            <span class="string">&quot;/epoch&quot;</span>,
+            (),
+            EventuallyConsistent::new(<span class="self">self</span>.peers().one_honest()),
+        )
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
         <span class="self">self</span>.request(

@@ -220,6 +220,12 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -432,6 +438,12 @@
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, epoch: u64| -&gt; SerdeEpochHistory {
                 <span class="kw">let </span>epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>epoch).into())
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;/epoch&quot;</span>,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _v: ()| -&gt; u64 {
+                <span class="prelude-val">Ok</span>(fedimint.get_last_epoch().ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{

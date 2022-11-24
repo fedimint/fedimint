@@ -578,6 +578,10 @@
 <a href="#578" id="578">578</a>
 <a href="#579" id="579">579</a>
 <a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
@@ -1008,6 +1012,10 @@
             _epoch: u64,
             _pk: PublicKey,
         ) -&gt; <span class="kw">crate</span>::api::Result&lt;EpochHistory&gt; {
+            <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;u64&gt; {
             <span class="macro">unimplemented!</span>()
         }
 
