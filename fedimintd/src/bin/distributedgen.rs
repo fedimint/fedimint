@@ -86,6 +86,11 @@ enum Command {
         #[arg(long = "network", default_value = "regtest")]
         network: bitcoin::network::constants::Network,
 
+        /// The number of confirmations a deposit transaction requires before accepted by the
+        /// federation
+        #[arg(long = "finalty", default_value = "10")]
+        finality_delay: u32,
+
         /// The password that encrypts the configs, will prompt if not passed in
         #[arg(long = "password")]
         password: Option<String>,
@@ -125,6 +130,7 @@ async fn main() {
             bitcoind_rpc,
             denominations,
             network,
+            finality_delay,
             password,
         } => {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
@@ -137,6 +143,7 @@ async fn main() {
                 certs,
                 bitcoind_rpc,
                 network,
+                finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 &mut task_group,
             )
@@ -171,6 +178,7 @@ async fn run_dkg(
     certs: Vec<String>,
     bitcoind_rpc: String,
     network: bitcoin::network::constants::Network,
+    finality_delay: u32,
     pk: rustls::PrivateKey,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(ServerConfig, ClientConfig)> {
@@ -198,6 +206,7 @@ async fn run_dkg(
         federation_name,
         bitcoind_rpc,
         network,
+        finality_delay,
     );
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
     let server_conn =

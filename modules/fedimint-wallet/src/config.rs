@@ -15,8 +15,6 @@ use serde::{Deserialize, Serialize};
 use crate::keys::CompressedPublicKey;
 use crate::PegInDescriptor;
 
-const FINALITY_DELAY: u32 = 10;
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {
     pub network: Network,
@@ -93,6 +91,7 @@ impl WalletConfig {
         threshold: usize,
         btc_rpc: BitcoindRpcCfg,
         network: bitcoin::network::constants::Network,
+        finality_delay: u32,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.iter().map(|(_, pk)| *pk).collect()).unwrap(),
@@ -104,7 +103,7 @@ impl WalletConfig {
             peer_peg_in_keys: pubkeys,
             peg_in_key: sk,
             default_fee: Feerate { sats_per_kvb: 1000 },
-            finality_delay: FINALITY_DELAY,
+            finality_delay,
             fee_consensus: FeeConsensus::default(),
             btc_rpc,
         }
@@ -112,11 +111,15 @@ impl WalletConfig {
 }
 
 impl WalletClientConfig {
-    pub fn new(peg_in_descriptor: PegInDescriptor) -> Self {
+    pub fn new(
+        peg_in_descriptor: PegInDescriptor,
+        network: bitcoin::network::constants::Network,
+        finality_delay: u32,
+    ) -> Self {
         Self {
             peg_in_descriptor,
-            network: Network::Regtest,
-            finality_delay: FINALITY_DELAY,
+            network,
+            finality_delay,
             fee_consensus: Default::default(),
         }
     }
