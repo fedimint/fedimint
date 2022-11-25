@@ -61,7 +61,7 @@ function kill_fedimint_processes {
 }
 
 function start_gateway() {
-  $FM_GATEWAY_CLI generate-config '127.0.0.1:8080' $FM_CFG_DIR # generate gateway config
+  $FM_GATEWAY_CLI generate-config '127.0.0.1:8080' 'http://127.0.0.1:8080' $FM_CFG_DIR # generate gateway config
   $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR &
   sleep 5 # wait for plugin to start
   gw_register_fed
