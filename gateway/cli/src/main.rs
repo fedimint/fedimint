@@ -17,8 +17,8 @@ use url::Url;
 #[command(version)]
 struct Cli {
     /// The address of the gateway webserver
-    #[clap(short, long, default_value = "127.0.0.1:8080")]
-    address: SocketAddr,
+    #[clap(short, long, default_value = "http://127.0.0.1:8080")]
+    address: Url,
     #[command(subcommand)]
     command: Commands,
     /// WARNING: Passing in a password from the command line may be less secure!
@@ -31,8 +31,10 @@ pub enum Commands {
     /// Ganerate gateway configuration
     /// NOTE: This command can only be used on a local gateway
     GenerateConfig {
-        /// The address of the gateway webserver
-        address: SocketAddr,
+        /// Address to which the API webserver will bind
+        bind_address: SocketAddr,
+        /// URL under which the API will be reachable
+        announce_address: Url,
         /// The gateway configuration directory
         out_dir: PathBuf,
     },
@@ -74,12 +76,12 @@ pub enum Commands {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let url = Url::parse(&format!("http://{}", cli.address)).expect("Invalid address");
-    let client = RpcClient::new(url);
+    let client = RpcClient::new(cli.address);
 
     match cli.command {
         Commands::GenerateConfig {
-            address,
+            bind_address: address,
+            announce_address,
             mut out_dir,
         } => {
             // Recursively create config directory if it doesn't exist
@@ -92,8 +94,9 @@ async fn main() {
             serde_json::to_writer_pretty(
                 cfg_file,
                 &GatewayConfig {
-                    address,
+                    bind_address: address,
                     // TODO: Generate a strong random password
+                    announce_address,
                     password: source_password(cli.rpcpassword),
                     // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
                     default_federation: FederationId("Hals_trusty_mint".into()),

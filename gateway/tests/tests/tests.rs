@@ -12,13 +12,16 @@ use url::Url;
 async fn test_gateway_authentication() -> Result<()> {
     let gw_password = "password".to_string();
     let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
-    let gw_address = SocketAddr::from(([127, 0, 0, 1], gw_port));
+    let gw_bind_address = SocketAddr::from(([127, 0, 0, 1], gw_port));
+    let gw_announce_address =
+        Url::parse(&format!("http://{}", gw_bind_address)).expect("Invalid gateway address");
     let federation_id = FederationId("test_fed".into());
 
     let cfg = GatewayConfig {
         password: gw_password.clone(),
         default_federation: federation_id.clone(),
-        address: gw_address,
+        bind_address: gw_bind_address,
+        announce_address: gw_announce_address.clone(),
     };
 
     let Fixtures {
@@ -34,9 +37,7 @@ async fn test_gateway_authentication() -> Result<()> {
         .await;
 
     // Create an RPC client
-    let client = RpcClient::new(
-        Url::parse(&format!("http://{}", gw_address)).expect("Invalid gateway address"),
-    );
+    let client = RpcClient::new(gw_announce_address);
 
     // Test gateway authentication on `get_info` function
     // *  `get_info` with correct password succeeds

@@ -388,12 +388,13 @@ impl GatewayTest {
         };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
+        let announce_addr = Url::parse(format!("http://{}", bind_addr).as_str())
+            .expect("Could not parse URL to generate GatewayClientConfig API endpoint");
         let gw_client_cfg = GatewayClientConfig {
             client_config: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,
-            api: Url::parse(format!("http://{}", bind_addr).as_str())
-                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+            api: announce_addr.clone(),
             node_pub_key,
         };
 
@@ -405,7 +406,8 @@ impl GatewayTest {
         let ln_rpc = Arc::clone(&adapter);
 
         let gw_cfg = GatewayConfig {
-            address: bind_addr,
+            bind_address: bind_addr,
+            announce_address: announce_addr,
             password: "abc".into(),
             default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };

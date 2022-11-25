@@ -30,7 +30,6 @@ use secp256k1::KeyPair;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
-use url::Url;
 
 use crate::{
     actor::GatewayActor,
@@ -139,8 +138,7 @@ impl LnGateway {
             redeem_key: kp_fed,
             timelock_delta: 10,
             node_pub_key,
-            api: Url::parse(format!("http://{}", self.config.address).as_str())
-                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+            api: self.config.announce_address.clone(),
         };
 
         let client = self.client_builder.build(gw_client_cfg.clone())?;
@@ -242,8 +240,11 @@ impl LnGateway {
         let cfg = self.config.clone();
         let sender = GatewayRpcSender::new(self.sender.clone());
         tg.spawn("Gateway Webserver", move |server_ctrl| async move {
-            let mut webserver =
-                tokio::spawn(run_webserver(cfg.password.clone(), cfg.address, sender));
+            let mut webserver = tokio::spawn(run_webserver(
+                cfg.password.clone(),
+                cfg.bind_address,
+                sender,
+            ));
 
             // Shut down webserver if requested
             if server_ctrl.is_shutting_down() {
