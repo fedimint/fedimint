@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
@@ -95,6 +96,36 @@ enum Command {
         #[arg(long = "password")]
         password: Option<String>,
     },
+
+    ConfigDecrypt {
+        /// Encrypted config file
+        #[arg(long = "in-file")]
+        in_file: PathBuf,
+        /// Plaintext config file output
+        #[arg(long = "out-file")]
+        out_file: PathBuf,
+        /// Encryption salt file, otherwise defaults to the salt file from the in_file directory
+        #[arg(long = "salt-file")]
+        salt_file: Option<PathBuf>,
+        /// The password that encrypts the configs, will prompt if not passed in
+        #[arg(long = "password")]
+        password: Option<String>,
+    },
+
+    ConfigEncrypt {
+        /// Plaintext config file
+        #[arg(long = "in-file")]
+        in_file: PathBuf,
+        /// Encrypted config file output
+        #[arg(long = "out-file")]
+        out_file: PathBuf,
+        /// Encryption salt file, otherwise defaults to the salt file from the out_file directory
+        #[arg(long = "salt-file")]
+        salt_file: Option<PathBuf>,
+        /// The password that encrypts the configs, will prompt if not passed in
+        #[arg(long = "password")]
+        password: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -166,7 +197,43 @@ async fn main() {
         Command::VersionHash => {
             println!("{}", env!("GIT_HASH"));
         }
+        Command::ConfigDecrypt {
+            in_file,
+            out_file,
+            salt_file,
+            password,
+        } => {
+            let salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&in_file));
+            let key = get_key(password, salt_file);
+            let decrypted_bytes = encrypted_read(&key, in_file);
+
+            let mut out_file_handle =
+                fs::File::create(out_file).expect("Could not create output cfg file");
+            out_file_handle.write_all(&decrypted_bytes).unwrap();
+        }
+        Command::ConfigEncrypt {
+            in_file,
+            out_file,
+            salt_file,
+            password,
+        } => {
+            let mut in_file_handle =
+                fs::File::open(in_file).expect("Could not create output cfg file");
+            let mut plaintext_bytes = vec![];
+            in_file_handle.read_to_end(&mut plaintext_bytes).unwrap();
+
+            let salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&out_file));
+            let key = get_key(password, salt_file);
+            encrypted_write(plaintext_bytes, &key, out_file);
+        }
     }
+}
+
+fn salt_file_path_from_file_path(file_path: &Path) -> PathBuf {
+    file_path
+        .parent()
+        .expect("File has no parent?!")
+        .join(SALT_FILE)
 }
 
 #[allow(clippy::too_many_arguments)]
