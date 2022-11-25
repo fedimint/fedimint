@@ -11,6 +11,7 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::config::load_from_file;
 use fedimint_core::modules::ln::contracts::ContractId;
+use fedimint_core::modules::ln::ContractAccount;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableNote;
@@ -97,6 +98,10 @@ enum CliOutput {
 
     SwitchGateway {
         new_gateway: Value,
+    },
+
+    FetchContract {
+        contract: Box<ContractAccount>,
     },
 }
 
@@ -261,6 +266,9 @@ enum Command {
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
+
+    /// Fetches a LN contract from the federation
+    FetchContract { contract_id: ContractId },
 }
 
 trait ErrorHandler<T, E> {
@@ -626,5 +634,19 @@ async fn handle_command(
                 )),
             }
         }
+        Command::FetchContract { contract_id } => client
+            .api_client()
+            .fetch_contract(contract_id)
+            .await
+            .map(|contract| CliOutput::FetchContract {
+                contract: Box::new(contract),
+            })
+            .map_err(|e| {
+                CliError::from(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to fetch contract",
+                    Some(Box::new(e)),
+                )
+            }),
     }
 }
