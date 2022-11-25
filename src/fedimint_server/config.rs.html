@@ -627,6 +627,11 @@
 <a href="#627" id="627">627</a>
 <a href="#628" id="628">628</a>
 <a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -1070,6 +1075,7 @@
         federation_name: String,
         bitcoind_rpc: String,
         network: bitcoin::network::constants::Network,
+        finality_delay: u32,
     ) -&gt; ServerConfigParams {
         <span class="kw">let </span>peer_certs: HashMap&lt;PeerId, rustls::Certificate&gt; = peers
             .iter()
@@ -1096,9 +1102,12 @@
             amount_tiers,
             federation_name,
             bitcoind_rpc,
-            other: <span class="macro">vec!</span>[(<span class="string">&quot;network&quot;</span>.into(), network.to_string().into())]
-                .into_iter()
-                .collect(),
+            other: <span class="macro">vec!</span>[
+                (<span class="string">&quot;network&quot;</span>.into(), network.to_string().into()),
+                (<span class="string">&quot;finality_delay&quot;</span>.into(), finality_delay.into()),
+            ]
+            .into_iter()
+            .collect(),
         }
     }
 
@@ -1164,6 +1173,7 @@
                     federation_name.to_string(),
                     bitcoind_rpc.to_string(),
                     bitcoin::network::constants::Network::Regtest,
+                    <span class="number">10</span>,
                 );
                 (<span class="kw-2">*</span>peer, params)
             })

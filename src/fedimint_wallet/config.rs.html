@@ -121,6 +121,9 @@
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::bail;
@@ -137,8 +140,6 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use </span><span class="kw">crate</span>::PegInDescriptor;
-
-<span class="kw">const </span>FINALITY_DELAY: u32 = <span class="number">10</span>;
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfig {
@@ -216,6 +217,7 @@
         threshold: usize,
         btc_rpc: BitcoindRpcCfg,
         network: bitcoin::network::constants::Network,
+        finality_delay: u32,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.iter().map(|(<span class="kw">_</span>, pk)| <span class="kw-2">*</span>pk).collect()).unwrap(),
@@ -227,7 +229,7 @@
             peer_peg_in_keys: pubkeys,
             peg_in_key: sk,
             default_fee: Feerate { sats_per_kvb: <span class="number">1000 </span>},
-            finality_delay: FINALITY_DELAY,
+            finality_delay,
             fee_consensus: FeeConsensus::default(),
             btc_rpc,
         }
@@ -235,11 +237,15 @@
 }
 
 <span class="kw">impl </span>WalletClientConfig {
-    <span class="kw">pub fn </span>new(peg_in_descriptor: PegInDescriptor) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(
+        peg_in_descriptor: PegInDescriptor,
+        network: bitcoin::network::constants::Network,
+        finality_delay: u32,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             peg_in_descriptor,
-            network: Network::Regtest,
-            finality_delay: FINALITY_DELAY,
+            network,
+            finality_delay,
             fee_consensus: Default::default(),
         }
     }

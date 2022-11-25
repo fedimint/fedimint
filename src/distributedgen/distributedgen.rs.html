@@ -238,6 +238,15 @@
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -326,6 +335,11 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;network&quot;</span>, default_value = <span class="string">&quot;regtest&quot;</span>)]
         </span>network: bitcoin::network::constants::Network,
 
+        <span class="doccomment">/// The number of confirmations a deposit transaction requires before accepted by the
+        /// federation
+        </span><span class="attr">#[arg(long = <span class="string">&quot;finalty&quot;</span>, default_value = <span class="string">&quot;10&quot;</span>)]
+        </span>finality_delay: u32,
+
         <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
         </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>)]
         </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -365,6 +379,7 @@
             bitcoind_rpc,
             denominations,
             network,
+            finality_delay,
             password,
         } =&gt; {
             <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
@@ -377,6 +392,7 @@
                 certs,
                 bitcoind_rpc,
                 network,
+                finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 <span class="kw-2">&amp;mut </span>task_group,
             )
@@ -411,6 +427,7 @@
     certs: Vec&lt;String&gt;,
     bitcoind_rpc: String,
     network: bitcoin::network::constants::Network,
+    finality_delay: u32,
     pk: rustls::PrivateKey,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
 ) -&gt; Cancellable&lt;(ServerConfig, ClientConfig)&gt; {
@@ -438,6 +455,7 @@
         federation_name,
         bitcoind_rpc,
         network,
+        finality_delay,
     );
     <span class="kw">let </span>peer_ids: Vec&lt;PeerId&gt; = peers.keys().cloned().collect();
     <span class="kw">let </span>server_conn =

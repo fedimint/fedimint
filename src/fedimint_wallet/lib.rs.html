@@ -1501,6 +1501,29 @@
 <a href="#1501" id="1501">1501</a>
 <a href="#1502" id="1502">1502</a>
 <a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1709,6 +1732,8 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
     ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
+        <span class="kw">const </span>FINALITY_DELAY: u32 = <span class="number">10</span>;
+
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
 
         <span class="kw">let </span>btc_pegin_keys = peers
@@ -1728,13 +1753,18 @@
                     peers.threshold(),
                     params.bitcoin_rpc.clone(),
                     bitcoin::network::constants::Network::Regtest,
+                    FINALITY_DELAY,
                 );
                 (<span class="kw-2">*</span>id, cfg)
             })
             .collect();
 
         <span class="kw">let </span>descriptor = wallet_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].peg_in_descriptor.clone();
-        <span class="kw">let </span>client_cfg = WalletClientConfig::new(descriptor);
+        <span class="kw">let </span>client_cfg = WalletClientConfig::new(
+            descriptor,
+            bitcoin::network::constants::Network::Regtest,
+            FINALITY_DELAY,
+        );
 
         (
             wallet_cfg
@@ -1789,21 +1819,37 @@
             }
         }
 
+        <span class="kw">let </span>network: bitcoin::network::constants::Network = params
+            .other
+            .get(<span class="string">&quot;network&quot;</span>)
+            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` parameter wasn&#39;t supplied&quot;</span>))<span class="question-mark">?
+            </span>.as_str()
+            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` param has to be a string&quot;</span>))<span class="question-mark">?
+            </span>.parse()
+            .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Invalid network: {}&quot;</span>, e))<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>finality_delay: u32 = params
+            .other
+            .get(<span class="string">&quot;finality_delay&quot;</span>)
+            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`finality_delay` parameter wasn&#39;t supplied&quot;</span>))<span class="question-mark">?
+            </span>.as_i64()
+            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`finality_delay` param has to be a number&quot;</span>))<span class="question-mark">?
+            </span>.try_into()
+            .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;`finality_delay` out of range: {}&quot;</span>, e))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
             peers.threshold(),
             params.bitcoin_rpc.clone(),
-            params
-                .other
-                .get(<span class="string">&quot;network&quot;</span>)
-                .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` parameter wasn&#39;t supplied&quot;</span>))<span class="question-mark">?
-                </span>.as_str()
-                .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` param has to be a string&quot;</span>))<span class="question-mark">?
-                </span>.parse()
-                .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Invalid network: {}&quot;</span>, e))<span class="question-mark">?</span>,
+            network,
+            finality_delay,
         );
-        <span class="kw">let </span>client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
+        <span class="kw">let </span>client_cfg = WalletClientConfig::new(
+            wallet_cfg.peg_in_descriptor.clone(),
+            network,
+            finality_delay,
+        );
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((wallet_cfg.to_erased(), client_cfg.to_erased())))
     }
