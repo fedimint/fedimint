@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
     let ClnRpcRef { ln_rpc, work_dir } = build_cln_rpc(GatewayRpcSender::new(tx.clone())).await?;
 
     let gw_cfg_path = work_dir.clone().join("gateway.config");
-    let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path);
+    let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path).expect("Failed to parse config");
 
     // Create federation client builder
     let client_builder: GatewayClientBuilder =
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Error> {
 
     // Create gateway instance
     let task_group = TaskGroup::new();
-    let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone());
+    let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone()).await;
 
     if let Err(e) = gateway.run().await {
         task_group.shutdown_join_all().await?;

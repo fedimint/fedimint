@@ -9,10 +9,11 @@ use fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define,
 };
+use fedimint_server::config::load_from_file;
 use mint_client::{Client, FederationId, GatewayClientConfig};
-use tracing::debug;
+use tracing::{debug, warn};
 
-use crate::Result;
+use crate::{LnGatewayError, Result};
 
 /// Trait for gateway federation client builders
 pub trait IGatewayClientBuilder: Debug {
@@ -24,6 +25,8 @@ pub trait IGatewayClientBuilder: Debug {
 
     /// Save and persist the configuration of the gateway federation client
     fn save_config(&self, config: GatewayClientConfig) -> Result<()>;
+
+    fn load_configs(&self) -> Result<Vec<GatewayClientConfig>>;
 }
 
 dyn_newtype_define! {
@@ -84,6 +87,37 @@ impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
 
         Ok(())
     }
+
+    fn load_configs(&self) -> Result<Vec<GatewayClientConfig>> {
+        Ok(std::fs::read_dir(&self.work_dir)
+            .map_err(|e| LnGatewayError::Other(anyhow::Error::new(e)))?
+            .filter_map(|file_res| {
+                let file = file_res.ok()?;
+                if !file.file_type().ok()?.is_file() {
+                    return None;
+                }
+
+                if file
+                    .path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext == "json")
+                    .unwrap_or(false)
+                {
+                    Some(file)
+                } else {
+                    None
+                }
+            })
+            .filter_map(|file| {
+                // FIXME: handle parsing errors
+                debug!("Trying to load config file {:?}", file.path());
+                load_from_file(&file.path())
+                    .map_err(|e| warn!("Could not parse config: {}", e))
+                    .ok()
+            })
+            .collect())
+    }
 }
 
 // Builds a new federation client with MemoryDb
@@ -108,5 +142,9 @@ impl IGatewayClientBuilder for MemoryDbGatewayClientBuilder {
     /// Persist gateway federation client cfg
     fn save_config(&self, _config: GatewayClientConfig) -> Result<()> {
         unimplemented!()
+    }
+
+    fn load_configs(&self) -> Result<Vec<GatewayClientConfig>> {
+        Ok(vec![])
     }
 }

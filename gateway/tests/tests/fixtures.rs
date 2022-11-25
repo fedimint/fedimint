@@ -21,7 +21,7 @@ pub struct Fixtures {
     pub task_group: TaskGroup,
 }
 
-pub fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
+pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
     let task_group = TaskGroup::new();
 
     let ln_rpc = Arc::new(MockLnRpc::new());
@@ -29,7 +29,7 @@ pub fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
     let client_builder: GatewayClientBuilder = MemoryDbGatewayClientBuilder {}.into();
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
 
-    let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone());
+    let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone()).await;
 
     Ok(Fixtures {
         gateway,

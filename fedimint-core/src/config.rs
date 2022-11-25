@@ -2,9 +2,9 @@ use std::path::Path;
 
 use serde::de::DeserializeOwned;
 
-pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
-    let file = std::fs::File::open(path).expect("Can't read cfg file.");
-    serde_json::from_reader(file).expect("Could not parse cfg file.")
+pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
+    let file = std::fs::File::open(path)?;
+    Ok(serde_json::from_reader(file)?)
 }
 
 pub mod serde_binary_human_readable {
