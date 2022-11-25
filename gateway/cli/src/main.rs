@@ -17,8 +17,8 @@ use url::Url;
 #[command(version)]
 struct Cli {
     /// The address of the gateway webserver
-    #[clap(short, long, default_value = "127.0.0.1:8080")]
-    address: SocketAddr,
+    #[clap(short, long, default_value = "http://127.0.0.1:8080")]
+    address: Url,
     #[command(subcommand)]
     command: Commands,
     /// WARNING: Passing in a password from the command line may be less secure!
@@ -76,8 +76,7 @@ pub enum Commands {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let url = Url::parse(&format!("http://{}", cli.address)).expect("Invalid address");
-    let client = RpcClient::new(url);
+    let client = RpcClient::new(cli.address);
 
     match cli.command {
         Commands::GenerateConfig {
