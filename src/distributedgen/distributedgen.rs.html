@@ -247,8 +247,76 @@
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
 <a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
@@ -344,6 +412,36 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>)]
         </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
+
+    ConfigDecrypt {
+        <span class="doccomment">/// Encrypted config file
+        </span><span class="attr">#[arg(long = <span class="string">&quot;in-file&quot;</span>)]
+        </span>in_file: PathBuf,
+        <span class="doccomment">/// Plaintext config file output
+        </span><span class="attr">#[arg(long = <span class="string">&quot;out-file&quot;</span>)]
+        </span>out_file: PathBuf,
+        <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the in_file directory
+        </span><span class="attr">#[arg(long = <span class="string">&quot;salt-file&quot;</span>)]
+        </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+        <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
+        </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>)]
+        </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    },
+
+    ConfigEncrypt {
+        <span class="doccomment">/// Plaintext config file
+        </span><span class="attr">#[arg(long = <span class="string">&quot;in-file&quot;</span>)]
+        </span>in_file: PathBuf,
+        <span class="doccomment">/// Encrypted config file output
+        </span><span class="attr">#[arg(long = <span class="string">&quot;out-file&quot;</span>)]
+        </span>out_file: PathBuf,
+        <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the out_file directory
+        </span><span class="attr">#[arg(long = <span class="string">&quot;salt-file&quot;</span>)]
+        </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+        <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
+        </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>)]
+        </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    },
 }
 
 <span class="attr">#[tokio::main]
@@ -415,7 +513,43 @@
         Command::VersionHash =&gt; {
             <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
         }
+        Command::ConfigDecrypt {
+            in_file,
+            out_file,
+            salt_file,
+            password,
+        } =&gt; {
+            <span class="kw">let </span>salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(<span class="kw-2">&amp;</span>in_file));
+            <span class="kw">let </span>key = get_key(password, salt_file);
+            <span class="kw">let </span>decrypted_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, in_file);
+
+            <span class="kw">let </span><span class="kw-2">mut </span>out_file_handle =
+                fs::File::create(out_file).expect(<span class="string">&quot;Could not create output cfg file&quot;</span>);
+            out_file_handle.write_all(<span class="kw-2">&amp;</span>decrypted_bytes).unwrap();
+        }
+        Command::ConfigEncrypt {
+            in_file,
+            out_file,
+            salt_file,
+            password,
+        } =&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>in_file_handle =
+                fs::File::open(in_file).expect(<span class="string">&quot;Could not create output cfg file&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>plaintext_bytes = <span class="macro">vec!</span>[];
+            in_file_handle.read_to_end(<span class="kw-2">&amp;mut </span>plaintext_bytes).unwrap();
+
+            <span class="kw">let </span>salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(<span class="kw-2">&amp;</span>out_file));
+            <span class="kw">let </span>key = get_key(password, salt_file);
+            encrypted_write(plaintext_bytes, <span class="kw-2">&amp;</span>key, out_file);
+        }
     }
+}
+
+<span class="kw">fn </span>salt_file_path_from_file_path(file_path: <span class="kw-2">&amp;</span>Path) -&gt; PathBuf {
+    file_path
+        .parent()
+        .expect(<span class="string">&quot;File has no parent?!&quot;</span>)
+        .join(SALT_FILE)
 }
 
 <span class="attr">#[allow(clippy::too_many_arguments)]
