@@ -188,6 +188,10 @@ impl PaymentParameters {
 
 // TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
 impl<T: AsRef<ClientConfig> + Clone> Client<T> {
+    pub fn api_client(&self) -> &FederationApi {
+        &self.context.api
+    }
+
     pub fn ln_client(&self) -> LnClient {
         LnClient {
             config: self
