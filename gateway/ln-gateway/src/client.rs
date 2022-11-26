@@ -16,6 +16,40 @@ use tracing::{debug, warn};
 
 use crate::{LnGatewayError, Result};
 
+pub trait IDbFactory: Debug {
+    fn create_database(&self, federation_id: FederationId, _path: PathBuf) -> Result<Database>;
+}
+
+dyn_newtype_define!(
+    /// Arc reference to a database factory
+    #[derive(Clone)]
+    pub DbFactory(Arc<IDbFactory>)
+);
+
+/// A factory that creates in-memory databases
+#[derive(Default, Debug, Clone)]
+pub struct MemDbFactory;
+
+impl IDbFactory for MemDbFactory {
+    fn create_database(&self, _federation_id: FederationId, _path: PathBuf) -> Result<Database> {
+        Ok(MemDatabase::new().into())
+    }
+}
+
+/// A factory that creates RocksDb database instances
+#[derive(Default, Debug, Clone)]
+pub struct RocksDbFactory;
+
+impl IDbFactory for RocksDbFactory {
+    fn create_database(&self, federation_id: FederationId, path: PathBuf) -> Result<Database> {
+        let db_path = path.join(format!("{}.db", federation_id.hash()));
+        let db = fedimint_rocksdb::RocksDb::open(db_path)
+            .expect("Error opening new rocks DB")
+            .into();
+        Ok(db)
+    }
+}
+
 /// Trait for gateway federation client builders
 #[async_trait]
 pub trait IGatewayClientBuilder: Debug {
