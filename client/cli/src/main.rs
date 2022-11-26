@@ -363,7 +363,7 @@ async fn main() {
 
         let cfg_path = cli.workdir.join("client.json");
         let db_path = cli.workdir.join("client.db");
-        let cfg: UserClientConfig = load_from_file(&cfg_path);
+        let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
         let db = fedimint_rocksdb::RocksDb::open(db_path)
             .or_terminate(CliErrorKind::IOError, "could not open transaction db")
             .into();

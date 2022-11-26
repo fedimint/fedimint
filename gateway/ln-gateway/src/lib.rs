@@ -56,7 +56,7 @@ pub struct LnGateway {
 }
 
 impl LnGateway {
-    pub fn new(
+    pub async fn new(
         config: GatewayConfig,
         ln_rpc: Arc<dyn LnRpc>,
         client_builder: GatewayClientBuilder,
@@ -65,7 +65,7 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
-        Self {
+        let ln_gw = Self {
             config,
             actors: Mutex::new(HashMap::new()),
             ln_rpc,
@@ -73,6 +73,28 @@ impl LnGateway {
             receiver,
             client_builder,
             task_group,
+        };
+
+        ln_gw.load_federation_actors().await;
+
+        ln_gw
+    }
+
+    async fn load_federation_actors(&self) {
+        // TODO: handle error better
+        for config in self
+            .client_builder
+            .load_configs()
+            .expect("Could not read configs")
+        {
+            let client = self
+                .client_builder
+                .build(config.clone())
+                .expect("Could not build federation client");
+
+            if let Err(e) = self.register_federation(Arc::new(client)).await {
+                error!("Failed to register federation: {}", e);
+            }
         }
     }
 
