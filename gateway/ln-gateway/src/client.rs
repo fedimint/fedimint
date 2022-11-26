@@ -1,24 +1,41 @@
-use std::fmt::Debug;
 use std::{
+    fmt::Debug,
     fs::File,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
+use async_trait::async_trait;
 use fedimint_api::{
+    config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
-    dyn_newtype_define,
+    dyn_newtype_define, NumPeers,
 };
 use fedimint_server::config::load_from_file;
-use mint_client::{Client, FederationId, GatewayClientConfig};
+use mint_client::{
+    api::{WsFederationApi, WsFederationConnect},
+    query::CurrentConsensus,
+    Client, FederationId, GatewayClientConfig,
+};
+use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
+use url::Url;
 
 use crate::{LnGatewayError, Result};
 
 /// Trait for gateway federation client builders
+#[async_trait]
 pub trait IGatewayClientBuilder: Debug {
     /// Build a new gateway federation client
     fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>>;
+
+    /// Create a new gateway federation client config from connect info
+    async fn create_config(
+        &self,
+        connect: WsFederationConnect,
+        node_pubkey: PublicKey,
+        announce_address: Url,
+    ) -> Result<GatewayClientConfig>;
 
     /// Create a new database for the gateway federation client
     fn create_database(&self, federation_id: FederationId) -> Result<Database>;
@@ -50,6 +67,7 @@ impl RocksDbGatewayClientBuilder {
 
 /// Builds a new federation client with RocksDb
 /// On successful build, the configuration is saved to a file at the builder work directory
+#[async_trait]
 impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
     fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
         let federation_id = FederationId(config.client_config.federation_name.clone());
@@ -67,6 +85,15 @@ impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
             .expect("Error opening DB")
             .into();
         Ok(db)
+    }
+
+    async fn create_config(
+        &self,
+        connect: WsFederationConnect,
+        node_pubkey: PublicKey,
+        announce_address: Url,
+    ) -> Result<GatewayClientConfig> {
+        create_gateway_client_cfg(connect, node_pubkey, announce_address).await
     }
 
     /// Persist federation client cfg to [`<federation_id>.json`] file
@@ -124,6 +151,7 @@ impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
 #[derive(Default, Debug, Clone)]
 pub struct MemoryDbGatewayClientBuilder {}
 
+#[async_trait]
 impl IGatewayClientBuilder for MemoryDbGatewayClientBuilder {
     fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
         let federation_id = FederationId(config.client_config.federation_name.clone());
@@ -139,6 +167,15 @@ impl IGatewayClientBuilder for MemoryDbGatewayClientBuilder {
         Ok(MemDatabase::new().into())
     }
 
+    async fn create_config(
+        &self,
+        connect: WsFederationConnect,
+        node_pubkey: PublicKey,
+        announce_address: Url,
+    ) -> Result<GatewayClientConfig> {
+        create_gateway_client_cfg(connect, node_pubkey, announce_address).await
+    }
+
     /// Persist gateway federation client cfg
     fn save_config(&self, _config: GatewayClientConfig) -> Result<()> {
         unimplemented!()
@@ -147,4 +184,33 @@ impl IGatewayClientBuilder for MemoryDbGatewayClientBuilder {
     fn load_configs(&self) -> Result<Vec<GatewayClientConfig>> {
         Ok(vec![])
     }
+}
+
+async fn create_gateway_client_cfg(
+    connect: WsFederationConnect,
+    node_pubkey: PublicKey,
+    announce_address: Url,
+) -> Result<GatewayClientConfig> {
+    let api = WsFederationApi::new(connect.members);
+
+    let client_cfg: ClientConfig = api
+        .request(
+            "/config",
+            (),
+            CurrentConsensus::new(api.peers().one_honest()),
+        )
+        .await
+        .expect("Failed to get client config");
+
+    let mut rng = rand::rngs::OsRng;
+    let ctx = secp256k1::Secp256k1::new();
+    let kp_fed = KeyPair::new(&ctx, &mut rng);
+
+    Ok(GatewayClientConfig {
+        client_config: client_cfg,
+        redeem_key: kp_fed,
+        timelock_delta: 10,
+        node_pub_key: node_pubkey,
+        api: announce_address,
+    })
 }

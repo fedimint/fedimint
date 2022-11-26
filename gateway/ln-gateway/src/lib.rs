@@ -17,16 +17,12 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::{config::ClientConfig, task::TaskGroup, Amount, NumPeers, TransactionId};
+use fedimint_api::{task::TaskGroup, Amount, TransactionId};
 use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{
-    api::{WsFederationApi, WsFederationConnect},
-    ln::PayInvoicePayload,
-    mint::MintClientError,
-    query::CurrentConsensus,
-    ClientError, FederationId, GatewayClient, GatewayClientConfig,
+    api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
+    FederationId, GatewayClient,
 };
-use secp256k1::KeyPair;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
@@ -133,20 +129,6 @@ impl LnGateway {
     async fn handle_register_federation(&self, payload: RegisterFedPayload) -> Result<()> {
         let connect: WsFederationConnect =
             serde_json::from_str(&payload.connect).expect("Invalid federation connect info");
-        let api = WsFederationApi::new(connect.members);
-
-        let client_cfg: ClientConfig = api
-            .request(
-                "/config",
-                (),
-                CurrentConsensus::new(api.peers().one_honest()),
-            )
-            .await
-            .expect("Failed to get client config");
-
-        let mut rng = rand::rngs::OsRng;
-        let ctx = secp256k1::Secp256k1::new();
-        let kp_fed = KeyPair::new(&ctx, &mut rng);
 
         let node_pub_key = self
             .ln_rpc
@@ -154,21 +136,23 @@ impl LnGateway {
             .await
             .expect("Failed to get node pubkey from Lightning node");
 
-        let gw_client_cfg = GatewayClientConfig {
-            client_config: client_cfg,
-            redeem_key: kp_fed,
-            timelock_delta: 10,
-            node_pub_key,
-            api: self.config.announce_address.clone(),
-        };
+        let gw_client_cfg = self
+            .client_builder
+            .create_config(connect, node_pub_key, self.config.announce_address.clone())
+            .await
+            .expect("Failed to create gateway client config");
 
-        let client = self.client_builder.build(gw_client_cfg.clone())?;
+        let client = Arc::new(
+            self.client_builder
+                .build(gw_client_cfg.clone())
+                .expect("Failed to build gateway client"),
+        );
 
-        if let Err(e) = self.register_federation(Arc::new(client)).await {
+        if let Err(e) = self.register_federation(client.clone()).await {
             error!("Failed to register federation: {}", e);
         }
 
-        if let Err(e) = self.client_builder.save_config(gw_client_cfg) {
+        if let Err(e) = self.client_builder.save_config(client.config()) {
             warn!(
                 "Failed to save default federation client configuration: {}",
                 e
