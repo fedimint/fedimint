@@ -35,9 +35,9 @@
 
 <span class="kw">use </span>serde::de::DeserializeOwned;
 
-<span class="kw">pub fn </span>load_from_file&lt;T: DeserializeOwned&gt;(path: <span class="kw-2">&amp;</span>Path) -&gt; T {
-    <span class="kw">let </span>file = std::fs::File::open(path).expect(<span class="string">&quot;Can&#39;t read cfg file.&quot;</span>);
-    serde_json::from_reader(file).expect(<span class="string">&quot;Could not parse cfg file.&quot;</span>)
+<span class="kw">pub fn </span>load_from_file&lt;T: DeserializeOwned&gt;(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt; {
+    <span class="kw">let </span>file = std::fs::File::open(path)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(serde_json::from_reader(file)<span class="question-mark">?</span>)
 }
 
 <span class="kw">pub mod </span>serde_binary_human_readable {

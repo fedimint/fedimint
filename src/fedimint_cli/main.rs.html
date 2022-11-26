@@ -1015,7 +1015,7 @@
 
         <span class="kw">let </span>cfg_path = cli.workdir.join(<span class="string">&quot;client.json&quot;</span>);
         <span class="kw">let </span>db_path = cli.workdir.join(<span class="string">&quot;client.db&quot;</span>);
-        <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path);
+        <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to parse config&quot;</span>);
         <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
             .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>)
             .into();
