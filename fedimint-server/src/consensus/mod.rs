@@ -158,7 +158,9 @@ impl FedimintConsensus {
                 .expect("Parsing the input should fail if the module doesn't exist");
 
             let cache = module.build_verification_cache(&[input.clone()]);
-            let meta = module.validate_input(&self.build_interconnect(), &dbtx, &cache, input)?;
+            let meta = module
+                .validate_input(&self.build_interconnect(), &dbtx, &cache, input)
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
 
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
@@ -170,7 +172,9 @@ impl FedimintConsensus {
                 .modules
                 .get(&output.module_key())
                 .expect("Parsing the input should fail if the module doesn't exist");
-            let amount = module.validate_output(&dbtx, output)?;
+            let amount = module
+                .validate_output(&dbtx, output)
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
         }
 
@@ -461,7 +465,8 @@ impl FedimintConsensus {
                     input,
                     caches.get_cache(input.module_key()),
                 )
-                .await?;
+                .await
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
         }
@@ -477,7 +482,10 @@ impl FedimintConsensus {
                 .get(&output.module_key())
                 .expect("Parsing the input should fail if the module doesn't exist");
 
-            let amount = module.apply_output(dbtx, &output, out_point).await?;
+            let amount = module
+                .apply_output(dbtx, &output, out_point)
+                .await
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
         }
 
@@ -611,8 +619,8 @@ impl Default for FundingVerifier {
 pub enum TransactionSubmissionError {
     #[error("High level transaction error: {0}")]
     TransactionError(#[from] TransactionError),
-    #[error("Module input or output error: {0}")]
-    ModuleError(#[from] ModuleError),
+    #[error("Module input or output error in tx {0}: {1}")]
+    ModuleError(TransactionId, ModuleError),
     #[error("Transaction conflict error")]
     TransactionConflictError,
 }
