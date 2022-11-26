@@ -66,8 +66,7 @@ dyn_newtype_define! {
 #[derive(Debug)]
 pub struct RetryClient<C> {
     inner: C,
-    max_retries: u16,
-    base_sleep: Duration,
+    sleep: Duration,
     task_handle: TaskHandle,
 }
 
@@ -75,8 +74,7 @@ impl<C> RetryClient<C> {
     pub fn new(inner: C, task_handle: TaskHandle) -> Self {
         Self {
             inner,
-            max_retries: 10,
-            base_sleep: Duration::from_millis(10),
+            sleep: Duration::from_millis(10),
             task_handle,
         }
     }
@@ -86,23 +84,18 @@ impl<C> RetryClient<C> {
         F: Fn() -> R,
         R: Future<Output = Result<T>>,
     {
-        let mut retries = 0;
-        let mut fail_sleep = self.base_sleep;
         let ret = loop {
             match call_fn().await {
                 Ok(ret) => {
                     break ret;
                 }
                 Err(e) => {
-                    retries += 1;
-
-                    if retries > self.max_retries || self.task_handle.is_shutting_down() {
+                    if self.task_handle.is_shutting_down() {
                         return Err(e);
                     }
 
-                    info!("Will retry rpc after {}ms", fail_sleep.as_millis());
-                    std::thread::sleep(fail_sleep);
-                    fail_sleep *= 2;
+                    info!("Bitcoind error {:?}, retrying", e);
+                    std::thread::sleep(self.sleep);
                 }
             }
         };
