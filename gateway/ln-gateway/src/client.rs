@@ -1,5 +1,5 @@
-use std::fmt::Debug;
 use std::{
+    fmt::Debug,
     fs::File,
     path::{Path, PathBuf},
     sync::Arc,
@@ -7,12 +7,19 @@ use std::{
 
 use async_trait::async_trait;
 use fedimint_api::{
+    config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
-    dyn_newtype_define,
+    dyn_newtype_define, NumPeers,
 };
 use fedimint_server::config::load_from_file;
-use mint_client::{Client, FederationId, GatewayClientConfig};
+use mint_client::{
+    api::{WsFederationApi, WsFederationConnect},
+    query::CurrentConsensus,
+    Client, FederationId, GatewayClientConfig,
+};
+use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
+use url::Url;
 
 use crate::{LnGatewayError, Result};
 
@@ -56,9 +63,18 @@ pub trait IGatewayClientBuilder: Debug {
     /// Build a new gateway federation client
     async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>>;
 
+    /// Create a new gateway federation client config from connect info
+    async fn create_config(
+        &self,
+        connect: WsFederationConnect,
+        node_pubkey: PublicKey,
+        announce_address: Url,
+    ) -> Result<GatewayClientConfig>;
+
     /// Save and persist the configuration of the gateway federation client
     fn save_config(&self, config: GatewayClientConfig) -> Result<()>;
 
+    /// Load all gateway client configs from the work directory
     fn load_configs(&self) -> Result<Vec<GatewayClientConfig>>;
 }
 
@@ -85,7 +101,6 @@ impl StandardGatewayClientBuilder {
 
 #[async_trait]
 impl IGatewayClientBuilder for StandardGatewayClientBuilder {
-    /// Build a new gateway federation client
     async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
         let federation_id = FederationId(config.client_config.federation_name.clone());
 
@@ -97,7 +112,36 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         Ok(Client::new(config, db, ctx).await)
     }
 
-    /// Persist federation client cfg to [`<federation_id>.json`] file
+    async fn create_config(
+        &self,
+        connect: WsFederationConnect,
+        node_pubkey: PublicKey,
+        announce_address: Url,
+    ) -> Result<GatewayClientConfig> {
+        let api = WsFederationApi::new(connect.members);
+
+        let client_cfg: ClientConfig = api
+            .request(
+                "/config",
+                (),
+                CurrentConsensus::new(api.peers().one_honest()),
+            )
+            .await
+            .expect("Failed to get client config");
+
+        let mut rng = rand::rngs::OsRng;
+        let ctx = secp256k1::Secp256k1::new();
+        let kp_fed = KeyPair::new(&ctx, &mut rng);
+
+        Ok(GatewayClientConfig {
+            client_config: client_cfg,
+            redeem_key: kp_fed,
+            timelock_delta: 10,
+            node_pub_key: node_pubkey,
+            api: announce_address,
+        })
+    }
+
     fn save_config(&self, config: GatewayClientConfig) -> Result<()> {
         let federation_id = FederationId(config.client_config.federation_name.clone());
 
@@ -116,7 +160,6 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         Ok(())
     }
 
-    /// Load all gateway client configs from the work directory
     fn load_configs(&self) -> Result<Vec<GatewayClientConfig>> {
         Ok(std::fs::read_dir(&self.work_dir)
             .map_err(|e| LnGatewayError::Other(anyhow::Error::new(e)))?
