@@ -138,13 +138,6 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::Arc;
@@ -213,8 +206,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RetryClient&lt;C&gt; {
     inner: C,
-    max_retries: u16,
-    base_sleep: Duration,
+    sleep: Duration,
     task_handle: TaskHandle,
 }
 
@@ -222,8 +214,7 @@
     <span class="kw">pub fn </span>new(inner: C, task_handle: TaskHandle) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             inner,
-            max_retries: <span class="number">10</span>,
-            base_sleep: Duration::from_millis(<span class="number">10</span>),
+            sleep: Duration::from_millis(<span class="number">10</span>),
             task_handle,
         }
     }
@@ -233,23 +224,18 @@
         </span>F: Fn() -&gt; R,
         R: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>fail_sleep = <span class="self">self</span>.base_sleep;
         <span class="kw">let </span>ret = <span class="kw">loop </span>{
             <span class="kw">match </span>call_fn().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(ret) =&gt; {
                     <span class="kw">break </span>ret;
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    retries += <span class="number">1</span>;
-
-                    <span class="kw">if </span>retries &gt; <span class="self">self</span>.max_retries || <span class="self">self</span>.task_handle.is_shutting_down() {
+                    <span class="kw">if </span><span class="self">self</span>.task_handle.is_shutting_down() {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
 
-                    <span class="macro">info!</span>(<span class="string">&quot;Will retry rpc after {}ms&quot;</span>, fail_sleep.as_millis());
-                    std::thread::sleep(fail_sleep);
-                    fail_sleep <span class="kw-2">*</span>= <span class="number">2</span>;
+                    <span class="macro">info!</span>(<span class="string">&quot;Bitcoind error {:?}, retrying&quot;</span>, e);
+                    std::thread::sleep(<span class="self">self</span>.sleep);
                 }
             }
         };
