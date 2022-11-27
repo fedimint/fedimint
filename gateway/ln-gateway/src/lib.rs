@@ -81,20 +81,19 @@ impl LnGateway {
     }
 
     async fn load_federation_actors(&self) {
-        // TODO: handle error better
-        for config in self
-            .client_builder
-            .load_configs()
-            .expect("Could not read configs")
-        {
-            let client = self
-                .client_builder
-                .build(config.clone())
-                .expect("Could not build federation client");
+        if let Ok(configs) = self.client_builder.load_configs() {
+            for config in configs {
+                let client = self
+                    .client_builder
+                    .build(config.clone())
+                    .expect("Could not build federation client");
 
-            if let Err(e) = self.register_federation(Arc::new(client)).await {
-                error!("Failed to register federation: {}", e);
+                if let Err(e) = self.register_federation(Arc::new(client)).await {
+                    error!("Failed to register federation: {}", e);
+                }
             }
+        } else {
+            warn!("Could not load any previous federation configs");
         }
     }
 
