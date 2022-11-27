@@ -360,17 +360,11 @@ impl ServerModulePlugin for Wallet {
         WalletModuleDecoder
     }
 
-    async fn await_consensus_proposal(&self) {
+    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) {
         let mut our_target_height = self.target_height().await;
-        let last_consensus_height = self
-            .consensus_height(
-                &self
-                    .non_consensus_db
-                    .begin_transaction(self.decoders.clone()),
-            )
-            .unwrap_or(0);
+        let last_consensus_height = self.consensus_height(dbtx).unwrap_or(0);
 
-        if self.consensus_proposal().await.len() == 1 {
+        if self.consensus_proposal(dbtx).await.len() == 1 {
             while our_target_height <= last_consensus_height {
                 our_target_height = self.target_height().await;
                 sleep(Duration::from_millis(1000)).await;
@@ -378,7 +372,10 @@ impl ServerModulePlugin for Wallet {
         }
     }
 
-    async fn consensus_proposal<'a>(&'a self) -> Vec<Self::ConsensusItem> {
+    async fn consensus_proposal<'a>(
+        &'a self,
+        _dbtx: &DatabaseTransaction<'_>,
+    ) -> Vec<Self::ConsensusItem> {
         let dbtx = self
             .non_consensus_db
             .begin_transaction(self.decoders.clone());
@@ -699,14 +696,18 @@ impl ServerModulePlugin for Wallet {
         drop_peers
     }
 
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
+    fn output_status(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<Self::OutputOutcome> {
         self.non_consensus_db
             .begin_transaction(self.decoders.clone())
             .get_value(&PegOutBitcoinTransaction(out_point))
             .expect("DB error")
     }
 
-    fn audit(&self, audit: &mut Audit) {
+    fn audit(&self, _dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
         let dbtx = self
             .non_consensus_db
             .begin_transaction(self.decoders.clone());

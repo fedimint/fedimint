@@ -291,13 +291,16 @@ impl ServerModulePlugin for Mint {
         MintModuleDecoder
     }
 
-    async fn await_consensus_proposal(&self) {
-        if self.consensus_proposal().await.is_empty() {
+    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) {
+        if self.consensus_proposal(dbtx).await.is_empty() {
             std::future::pending().await
         }
     }
 
-    async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
+    async fn consensus_proposal(
+        &self,
+        _dbtx: &DatabaseTransaction<'_>,
+    ) -> Vec<Self::ConsensusItem> {
         self.non_consensus_db
             .begin_transaction(self.decoders.clone())
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
@@ -584,7 +587,11 @@ impl ServerModulePlugin for Mint {
         drop_peers.into_iter().collect()
     }
 
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
+    fn output_status(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<Self::OutputOutcome> {
         let dbtx = self
             .non_consensus_db
             .begin_transaction(self.decoders.clone());
@@ -611,7 +618,7 @@ impl ServerModulePlugin for Mint {
         }
     }
 
-    fn audit(&self, audit: &mut Audit) {
+    fn audit(&self, _dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
         audit.add_items(
             &self
                 .non_consensus_db

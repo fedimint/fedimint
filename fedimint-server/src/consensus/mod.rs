@@ -132,6 +132,10 @@ impl FedimintConsensus {
             .collect()
     }
 
+    fn database_transaction(&self) -> DatabaseTransaction<'_> {
+        self.db.begin_transaction(self.decoders())
+    }
+
     pub fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -382,19 +386,20 @@ impl FedimintConsensus {
     }
 
     pub async fn await_consensus_proposal(&self) {
+        let dbtx = self.database_transaction();
         let proposal_futures = self
             .modules
             .iter()
-            .map(|(_, module)| module.await_consensus_proposal())
+            .map(|(_, module)| module.await_consensus_proposal(&dbtx))
             .collect::<Vec<_>>();
 
         select_all(proposal_futures).await;
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
-        let drop_peers = self
-            .db
-            .begin_transaction(self.decoders())
+        let dbtx = self.database_transaction();
+
+        let drop_peers = dbtx
             .find_by_prefix(&DropPeerKeyPrefix)
             .map(|res| {
                 let key = res.expect("DB error").0;
@@ -402,9 +407,7 @@ impl FedimintConsensus {
             })
             .collect();
 
-        let mut items: Vec<ConsensusItem> = self
-            .db
-            .begin_transaction(self.decoders())
+        let mut items: Vec<ConsensusItem> = dbtx
             .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
@@ -415,25 +418,15 @@ impl FedimintConsensus {
         for module in self.modules.values() {
             items.extend(
                 module
-                    .consensus_proposal()
+                    .consensus_proposal(&dbtx)
                     .await
                     .into_iter()
                     .map(ConsensusItem::Module),
             );
         }
 
-        if let Some(epoch) = self
-            .db
-            .begin_transaction(self.decoders())
-            .get_value(&LastEpochKey)
-            .unwrap()
-        {
-            let last_epoch = self
-                .db
-                .begin_transaction(self.decoders())
-                .get_value(&epoch)
-                .unwrap()
-                .unwrap();
+        if let Some(epoch) = dbtx.get_value(&LastEpochKey).unwrap() {
+            let last_epoch = dbtx.get_value(&epoch).unwrap().unwrap();
             let sig = self.cfg.epoch_sks.0.sign(last_epoch.hash);
             let item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
             items.push(item);
@@ -498,9 +491,9 @@ impl FedimintConsensus {
         &self,
         txid: TransactionId,
     ) -> Option<crate::outcome::TransactionStatus> {
-        let accepted: Option<AcceptedTransaction> = self
-            .db
-            .begin_transaction(self.decoders())
+        let mut dbtx = self.database_transaction();
+
+        let accepted: Option<AcceptedTransaction> = dbtx
             .get_value(&AcceptedTransactionKey(txid))
             .expect("DB error");
 
@@ -519,7 +512,7 @@ impl FedimintConsensus {
                         .modules
                         .get(&output.module_key())
                         .expect("Module exists because parsing succeeded")
-                        .output_status(outpoint)
+                        .output_status(&mut dbtx, outpoint)
                         .expect("the transaction was processed, so should be known");
                     (&outcome).into()
                 })
@@ -569,9 +562,10 @@ impl FedimintConsensus {
     }
 
     pub fn audit(&self) -> Audit {
+        let dbtx = self.database_transaction();
         let mut audit = Audit::default();
         for module in self.modules.values() {
-            module.audit(&mut audit)
+            module.audit(&dbtx, &mut audit)
         }
         audit
     }

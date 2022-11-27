@@ -262,13 +262,16 @@ impl ServerModulePlugin for LightningModule {
         LightningModuleDecoder
     }
 
-    async fn await_consensus_proposal(&self) {
-        if self.consensus_proposal().await.is_empty() {
+    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) {
+        if self.consensus_proposal(dbtx).await.is_empty() {
             std::future::pending().await
         }
     }
 
-    async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
+    async fn consensus_proposal(
+        &self,
+        _dbtx: &DatabaseTransaction<'_>,
+    ) -> Vec<Self::ConsensusItem> {
         self.non_consensus_db
             .begin_transaction(self.decoders.clone())
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
@@ -734,14 +737,18 @@ impl ServerModulePlugin for LightningModule {
         bad_peers
     }
 
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
+    fn output_status(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<Self::OutputOutcome> {
         self.non_consensus_db
             .begin_transaction(self.decoders.clone())
             .get_value(&ContractUpdateKey(out_point))
             .expect("DB error")
     }
 
-    fn audit(&self, audit: &mut Audit) {
+    fn audit(&self, _dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
         audit.add_items(
             &self
                 .non_consensus_db

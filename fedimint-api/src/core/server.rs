@@ -69,10 +69,10 @@ pub trait IServerModule: Debug {
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self);
+    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self) -> Vec<ConsensusItem>;
+    async fn consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) -> Vec<ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -158,13 +158,17 @@ pub trait IServerModule: Debug {
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(&self, out_point: OutPoint) -> Option<OutputOutcome>;
+    fn output_status(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<OutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, audit: &mut Audit);
+    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///
@@ -240,13 +244,13 @@ where
     }
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self) {
-        <Self as ServerModulePlugin>::await_consensus_proposal(self).await
+    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) {
+        <Self as ServerModulePlugin>::await_consensus_proposal(self, dbtx).await
     }
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self) -> Vec<ConsensusItem> {
-        <Self as ServerModulePlugin>::consensus_proposal(self)
+    async fn consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) -> Vec<ConsensusItem> {
+        <Self as ServerModulePlugin>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
             .map(Into::into)
@@ -419,16 +423,20 @@ where
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(&self, out_point: OutPoint) -> Option<OutputOutcome> {
-        <Self as ServerModulePlugin>::output_status(self, out_point).map(Into::into)
+    fn output_status(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<OutputOutcome> {
+        <Self as ServerModulePlugin>::output_status(self, dbtx, out_point).map(Into::into)
     }
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, audit: &mut Audit) {
-        <Self as ServerModulePlugin>::audit(self, audit)
+    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
+        <Self as ServerModulePlugin>::audit(self, dbtx, audit)
     }
 
     fn api_base_name(&self) -> &'static str {

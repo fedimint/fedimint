@@ -119,13 +119,14 @@ where
         <Module as ServerModulePlugin>::Input: Send + Sync,
     {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
+        let decoders = self.decoders();
 
         // TODO: only include some of the proposals for realism
         let mut consensus = vec![];
-        for (id, member, _db) in &mut self.members {
+        for (id, member, db) in &mut self.members {
             consensus.extend(
                 member
-                    .consensus_proposal()
+                    .consensus_proposal(&db.begin_transaction(decoders.clone()))
                     .await
                     .into_iter()
                     .map(|ci| (*id, ci)),
@@ -171,11 +172,9 @@ where
         // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
         // main consensus loop into another thread to optimize latency. This test will probably fail
         // then.
-        assert_all_equal(
-            self.members
-                .iter()
-                .map(|(_, member, _)| member.output_status(out_point)),
-        )
+        assert_all_equal(self.members.iter().map(|(_, member, db)| {
+            member.output_status(&mut db.begin_transaction(self.decoders()), out_point)
+        }))
     }
 
     pub async fn patch_dbs<U>(&mut self, update: U)
