@@ -307,10 +307,10 @@ impl ServerModulePlugin for LightningModule {
         LightningVerificationCache
     }
 
-    fn validate_input<'a, 'b>(
+    async fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
@@ -329,7 +329,7 @@ impl ServerModulePlugin for LightningModule {
 
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
-                if outgoing.timelock > block_height(interconnect) && !outgoing.cancelled {
+                if outgoing.timelock > block_height(interconnect).await && !outgoing.cancelled {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         &input
@@ -387,7 +387,9 @@ impl ServerModulePlugin for LightningModule {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
+        let meta = self
+            .validate_input(interconnect, dbtx, cache, input)
+            .await?;
 
         let account_db_key = ContractKey(input.contract_id);
         let mut contract_account = dbtx
@@ -766,7 +768,7 @@ impl ServerModulePlugin for LightningModule {
         vec![
             api_endpoint! {
                 "/account",
-                async |module: &LightningModule, contract_id: ContractId| -> ContractAccount {
+                async |module: &LightningModule, _dbtx, contract_id: ContractId| -> ContractAccount {
                     module
                         .get_contract_account(&module.non_consensus_db.begin_transaction(module.decoders.clone()), contract_id)
                         .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
@@ -774,13 +776,13 @@ impl ServerModulePlugin for LightningModule {
             },
             api_endpoint! {
                 "/offers",
-                async |module: &LightningModule, _params: ()| -> Vec<IncomingContractOffer> {
+                async |module: &LightningModule, _dbtx, _params: ()| -> Vec<IncomingContractOffer> {
                     Ok(module.get_offers(&module.non_consensus_db.begin_transaction(module.decoders.clone())))
                 }
             },
             api_endpoint! {
                 "/offer",
-                async |module: &LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
+                async |module: &LightningModule, _dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     let offer = module
                         .get_offer(&module.non_consensus_db.begin_transaction(module.decoders.clone()), payment_hash)
                         .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
@@ -791,13 +793,13 @@ impl ServerModulePlugin for LightningModule {
             },
             api_endpoint! {
                 "/list_gateways",
-                async |module: &LightningModule, _v: ()| -> Vec<LightningGateway> {
+                async |module: &LightningModule, _dbtx, _v: ()| -> Vec<LightningGateway> {
                     Ok(module.list_gateways(&module.non_consensus_db.begin_transaction(module.decoders.clone())))
                 }
             },
             api_endpoint! {
                 "/register_gateway",
-                async |module: &LightningModule, gateway: LightningGateway| -> () {
+                async |module: &LightningModule, _dbtx, gateway: LightningGateway| -> () {
                     futures::executor::block_on( async {
                        module.register_gateway(gateway).await;
                     });
@@ -881,15 +883,13 @@ plugin_types_trait_impl!(
     LightningVerificationCache
 );
 
-fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
+async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     // This is a future because we are normally reading from a network socket. But for internal
     // calls the data is available instantly in one go, so we can just block on it.
-    let body = futures::executor::block_on(interconnect.call(
-        "wallet",
-        "/block_height".to_owned(),
-        Default::default(),
-    ))
-    .expect("Wallet module not present or malfunctioning!");
+    let body = interconnect
+        .call("wallet", "/block_height".to_owned(), Default::default())
+        .await
+        .expect("Wallet module not present or malfunctioning!");
 
     serde_json::from_value(body).expect("Malformed block height response from wallet module!")
 }

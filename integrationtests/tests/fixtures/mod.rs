@@ -567,7 +567,8 @@ impl FederationTest {
     }
 
     /// Submit a fedimint transaction to all federation servers
-    pub fn submit_transaction(
+    #[allow(clippy::await_holding_refcell_ref)] // TODO: fix, it's just a test
+    pub async fn submit_transaction(
         &self,
         transaction: fedimint_server::transaction::Transaction,
     ) -> Result<(), TransactionSubmissionError> {
@@ -576,7 +577,8 @@ impl FederationTest {
                 .borrow_mut()
                 .fedimint
                 .consensus
-                .submit_transaction(transaction.clone())?;
+                .submit_transaction(transaction.clone())
+                .await?;
         }
         Ok(())
     }

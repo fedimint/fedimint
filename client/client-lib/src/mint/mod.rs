@@ -762,7 +762,7 @@ mod tests {
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
-        let meta = fed.lock().await.verify_input(&input).unwrap();
+        let meta = fed.lock().await.verify_input(&input).await.unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
             meta.keys,
@@ -781,7 +781,7 @@ mod tests {
         assert_eq!(client.coins().total_amount(), SPEND_AMOUNT);
 
         // Double spends aren't possible
-        assert!(fed.lock().await.verify_input(&input).is_err());
+        assert!(fed.lock().await.verify_input(&input).await.is_err());
 
         // We can exactly spend the remainder
         let mut dbtx = client
@@ -805,7 +805,7 @@ mod tests {
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
-        let meta = fed.lock().await.verify_input(&input).unwrap();
+        let meta = fed.lock().await.verify_input(&input).await.unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
             meta.keys,

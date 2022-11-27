@@ -98,29 +98,34 @@ fn attach_endpoints(
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, move |params, state| {
-                Box::pin(async move {
-                    let params = params.one::<serde_json::Value>()?;
-                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    AssertUnwindSafe((handler)(&state.fedimint, params))
-                        .catch_unwind()
-                        .await
-                        .map_err(|_| {
-                            error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                500,
-                                "API handler panicked",
-                                None::<()>,
-                            )))
-                        })?
-                        .map_err(|e| {
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                e.code, e.message, None::<()>,
-                            )))
-                        })
+            .register_method(path, move |params, state| {
+                // Hack to avoid Sync/Send issues
+                tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async move {
+                        let params = params.one::<serde_json::Value>()?;
+                        let fedimint = &state.fedimint;
+                        let dbtx = fedimint.database_transaction();
+                        // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                        // end up with an inconsistent state in theory. In practice most API functions
+                        // are only reading and the few that do write anything are atomic. Lastly, this
+                        // is only the last line of defense
+                        AssertUnwindSafe((handler)(fedimint, dbtx, params))
+                            .catch_unwind()
+                            .await
+                            .map_err(|_| {
+                                error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                                jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                    500,
+                                    "API handler panicked",
+                                    None::<()>,
+                                )))
+                            })?
+                            .map_err(|e| {
+                                jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                    e.code, e.message, None::<()>,
+                                )))
+                            })
+                    })
                 })
             })
             .expect("Failed to register async method");
@@ -143,35 +148,40 @@ fn attach_endpoints_erased(
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, move |params, state| {
-                Box::pin(async move {
-                    let params = params.one::<serde_json::Value>()?;
-                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    AssertUnwindSafe((handler)(
-                        state
-                            .fedimint
-                            .modules
-                            .get(&module_key)
-                            .expect("Module exists if it was registered"),
-                        params,
-                    ))
-                    .catch_unwind()
-                    .await
-                    .map_err(|_| {
-                        error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            500,
-                            "API handler panicked",
-                            None::<()>,
-                        )))
-                    })?
-                    .map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, None::<()>,
-                        )))
+            .register_method(path, move |params, state| {
+                // Hack to avoid Sync/Send issues
+                tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async move {
+                        let params = params.one::<serde_json::Value>()?;
+                        let fedimint = &state.fedimint;
+                        let dbtx = fedimint.database_transaction();
+                        // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                        // end up with an inconsistent state in theory. In practice most API functions
+                        // are only reading and the few that do write anything are atomic. Lastly, this
+                        // is only the last line of defense
+                        AssertUnwindSafe((handler)(
+                            fedimint
+                                .modules
+                                .get(&module_key)
+                                .expect("Module exists if it was registered"),
+                            dbtx,
+                            params,
+                        ))
+                        .catch_unwind()
+                        .await
+                        .map_err(|_| {
+                            error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                500,
+                                "API handler panicked",
+                                None::<()>,
+                            )))
+                        })?
+                        .map_err(|e| {
+                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                e.code, e.message, None::<()>,
+                            )))
+                        })
                     })
                 })
             })
@@ -183,7 +193,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
     vec![
         api_endpoint! {
             "/transaction",
-            async |fedimint: &FedimintConsensus, transaction: serde_json::Value| -> TransactionId {
+            async |fedimint: &FedimintConsensus, _dbtx, transaction: serde_json::Value| -> TransactionId {
                 // deserializing Transaction from json Value always fails
                 // we need to convert it to string first
                 let string = serde_json::to_string(&transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;
@@ -192,14 +202,16 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
 
                 let tx_id = transaction.tx_hash();
 
-                fedimint.submit_transaction(transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;
+                fedimint.submit_transaction(transaction)
+                    .await
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 Ok(tx_id)
             }
         },
         api_endpoint! {
             "/fetch_transaction",
-            async |fedimint: &FedimintConsensus, tx_hash: TransactionId| -> TransactionStatus {
+            async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
                 let tx_status = fedimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
@@ -210,20 +222,20 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/fetch_epoch_history",
-            async |fedimint: &FedimintConsensus, epoch: u64| -> SerdeEpochHistory {
+            async |fedimint: &FedimintConsensus, _dbtx, epoch: u64| -> SerdeEpochHistory {
                 let epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
                 Ok((&epoch).into())
             }
         },
         api_endpoint! {
             "/epoch",
-            async |fedimint: &FedimintConsensus, _v: ()| -> u64 {
+            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> u64 {
                 Ok(fedimint.get_last_epoch().ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?)
             }
         },
         api_endpoint! {
             "/config",
-            async |fedimint: &FedimintConsensus, _v: ()| -> ClientConfig {
+            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> ClientConfig {
                 Ok(fedimint.cfg.to_client_config())
             }
         },

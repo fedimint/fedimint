@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+use futures::future::LocalBoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
 use thiserror::Error;
 
@@ -65,7 +65,7 @@ impl ApiError {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait TypedApiEndpoint {
     type State: Sync;
 
@@ -75,7 +75,11 @@ pub trait TypedApiEndpoint {
     type Param: serde::de::DeserializeOwned + Send;
     type Response: serde::Serialize;
 
-    async fn handle(state: &Self::State, params: Self::Param) -> Result<Self::Response, ApiError>;
+    async fn handle<'a, 'b>(
+        state: &'a Self::State,
+        dbtx: fedimint_api::db::DatabaseTransaction<'b>,
+        params: Self::Param,
+    ) -> Result<Self::Response, ApiError>;
 }
 
 #[doc(hidden)]
@@ -100,19 +104,20 @@ pub mod __reexports {
 macro_rules! __api_endpoint {
     (
         $path:expr,
-        async |$state:ident: &$state_ty:ty, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
+        async |$state:ident: &$state_ty:ty, $dbtx:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
     ) => {{
         struct Endpoint;
 
-        #[async_trait::async_trait]
+        #[async_trait::async_trait(?Send)]
         impl $crate::module::TypedApiEndpoint for Endpoint {
             const PATH: &'static str = $path;
             type State = $state_ty;
             type Param = $param_ty;
             type Response = $resp_ty;
 
-            async fn handle(
-                $state: &Self::State,
+            async fn handle<'a, 'b>(
+                $state: &'a Self::State,
+                $dbtx: fedimint_api::db::DatabaseTransaction<'b>,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
@@ -121,13 +126,14 @@ macro_rules! __api_endpoint {
 
         ApiEndpoint {
             path: <Endpoint as $crate::module::TypedApiEndpoint>::PATH,
-            handler: Box::new(|m, param| {
+            handler: Box::new(|m, dbtx, param| {
                 Box::pin(async move {
                     let params = $crate::module::__reexports::serde_json::from_value(param)
                         .map_err(|e| $crate::module::ApiError::bad_request(e.to_string()))?;
 
                     let ret =
-                        <Endpoint as $crate::module::TypedApiEndpoint>::handle(m, params).await?;
+                        <Endpoint as $crate::module::TypedApiEndpoint>::handle(m, dbtx, params)
+                            .await?;
                     Ok($crate::module::__reexports::serde_json::to_value(ret)
                         .expect("encoding error"))
                 })
@@ -138,9 +144,16 @@ macro_rules! __api_endpoint {
 
 pub use __api_endpoint as api_endpoint;
 
-type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
-type HandlerFn<M> =
-    Box<dyn for<'a> Fn(&'a M, serde_json::Value) -> HandlerFnReturn<'a> + Sync + Send>;
+type HandlerFnReturn<'a> = LocalBoxFuture<'a, Result<serde_json::Value, ApiError>>;
+type HandlerFn<M> = Box<
+    dyn for<'a> Fn(
+            &'a M,
+            fedimint_api::db::DatabaseTransaction<'a>,
+            serde_json::Value,
+        ) -> HandlerFnReturn<'a>
+        + Send
+        + Sync,
+>;
 
 /// Definition of an API endpoint defined by a module `M`.
 pub struct ApiEndpoint<M> {
@@ -250,10 +263,10 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input<'a, 'b>(
+    async fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError>;

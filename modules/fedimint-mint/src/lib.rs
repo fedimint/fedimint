@@ -353,10 +353,10 @@ impl ServerModulePlugin for Mint {
         VerificationCache { valid_coins }
     }
 
-    fn validate_input<'a, 'b>(
+    async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
@@ -404,7 +404,9 @@ impl ServerModulePlugin for Mint {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
+        let meta = self
+            .validate_input(interconnect, dbtx, cache, input)
+            .await?;
 
         for (amount, coin) in input.iter_items() {
             let key = NonceKey(coin.0.clone());
@@ -641,14 +643,14 @@ impl ServerModulePlugin for Mint {
         vec![
             api_endpoint! {
                 "/backup",
-                async |module: &Mint, request: SignedBackupRequest| -> () {
+                async |module: &Mint, _dbtx, request: SignedBackupRequest| -> () {
                     module
                         .handle_backup_request(request).await
                 }
             },
             api_endpoint! {
                 "/recover",
-                async |module: &Mint, id: secp256k1_zkp::XOnlyPublicKey| -> Vec<u8> {
+                async |module: &Mint, _dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Vec<u8> {
                     module
                         .handle_recover_request(id).await
                         .ok_or_else(|| ApiError::not_found(String::from("Backup not found")))

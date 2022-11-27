@@ -71,12 +71,12 @@ async fn test_account() {
         amount: Amount::from_sat(42),
         witness: None,
     };
-    let meta = fed.verify_input(&account_input).unwrap();
+    let meta = fed.verify_input(&account_input).await.unwrap();
     assert_eq!(meta.keys, vec![kp.x_only_public_key().0]);
 
     fed.consensus_round(&[account_input.clone()], &[]).await;
 
-    assert!(fed.verify_input(&account_input).is_err());
+    assert!(fed.verify_input(&account_input).await.is_err());
 }
 
 #[test_log::test(tokio::test)]
@@ -152,7 +152,10 @@ j5r6drg6k6zcqj0fcwg"
         amount: Amount::from_sat(42),
         witness: None,
     };
-    let err = fed.verify_input(&account_input_no_witness).unwrap_err();
+    let err = fed
+        .verify_input(&account_input_no_witness)
+        .await
+        .unwrap_err();
     assert_eq!(
         format!("{err}"),
         format!("{}", LightningModuleError::MissingPreimage)
@@ -164,12 +167,12 @@ j5r6drg6k6zcqj0fcwg"
         amount: Amount::from_sat(42),
         witness: Some(preimage),
     };
-    let meta = fed.verify_input(&account_input_witness).unwrap();
+    let meta = fed.verify_input(&account_input_witness).await.unwrap();
     assert_eq!(meta.keys, vec![gw_pk]);
 
     // Test case 2: after timeout
     fed.set_block_height(42);
-    let meta = fed.verify_input(&account_input_no_witness).unwrap();
+    let meta = fed.verify_input(&account_input_no_witness).await.unwrap();
     assert_eq!(meta.keys, vec![user_pk]);
 
     fed.consensus_round(&[account_input_no_witness], &[]).await;
@@ -249,7 +252,7 @@ async fn test_incoming() {
         amount: Amount::from_sat(42),
         witness: None,
     };
-    let error = fed.verify_input(&incoming_input).unwrap_err();
+    let error = fed.verify_input(&incoming_input).await.unwrap_err();
     assert_eq!(
         format!("{error}"),
         format!("{}", LightningModuleError::ContractNotReady)
@@ -266,7 +269,7 @@ async fn test_incoming() {
         _ => panic!(),
     };
 
-    let meta = fed.verify_input(&incoming_input).unwrap();
+    let meta = fed.verify_input(&incoming_input).await.unwrap();
     assert_eq!(meta.keys, vec![user_pk]);
 
     // TODO: test faulty encrypted preimage

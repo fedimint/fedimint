@@ -481,10 +481,10 @@ impl ServerModulePlugin for Wallet {
         WalletVerificationCache
     }
 
-    fn validate_input<'a, 'b>(
+    async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
@@ -521,7 +521,9 @@ impl ServerModulePlugin for Wallet {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
+        let meta = self
+            .validate_input(interconnect, dbtx, cache, input)
+            .await?;
         debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
         dbtx.insert_new_entry(
@@ -730,13 +732,13 @@ impl ServerModulePlugin for Wallet {
         vec![
             api_endpoint! {
                 "/block_height",
-                async |module: &Wallet, _params: ()| -> u32 {
+                async |module: &Wallet, _dbtx, _params: ()| -> u32 {
                     Ok(module.consensus_height(&module.non_consensus_db.begin_transaction(module.decoders.clone())).unwrap_or(0))
                 }
             },
             api_endpoint! {
                 "/peg_out_fees",
-                async |module: &Wallet, params: (Address, u64)| -> Option<PegOutFees> {
+                async |module: &Wallet, _dbtx, params: (Address, u64)| -> Option<PegOutFees> {
                     let dbtx = module.non_consensus_db.begin_transaction(module.decoders.clone());
                     let (address, sats) = params;
                     let consensus = module.current_round_consensus(&dbtx).unwrap();

@@ -132,11 +132,11 @@ impl FedimintConsensus {
             .collect()
     }
 
-    fn database_transaction(&self) -> DatabaseTransaction<'_> {
+    pub fn database_transaction(&self) -> DatabaseTransaction<'_> {
         self.db.begin_transaction(self.decoders())
     }
 
-    pub fn submit_transaction(
+    pub async fn submit_transaction(
         &self,
         transaction: Transaction,
     ) -> Result<(), TransactionSubmissionError> {
@@ -153,7 +153,7 @@ impl FedimintConsensus {
         let mut pub_keys = Vec::new();
 
         // Create read-only DB tx so that the read state is consistent
-        let dbtx = self.db.begin_transaction(self.decoders());
+        let mut dbtx = self.db.begin_transaction(self.decoders());
 
         for input in &transaction.inputs {
             let module = self
@@ -162,8 +162,10 @@ impl FedimintConsensus {
                 .expect("Parsing the input should fail if the module doesn't exist");
 
             let cache = module.build_verification_cache(&[input.clone()]);
+            let interconnect = self.build_interconnect();
             let meta = module
-                .validate_input(&self.build_interconnect(), &dbtx, &cache, input)
+                .validate_input(&interconnect, &mut dbtx, &cache, input)
+                .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
 
             pub_keys.push(meta.puk_keys);
@@ -184,18 +186,15 @@ impl FedimintConsensus {
 
         funding_verifier.verify_funding()?;
 
-        futures::executor::block_on(async {
-            let mut dbtx = self.db.begin_transaction(self.decoders());
-            let new = dbtx
-                .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
-                .await
-                .expect("DB error");
-            dbtx.commit_tx().await.expect("DB Error");
+        let new = dbtx
+            .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
+            .await
+            .expect("DB error");
+        dbtx.commit_tx().await.expect("DB Error");
 
-            if new.is_some() {
-                warn!("Added consensus item was already in consensus queue");
-            }
-        });
+        if new.is_some() {
+            warn!("Added consensus item was already in consensus queue");
+        }
 
         self.transaction_notify.notify_one();
         Ok(())

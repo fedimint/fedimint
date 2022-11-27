@@ -94,10 +94,10 @@ pub trait IServerModule: Debug {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input<'a>(
+    async fn validate_input<'a>(
         &self,
-        interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'a>,
+        interconnect: &'a dyn ModuleInterconect,
+        dbtx: &mut DatabaseTransaction<'_>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -306,10 +306,10 @@ where
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input<'a>(
+    async fn validate_input<'a>(
         &self,
-        interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'a>,
+        interconnect: &'a dyn ModuleInterconect,
+        dbtx: &mut DatabaseTransaction<'_>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError> {
@@ -326,6 +326,7 @@ where
                 .downcast_ref::<<Self as ServerModulePlugin>::Input>()
                 .expect("incorrect input type passed to module plugin"),
         )
+        .await
         .map(Into::into)
     }
 
@@ -448,13 +449,17 @@ where
             .into_iter()
             .map(|ApiEndpoint { path, handler }| ApiEndpoint {
                 path,
-                handler: Box::new(move |module: &ServerModule, value: serde_json::Value| {
-                    let typed_module = module
-                        .as_any()
-                        .downcast_ref::<T>()
-                        .expect("the dispatcher should always call with the right module");
-                    Box::pin(handler(typed_module, value))
-                }),
+                handler: Box::new(
+                    move |module: &ServerModule,
+                          dbtx: fedimint_api::db::DatabaseTransaction<'_>,
+                          value: serde_json::Value| {
+                        let typed_module = module
+                            .as_any()
+                            .downcast_ref::<T>()
+                            .expect("the dispatcher should always call with the right module");
+                        Box::pin(handler(typed_module, dbtx, value))
+                    },
+                ),
             })
             .collect()
     }

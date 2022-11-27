@@ -74,26 +74,34 @@ where
         self.block_height.store(bh, Ordering::Relaxed);
     }
 
-    pub fn verify_input(&self, input: &Module::Input) -> Result<TestInputMeta, ModuleError> {
+    pub async fn verify_input(&self, input: &Module::Input) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
-        let results = self.members.iter().map(|(_, member, db)| {
+        async fn member_validate<M: ServerModulePlugin>(
+            member: &M,
+            dbtx: &mut DatabaseTransaction<'_>,
+            fake_ic: &FakeInterconnect,
+            input: &M::Input,
+        ) -> Result<TestInputMeta, ModuleError> {
             let cache = member.build_verification_cache(std::iter::once(input));
             let InputMeta {
                 amount,
                 puk_keys: pub_keys,
-            } = member.validate_input(
-                &fake_ic,
-                &db.begin_transaction(self.decoders()),
-                &cache,
-                input,
-            )?;
+            } = member.validate_input(fake_ic, dbtx, &cache, input).await?;
             Ok(TestInputMeta {
                 amount,
                 keys: pub_keys,
             })
-        });
-        assert_all_equal_result(results)
+        }
+
+        let mut results = vec![];
+        for (_, member, db) in &self.members {
+            let mut dbtx = db.begin_transaction(self.decoders());
+            results.push(member_validate(member, &mut dbtx, &fake_ic, input).await);
+            dbtx.commit_tx().await.expect("DB tx failed");
+        }
+
+        assert_all_equal_result(results.into_iter())
     }
 
     pub fn verify_output(&self, output: &Module::Output) -> bool {
@@ -315,7 +323,7 @@ impl FakeInterconnect {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ModuleInterconect for FakeInterconnect {
     async fn call(
         &self,
