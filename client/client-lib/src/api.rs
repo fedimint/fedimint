@@ -9,7 +9,7 @@ use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::client::ClientModule;
 use fedimint_api::encoding::ModuleRegistry;
-use fedimint_api::task::{RwLock, RwLockWriteGuard};
+use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::{EpochHistory, SerdeEpochHistory};
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -266,7 +266,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
                 };
                 match self.strategy.process(response) {
                     QueryStep::Finished(res) => QueryStep::Finished(res.map(|val| (&val).into())),
-                    QueryStep::Request(r) => QueryStep::Request(r),
+                    QueryStep::Retry(r) => QueryStep::Retry(r),
                     QueryStep::Continue => QueryStep::Continue,
                 }
             }
@@ -547,16 +547,20 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
             futures.push(member.request(method, &params));
         }
 
-        // Delegates the response handling to the `QueryStrategy` which can
+        // Delegates the response handling to the `QueryStrategy` with an exponential back-off
+        // with every new set of requests
+        let mut delay_ms = 10;
         loop {
             match futures.next().await {
                 Some(result) => match strategy.process(result) {
-                    QueryStep::Request(peers) => {
+                    QueryStep::Retry(peers) => {
                         for member in &self.members {
                             if peers.contains(&member.peer_id) {
                                 futures.push(member.request(method, &params));
                             }
                         }
+                        sleep(Duration::from_millis(delay_ms)).await;
+                        delay_ms *= 2;
                     }
                     QueryStep::Continue => {}
                     QueryStep::Finished(result) => return result,
