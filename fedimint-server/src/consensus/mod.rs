@@ -235,11 +235,19 @@ impl FedimintConsensus {
             let mut dbtx = self.db.begin_transaction(self.decoders());
 
             let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
+            let mut processed_tx: HashSet<TransactionId> = HashSet::new();
+
             for (_, transaction) in transaction_cis {
+                let txid: TransactionId = transaction.tx_hash();
+                if !processed_tx.insert(txid) {
+                    // Avoid processing duplicate tx from different peers
+                    continue;
+                }
+
                 let span = info_span!("Processing transaction");
                 async {
                     trace!(?transaction);
-                    dbtx.remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
+                    dbtx.remove_entry(&ProposedTransactionKey(txid))
                         .await
                         .expect("DB Error");
 
@@ -251,7 +259,7 @@ impl FedimintConsensus {
                     {
                         Ok(()) => {
                             dbtx.insert_entry(
-                                &AcceptedTransactionKey(transaction.tx_hash()),
+                                &AcceptedTransactionKey(txid),
                                 &AcceptedTransaction { epoch, transaction },
                             )
                             .expect("DB Error");
@@ -260,7 +268,7 @@ impl FedimintConsensus {
                             dbtx.rollback_tx_to_savepoint().await;
                             warn!(%error, "Transaction failed");
                             dbtx.insert_entry(
-                                &RejectedTransactionKey(transaction.tx_hash()),
+                                &RejectedTransactionKey(txid),
                                 &format!("{:?}", error),
                             )
                             .expect("DB Error");
