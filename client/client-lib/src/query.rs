@@ -111,7 +111,7 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R> for Retry404<R> {
         let FedResponse { peer, result } = response;
         match result {
             Err(JsonRpcError::Call(RpcCallError::Custom(e))) if e.code() == 404 => {
-                QueryStep::Request(HashSet::from([peer]))
+                QueryStep::Retry(HashSet::from([peer]))
             }
             result => self.current.process(FedResponse { peer, result }),
         }
@@ -143,7 +143,7 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for EventuallyConsistent<R> {
 
         match self.current.process(response) {
             QueryStep::Continue if self.responses.len() >= self.required => {
-                let result = QueryStep::Request(self.responses.clone());
+                let result = QueryStep::Retry(self.responses.clone());
                 self.responses.clear();
                 result
             }
@@ -224,11 +224,11 @@ pub trait QueryStrategy<R> {
 
 /// Results from the strategy handling a response from a peer
 ///
-/// `Request` sending requests to some of the peers
+/// `Retry` sending requests to some of the peers
 /// `Continue` awaiting and handling responses
 /// `Finished` return a final result
 pub enum QueryStep<R> {
-    Request(HashSet<PeerId>),
+    Retry(HashSet<PeerId>),
     Continue,
     Finished(Result<R>),
 }
