@@ -1806,9 +1806,9 @@ dependencies = [
 
 [[package]]
 name = "impl-tools"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbc403c862b3c7dfde41c8a0d1393ce649618cb63adcc53e0608e4106adf4169"
+checksum = "90d83f9d3dc584a1b060827b05b4ef94460da1f348da3a37855da69d1e8d36bd"
 dependencies = [
  "autocfg",
  "impl-tools-lib",
@@ -1818,9 +1818,9 @@ dependencies = [
 
 [[package]]
 name = "impl-tools-lib"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bbefd85b83792dddecb36da8b90620c163fcbd669dfd45554b99b1b023a53ef"
+checksum = "3bd54837c88a42bc188fdcfa06630a25788a43e570699d4b463e5caf1382e783"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
