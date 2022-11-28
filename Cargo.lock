@@ -1444,6 +1444,7 @@ dependencies = [
  "bitcoin",
  "fedimint-api",
  "fedimint-ln",
+ "fedimint-testing",
  "lightning-invoice",
  "ln-gateway",
  "mint-client",

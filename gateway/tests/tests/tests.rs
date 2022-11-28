@@ -25,6 +25,7 @@ async fn test_gateway_authentication() -> Result<()> {
     };
 
     let Fixtures {
+        bitcoin,
         gateway,
         mut task_group,
     } = fixtures(cfg).await?;
@@ -64,6 +65,7 @@ async fn test_gateway_authentication() -> Result<()> {
     // Test gateway authentication on `withdraw` function
     // *  `withdraw` with correct password succeeds
     // *  `withdraw` with incorrect password fails
+    let _peg_out_addr = bitcoin.get_new_address();
 
     // TODO:
     // Test gateway authentication on `register_federation` function
