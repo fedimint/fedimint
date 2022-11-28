@@ -188,6 +188,7 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ModuleConfigGenParams, Node};
@@ -347,6 +348,7 @@
                     .iter()
                     .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">0</span>[<span class="kw-2">&amp;</span>id].clone()))
                     .collect(),
+                max_connections: <span class="number">1000</span>,
             };
             (id, config)
         })

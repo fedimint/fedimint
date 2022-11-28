@@ -226,10 +226,14 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_api::server::ServerModule;
@@ -283,6 +287,8 @@
 
     <span class="macro">debug!</span>(addr = cfg.api_bind_addr, <span class="string">&quot;Starting WSServer&quot;</span>);
     <span class="kw">let </span>server = ServerBuilder::new()
+        .max_connections(cfg.max_connections)
+        .ping_interval(Duration::from_secs(<span class="number">10</span>))
         .build(<span class="kw-2">&amp;</span>cfg.api_bind_addr)
         .<span class="kw">await
         </span>.context(<span class="macro">format!</span>(<span class="string">&quot;Bind address: {}&quot;</span>, cfg.api_bind_addr))

@@ -632,6 +632,11 @@
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -666,6 +671,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
 
+<span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
+
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfig {
     <span class="kw">pub </span>federation_name: String,
@@ -689,6 +696,7 @@
     </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
 
     <span class="kw">pub </span>modules: BTreeMap&lt;String, ServerModuleConfig&gt;,
+    <span class="kw">pub </span>max_connections: u32,
 }
 
 <span class="kw">impl </span>ServerConfig {
@@ -875,6 +883,7 @@
                         .iter()
                         .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">0</span>[<span class="kw-2">&amp;</span>id].clone()))
                         .collect(),
+                    max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
                 };
                 (id, config)
             })
@@ -982,6 +991,7 @@
                 .iter()
                 .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">0</span>.clone()))
                 .collect(),
+            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
         };
 
         <span class="kw">let </span>client = ClientConfig {
