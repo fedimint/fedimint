@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     .await
     .expect("Couldn't create wallet");
 
-    let ln = LightningModule::new(cfg.get_module_config("ln")?, db.clone(), all_decoders());
+    let ln = LightningModule::new(cfg.get_module_config("ln")?);
 
     let mut consensus = FedimintConsensus::new(cfg.clone(), db);
     consensus.register_module(mint.into());

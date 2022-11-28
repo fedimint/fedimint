@@ -117,7 +117,7 @@ macro_rules! __api_endpoint {
 
             async fn handle<'a, 'b>(
                 $state: &'a Self::State,
-                $dbtx: fedimint_api::db::DatabaseTransaction<'b>,
+                mut $dbtx: fedimint_api::db::DatabaseTransaction<'b>,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
