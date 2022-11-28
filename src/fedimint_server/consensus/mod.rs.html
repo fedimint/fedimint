@@ -606,6 +606,16 @@
 <a href="#606" id="606">606</a>
 <a href="#607" id="607">607</a>
 <a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -788,7 +798,8 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
             <span class="kw">let </span>new = dbtx
                 .insert_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(tx_hash), <span class="kw-2">&amp;</span>transaction)
-                .expect(<span class="string">&quot;DB error&quot;</span>);
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB error&quot;</span>);
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
             <span class="kw">if </span>new.is_some() {
@@ -870,7 +881,8 @@
                                 <span class="kw-2">&amp;</span>AcceptedTransactionKey(txid),
                                 <span class="kw-2">&amp;</span>AcceptedTransaction { epoch, transaction },
                             )
-                            .expect(<span class="string">&quot;DB Error&quot;</span>);
+                            .<span class="kw">await
+                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                         }
                         <span class="prelude-val">Err</span>(error) =&gt; {
                             dbtx.rollback_tx_to_savepoint().<span class="kw">await</span>;
@@ -879,7 +891,8 @@
                                 <span class="kw-2">&amp;</span>RejectedTransactionKey(txid),
                                 <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, error),
                             )
-                            .expect(<span class="string">&quot;DB Error&quot;</span>);
+                            .<span class="kw">await
+                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                         }
                     }
                 }
@@ -894,7 +907,8 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
             <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
-            <span class="self">self</span>.save_epoch_history(outcome, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>drop_peers);
+            <span class="self">self</span>.save_epoch_history(outcome, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>drop_peers)
+                .<span class="kw">await</span>;
 
             <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.values() {
                 <span class="kw">let </span>module_drop_peers = module.end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
@@ -903,7 +917,8 @@
 
             <span class="kw">for </span>peer <span class="kw">in </span>drop_peers {
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>DropPeerKey(peer), <span class="kw-2">&amp;</span>())
-                    .expect(<span class="string">&quot;DB Error&quot;</span>);
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
             }
 
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -933,7 +948,7 @@
             .unwrap()
     }
 
-    <span class="kw">fn </span>save_epoch_history&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">async fn </span>save_epoch_history&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outcome: ConsensusOutcome,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -956,7 +971,8 @@
             <span class="kw">match </span>current.add_sig_to_prev(pks, prev_epoch) {
                 <span class="prelude-val">Ok</span>(prev_epoch) =&gt; {
                     dbtx.insert_entry(<span class="kw-2">&amp;</span>prev_epoch_key, <span class="kw-2">&amp;</span>prev_epoch)
-                        .expect(<span class="string">&quot;DB Error&quot;</span>);
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                 }
                 <span class="prelude-val">Err</span>(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) =&gt; {
                     <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, prev_epoch_key.<span class="number">0</span>);
@@ -972,9 +988,11 @@
         }
 
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LastEpochKey, <span class="kw-2">&amp;</span>EpochHistoryKey(current.outcome.epoch))
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.insert_entry(<span class="kw-2">&amp;</span>EpochHistoryKey(current.outcome.epoch), <span class="kw-2">&amp;</span>current)
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
     <span class="kw">pub async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -1054,12 +1072,14 @@
                 </span>.modules
                 .get(<span class="kw-2">&amp;</span>input.module_key())
                 .expect(<span class="string">&quot;Parsing the input should fail if the module doesn&#39;t exist&quot;</span>);
-            <span class="kw">let </span>meta = module.apply_input(
-                <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
-                dbtx,
-                input,
-                caches.get_cache(input.module_key()),
-            )<span class="question-mark">?</span>;
+            <span class="kw">let </span>meta = module
+                .apply_input(
+                    <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
+                    dbtx,
+                    input,
+                    caches.get_cache(input.module_key()),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
         }

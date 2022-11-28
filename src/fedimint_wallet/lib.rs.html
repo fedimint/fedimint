@@ -1524,6 +1524,15 @@
 <a href="#1524" id="1524">1524</a>
 <a href="#1525" id="1525">1525</a>
 <a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1972,7 +1981,7 @@
         } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         <span class="comment">// Save signatures to the database
-        </span><span class="self">self</span>.save_peg_out_signatures(dbtx, peg_out_signatures);
+        </span><span class="self">self</span>.save_peg_out_signatures(dbtx, peg_out_signatures).<span class="kw">await</span>;
 
         <span class="comment">// FIXME: also warn on less than 1/3, that should never happen
         // Make sure we have enough contributions to continue
@@ -2004,7 +2013,8 @@
         };
 
         dbtx.insert_entry(<span class="kw-2">&amp;</span>RoundConsensusKey, <span class="kw-2">&amp;</span>round_consensus)
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -2047,7 +2057,7 @@
         })
     }
 
-    <span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+    <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
@@ -2064,7 +2074,8 @@
                 amount: bitcoin::Amount::from_sat(input.tx_output().value),
             },
         )
-        .expect(<span class="string">&quot;DB Error&quot;</span>);
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="prelude-val">Ok</span>(meta)
     }
@@ -2154,14 +2165,17 @@
         }
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>tx)
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PegOutTxSignatureCI(txid), <span class="kw-2">&amp;</span>sigs)
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point),
             <span class="kw-2">&amp;</span>WalletOutputOutcome(txid),
         )
-        .expect(<span class="string">&quot;DB Error&quot;</span>);
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         <span class="prelude-val">Ok</span>(amount)
     }
 
@@ -2210,7 +2224,8 @@
                     // extracted tx for periodic transmission and to accept the change into our wallet
                     // eventually once it confirms.
                     </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PendingTransactionKey(key.<span class="number">0</span>), <span class="kw-2">&amp;</span>pending_tx)
-                        .expect(<span class="string">&quot;DB Error&quot;</span>);
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                     dbtx.remove_entry(<span class="kw-2">&amp;</span>PegOutTxSignatureCI(key.<span class="number">0</span>))
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -2333,7 +2348,7 @@
         randomness.into_iter().fold([<span class="number">0</span>; <span class="number">32</span>], xor)
     }
 
-    <span class="kw">fn </span>save_peg_out_signatures&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">async fn </span>save_peg_out_signatures&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
@@ -2358,7 +2373,8 @@
 
         <span class="kw">for </span>(txid, unsigned) <span class="kw">in </span>cache.into_iter() {
             dbtx.insert_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>unsigned)
-                .expect(<span class="string">&quot;DB Error&quot;</span>);
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
     }
 
@@ -2570,7 +2586,7 @@
                     </span>.expect(<span class="string">&quot;bitcoin rpc failed&quot;</span>);
                 <span class="kw">for </span>transaction <span class="kw">in </span>block.txdata {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(pending_tx) = pending_transactions.get(<span class="kw-2">&amp;</span>transaction.txid()) {
-                        <span class="self">self</span>.recognize_change_utxo(dbtx, pending_tx);
+                        <span class="self">self</span>.recognize_change_utxo(dbtx, pending_tx).<span class="kw">await</span>;
                     }
                 }
             }
@@ -2579,13 +2595,14 @@
                 <span class="kw-2">&amp;</span>BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
                 <span class="kw-2">&amp;</span>(),
             )
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
     }
 
     <span class="doccomment">/// Add a change UTXO to our spendable UTXO database after it was included in a block that we
     /// got consensus on.
-    </span><span class="kw">fn </span>recognize_change_utxo&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>recognize_change_utxo&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         pending_tx: <span class="kw-2">&amp;</span>PendingTransaction,
@@ -2607,7 +2624,8 @@
                         amount: bitcoin::Amount::from_sat(output.value),
                     },
                 )
-                .expect(<span class="string">&quot;DB Error&quot;</span>);
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
             }
         }
     }

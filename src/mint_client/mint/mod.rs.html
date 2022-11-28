@@ -862,6 +862,10 @@
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
 <a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1026,22 +1030,29 @@
         )
     }
 
-    <span class="kw">fn </span>new_note_secret(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; DerivableSecret {
-        <span class="kw">let </span>new_idx = <span class="self">self</span>.get_last_note_index(dbtx).next();
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>LastECashNoteIndexKey, <span class="kw-2">&amp;</span>new_idx.as_u64())
-            .expect(<span class="string">&quot;DB error&quot;</span>);
+    <span class="kw">async fn </span>new_note_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DerivableSecret {
+        <span class="kw">let </span><span class="kw-2">mut </span>new_idx;
+        <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx();
+            new_idx = <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx).next();
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>LastECashNoteIndexKey, <span class="kw-2">&amp;</span>new_idx.as_u64())
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB error&quot;</span>);
+            <span class="kw">if </span>dbtx.commit_tx().<span class="kw">await</span>.is_ok() {
+                <span class="kw">break</span>;
+            }
+        }
 
         <span class="self">self</span>.secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) <span class="comment">// TODO: cache
             </span>.child_key(ChildId(new_idx.as_u64()))
     }
 
-    <span class="kw">pub fn </span>new_ecash_note&lt;C: Signing&gt;(
+    <span class="kw">pub async fn </span>new_ecash_note&lt;C: Signing&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; (NoteIssuanceRequest, BlindNonce) {
-        <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(dbtx);
+        <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret().<span class="kw">await</span>;
         NoteIssuanceRequest::new(ctx, secret)
     }
 
@@ -1070,7 +1081,7 @@
             .build(
                 change_required,
                 <span class="kw-2">&amp;mut </span>dbtx,
-                |tx| <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, tx),
+                || <span class="kw">async </span>{ <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp).<span class="kw">await </span>},
                 <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp,
                 <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
                 rng,
@@ -1087,23 +1098,27 @@
         <span class="prelude-val">Ok</span>(txid)
     }
 
-    <span class="kw">pub async fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>, F, Fut&gt;(
+    <span class="kw">pub async fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>, F, Fut, G, GFut&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        coin_gen: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; (NoteIssuanceRequest, BlindNonce),
+        coin_gen: G,
         <span class="kw-2">mut </span>create_tx: F,
     ) <span class="kw">where
         </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
         Fut: futures::Future&lt;Output = OutPoint&gt;,
+        G: FnMut() -&gt; GFut,
+        GFut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
 
-        <span class="kw">let </span>(finalization, coins) =
-            builder.create_output_coins(amount, || coin_gen(dbtx), <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks);
+        <span class="kw">let </span>(finalization, coins) = builder
+            .create_output_coins(amount, coin_gen, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks)
+            .<span class="kw">await</span>;
         <span class="kw">let </span>out_point = create_tx(coins).<span class="kw">await</span>;
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
     <span class="kw">pub async fn </span>fetch_coins&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1132,16 +1147,14 @@
 
         <span class="kw">let </span>coins = issuance.finalize(bsig, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks)<span class="question-mark">?</span>;
 
-        coins
-            .into_iter()
-            .for_each(|(amount, coin): (Amount, SpendableNote)| {
-                <span class="kw">let </span>key = CoinKey {
-                    amount,
-                    nonce: coin.note.<span class="number">0</span>.clone(),
-                };
-                <span class="kw">let </span>value = coin;
-                dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value).expect(<span class="string">&quot;DB Error&quot;</span>);
-            });
+        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>coins.into_iter() {
+            <span class="kw">let </span>key = CoinKey {
+                amount,
+                nonce: coin.note.<span class="number">0</span>.clone(),
+            };
+            <span class="kw">let </span>value = coin;
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        }
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -1530,7 +1543,7 @@
             .receive_coins(
                 amt,
                 <span class="kw-2">&amp;mut </span>dbtx,
-                |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
+                || <span class="kw">async </span>{ client.new_ecash_note(secp256k1_zkp::SECP256K1).<span class="kw">await </span>},
                 |output| <span class="kw">async </span>{
                     <span class="comment">// Agree on output
                     </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
@@ -1592,7 +1605,7 @@
             .build(
                 Amount::from_sat(<span class="number">0</span>),
                 <span class="kw-2">&amp;mut </span>dbtx,
-                |dbtx| client.new_ecash_note(secp, dbtx),
+                || <span class="kw">async </span>{ client.new_ecash_note(secp).<span class="kw">await </span>},
                 secp,
                 tbs_pks,
                 rng,
@@ -1635,7 +1648,7 @@
             .build(
                 Amount::from_sat(<span class="number">0</span>),
                 <span class="kw-2">&amp;mut </span>dbtx,
-                |dbtx| client.new_ecash_note(secp, dbtx),
+                || <span class="kw">async </span>{ client.new_ecash_note(secp).<span class="kw">await </span>},
                 secp,
                 tbs_pks,
                 rng,
@@ -1683,13 +1696,8 @@
             (<span class="number">0</span>..ITERATIONS)
                 .filter_map(|<span class="kw">_</span>| {
                     block_on(<span class="kw">async </span>{
-                        <span class="kw">let </span><span class="kw-2">mut </span>tx = client_ref
-                            .context
-                            .db
-                            .begin_transaction(ModuleRegistry::default());
-                        <span class="kw">let </span>(<span class="kw">_</span>, nonce) =
-                            client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, <span class="kw-2">&amp;mut </span>tx);
-                        tx.commit_tx().<span class="kw">await</span>.map(|<span class="kw">_</span>| nonce).ok()
+                        <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1).<span class="kw">await</span>;
+                        <span class="prelude-val">Some</span>(nonce)
                     })
                 })
                 .collect::&lt;Vec&lt;BlindNonce&gt;&gt;()

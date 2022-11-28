@@ -648,6 +648,59 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -751,7 +804,7 @@
 /// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;: <span class="lifetime">&#39;a </span>+ Send {
-    <span class="kw">fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
+    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
     <span class="kw">fn </span>raw_get_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
@@ -806,11 +859,15 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">pub fn </span>insert_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
+    <span class="kw">pub async fn </span>insert_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())<span class="question-mark">? </span>{
+        <span class="kw">match </span><span class="self">self
+            </span>.<span class="number">0
+            </span>.raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
             <span class="prelude-val">Some</span>(old_val_bytes) =&gt; {
                 <span class="macro">trace!</span>(
                     <span class="string">&quot;insert_bytes: Decoding {} from bytes {:?}&quot;</span>,
@@ -823,11 +880,19 @@
         }
     }
 
-    <span class="kw">pub fn </span>insert_new_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
+    <span class="kw">pub async fn </span>insert_new_entry&lt;K&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        key: <span class="kw-2">&amp;</span>K,
+        value: <span class="kw-2">&amp;</span>K::Value,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())<span class="question-mark">? </span>{
+        <span class="kw">match </span><span class="self">self
+            </span>.<span class="number">0
+            </span>.raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
             <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {
                 <span class="macro">warn!</span>(
                     <span class="string">&quot;Database overwriting element when expecting insertion of new entry. Key: {:?}&quot;</span>,
@@ -1037,12 +1102,14 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
-            .unwrap()
+            .<span class="kw">await
+            </span>.unwrap()
             .is_none());
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">2</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">3</span>))
-            .unwrap()
+            .<span class="kw">await
+            </span>.unwrap()
             .is_none());
 
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -1060,7 +1127,8 @@
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
-            .unwrap()
+            .<span class="kw">await
+            </span>.unwrap()
             .is_none());
 
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
@@ -1071,23 +1139,25 @@
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">None</span>);
     }
 
-    <span class="kw">pub fn </span>verify_read_own_writes(db: Database) {
+    <span class="kw">pub async fn </span>verify_read_own_writes(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
-            .unwrap()
+            .<span class="kw">await
+            </span>.unwrap()
             .is_none());
 
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
     }
 
-    <span class="kw">pub fn </span>verify_prevent_dirty_reads(db: Database) {
+    <span class="kw">pub async fn </span>verify_prevent_dirty_reads(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
-            .unwrap()
+            .<span class="kw">await
+            </span>.unwrap()
             .is_none());
 
         <span class="comment">// dbtx2 should not be able to see uncommitted changes
@@ -1097,11 +1167,23 @@
 
     <span class="kw">pub async fn </span>verify_find_by_prefix(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
-        <span class="macro">assert!</span>(dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>)).is_ok());
-        <span class="macro">assert!</span>(dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">54</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">8888</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>))
+            .<span class="kw">await
+            </span>.is_ok());
+        <span class="macro">assert!</span>(dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">54</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">8888</span>))
+            .<span class="kw">await
+            </span>.is_ok());
 
-        <span class="macro">assert!</span>(dbtx.insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>)).is_ok());
-        <span class="macro">assert!</span>(dbtx.insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">54</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">6666</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>))
+            .<span class="kw">await
+            </span>.is_ok());
+        <span class="macro">assert!</span>(dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">54</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">6666</span>))
+            .<span class="kw">await
+            </span>.is_ok());
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="comment">// Verify finding by prefix returns the correct set of key pairs
@@ -1152,7 +1234,8 @@
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
-            .unwrap()
+            .<span class="kw">await
+            </span>.unwrap()
             .is_none());
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
@@ -1166,13 +1249,15 @@
 
         <span class="macro">assert!</span>(dbtx_rollback
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">20</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2000</span>))
-            .is_ok());
+            .<span class="kw">await
+            </span>.is_ok());
 
         dbtx_rollback.set_tx_savepoint();
 
         <span class="macro">assert!</span>(dbtx_rollback
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">21</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2001</span>))
-            .is_ok());
+            .<span class="kw">await
+            </span>.is_ok());
 
         <span class="macro">assert_eq!</span>(
             dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">20</span>)).unwrap(),
@@ -1199,7 +1284,10 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
 
-        <span class="macro">assert!</span>(dbtx2.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx2
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
+            .<span class="kw">await
+            </span>.is_ok());
 
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).unwrap(), <span class="prelude-val">None</span>);
 
@@ -1229,9 +1317,15 @@
     <span class="kw">pub async fn </span>verify_phantom_entry(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
 
-        <span class="macro">assert!</span>(dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
+            .<span class="kw">await
+            </span>.is_ok());
 
-        <span class="macro">assert!</span>(dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">101</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">101</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>))
+            .<span class="kw">await
+            </span>.is_ok());
 
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
@@ -1258,7 +1352,10 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
 
-        <span class="macro">assert!</span>(dbtx2.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">102</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">103</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx2
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">102</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">103</span>))
+            .<span class="kw">await
+            </span>.is_ok());
 
         dbtx2.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
@@ -1284,15 +1381,24 @@
 
     <span class="kw">pub async fn </span>expect_write_conflict(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
-        <span class="macro">assert!</span>(dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
+            .<span class="kw">await
+            </span>.is_ok());
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx3 = db.begin_transaction(ModuleRegistry::default());
 
-        <span class="macro">assert!</span>(dbtx2.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx2
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>))
+            .<span class="kw">await
+            </span>.is_ok());
 
-        <span class="macro">assert!</span>(dbtx3.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">103</span>)).is_ok());
+        <span class="macro">assert!</span>(dbtx3
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">103</span>))
+            .<span class="kw">await
+            </span>.is_ok());
 
         dbtx2.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx3.commit_tx().<span class="kw">await</span>.expect_err(<span class="string">&quot;Expecting an error to be returned because this transaction is in a write-write conflict with dbtx&quot;</span>);

@@ -1247,6 +1247,15 @@
 <a href="#1247" id="1247">1247</a>
 <a href="#1248" id="1248">1248</a>
 <a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1589,7 +1598,8 @@
                 consensus_item.out_point,
                 consensus_item.<span class="number">0</span>.partial_signature,
             )
-        }
+            .<span class="kw">await
+        </span>}
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1659,7 +1669,7 @@
         })
     }
 
-    <span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+    <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
@@ -1668,12 +1678,13 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, dbtx, cache, input)<span class="question-mark">?</span>;
 
-        input.iter_items().for_each(|(amount, coin)| {
+        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>input.iter_items() {
             <span class="kw">let </span>key = NonceKey(coin.<span class="number">0</span>.clone());
-            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>()).expect(<span class="string">&quot;DB Error&quot;</span>);
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(key), <span class="kw-2">&amp;</span>amount)
-                .expect(<span class="string">&quot;DB Error&quot;</span>);
-        });
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        }
 
         <span class="prelude-val">Ok</span>(meta)
     }
@@ -1719,12 +1730,14 @@
             },
             <span class="kw-2">&amp;</span>partial_sig,
         )
-        .expect(<span class="string">&quot;DB Error&quot;</span>);
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>MintAuditItemKey::Issuance(out_point),
             <span class="kw-2">&amp;</span>output.total_amount(),
         )
-        .expect(<span class="string">&quot;DB Error&quot;</span>);
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="prelude-val">Ok</span>(amount)
     }
@@ -1783,7 +1796,8 @@
                         dbtx.remove_entry(<span class="kw-2">&amp;</span>proposal_key).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
                         dbtx.insert_entry(<span class="kw-2">&amp;</span>OutputOutcomeKey(issuance_id), <span class="kw-2">&amp;</span>blind_signature)
-                            .expect(<span class="string">&quot;DB Error&quot;</span>);
+                            .<span class="kw">await
+                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                     }
                     <span class="prelude-val">Err</span>(CombineError::TooFewShares(got, <span class="kw">_</span>)) =&gt; {
                         <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers.sub(<span class="kw-2">&amp;</span>HashSet::from_iter(got)) {
@@ -1824,9 +1838,11 @@
         }
 
         dbtx.insert_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::IssuanceTotal, <span class="kw-2">&amp;</span>issuances)
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.insert_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::RedemptionTotal, <span class="kw-2">&amp;</span>redemptions)
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         dropped_peers
     }
@@ -1926,7 +1942,8 @@
                 data: request.payload.to_vec(),
             },
         )
-        .expect(<span class="string">&quot;DB error&quot;</span>);
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;DB error&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -2141,7 +2158,7 @@
         (<span class="prelude-val">Ok</span>(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    <span class="kw">fn </span>process_partial_signature&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">async fn </span>process_partial_signature&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         peer: PeerId,
@@ -2172,7 +2189,8 @@
             },
             <span class="kw-2">&amp;</span>partial_sig,
         )
-        .expect(<span class="string">&quot;DB Error&quot;</span>);
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 }
 

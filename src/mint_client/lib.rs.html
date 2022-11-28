@@ -1347,12 +1347,6 @@
 <a href="#1347" id="1347">1347</a>
 <a href="#1348" id="1348">1348</a>
 <a href="#1349" id="1349">1349</a>
-<a href="#1350" id="1350">1350</a>
-<a href="#1351" id="1351">1351</a>
-<a href="#1352" id="1352">1352</a>
-<a href="#1353" id="1353">1353</a>
-<a href="#1354" id="1354">1354</a>
-<a href="#1355" id="1355">1355</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1586,7 +1580,7 @@
         <span class="self">self</span>.config.clone()
     }
 
-    <span class="kw">pub fn </span>new(config: T, db: Database, secp: Secp256k1&lt;All&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub async fn </span>new(config: T, db: Database, secp: Secp256k1&lt;All&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>api = api::WsFederationApi::new(
             config
                 .as_ref()
@@ -1600,16 +1594,16 @@
                 })
                 .collect(),
         );
-        <span class="self">Self</span>::new_with_api(config, db, api.into(), secp)
-    }
+        <span class="self">Self</span>::new_with_api(config, db, api.into(), secp).<span class="kw">await
+    </span>}
 
-    <span class="kw">pub fn </span>new_with_api(
+    <span class="kw">pub async fn </span>new_with_api(
         config: T,
         db: Database,
         api: FederationApi,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; Client&lt;T&gt; {
-        <span class="kw">let </span>root_secret = <span class="self">Self</span>::get_secret(<span class="kw-2">&amp;</span>db);
+        <span class="kw">let </span>root_secret = <span class="self">Self</span>::get_secret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
         <span class="self">Self </span>{
             config,
             context: ClientContext { db, api, secp },
@@ -1618,23 +1612,24 @@
     }
 
     <span class="doccomment">/// Fetches the client secret from the database or generates a new one if none is present
-    </span><span class="kw">fn </span>get_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret {
+    </span><span class="kw">async fn </span>get_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret {
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction(ModuleRegistry::default());
-        <span class="kw">let </span>secret = tx
-            .get_value(<span class="kw-2">&amp;</span>ClientSecretKey)
-            .expect(<span class="string">&quot;DB error&quot;</span>)
-            .unwrap_or_else(|| {
-                <span class="kw">let </span>secret: ClientSecret = thread_rng().gen();
-                <span class="kw">let </span>no_replacement = tx
-                    .insert_entry(<span class="kw-2">&amp;</span>ClientSecretKey, <span class="kw-2">&amp;</span>secret)
-                    .expect(<span class="string">&quot;DB error&quot;</span>)
-                    .is_none();
-                <span class="macro">assert!</span>(
-                    no_replacement,
-                    <span class="string">&quot;We would have overwritten our secret key, aborting!&quot;
-                </span>);
-                secret
-            });
+        <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>ClientSecretKey).expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>secret = <span class="kw">if let </span><span class="prelude-val">Some</span>(client_secret) = client_secret {
+            client_secret
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>secret: ClientSecret = thread_rng().gen();
+            <span class="kw">let </span>no_replacement = tx
+                .insert_entry(<span class="kw-2">&amp;</span>ClientSecretKey, <span class="kw-2">&amp;</span>secret)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB error&quot;</span>)
+                .is_none();
+            <span class="macro">assert!</span>(
+                no_replacement,
+                <span class="string">&quot;We would have overwritten our secret key, aborting!&quot;
+            </span>);
+            secret
+        };
         secret.into_root_secret()
     }
 
@@ -1741,7 +1736,7 @@
             .receive_coins(
                 amount,
                 <span class="kw-2">&amp;mut </span>dbtx,
-                |tx| <span class="self">self</span>.mint_client().new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, tx),
+                || <span class="kw">async </span>{ <span class="self">self</span>.mint_client().new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp).<span class="kw">await </span>},
                 create_tx,
             )
             .<span class="kw">await</span>;
@@ -1803,7 +1798,10 @@
     /// read more on fedimints address derivation: &lt;https://fedimint.org/Fedimint/wallet/&gt;
     </span><span class="kw">pub async fn </span>get_new_pegin_address&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; Address {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
-        <span class="kw">let </span>address = <span class="self">self</span>.wallet_client().get_new_pegin_address(<span class="kw-2">&amp;mut </span>dbtx, rng);
+        <span class="kw">let </span>address = <span class="self">self
+            </span>.wallet_client()
+            .get_new_pegin_address(<span class="kw-2">&amp;mut </span>dbtx, rng)
+            .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         address
     }
@@ -1822,31 +1820,15 @@
         <span class="kw">let </span>final_coins = <span class="kw">if </span>coins.total_amount() == amount {
             coins
         } <span class="kw">else </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>failed_tx_attempts = <span class="number">0</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
-            <span class="kw">loop </span>{
-                <span class="kw">if </span>failed_tx_attempts &gt;= <span class="number">5 </span>{
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::SpendReusedNote);
-                }
 
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
-                <span class="kw">let </span>dbtx_mutref = <span class="kw-2">&amp;mut </span>dbtx;
-                tx.input_coins(coins.clone())<span class="question-mark">?</span>;
-                tx.output_coins(
-                    amount,
-                    <span class="kw">move </span>|| {
-                        <span class="self">self</span>.mint_client()
-                            .new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, dbtx_mutref)
-                    },
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().config.tbs_pks,
-                );
-
-                <span class="kw">if </span>dbtx.commit_tx().<span class="kw">await</span>.is_err() {
-                    failed_tx_attempts += <span class="number">1</span>;
-                } <span class="kw">else </span>{
-                    <span class="kw">break</span>;
-                }
-            }
+            tx.input_coins(coins.clone())<span class="question-mark">?</span>;
+            tx.output_coins(
+                amount,
+                <span class="kw">move </span>|| <span class="kw">async </span>{ <span class="self">self</span>.mint_client().new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp).<span class="kw">await </span>},
+                <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().config.tbs_pks,
+            )
+            .<span class="kw">await</span>;
 
             <span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
@@ -2009,7 +1991,8 @@
         };
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway)
-            .expect(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>);
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         <span class="prelude-val">Ok</span>(gateway)
     }
@@ -2026,13 +2009,16 @@
         <span class="kw">let </span>consensus_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>absolute_timelock = consensus_height + TIMELOCK;
 
-        <span class="kw">let </span>contract = <span class="self">self</span>.ln_client().create_outgoing_output(
-            <span class="kw-2">&amp;mut </span>dbtx,
-            invoice,
-            <span class="kw-2">&amp;</span>gateway,
-            absolute_timelock <span class="kw">as </span>u32,
-            <span class="kw-2">&amp;mut </span>rng,
-        )<span class="question-mark">?</span>;
+        <span class="kw">let </span>contract = <span class="self">self
+            </span>.ln_client()
+            .create_outgoing_output(
+                <span class="kw-2">&amp;mut </span>dbtx,
+                invoice,
+                <span class="kw-2">&amp;</span>gateway,
+                absolute_timelock <span class="kw">as </span>u32,
+                <span class="kw-2">&amp;mut </span>rng,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
@@ -2364,7 +2350,8 @@
             <span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract.contract.contract_id()),
             <span class="kw-2">&amp;</span>contract,
         )
-        .expect(<span class="string">&quot;DB error&quot;</span>);
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;DB error&quot;</span>);
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
@@ -2429,7 +2416,8 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.insert_entry(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKey(contract_id), <span class="kw-2">&amp;</span>())
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="self">self</span>.config.redeem_key], input);

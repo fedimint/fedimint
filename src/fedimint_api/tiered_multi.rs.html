@@ -501,10 +501,10 @@
 
 <span class="kw">impl</span>&lt;C&gt; IntoIterator <span class="kw">for </span>TieredMulti&lt;C&gt;
 <span class="kw">where
-    </span>C: <span class="lifetime">&#39;static</span>,
+    </span>C: <span class="lifetime">&#39;static </span>+ Send,
 {
     <span class="kw">type </span>Item = (Amount, C);
-    <span class="kw">type </span>IntoIter = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (Amount, C)&gt;&gt;;
+    <span class="kw">type </span>IntoIter = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (Amount, C)&gt; + Send&gt;;
 
     <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
         Box::new(

@@ -1022,7 +1022,7 @@
 
         <span class="kw">let </span>rng = rand::rngs::OsRng;
 
-        <span class="kw">let </span>client = Client::new(cfg.clone(), db, Default::default());
+        <span class="kw">let </span>client = Client::new(cfg.clone(), db, Default::default()).<span class="kw">await</span>;
 
         <span class="kw">let </span>cli_result = handle_command(cli, client, rng).<span class="kw">await</span>;
 

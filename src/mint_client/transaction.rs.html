@@ -278,6 +278,19 @@
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
@@ -411,14 +424,17 @@
         <span class="self">self</span>.input_amount(client) - <span class="self">self</span>.output_amount(client) - <span class="self">self</span>.fee_amount(client)
     }
 
-    <span class="kw">pub fn </span>output_coins(
+    <span class="kw">pub async fn </span>output_coins&lt;F, Fut&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         amount: Amount,
-        coin_gen: <span class="kw">impl </span>FnMut() -&gt; (NoteIssuanceRequest, BlindNonce),
+        coin_gen: F,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-    ) {
+    ) <span class="kw">where
+        </span>F: FnMut() -&gt; Fut,
+        Fut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
+    {
         <span class="kw">let </span>(coin_finalization_data, coin_output) =
-            <span class="self">self</span>.create_output_coins(amount, coin_gen, tbs_pks);
+            <span class="self">self</span>.create_output_coins(amount, coin_gen, tbs_pks).<span class="kw">await</span>;
 
         <span class="kw">if </span>!coin_output.is_empty() {
             <span class="kw">let </span>out_idx = <span class="self">self</span>.tx.outputs.len();
@@ -428,20 +444,24 @@
         }
     }
 
-    <span class="kw">pub fn </span>create_output_coins(
+    <span class="kw">pub async fn </span>create_output_coins&lt;F, Fut&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         amount: Amount,
-        <span class="kw-2">mut </span>coin_gen: <span class="kw">impl </span>FnMut() -&gt; (NoteIssuanceRequest, BlindNonce),
+        <span class="kw-2">mut </span>coin_gen: F,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-    ) -&gt; (NoteIssuanceRequests, TieredMulti&lt;BlindNonce&gt;) {
+    ) -&gt; (NoteIssuanceRequests, TieredMulti&lt;BlindNonce&gt;)
+    <span class="kw">where
+        </span>F: FnMut() -&gt; Fut,
+        Fut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>amount_requests: Vec&lt;((Amount, NoteIssuanceRequest), (Amount, BlindNonce))&gt; =
+            Vec::new();
+        <span class="kw">for </span>(amt, ()) <span class="kw">in </span>TieredMulti::represent_amount(amount, tbs_pks).into_iter() {
+            <span class="kw">let </span>(request, blind_nonce) = coin_gen().<span class="kw">await</span>;
+            amount_requests.push(((amt, request), (amt, blind_nonce)));
+        }
         <span class="kw">let </span>(coin_finalization_data, sig_req): (NoteIssuanceRequests, SignRequest) =
-            TieredMulti::represent_amount(amount, tbs_pks)
-                .into_iter()
-                .map(|(amt, ())| {
-                    <span class="kw">let </span>(request, blind_nonce) = coin_gen();
-                    ((amt, request), (amt, blind_nonce))
-                })
-                .unzip();
+            amount_requests.into_iter().unzip();
 
         <span class="macro">debug!</span>(
             %amount,
@@ -453,17 +473,21 @@
         (coin_finalization_data, sig_req.<span class="number">0</span>)
     }
 
-    <span class="kw">pub async fn </span>build&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub async fn </span>build&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng, F, Fut&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
         change_required: Amount,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="kw-2">mut </span>coin_gen: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; (NoteIssuanceRequest, BlindNonce),
+        coin_gen: F,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         <span class="kw-2">mut </span>rng: R,
-    ) -&gt; Transaction {
+    ) -&gt; Transaction
+    <span class="kw">where
+        </span>F: FnMut() -&gt; Fut,
+        Fut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
+    {
         <span class="comment">// add change
-        </span><span class="self">self</span>.output_coins(change_required, || coin_gen(dbtx), tbs_pks);
+        </span><span class="self">self</span>.output_coins(change_required, coin_gen, tbs_pks).<span class="kw">await</span>;
 
         <span class="kw">let </span>txid = <span class="self">self</span>.tx.tx_hash();
         <span class="kw">if </span>!<span class="self">self</span>.keys.is_empty() {
@@ -484,11 +508,12 @@
                 </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
             }
             dbtx.insert_entry(<span class="kw-2">&amp;</span>PendingCoinsKey(txid), <span class="kw-2">&amp;</span><span class="self">self</span>.input_notes)
-                .expect(<span class="string">&quot;DB Error&quot;</span>);
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
 
         <span class="comment">// write coin output to db to await for tx success to be fetched later
-        </span><span class="self">self</span>.output_notes.iter().for_each(|(out_idx, coins)| {
+        </span><span class="kw">for </span>(out_idx, coins) <span class="kw">in </span><span class="self">self</span>.output_notes.iter() {
             dbtx.insert_new_entry(
                 <span class="kw-2">&amp;</span>OutputFinalizationKey(OutPoint {
                     txid,
@@ -496,8 +521,9 @@
                 }),
                 <span class="kw-2">&amp;</span>coins.clone(),
             )
-            .expect(<span class="string">&quot;DB Error&quot;</span>);
-        });
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        }
 
         <span class="self">self</span>.tx
     }
