@@ -157,6 +157,7 @@ fn trusted_dealer_gen(
                     .iter()
                     .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
                     .collect(),
+                max_connections: 1000,
             };
             (id, config)
         })
