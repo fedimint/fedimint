@@ -1443,6 +1443,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "fedimint-api",
+ "fedimint-core",
  "fedimint-ln",
  "fedimint-testing",
  "lightning-invoice",
@@ -1450,6 +1451,7 @@ dependencies = [
  "mint-client",
  "portpicker",
  "rand",
+ "threshold_crypto",
  "tokio",
  "url",
 ]

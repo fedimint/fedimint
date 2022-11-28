@@ -20,6 +20,8 @@ use ln_gateway::{
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 
+pub mod fed;
+
 pub struct Fixtures {
     pub bitcoin: Box<dyn BitcoinTest>,
     pub gateway: LnGateway,

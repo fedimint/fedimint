@@ -15,6 +15,7 @@ anyhow = "1.0.66"
 async-trait = "0.1.42"
 bitcoin = "0.29.2"
 fedimint-api = { path = "../../fedimint-api" }
+fedimint-core = { path = "../../fedimint-core" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
 fedimint-testing = { path = "../../fedimint-testing" }
 lightning-invoice = "0.20.0"
@@ -22,5 +23,6 @@ ln-gateway = { path = "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
 portpicker = "0.1.1"
 rand = "0.8"
+threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 tokio = { version = "1.22.0", features = ["full"] }
 url = { version = "2.3.1", features = ["serde"] }
