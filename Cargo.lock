@@ -1088,6 +1088,7 @@ dependencies = [
  "bitcoin",
  "fedimint-api",
  "fedimint-bitcoind",
+ "fedimint-wallet",
  "futures",
  "rand",
  "secp256k1-zkp",

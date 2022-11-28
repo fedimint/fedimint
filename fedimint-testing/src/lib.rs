@@ -146,6 +146,7 @@ where
             for input in inputs {
                 member
                     .apply_input(&fake_ic, &mut dbtx, input, &cache)
+                    .await
                     .expect("Faulty input");
             }
 
@@ -185,6 +186,35 @@ where
         for (_, _, db) in &mut self.members {
             let mut dbtx = db.begin_transaction(decoders.clone());
             update(&mut dbtx);
+            dbtx.commit_tx().await.expect("DB Error");
+        }
+    }
+
+    pub async fn generate_fake_utxo(&mut self) {
+        let decoders = self.decoders();
+        for (_, _, db) in &mut self.members {
+            let mut dbtx = db.begin_transaction(decoders.clone());
+            let out_point = bitcoin::OutPoint::default();
+            let tweak = [42; 32];
+            let utxo = fedimint_wallet::SpendableUTXO {
+                tweak,
+                amount: bitcoin::Amount::from_sat(48000),
+            };
+
+            dbtx.insert_entry(&fedimint_wallet::db::UTXOKey(out_point), &utxo)
+                .await
+                .unwrap();
+
+            dbtx.insert_entry(
+                &fedimint_wallet::db::RoundConsensusKey,
+                &fedimint_wallet::RoundConsensus {
+                    block_height: 0,
+                    fee_rate: fedimint_api::Feerate { sats_per_kvb: 0 },
+                    randomness_beacon: tweak,
+                },
+            )
+            .await
+            .unwrap();
             dbtx.commit_tx().await.expect("DB Error");
         }
     }

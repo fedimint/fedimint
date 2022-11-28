@@ -296,18 +296,17 @@ impl ServerModulePlugin for LightningModule {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
-        consensus_items
-            .into_iter()
-            .for_each(|(peer, decryption_share)| {
-                let span = info_span!("process decryption share", %peer);
-                let _guard = span.enter();
+        for (peer, decryption_share) in consensus_items.into_iter() {
+            let span = info_span!("process decryption share", %peer);
+            let _guard = span.enter();
 
-                dbtx.insert_new_entry(
-                    &AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                    &decryption_share.share,
-                )
-                .expect("DB Error");
-            });
+            dbtx.insert_new_entry(
+                &AgreedDecryptionShareKey(decryption_share.contract_id, peer),
+                &decryption_share.share,
+            )
+            .await
+            .expect("DB Error");
+        }
     }
 
     fn build_verification_cache<'a>(
@@ -390,7 +389,7 @@ impl ServerModulePlugin for LightningModule {
         })
     }
 
-    fn apply_input<'a, 'b, 'c>(
+    async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
@@ -406,6 +405,7 @@ impl ServerModulePlugin for LightningModule {
             .expect("Should fail validation if contract account doesn't exist");
         contract_account.amount -= meta.amount.amount;
         dbtx.insert_entry(&account_db_key, &contract_account)
+            .await
             .expect("DB Error");
 
         Ok(meta)
@@ -507,6 +507,7 @@ impl ServerModulePlugin for LightningModule {
                         contract: contract.contract.clone().to_funded(out_point),
                     });
                 dbtx.insert_entry(&contract_db_key, &updated_contract_account)
+                    .await
                     .expect("DB Error");
 
                 dbtx.insert_new_entry(
@@ -516,6 +517,7 @@ impl ServerModulePlugin for LightningModule {
                         outcome: contract.contract.to_outcome(),
                     },
                 )
+                .await
                 .expect("DB Error");
 
                 if let Contract::Incoming(incoming) = &contract.contract {
@@ -533,6 +535,7 @@ impl ServerModulePlugin for LightningModule {
                         &ProposeDecryptionShareKey(contract.contract.contract_id()),
                         &PreimageDecryptionShare(decryption_share),
                     )
+                    .await
                     .expect("DB Error");
                     dbtx.remove_entry(&OfferKey(offer.hash))
                         .await
@@ -544,9 +547,11 @@ impl ServerModulePlugin for LightningModule {
                     &ContractUpdateKey(out_point),
                     &LightningOutputOutcome::Offer { id: offer.id() },
                 )
+                .await
                 .expect("DB Error");
                 // TODO: sanity-check encrypted preimage size
                 dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
+                    .await
                     .expect("DB Error");
             }
             LightningOutput::CancelOutgoing { contract, .. } => {
@@ -569,6 +574,7 @@ impl ServerModulePlugin for LightningModule {
                 };
 
                 dbtx.insert_entry(&ContractKey(*contract), &updated_contract_account)
+                    .await
                     .expect("DB Error");
             }
         }
@@ -715,6 +721,7 @@ impl ServerModulePlugin for LightningModule {
             incoming.contract.decrypted_preimage = decrypted_preimage.clone();
             trace!(?contract_account, "Updating contract account");
             dbtx.insert_entry(&contract_db_key, &contract_account)
+                .await
                 .expect("DB Error");
 
             // Update output outcome
@@ -732,6 +739,7 @@ impl ServerModulePlugin for LightningModule {
             };
             *incoming_contract_outcome_preimage = decrypted_preimage.clone();
             dbtx.insert_entry(&outcome_db_key, &outcome)
+                .await
                 .expect("DB Error");
         }
 
@@ -863,6 +871,7 @@ impl LightningModule {
             .non_consensus_db
             .begin_transaction(self.decoders.clone());
         dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
+            .await
             .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");
     }

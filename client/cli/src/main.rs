@@ -370,7 +370,7 @@ async fn main() {
 
         let rng = rand::rngs::OsRng;
 
-        let client = Client::new(cfg.clone(), db, Default::default());
+        let client = Client::new(cfg.clone(), db, Default::default()).await;
 
         let cli_result = handle_command(cli, client, rng).await;
 

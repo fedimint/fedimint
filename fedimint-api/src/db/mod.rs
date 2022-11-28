@@ -101,7 +101,7 @@ dyn_newtype_define! {
 /// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
 #[async_trait]
 pub trait IDatabaseTransaction<'a>: 'a + Send {
-    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
     fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
@@ -156,11 +156,15 @@ impl<'a> DatabaseTransaction<'a> {
 }
 
 impl<'a> DatabaseTransaction<'a> {
-    pub fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
+    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        match self.0.raw_insert_bytes(&key.to_bytes(), value.to_bytes())? {
+        match self
+            .0
+            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .await?
+        {
             Some(old_val_bytes) => {
                 trace!(
                     "insert_bytes: Decoding {} from bytes {:?}",
@@ -173,11 +177,19 @@ impl<'a> DatabaseTransaction<'a> {
         }
     }
 
-    pub fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
+    pub async fn insert_new_entry<K>(
+        &mut self,
+        key: &K,
+        value: &K::Value,
+    ) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        match self.0.raw_insert_bytes(&key.to_bytes(), value.to_bytes())? {
+        match self
+            .0
+            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .await?
+        {
             Some(_) => {
                 warn!(
                     "Database overwriting element when expecting insertion of new entry. Key: {:?}",
@@ -387,11 +399,13 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
+            .await
             .unwrap()
             .is_none());
 
         assert!(dbtx
             .insert_entry(&TestKey(2), &TestVal(3))
+            .await
             .unwrap()
             .is_none());
 
@@ -410,6 +424,7 @@ mod tests {
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
+            .await
             .unwrap()
             .is_none());
 
@@ -421,22 +436,24 @@ mod tests {
         assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), None);
     }
 
-    pub fn verify_read_own_writes(db: Database) {
+    pub async fn verify_read_own_writes(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
+            .await
             .unwrap()
             .is_none());
 
         assert_eq!(dbtx.get_value(&TestKey(1)).unwrap(), Some(TestVal(2)));
     }
 
-    pub fn verify_prevent_dirty_reads(db: Database) {
+    pub async fn verify_prevent_dirty_reads(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
+            .await
             .unwrap()
             .is_none());
 
@@ -447,11 +464,23 @@ mod tests {
 
     pub async fn verify_find_by_prefix(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
-        assert!(dbtx.insert_entry(&TestKey(55), &TestVal(9999)).is_ok());
-        assert!(dbtx.insert_entry(&TestKey(54), &TestVal(8888)).is_ok());
+        assert!(dbtx
+            .insert_entry(&TestKey(55), &TestVal(9999))
+            .await
+            .is_ok());
+        assert!(dbtx
+            .insert_entry(&TestKey(54), &TestVal(8888))
+            .await
+            .is_ok());
 
-        assert!(dbtx.insert_entry(&AltTestKey(55), &TestVal(7777)).is_ok());
-        assert!(dbtx.insert_entry(&AltTestKey(54), &TestVal(6666)).is_ok());
+        assert!(dbtx
+            .insert_entry(&AltTestKey(55), &TestVal(7777))
+            .await
+            .is_ok());
+        assert!(dbtx
+            .insert_entry(&AltTestKey(54), &TestVal(6666))
+            .await
+            .is_ok());
         dbtx.commit_tx().await.expect("DB Error");
 
         // Verify finding by prefix returns the correct set of key pairs
@@ -502,6 +531,7 @@ mod tests {
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
+            .await
             .unwrap()
             .is_none());
         dbtx.commit_tx().await.expect("DB Error");
@@ -516,12 +546,14 @@ mod tests {
 
         assert!(dbtx_rollback
             .insert_entry(&TestKey(20), &TestVal(2000))
+            .await
             .is_ok());
 
         dbtx_rollback.set_tx_savepoint();
 
         assert!(dbtx_rollback
             .insert_entry(&TestKey(21), &TestVal(2001))
+            .await
             .is_ok());
 
         assert_eq!(
@@ -549,7 +581,10 @@ mod tests {
 
         let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
 
-        assert!(dbtx2.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
+        assert!(dbtx2
+            .insert_entry(&TestKey(100), &TestVal(101))
+            .await
+            .is_ok());
 
         assert_eq!(dbtx.get_value(&TestKey(100)).unwrap(), None);
 
@@ -579,9 +614,15 @@ mod tests {
     pub async fn verify_phantom_entry(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
 
-        assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
+        assert!(dbtx
+            .insert_entry(&TestKey(100), &TestVal(101))
+            .await
+            .is_ok());
 
-        assert!(dbtx.insert_entry(&TestKey(101), &TestVal(102)).is_ok());
+        assert!(dbtx
+            .insert_entry(&TestKey(101), &TestVal(102))
+            .await
+            .is_ok());
 
         dbtx.commit_tx().await.expect("DB Error");
 
@@ -608,7 +649,10 @@ mod tests {
 
         let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
 
-        assert!(dbtx2.insert_entry(&TestKey(102), &TestVal(103)).is_ok());
+        assert!(dbtx2
+            .insert_entry(&TestKey(102), &TestVal(103))
+            .await
+            .is_ok());
 
         dbtx2.commit_tx().await.expect("DB Error");
 
@@ -634,15 +678,24 @@ mod tests {
 
     pub async fn expect_write_conflict(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleRegistry::default());
-        assert!(dbtx.insert_entry(&TestKey(100), &TestVal(101)).is_ok());
+        assert!(dbtx
+            .insert_entry(&TestKey(100), &TestVal(101))
+            .await
+            .is_ok());
         dbtx.commit_tx().await.expect("DB Error");
 
         let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
         let mut dbtx3 = db.begin_transaction(ModuleRegistry::default());
 
-        assert!(dbtx2.insert_entry(&TestKey(100), &TestVal(102)).is_ok());
+        assert!(dbtx2
+            .insert_entry(&TestKey(100), &TestVal(102))
+            .await
+            .is_ok());
 
-        assert!(dbtx3.insert_entry(&TestKey(100), &TestVal(103)).is_ok());
+        assert!(dbtx3
+            .insert_entry(&TestKey(100), &TestVal(103))
+            .await
+            .is_ok());
 
         dbtx2.commit_tx().await.expect("DB Error");
         dbtx3.commit_tx().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");

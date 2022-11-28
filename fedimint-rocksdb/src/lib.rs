@@ -65,7 +65,7 @@ impl IDatabase for RocksDb {
 
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
-    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.0.get(key).unwrap();
         self.0.put(key, value)?;
         Ok(val)
@@ -122,7 +122,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
 
 #[async_trait]
 impl IDatabaseTransaction<'_> for RocksDbReadOnly {
-    fn raw_insert_bytes(&mut self, _key: &[u8], _value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, _key: &[u8], _value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         panic!("Cannot insert into a read only transaction");
     }
 
@@ -200,18 +200,20 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_read_own_writes() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_read_own_writes() {
         fedimint_api::db::verify_read_own_writes(
             open_temp_db("fcb-rocksdb-test-read-own-writes").into(),
-        );
+        )
+        .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_prevent_dirty_reads() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_prevent_dirty_reads() {
         fedimint_api::db::verify_prevent_dirty_reads(
             open_temp_db("fcb-rocksdb-test-prevent-dirty-reads").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test(tokio::test)]

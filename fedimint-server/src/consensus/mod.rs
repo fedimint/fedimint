@@ -180,6 +180,7 @@ impl FedimintConsensus {
             let mut dbtx = self.db.begin_transaction(self.decoders());
             let new = dbtx
                 .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
+                .await
                 .expect("DB error");
             dbtx.commit_tx().await.expect("DB Error");
 
@@ -262,6 +263,7 @@ impl FedimintConsensus {
                                 &AcceptedTransactionKey(txid),
                                 &AcceptedTransaction { epoch, transaction },
                             )
+                            .await
                             .expect("DB Error");
                         }
                         Err(error) => {
@@ -271,6 +273,7 @@ impl FedimintConsensus {
                                 &RejectedTransactionKey(txid),
                                 &format!("{:?}", error),
                             )
+                            .await
                             .expect("DB Error");
                         }
                     }
@@ -286,7 +289,8 @@ impl FedimintConsensus {
             let mut dbtx = self.db.begin_transaction(self.decoders());
             let mut drop_peers = Vec::<PeerId>::new();
 
-            self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers);
+            self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers)
+                .await;
 
             for module in self.modules.values() {
                 let module_drop_peers = module.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
@@ -295,6 +299,7 @@ impl FedimintConsensus {
 
             for peer in drop_peers {
                 dbtx.insert_entry(&DropPeerKey(peer), &())
+                    .await
                     .expect("DB Error");
             }
 
@@ -325,7 +330,7 @@ impl FedimintConsensus {
             .unwrap()
     }
 
-    fn save_epoch_history<'a>(
+    async fn save_epoch_history<'a>(
         &self,
         outcome: ConsensusOutcome,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -348,6 +353,7 @@ impl FedimintConsensus {
             match current.add_sig_to_prev(pks, prev_epoch) {
                 Ok(prev_epoch) => {
                     dbtx.insert_entry(&prev_epoch_key, &prev_epoch)
+                        .await
                         .expect("DB Error");
                 }
                 Err(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) => {
@@ -364,8 +370,10 @@ impl FedimintConsensus {
         }
 
         dbtx.insert_entry(&LastEpochKey, &EpochHistoryKey(current.outcome.epoch))
+            .await
             .expect("DB Error");
         dbtx.insert_entry(&EpochHistoryKey(current.outcome.epoch), &current)
+            .await
             .expect("DB Error");
     }
 
@@ -446,12 +454,14 @@ impl FedimintConsensus {
                 .modules
                 .get(&input.module_key())
                 .expect("Parsing the input should fail if the module doesn't exist");
-            let meta = module.apply_input(
-                &self.build_interconnect(),
-                dbtx,
-                input,
-                caches.get_cache(input.module_key()),
-            )?;
+            let meta = module
+                .apply_input(
+                    &self.build_interconnect(),
+                    dbtx,
+                    input,
+                    caches.get_cache(input.module_key()),
+                )
+                .await?;
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
         }

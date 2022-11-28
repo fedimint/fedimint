@@ -162,22 +162,29 @@ impl<'c> MintClient<'c> {
         )
     }
 
-    fn new_note_secret(&self, dbtx: &mut DatabaseTransaction<'_>) -> DerivableSecret {
-        let new_idx = self.get_last_note_index(dbtx).next();
-        dbtx.insert_entry(&LastECashNoteIndexKey, &new_idx.as_u64())
-            .expect("DB error");
+    async fn new_note_secret(&self) -> DerivableSecret {
+        let mut new_idx;
+        loop {
+            let mut dbtx = self.start_dbtx();
+            new_idx = self.get_last_note_index(&mut dbtx).next();
+            dbtx.insert_entry(&LastECashNoteIndexKey, &new_idx.as_u64())
+                .await
+                .expect("DB error");
+            if dbtx.commit_tx().await.is_ok() {
+                break;
+            }
+        }
 
         self.secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
             .child_key(ChildId(new_idx.as_u64()))
     }
 
-    pub fn new_ecash_note<C: Signing>(
+    pub async fn new_ecash_note<C: Signing>(
         &self,
         ctx: &Secp256k1<C>,
-        dbtx: &mut DatabaseTransaction<'_>,
     ) -> (NoteIssuanceRequest, BlindNonce) {
-        let secret = self.new_note_secret(dbtx);
+        let secret = self.new_note_secret().await;
         NoteIssuanceRequest::new(ctx, secret)
     }
 
@@ -206,7 +213,7 @@ impl<'c> MintClient<'c> {
             .build(
                 change_required,
                 &mut dbtx,
-                |tx| self.new_ecash_note(&self.context.secp, tx),
+                || async { self.new_ecash_note(&self.context.secp).await },
                 &self.context.secp,
                 &self.config.tbs_pks,
                 rng,
@@ -223,22 +230,26 @@ impl<'c> MintClient<'c> {
         Ok(txid)
     }
 
-    pub async fn receive_coins<'a, F, Fut>(
+    pub async fn receive_coins<'a, F, Fut, G, GFut>(
         &self,
         amount: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
-        coin_gen: impl Fn(&mut DatabaseTransaction<'_>) -> (NoteIssuanceRequest, BlindNonce),
+        coin_gen: G,
         mut create_tx: F,
     ) where
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
+        G: FnMut() -> GFut,
+        GFut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
     {
         let mut builder = TransactionBuilder::default();
 
-        let (finalization, coins) =
-            builder.create_output_coins(amount, || coin_gen(dbtx), &self.config.tbs_pks);
+        let (finalization, coins) = builder
+            .create_output_coins(amount, coin_gen, &self.config.tbs_pks)
+            .await;
         let out_point = create_tx(coins).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
+            .await
             .expect("DB Error");
     }
 
@@ -268,16 +279,14 @@ impl<'c> MintClient<'c> {
 
         let coins = issuance.finalize(bsig, &self.config.tbs_pks)?;
 
-        coins
-            .into_iter()
-            .for_each(|(amount, coin): (Amount, SpendableNote)| {
-                let key = CoinKey {
-                    amount,
-                    nonce: coin.note.0.clone(),
-                };
-                let value = coin;
-                dbtx.insert_new_entry(&key, &value).expect("DB Error");
-            });
+        for (amount, coin) in coins.into_iter() {
+            let key = CoinKey {
+                amount,
+                nonce: coin.note.0.clone(),
+            };
+            let value = coin;
+            dbtx.insert_new_entry(&key, &value).await.expect("DB Error");
+        }
         dbtx.remove_entry(&OutputFinalizationKey(outpoint))
             .await
             .expect("DB Error");
@@ -666,7 +675,7 @@ mod tests {
             .receive_coins(
                 amt,
                 &mut dbtx,
-                |dbtx| client.new_ecash_note(secp256k1_zkp::SECP256K1, dbtx),
+                || async { client.new_ecash_note(secp256k1_zkp::SECP256K1).await },
                 |output| async {
                     // Agree on output
                     let mut fed = block_on(fed.lock());
@@ -728,7 +737,7 @@ mod tests {
             .build(
                 Amount::from_sat(0),
                 &mut dbtx,
-                |dbtx| client.new_ecash_note(secp, dbtx),
+                || async { client.new_ecash_note(secp).await },
                 secp,
                 tbs_pks,
                 rng,
@@ -771,7 +780,7 @@ mod tests {
             .build(
                 Amount::from_sat(0),
                 &mut dbtx,
-                |dbtx| client.new_ecash_note(secp, dbtx),
+                || async { client.new_ecash_note(secp).await },
                 secp,
                 tbs_pks,
                 rng,
@@ -819,13 +828,8 @@ mod tests {
             (0..ITERATIONS)
                 .filter_map(|_| {
                     block_on(async {
-                        let mut tx = client_ref
-                            .context
-                            .db
-                            .begin_transaction(ModuleRegistry::default());
-                        let (_, nonce) =
-                            client_ref.new_ecash_note(secp256k1_zkp::SECP256K1, &mut tx);
-                        tx.commit_tx().await.map(|_| nonce).ok()
+                        let (_, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1).await;
+                        Some(nonce)
                     })
                 })
                 .collect::<Vec<BlindNonce>>()
