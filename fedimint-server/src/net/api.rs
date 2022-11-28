@@ -2,6 +2,7 @@
 use std::fmt::Formatter;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use fedimint_api::server::ServerModule;
@@ -55,6 +56,8 @@ pub async fn run_server(
 
     debug!(addr = cfg.api_bind_addr, "Starting WSServer");
     let server = ServerBuilder::new()
+        .max_connections(cfg.max_connections)
+        .ping_interval(Duration::from_secs(10))
         .build(&cfg.api_bind_addr)
         .await
         .context(format!("Bind address: {}", cfg.api_bind_addr))

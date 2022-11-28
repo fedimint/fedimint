@@ -32,6 +32,8 @@ use crate::net::connect::TlsConfig;
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
+const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub federation_name: String,
@@ -55,6 +57,7 @@ pub struct ServerConfig {
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
 
     pub modules: BTreeMap<String, ServerModuleConfig>,
+    pub max_connections: u32,
 }
 
 impl ServerConfig {
@@ -241,6 +244,7 @@ impl ServerConfig {
                         .iter()
                         .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
                         .collect(),
+                    max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
                 };
                 (id, config)
             })
@@ -348,6 +352,7 @@ impl ServerConfig {
                 .iter()
                 .map(|(name, cfgs)| (name.to_string(), cfgs.0.clone()))
                 .collect(),
+            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
         };
 
         let client = ClientConfig {
