@@ -186,11 +186,14 @@ async fn ecash_can_be_exchanged_directly_between_users() -> Result<()> {
         ..
     } = fixtures(4, &[sats(10), sats(100), sats(1000)]).await?;
 
-    let user_receive = UserTest::new(Arc::new(create_user_client(
-        user_send.config.clone(),
-        peers(&[0, 1, 2]),
-        MemDatabase::new().into(),
-    )));
+    let user_receive = UserTest::new(Arc::new(
+        create_user_client(
+            user_send.config.clone(),
+            peers(&[0, 1, 2]),
+            MemDatabase::new().into(),
+        )
+        .await,
+    ));
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     assert_eq!(user_send.total_coins(), sats(5000));
@@ -220,16 +223,12 @@ async fn ecash_cannot_double_spent_with_different_nodes() -> Result<()> {
     let ecash = fed.spend_ecash(&user1, sats(2000)).await;
 
     let cfg = user1.config.clone();
-    let user2 = UserTest::new(Arc::new(create_user_client(
-        cfg.clone(),
-        peers(&[0]),
-        MemDatabase::new().into(),
-    )));
-    let user3 = UserTest::new(Arc::new(create_user_client(
-        cfg,
-        peers(&[1]),
-        MemDatabase::new().into(),
-    )));
+    let user2 = UserTest::new(Arc::new(
+        create_user_client(cfg.clone(), peers(&[0]), MemDatabase::new().into()).await,
+    ));
+    let user3 = UserTest::new(Arc::new(
+        create_user_client(cfg, peers(&[1]), MemDatabase::new().into()).await,
+    ));
 
     let out2 = user2.client.reissue(ecash.clone(), rng()).await.unwrap();
     let out3 = user3.client.reissue(ecash, rng()).await.unwrap();
@@ -254,11 +253,14 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         ..
     } = fixtures(2, &[sats(100), sats(500)]).await?;
 
-    let user_receive = UserTest::new(Arc::new(create_user_client(
-        user_send.config.clone(),
-        peers(&[0]),
-        MemDatabase::new().into(),
-    )));
+    let user_receive = UserTest::new(Arc::new(
+        create_user_client(
+            user_send.config.clone(),
+            peers(&[0]),
+            MemDatabase::new().into(),
+        )
+        .await,
+    ));
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(1100)).await;
     assert_eq!(
@@ -470,11 +472,14 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
     fed.mine_and_mint(&sending_user, &*bitcoin, sats(2000))
         .await;
 
-    let receiving_user = UserTest::new(Arc::new(create_user_client(
-        sending_user.config.clone(),
-        peers(&[0]),
-        MemDatabase::new().into(),
-    )));
+    let receiving_user = UserTest::new(Arc::new(
+        create_user_client(
+            sending_user.config.clone(),
+            peers(&[0]),
+            MemDatabase::new().into(),
+        )
+        .await,
+    ));
 
     let confirmed_invoice = tokio::join!(
         receiving_user
@@ -634,7 +639,8 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         sending_user.config.clone(),
         peers(&[0]),
         MemDatabase::new().into(),
-    );
+    )
+    .await;
 
     let confirmed_invoice = tokio::join!(
         receiving_client.generate_invoice(sats(1000), "".into(), rng(), None),
@@ -825,7 +831,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         .build(
             sats(0),
             &mut dbtx,
-            |dbtx| user.client.mint_client().new_ecash_note(&secp(), dbtx),
+            || async { user.client.mint_client().new_ecash_note(&secp()).await },
             &secp(),
             tbs_pks,
             rng(),
@@ -982,11 +988,14 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
         ..
     } = fixtures(2, &[sats(100), sats(1000)]).await?;
 
-    let user_receive = UserTest::new(Arc::new(create_user_client(
-        user_send.config.clone(),
-        peers(&[0]),
-        MemDatabase::new().into(),
-    )));
+    let user_receive = UserTest::new(Arc::new(
+        create_user_client(
+            user_send.config.clone(),
+            peers(&[0]),
+            MemDatabase::new().into(),
+        )
+        .await,
+    ));
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     let ecash = fed.spend_ecash(&user_send, sats(5000)).await;
@@ -1156,7 +1165,8 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         user.config.clone(),
         peers(&[1, 2, 3]),
         MemDatabase::new().into(),
-    );
+    )
+    .await;
 
     assert_eq!(client2.await_consensus_block_height(height).await?, height);
 

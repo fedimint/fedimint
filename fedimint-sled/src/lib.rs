@@ -69,7 +69,7 @@ impl IDatabase for SledDb {
 // as it doesn't properly implement MVCC
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
-    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key);
         self.operations
             .push(DatabaseOperation::Insert(DatabaseInsertOperation {
@@ -231,18 +231,20 @@ mod fedimint_sled_tests {
         .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_read_own_writes() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_read_own_writes() {
         fedimint_api::db::verify_read_own_writes(
             open_temp_db("fcb-sled-test-read-own-writes").into(),
-        );
+        )
+        .await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_prevent_dirty_reads() {
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_prevent_dirty_reads() {
         fedimint_api::db::verify_prevent_dirty_reads(
             open_temp_db("fcb-sled-test-prevent-dirty-reads").into(),
-        );
+        )
+        .await;
     }
 
     #[test_log::test(tokio::test)]

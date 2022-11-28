@@ -181,7 +181,7 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
 
             let user_db = rocks(dir.clone()).into();
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db)));
+            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
@@ -226,7 +226,7 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
 
             let user_db = MemDatabase::new().into();
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db)));
+            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
@@ -257,7 +257,7 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
 }
 
 /// Creates a new user client connected to the given peers
-pub fn create_user_client(
+pub async fn create_user_client(
     config: UserClientConfig,
     peers: Vec<PeerId>,
     db: Database,
@@ -274,7 +274,7 @@ pub fn create_user_client(
     )
     .into();
 
-    UserClient::new_with_api(config, db, api, Default::default())
+    UserClient::new_with_api(config, db, api, Default::default()).await
 }
 
 async fn distributed_config(
@@ -425,6 +425,7 @@ impl GatewayTest {
         let client = Arc::new(
             client_builder
                 .build(gw_client_cfg.clone())
+                .await
                 .expect("Could not build gateway client"),
         );
 
@@ -658,6 +659,7 @@ impl FederationTest {
                         amount: bitcoin::Amount::from_sat(input.tx_output().value),
                     },
                 )
+                .await
                 .expect("DB Error");
                 dbtx.commit_tx().await.expect("DB Error");
             });
@@ -713,6 +715,7 @@ impl FederationTest {
                             transaction,
                         },
                     )
+                    .await
                     .expect("DB Error");
 
                     svr.fedimint

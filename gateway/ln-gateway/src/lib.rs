@@ -86,6 +86,7 @@ impl LnGateway {
                 let client = self
                     .client_builder
                     .build(config.clone())
+                    .await
                     .expect("Could not build federation client");
 
                 if let Err(e) = self.register_federation(Arc::new(client)).await {
@@ -162,7 +163,7 @@ impl LnGateway {
             api: self.config.announce_address.clone(),
         };
 
-        let client = self.client_builder.build(gw_client_cfg.clone())?;
+        let client = self.client_builder.build(gw_client_cfg.clone()).await?;
 
         if let Err(e) = self.register_federation(Arc::new(client)).await {
             error!("Failed to register federation: {}", e);

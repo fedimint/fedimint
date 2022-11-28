@@ -231,7 +231,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.config.clone()
     }
 
-    pub fn new(config: T, db: Database, secp: Secp256k1<All>) -> Self {
+    pub async fn new(config: T, db: Database, secp: Secp256k1<All>) -> Self {
         let api = api::WsFederationApi::new(
             config
                 .as_ref()
@@ -245,16 +245,16 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 })
                 .collect(),
         );
-        Self::new_with_api(config, db, api.into(), secp)
+        Self::new_with_api(config, db, api.into(), secp).await
     }
 
-    pub fn new_with_api(
+    pub async fn new_with_api(
         config: T,
         db: Database,
         api: FederationApi,
         secp: Secp256k1<All>,
     ) -> Client<T> {
-        let root_secret = Self::get_secret(&db);
+        let root_secret = Self::get_secret(&db).await;
         Self {
             config,
             context: ClientContext { db, api, secp },
@@ -263,23 +263,24 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     }
 
     /// Fetches the client secret from the database or generates a new one if none is present
-    fn get_secret(db: &Database) -> DerivableSecret {
+    async fn get_secret(db: &Database) -> DerivableSecret {
         let mut tx = db.begin_transaction(ModuleRegistry::default());
-        let secret = tx
-            .get_value(&ClientSecretKey)
-            .expect("DB error")
-            .unwrap_or_else(|| {
-                let secret: ClientSecret = thread_rng().gen();
-                let no_replacement = tx
-                    .insert_entry(&ClientSecretKey, &secret)
-                    .expect("DB error")
-                    .is_none();
-                assert!(
-                    no_replacement,
-                    "We would have overwritten our secret key, aborting!"
-                );
-                secret
-            });
+        let client_secret = tx.get_value(&ClientSecretKey).expect("DB error");
+        let secret = if let Some(client_secret) = client_secret {
+            client_secret
+        } else {
+            let secret: ClientSecret = thread_rng().gen();
+            let no_replacement = tx
+                .insert_entry(&ClientSecretKey, &secret)
+                .await
+                .expect("DB error")
+                .is_none();
+            assert!(
+                no_replacement,
+                "We would have overwritten our secret key, aborting!"
+            );
+            secret
+        };
         secret.into_root_secret()
     }
 
@@ -386,7 +387,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .receive_coins(
                 amount,
                 &mut dbtx,
-                |tx| self.mint_client().new_ecash_note(&self.context.secp, tx),
+                || async { self.mint_client().new_ecash_note(&self.context.secp).await },
                 create_tx,
             )
             .await;
@@ -448,7 +449,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// read more on fedimints address derivation: <https://fedimint.org/Fedimint/wallet/>
     pub async fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, rng: R) -> Address {
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
-        let address = self.wallet_client().get_new_pegin_address(&mut dbtx, rng);
+        let address = self
+            .wallet_client()
+            .get_new_pegin_address(&mut dbtx, rng)
+            .await;
         dbtx.commit_tx().await.expect("DB Error");
         address
     }
@@ -467,31 +471,15 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let final_coins = if coins.total_amount() == amount {
             coins
         } else {
-            let mut failed_tx_attempts = 0;
             let mut tx = TransactionBuilder::default();
-            loop {
-                if failed_tx_attempts >= 5 {
-                    return Err(ClientError::SpendReusedNote);
-                }
 
-                let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
-                let dbtx_mutref = &mut dbtx;
-                tx.input_coins(coins.clone())?;
-                tx.output_coins(
-                    amount,
-                    move || {
-                        self.mint_client()
-                            .new_ecash_note(&self.context.secp, dbtx_mutref)
-                    },
-                    &self.mint_client().config.tbs_pks,
-                );
-
-                if dbtx.commit_tx().await.is_err() {
-                    failed_tx_attempts += 1;
-                } else {
-                    break;
-                }
-            }
+            tx.input_coins(coins.clone())?;
+            tx.output_coins(
+                amount,
+                move || async { self.mint_client().new_ecash_note(&self.context.secp).await },
+                &self.mint_client().config.tbs_pks,
+            )
+            .await;
 
             self.submit_tx_with_change(tx, rng).await?;
             self.fetch_all_coins().await;
@@ -654,6 +642,7 @@ impl Client<UserClientConfig> {
         };
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(&LightningGatewayKey, &gateway)
+            .await
             .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");
         Ok(gateway)
@@ -671,13 +660,16 @@ impl Client<UserClientConfig> {
         let consensus_height = self.context.api.fetch_consensus_block_height().await?;
         let absolute_timelock = consensus_height + TIMELOCK;
 
-        let contract = self.ln_client().create_outgoing_output(
-            &mut dbtx,
-            invoice,
-            &gateway,
-            absolute_timelock as u32,
-            &mut rng,
-        )?;
+        let contract = self
+            .ln_client()
+            .create_outgoing_output(
+                &mut dbtx,
+                invoice,
+                &gateway,
+                absolute_timelock as u32,
+                &mut rng,
+            )
+            .await?;
 
         dbtx.commit_tx().await.expect("DB Error");
 
@@ -1009,6 +1001,7 @@ impl Client<GatewayClientConfig> {
             &OutgoingContractAccountKey(contract.contract.contract_id()),
             &contract,
         )
+        .await
         .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");
     }
@@ -1074,6 +1067,7 @@ impl Client<GatewayClientConfig> {
             .await
             .expect("DB Error");
         dbtx.insert_entry(&OutgoingPaymentClaimKey(contract_id), &())
+            .await
             .expect("DB Error");
         dbtx.commit_tx().await.expect("DB Error");
 

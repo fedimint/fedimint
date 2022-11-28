@@ -446,7 +446,7 @@ impl ServerModulePlugin for Wallet {
         } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         // Save signatures to the database
-        self.save_peg_out_signatures(dbtx, peg_out_signatures);
+        self.save_peg_out_signatures(dbtx, peg_out_signatures).await;
 
         // FIXME: also warn on less than 1/3, that should never happen
         // Make sure we have enough contributions to continue
@@ -478,6 +478,7 @@ impl ServerModulePlugin for Wallet {
         };
 
         dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
+            .await
             .expect("DB Error");
     }
 
@@ -521,7 +522,7 @@ impl ServerModulePlugin for Wallet {
         })
     }
 
-    fn apply_input<'a, 'b, 'c>(
+    async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
@@ -538,6 +539,7 @@ impl ServerModulePlugin for Wallet {
                 amount: bitcoin::Amount::from_sat(input.tx_output().value),
             },
         )
+        .await
         .expect("DB Error");
 
         Ok(meta)
@@ -628,13 +630,16 @@ impl ServerModulePlugin for Wallet {
         }
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
+            .await
             .expect("DB Error");
         dbtx.insert_new_entry(&PegOutTxSignatureCI(txid), &sigs)
+            .await
             .expect("DB Error");
         dbtx.insert_new_entry(
             &PegOutBitcoinTransaction(out_point),
             &WalletOutputOutcome(txid),
         )
+        .await
         .expect("DB Error");
         Ok(amount)
     }
@@ -684,6 +689,7 @@ impl ServerModulePlugin for Wallet {
                     // extracted tx for periodic transmission and to accept the change into our wallet
                     // eventually once it confirms.
                     dbtx.insert_new_entry(&PendingTransactionKey(key.0), &pending_tx)
+                        .await
                         .expect("DB Error");
                     dbtx.remove_entry(&PegOutTxSignatureCI(key.0))
                         .await
@@ -807,7 +813,7 @@ impl Wallet {
         randomness.into_iter().fold([0; 32], xor)
     }
 
-    fn save_peg_out_signatures<'a>(
+    async fn save_peg_out_signatures<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         signatures: Vec<(PeerId, PegOutSignatureItem)>,
@@ -832,6 +838,7 @@ impl Wallet {
 
         for (txid, unsigned) in cache.into_iter() {
             dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
+                .await
                 .expect("DB Error");
         }
     }
@@ -1044,7 +1051,7 @@ impl Wallet {
                     .expect("bitcoin rpc failed");
                 for transaction in block.txdata {
                     if let Some(pending_tx) = pending_transactions.get(&transaction.txid()) {
-                        self.recognize_change_utxo(dbtx, pending_tx);
+                        self.recognize_change_utxo(dbtx, pending_tx).await;
                     }
                 }
             }
@@ -1053,13 +1060,14 @@ impl Wallet {
                 &BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
                 &(),
             )
+            .await
             .expect("DB Error");
         }
     }
 
     /// Add a change UTXO to our spendable UTXO database after it was included in a block that we
     /// got consensus on.
-    fn recognize_change_utxo<'a>(
+    async fn recognize_change_utxo<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         pending_tx: &PendingTransaction,
@@ -1081,6 +1089,7 @@ impl Wallet {
                         amount: bitcoin::Amount::from_sat(output.value),
                     },
                 )
+                .await
                 .expect("DB Error");
             }
         }

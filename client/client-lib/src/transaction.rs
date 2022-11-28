@@ -131,14 +131,17 @@ impl TransactionBuilder {
         self.input_amount(client) - self.output_amount(client) - self.fee_amount(client)
     }
 
-    pub fn output_coins(
+    pub async fn output_coins<F, Fut>(
         &mut self,
         amount: Amount,
-        coin_gen: impl FnMut() -> (NoteIssuanceRequest, BlindNonce),
+        coin_gen: F,
         tbs_pks: &Tiered<AggregatePublicKey>,
-    ) {
+    ) where
+        F: FnMut() -> Fut,
+        Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
+    {
         let (coin_finalization_data, coin_output) =
-            self.create_output_coins(amount, coin_gen, tbs_pks);
+            self.create_output_coins(amount, coin_gen, tbs_pks).await;
 
         if !coin_output.is_empty() {
             let out_idx = self.tx.outputs.len();
@@ -148,20 +151,24 @@ impl TransactionBuilder {
         }
     }
 
-    pub fn create_output_coins(
+    pub async fn create_output_coins<F, Fut>(
         &mut self,
         amount: Amount,
-        mut coin_gen: impl FnMut() -> (NoteIssuanceRequest, BlindNonce),
+        mut coin_gen: F,
         tbs_pks: &Tiered<AggregatePublicKey>,
-    ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
+    ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>)
+    where
+        F: FnMut() -> Fut,
+        Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
+    {
+        let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
+            Vec::new();
+        for (amt, ()) in TieredMulti::represent_amount(amount, tbs_pks).into_iter() {
+            let (request, blind_nonce) = coin_gen().await;
+            amount_requests.push(((amt, request), (amt, blind_nonce)));
+        }
         let (coin_finalization_data, sig_req): (NoteIssuanceRequests, SignRequest) =
-            TieredMulti::represent_amount(amount, tbs_pks)
-                .into_iter()
-                .map(|(amt, ())| {
-                    let (request, blind_nonce) = coin_gen();
-                    ((amt, request), (amt, blind_nonce))
-                })
-                .unzip();
+            amount_requests.into_iter().unzip();
 
         debug!(
             %amount,
@@ -173,17 +180,21 @@ impl TransactionBuilder {
         (coin_finalization_data, sig_req.0)
     }
 
-    pub async fn build<'a, R: RngCore + CryptoRng>(
+    pub async fn build<'a, R: RngCore + CryptoRng, F, Fut>(
         mut self,
         change_required: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
-        mut coin_gen: impl FnMut(&mut DatabaseTransaction<'_>) -> (NoteIssuanceRequest, BlindNonce),
+        coin_gen: F,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
         tbs_pks: &Tiered<AggregatePublicKey>,
         mut rng: R,
-    ) -> Transaction {
+    ) -> Transaction
+    where
+        F: FnMut() -> Fut,
+        Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
+    {
         // add change
-        self.output_coins(change_required, || coin_gen(dbtx), tbs_pks);
+        self.output_coins(change_required, coin_gen, tbs_pks).await;
 
         let txid = self.tx.tx_hash();
         if !self.keys.is_empty() {
@@ -204,11 +215,12 @@ impl TransactionBuilder {
                 .expect("DB Error");
             }
             dbtx.insert_entry(&PendingCoinsKey(txid), &self.input_notes)
+                .await
                 .expect("DB Error");
         }
 
         // write coin output to db to await for tx success to be fetched later
-        self.output_notes.iter().for_each(|(out_idx, coins)| {
+        for (out_idx, coins) in self.output_notes.iter() {
             dbtx.insert_new_entry(
                 &OutputFinalizationKey(OutPoint {
                     txid,
@@ -216,8 +228,9 @@ impl TransactionBuilder {
                 }),
                 &coins.clone(),
             )
+            .await
             .expect("DB Error");
-        });
+        }
 
         self.tx
     }

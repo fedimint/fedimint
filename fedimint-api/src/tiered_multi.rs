@@ -166,10 +166,10 @@ impl<C> FromIterator<(Amount, C)> for TieredMulti<C> {
 
 impl<C> IntoIterator for TieredMulti<C>
 where
-    C: 'static,
+    C: 'static + Send,
 {
     type Item = (Amount, C);
-    type IntoIter = Box<dyn Iterator<Item = (Amount, C)>>;
+    type IntoIter = Box<dyn Iterator<Item = (Amount, C)> + Send>;
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(

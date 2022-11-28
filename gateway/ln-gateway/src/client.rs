@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use async_trait::async_trait;
 use fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define,
@@ -16,9 +17,10 @@ use tracing::{debug, warn};
 use crate::{LnGatewayError, Result};
 
 /// Trait for gateway federation client builders
+#[async_trait]
 pub trait IGatewayClientBuilder: Debug {
     /// Build a new gateway federation client
-    fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>>;
+    async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>>;
 
     /// Create a new database for the gateway federation client
     fn create_database(&self, federation_id: FederationId) -> Result<Database>;
@@ -50,14 +52,15 @@ impl RocksDbGatewayClientBuilder {
 
 /// Builds a new federation client with RocksDb
 /// On successful build, the configuration is saved to a file at the builder work directory
+#[async_trait]
 impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
-    fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
+    async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
         let federation_id = FederationId(config.client_config.federation_name.clone());
 
         let db = self.create_database(federation_id)?;
         let ctx = secp256k1::Secp256k1::new();
 
-        Ok(Client::new(config, db, ctx))
+        Ok(Client::new(config, db, ctx).await)
     }
 
     /// Create a client database
@@ -124,14 +127,15 @@ impl IGatewayClientBuilder for RocksDbGatewayClientBuilder {
 #[derive(Default, Debug, Clone)]
 pub struct MemoryDbGatewayClientBuilder {}
 
+#[async_trait]
 impl IGatewayClientBuilder for MemoryDbGatewayClientBuilder {
-    fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
+    async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
         let federation_id = FederationId(config.client_config.federation_name.clone());
 
         let db = self.create_database(federation_id)?;
         let ctx = secp256k1::Secp256k1::new();
 
-        Ok(Client::new(config, db, ctx))
+        Ok(Client::new(config, db, ctx).await)
     }
 
     /// Create a client database

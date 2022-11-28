@@ -340,6 +340,7 @@ impl ServerModulePlugin for Mint {
                 consensus_item.out_point,
                 consensus_item.0.partial_signature,
             )
+            .await
         }
     }
 
@@ -410,7 +411,7 @@ impl ServerModulePlugin for Mint {
         })
     }
 
-    fn apply_input<'a, 'b, 'c>(
+    async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
@@ -419,12 +420,13 @@ impl ServerModulePlugin for Mint {
     ) -> Result<InputMeta, ModuleError> {
         let meta = self.validate_input(interconnect, dbtx, cache, input)?;
 
-        input.iter_items().for_each(|(amount, coin)| {
+        for (amount, coin) in input.iter_items() {
             let key = NonceKey(coin.0.clone());
-            dbtx.insert_new_entry(&key, &()).expect("DB Error");
+            dbtx.insert_new_entry(&key, &()).await.expect("DB Error");
             dbtx.insert_new_entry(&MintAuditItemKey::Redemption(key), &amount)
+                .await
                 .expect("DB Error");
-        });
+        }
 
         Ok(meta)
     }
@@ -470,11 +472,13 @@ impl ServerModulePlugin for Mint {
             },
             &partial_sig,
         )
+        .await
         .expect("DB Error");
         dbtx.insert_new_entry(
             &MintAuditItemKey::Issuance(out_point),
             &output.total_amount(),
         )
+        .await
         .expect("DB Error");
 
         Ok(amount)
@@ -534,6 +538,7 @@ impl ServerModulePlugin for Mint {
                         dbtx.remove_entry(&proposal_key).await.expect("DB Error");
 
                         dbtx.insert_entry(&OutputOutcomeKey(issuance_id), &blind_signature)
+                            .await
                             .expect("DB Error");
                     }
                     Err(CombineError::TooFewShares(got, _)) => {
@@ -575,8 +580,10 @@ impl ServerModulePlugin for Mint {
         }
 
         dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
+            .await
             .expect("DB Error");
         dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
+            .await
             .expect("DB Error");
 
         dropped_peers
@@ -677,6 +684,7 @@ impl Mint {
                 data: request.payload.to_vec(),
             },
         )
+        .await
         .expect("DB error");
 
         Ok(())
@@ -892,7 +900,7 @@ impl Mint {
         (Ok(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    fn process_partial_signature<'a>(
+    async fn process_partial_signature<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         peer: PeerId,
@@ -923,6 +931,7 @@ impl Mint {
             },
             &partial_sig,
         )
+        .await
         .expect("DB Error");
     }
 }

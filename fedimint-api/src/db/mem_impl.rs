@@ -67,7 +67,7 @@ impl IDatabase for MemDatabase {
 // as it doesn't properly implement MVCC
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
-    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key);
         // Insert data from copy so we can read our own writes
         self.tx_data.insert(key.to_vec(), value.clone());
@@ -173,14 +173,14 @@ mod tests {
         fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_read_own_writes() {
+        fedimint_api::db::verify_read_own_writes(MemDatabase::new().into()).await;
     }
 
-    #[test_log::test]
-    fn test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(MemDatabase::new().into());
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_prevent_dirty_reads() {
+        fedimint_api::db::verify_prevent_dirty_reads(MemDatabase::new().into()).await;
     }
 
     #[test_log::test(tokio::test)]

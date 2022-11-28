@@ -65,7 +65,7 @@ impl<'c> WalletClient<'c> {
     /// prevent front-running by a malicious  federation member
     /// The returned bitcoin-address is derived from the script. Thus sending bitcoin to that address will result in a
     /// transaction containing the scripts public-key in at least one of it's outpoints.
-    pub fn get_new_pegin_address<'a, R: RngCore + CryptoRng>(
+    pub async fn get_new_pegin_address<'a, R: RngCore + CryptoRng>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         mut rng: R,
@@ -90,6 +90,7 @@ impl<'c> WalletClient<'c> {
             },
             &peg_in_keypair.secret_bytes(),
         )
+        .await
         .expect("DB Error");
 
         address
@@ -195,10 +196,8 @@ mod tests {
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     use fedimint_core::modules::wallet::common::WalletModuleDecoder;
     use fedimint_core::modules::wallet::config::WalletClientConfig;
-    use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     use fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet, WalletConfigGenerator,
-        WalletOutput, WalletOutputOutcome,
+        PegOut, PegOutFees, Wallet, WalletConfigGenerator, WalletOutput, WalletOutputOutcome,
     };
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
@@ -381,29 +380,7 @@ mod tests {
             .await;
 
         // generate fake UTXO
-        fed.lock()
-            .await
-            .patch_dbs(|dbtx| {
-                let out_point = bitcoin::OutPoint::default();
-                let tweak = [42; 32];
-                let utxo = SpendableUTXO {
-                    tweak,
-                    amount: bitcoin::Amount::from_sat(48000),
-                };
-
-                dbtx.insert_entry(&UTXOKey(out_point), &utxo).unwrap();
-
-                dbtx.insert_entry(
-                    &RoundConsensusKey,
-                    &RoundConsensus {
-                        block_height: 0,
-                        fee_rate: Feerate { sats_per_kvb: 0 },
-                        randomness_beacon: tweak,
-                    },
-                )
-                .unwrap();
-            })
-            .await;
+        fed.lock().await.generate_fake_utxo().await;
 
         let addr = Address::from_str("msFGPqHVk8rbARMd69FfGYxwcboZLemdBi").unwrap();
         let amount = bitcoin::Amount::from_sat(42000);

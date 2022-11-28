@@ -82,7 +82,7 @@ impl<'a> ClientModulePlugin for LnClient<'a> {
 impl<'c> LnClient<'c> {
     /// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
     /// till the block height defined by `timelock`, after that we can claim our money back.
-    pub fn create_outgoing_output<'a, 'b>(
+    pub async fn create_outgoing_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         invoice: Invoice,
@@ -123,6 +123,7 @@ impl<'c> LnClient<'c> {
             &OutgoingPaymentKey(contract.contract_id()),
             &outgoing_payment,
         )
+        .await
         .expect("DB Error");
 
         Ok(LightningOutput::Contract(ContractOutput {
@@ -259,6 +260,7 @@ impl<'c> LnClient<'c> {
     pub async fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
+            .await
             .expect("Db error");
         dbtx.commit_tx().await.expect("DB Error");
     }
@@ -537,6 +539,7 @@ mod tests {
             .begin_transaction(ModuleRegistry::default());
         let output = client
             .create_outgoing_output(&mut dbtx, invoice.clone(), &gateway, timelock, &mut rng)
+            .await
             .unwrap();
 
         dbtx.commit_tx().await.expect("DB Error");
