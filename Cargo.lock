@@ -1112,6 +1112,7 @@ dependencies = [
  "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-server",
+ "fedimint-testing",
  "fedimint-wallet",
  "futures",
  "hbbft",

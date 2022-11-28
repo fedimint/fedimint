@@ -13,9 +13,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
-use bitcoin::{secp256k1, Address, Transaction};
+use bitcoin::{secp256k1, Address};
 use cln_rpc::ClnRpc;
-use fake::{FakeBitcoinTest, FakeLightningTest};
+use fake::FakeLightningTest;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::{
@@ -43,9 +43,9 @@ use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{all_decoders, consensus, EpochMessage, FedimintServer};
+use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
-use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::SpendableUTXO;
 use fedimint_wallet::Wallet;
 use fedimint_wallet::WalletConsensusItem;
@@ -331,25 +331,6 @@ async fn distributed_config(
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
     let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
     fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
-}
-
-pub trait BitcoinTest {
-    /// Mines a given number of blocks
-    fn mine_blocks(&self, block_num: u64);
-
-    /// Send some bitcoin to an address then mine a block to confirm it.
-    /// Returns the proof that the transaction occurred.
-    fn send_and_mine_block(
-        &self,
-        address: &Address,
-        amount: bitcoin::Amount,
-    ) -> (TxOutProof, Transaction);
-
-    /// Returns a new address.
-    fn get_new_address(&self) -> Address;
-
-    /// Mine a block to include any pending transactions then get the amount received to an address
-    fn mine_block_and_get_received(&self, address: &Address) -> Amount;
 }
 
 #[async_trait]

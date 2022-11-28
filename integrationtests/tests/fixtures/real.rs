@@ -15,11 +15,12 @@ use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::core::Decoder;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::Amount;
+use fedimint_testing::btc::BitcoinTest;
 use fedimint_wallet::txoproof::TxOutProof;
 use futures::lock::Mutex;
 use lightning_invoice::Invoice;
 
-use crate::fixtures::{BitcoinTest, LightningTest};
+use crate::fixtures::LightningTest;
 
 pub struct RealLightningTest {
     rpc_gateway: Arc<Mutex<ClnRpc>>,
