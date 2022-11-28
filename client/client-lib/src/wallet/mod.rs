@@ -200,7 +200,7 @@ mod tests {
         PegOut, PegOutFees, Wallet, WalletConfigGenerator, WalletOutput, WalletOutputOutcome,
     };
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
-    use fedimint_testing::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
+    use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
     use threshold_crypto::PublicKey;
 

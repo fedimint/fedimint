@@ -1,3 +1,4 @@
+pub mod bitcoind;
 pub mod fixtures;
 
 use bitcoin::{Address, Transaction};
