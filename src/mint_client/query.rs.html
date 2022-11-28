@@ -345,7 +345,7 @@
         <span class="kw">let </span>FedResponse { peer, result } = response;
         <span class="kw">match </span>result {
             <span class="prelude-val">Err</span>(JsonRpcError::Call(RpcCallError::Custom(e))) <span class="kw">if </span>e.code() == <span class="number">404 </span>=&gt; {
-                QueryStep::Request(HashSet::from([peer]))
+                QueryStep::Retry(HashSet::from([peer]))
             }
             result =&gt; <span class="self">self</span>.current.process(FedResponse { peer, result }),
         }
@@ -377,7 +377,7 @@
 
         <span class="kw">match </span><span class="self">self</span>.current.process(response) {
             QueryStep::Continue <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required =&gt; {
-                <span class="kw">let </span>result = QueryStep::Request(<span class="self">self</span>.responses.clone());
+                <span class="kw">let </span>result = QueryStep::Retry(<span class="self">self</span>.responses.clone());
                 <span class="self">self</span>.responses.clear();
                 result
             }
@@ -458,11 +458,11 @@
 
 <span class="doccomment">/// Results from the strategy handling a response from a peer
 ///
-/// `Request` sending requests to some of the peers
+/// `Retry` sending requests to some of the peers
 /// `Continue` awaiting and handling responses
 /// `Finished` return a final result
 </span><span class="kw">pub enum </span>QueryStep&lt;R&gt; {
-    Request(HashSet&lt;PeerId&gt;),
+    Retry(HashSet&lt;PeerId&gt;),
     Continue,
     Finished(<span class="prelude-ty">Result</span>&lt;R&gt;),
 }
