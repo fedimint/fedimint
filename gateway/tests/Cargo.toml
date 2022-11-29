@@ -16,6 +16,7 @@ async-trait = "0.1.42"
 bitcoin = "0.29.2"
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
+fedimint-testing = { path = "../../fedimint-testing" }
 lightning-invoice = "0.20.0"
 ln-gateway = { path = "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }

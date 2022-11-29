@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::contracts::Preimage;
+use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use lightning_invoice::Invoice;
 use ln_gateway::{
     client::{GatewayClientBuilder, MemoryDbGatewayClientBuilder},
@@ -17,6 +18,7 @@ use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 
 pub struct Fixtures {
+    pub bitcoin: Box<dyn BitcoinTest>,
     pub gateway: LnGateway,
     pub task_group: TaskGroup,
 }
@@ -30,8 +32,10 @@ pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
 
     let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone()).await;
+    let bitcoin = Box::new(FakeBitcoinTest::new());
 
     Ok(Fixtures {
+        bitcoin,
         gateway,
         task_group,
     })

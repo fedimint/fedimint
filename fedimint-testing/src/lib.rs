@@ -17,7 +17,7 @@ use fedimint_api::module::{
 use fedimint_api::server::IServerModule;
 use fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
 
-pub mod bitcoind;
+pub mod btc;
 
 #[derive(Debug)]
 pub struct FakeFed<Module> {
