@@ -6,7 +6,7 @@ use anyhow::Result;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::{
     config::GatewayConfig,
-    rpc::{rpc_client::RpcClient, BalancePayload, RegisterFedPayload},
+    rpc::{rpc_client::RpcClient, BalancePayload, DepositAddressPayload, RegisterFedPayload},
 };
 use mint_client::api::WsFederationConnect;
 use mint_client::FederationId;
@@ -92,10 +92,26 @@ async fn test_gateway_authentication() -> Result<()> {
         401
     );
 
-    // TODO:
     // Test gateway authentication on `get_deposit_address` function
     // *  `get_deposit_address` with correct password succeeds
     // *  `get_deposit_address` with incorrect password fails
+    let payload = DepositAddressPayload {
+        federation_id: federation_id.clone(),
+    };
+    assert_eq!(
+        client
+            .get_deposit_address("getdepositaddress".to_string(), payload.clone())
+            .await?
+            .status(),
+        401
+    );
+    assert_ne!(
+        client
+            .get_deposit_address(gw_password.clone(), payload,)
+            .await?
+            .status(),
+        401
+    );
 
     // TODO:
     // Test gateway authentication on `deposit` function
