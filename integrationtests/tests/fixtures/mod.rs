@@ -56,7 +56,7 @@ use itertools::Itertools;
 use lightning_invoice::Invoice;
 use ln_gateway::{
     actor::GatewayActor,
-    client::{GatewayClientBuilder, MemoryDbGatewayClientBuilder},
+    client::{GatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
     config::GatewayConfig,
     rpc::GatewayRequest,
     LnGateway,
@@ -380,7 +380,8 @@ impl GatewayTest {
         };
 
         // Create federation client builder for the gateway
-        let client_builder: GatewayClientBuilder = MemoryDbGatewayClientBuilder {}.into();
+        let client_builder: GatewayClientBuilder =
+            StandardGatewayClientBuilder::new(PathBuf::new(), MemDbFactory.into()).into();
 
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let adapter = Arc::new(ln_client_adapter);

@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -8,7 +11,7 @@ use fedimint_ln::contracts::Preimage;
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use lightning_invoice::Invoice;
 use ln_gateway::{
-    client::{GatewayClientBuilder, MemoryDbGatewayClientBuilder},
+    client::{GatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::GatewayRequest,
@@ -28,7 +31,8 @@ pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
 
     let ln_rpc = Arc::new(MockLnRpc::new());
 
-    let client_builder: GatewayClientBuilder = MemoryDbGatewayClientBuilder {}.into();
+    let client_builder: GatewayClientBuilder =
+        StandardGatewayClientBuilder::new(PathBuf::new(), MemDbFactory.into()).into();
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
 
     let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone()).await;
