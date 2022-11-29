@@ -364,6 +364,8 @@ impl ServerConfig {
                 .collect(),
         };
 
+        info!("Distributed key generation has completed successfully!");
+
         Ok(Ok((server, client)))
     }
 }
