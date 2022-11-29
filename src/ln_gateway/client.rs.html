@@ -217,7 +217,7 @@
 <span class="kw">use crate</span>::{LnGatewayError, <span class="prelude-ty">Result</span>};
 
 <span class="kw">pub trait </span>IDbFactory: Debug {
-    <span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId, _path: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt;;
+    <span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId, path: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt;;
 }
 
 <span class="macro">dyn_newtype_define!</span>(
