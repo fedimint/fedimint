@@ -866,10 +866,17 @@
 <a href="#866" id="866">866</a>
 <a href="#867" id="867">867</a>
 <a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
 <span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
@@ -905,10 +912,10 @@
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
-</span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>MintClient {
     <span class="kw">pub </span>config: MintClientConfig,
-    <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
+    <span class="kw">pub </span>context: Arc&lt;ClientContext&gt;,
     <span class="kw">pub </span>secret: DerivableSecret,
 }
 
@@ -968,7 +975,7 @@
     </span><span class="kw">pub </span>spend_key: KeyPair,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ClientModulePlugin <span class="kw">for </span>MintClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl </span>ClientModulePlugin <span class="kw">for </span>MintClient {
     <span class="kw">type </span>Decoder = &lt;Mint <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
     <span class="kw">type </span>Module = Mint;
     <span class="kw">const </span>MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
@@ -994,7 +1001,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
+<span class="kw">impl </span>MintClient {
     <span class="kw">pub fn </span>start_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
         <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default())
     }
@@ -1531,7 +1538,7 @@
 
     <span class="kw">async fn </span>issue_tokens&lt;<span class="lifetime">&#39;a</span>&gt;(
         fed: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>tokio::sync::Mutex&lt;Fed&gt;,
-        client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintClient&lt;<span class="lifetime">&#39;a</span>&gt;,
+        client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintClient,
         client_db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
         amt: Amount,
     ) {
@@ -1564,14 +1571,15 @@
     </span><span class="kw">async fn </span>create_output() {
         <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
 
+        <span class="kw">let </span>context = Arc::new(client_context);
         <span class="kw">let </span>client = MintClient {
             config: client_config,
-            context: <span class="kw-2">&amp;</span>client_context,
+            context: context.clone(),
             secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sat(<span class="number">12</span>);
-        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>client_context.db, ISSUE_AMOUNT).<span class="kw">await</span>;
+        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, ISSUE_AMOUNT).<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(client.coins().total_amount(), ISSUE_AMOUNT)
     }
@@ -1581,13 +1589,15 @@
         <span class="kw">const </span>SPEND_AMOUNT: Amount = Amount::from_sat(<span class="number">21</span>);
 
         <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
+
+        <span class="kw">let </span>context = Arc::new(client_context);
         <span class="kw">let </span>client = MintClient {
             config: client_config,
-            context: <span class="kw-2">&amp;</span>client_context,
+            context: context.clone(),
             secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
-        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>client_context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
+        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
 
         <span class="comment">// Spending works
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client
@@ -1677,34 +1687,36 @@
 
         <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap();
 
-        <span class="kw">let </span>client: MintClient&lt;<span class="lifetime">&#39;static</span>&gt; = MintClient {
+        <span class="kw">let </span>client: MintClient = MintClient {
             config: MintClientConfig {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
             },
-            context: Box::leak(Box::new(ClientContext {
+            context: Arc::new(ClientContext {
                 db: db.into(),
                 api: WsFederationApi::new(<span class="macro">vec!</span>[]).into(),
                 secp: Default::default(),
-            })),
+            }),
             secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
+        <span class="kw">let </span>client_copy = client.clone();
 
-        <span class="kw">let </span>client_ref: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>MintClient&lt;<span class="lifetime">&#39;static</span>&gt; = Box::leak(Box::new(client));
-
-        <span class="kw">let </span>issuance_thread = || {
+        <span class="kw">let </span>issuance_thread = <span class="kw">move </span>|| {
             (<span class="number">0</span>..ITERATIONS)
-                .filter_map(|<span class="kw">_</span>| {
-                    block_on(<span class="kw">async </span>{
-                        <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1).<span class="kw">await</span>;
-                        <span class="prelude-val">Some</span>(nonce)
-                    })
+                .filter_map({
+                    |<span class="kw">_</span>| {
+                        <span class="kw">let </span>client = client_copy.clone();
+                        block_on(<span class="kw">async </span>{
+                            <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client.new_ecash_note(secp256k1_zkp::SECP256K1).<span class="kw">await</span>;
+                            <span class="prelude-val">Some</span>(nonce)
+                        })
+                    }
                 })
                 .collect::&lt;Vec&lt;BlindNonce&gt;&gt;()
         };
 
         <span class="kw">let </span>threads = (<span class="number">0</span>..<span class="number">4</span>)
-            .map(|<span class="kw">_</span>| std::thread::spawn(issuance_thread))
+            .map(|<span class="kw">_</span>| std::thread::spawn(issuance_thread.clone()))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>results = threads
             .into_iter()
@@ -1723,7 +1735,7 @@
         <span class="comment">// Ensure all notes are unique
         </span><span class="macro">assert_eq!</span>(result_count, result_count_deduplicated);
 
-        <span class="kw">let </span>last_idx = client_ref
+        <span class="kw">let </span>last_idx = client
             .context
             .db
             .begin_transaction(ModuleRegistry::default())

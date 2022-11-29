@@ -600,12 +600,14 @@
 <a href="#600" id="600">600</a>
 <a href="#601" id="601">601</a>
 <a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
 
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
@@ -641,12 +643,12 @@
 <span class="kw">use </span><span class="kw">crate</span>::FederationId;
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>LnClient&lt;<span class="lifetime">&#39;c</span>&gt; {
+</span><span class="kw">pub struct </span>LnClient {
     <span class="kw">pub </span>config: LightningModuleClientConfig,
-    <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
+    <span class="kw">pub </span>context: Arc&lt;ClientContext&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ClientModulePlugin <span class="kw">for </span>LnClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl </span>ClientModulePlugin <span class="kw">for </span>LnClient {
     <span class="kw">type </span>Decoder = &lt;LightningModule <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
     <span class="kw">type </span>Module = LightningModule;
     <span class="kw">const </span>MODULE_KEY: ModuleKey = MODULE_KEY_LN;
@@ -681,7 +683,7 @@
 }
 
 <span class="attr">#[allow(dead_code)]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; LnClient&lt;<span class="lifetime">&#39;c</span>&gt; {
+</span><span class="kw">impl </span>LnClient {
     <span class="doccomment">/// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
     /// till the block height defined by `timelock`, after that we can claim our money back.
     </span><span class="kw">pub async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
@@ -1105,7 +1107,7 @@
 
         <span class="kw">let </span>client = LnClient {
             config: client_config,
-            context: <span class="kw-2">&amp;</span>client_context,
+            context: Arc::new(client_context),
         };
 
         fed.lock().<span class="kw">await</span>.set_block_height(<span class="number">1</span>);

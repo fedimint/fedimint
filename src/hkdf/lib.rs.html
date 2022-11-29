@@ -379,6 +379,7 @@
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This crate implements the [RFC5869] hash based key derivation function using [`bitcoin_hashes`].
 //!
 //! [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
@@ -403,6 +404,7 @@
 <span class="doccomment">/// Implements the [RFC5869] hash based key derivation function using the hash function `H`.
 ///
 /// [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
+</span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Hkdf&lt;H: BitcoinHash&gt; {
     prk: Hmac&lt;H&gt;,
 }

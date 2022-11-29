@@ -436,7 +436,11 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
-</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>db::PegInKey;
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
@@ -462,12 +466,12 @@
 <span class="doccomment">/// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>WalletClient&lt;<span class="lifetime">&#39;c</span>&gt; {
+</span><span class="kw">pub struct </span>WalletClient {
     <span class="kw">pub </span>config: WalletClientConfig,
-    <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
+    <span class="kw">pub </span>context: Arc&lt;ClientContext&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ClientModulePlugin <span class="kw">for </span>WalletClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl </span>ClientModulePlugin <span class="kw">for </span>WalletClient {
     <span class="kw">type </span>Decoder = &lt;Wallet <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
     <span class="kw">type </span>Module = Wallet;
     <span class="kw">const </span>MODULE_KEY: ModuleKey = MODULE_KEY_WALLET;
@@ -493,7 +497,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; WalletClient&lt;<span class="lifetime">&#39;c</span>&gt; {
+<span class="kw">impl </span>WalletClient {
     <span class="doccomment">/// Returns a bitcoin-address derived from the federations peg-in-descriptor and a random tweak
     ///
     /// This function will create a public/secret [keypair](bitcoin::KeyPair). The public key is used to tweak the
@@ -809,7 +813,7 @@
             new_mint_and_client(<span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span>;
         <span class="kw">let </span>_client = WalletClient {
             config: client_config,
-            context: <span class="kw-2">&amp;</span>client_context,
+            context: Arc::new(client_context),
         };
 
         <span class="comment">// Set fees low forever

@@ -285,7 +285,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
+<span class="kw">impl </span>MintClient {
     <span class="doccomment">/// Prepare an encrypted backup and send it to federation for storing
     </span><span class="kw">pub async fn </span>back_up_ecash_to_federation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>backup = <span class="self">self</span>.prepare_ecash_backup().<span class="kw">await</span><span class="question-mark">?</span>;
