@@ -821,12 +821,8 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         .0
         .get_module::<MintClientConfig>("mint")?
         .tbs_pks;
-    let mut dbtx = user
-        .client
-        .mint_client()
-        .context
-        .db
-        .begin_transaction(all_decoders());
+    let context = &user.client.mint_client().context;
+    let mut dbtx = context.db.begin_transaction(all_decoders());
     let tx = builder
         .build(
             sats(0),

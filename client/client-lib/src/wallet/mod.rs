@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
@@ -24,12 +26,12 @@ pub mod decode_stub;
 /// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
 #[derive(Debug)]
-pub struct WalletClient<'c> {
+pub struct WalletClient {
     pub config: WalletClientConfig,
-    pub context: &'c ClientContext,
+    pub context: Arc<ClientContext>,
 }
 
-impl<'a> ClientModulePlugin for WalletClient<'a> {
+impl ClientModulePlugin for WalletClient {
     type Decoder = <Wallet as ServerModulePlugin>::Decoder;
     type Module = Wallet;
     const MODULE_KEY: ModuleKey = MODULE_KEY_WALLET;
@@ -55,7 +57,7 @@ impl<'a> ClientModulePlugin for WalletClient<'a> {
     }
 }
 
-impl<'c> WalletClient<'c> {
+impl WalletClient {
     /// Returns a bitcoin-address derived from the federations peg-in-descriptor and a random tweak
     ///
     /// This function will create a public/secret [keypair](bitcoin::KeyPair). The public key is used to tweak the
@@ -371,7 +373,7 @@ mod tests {
             new_mint_and_client(&mut task_group).await;
         let _client = WalletClient {
             config: client_config,
-            context: &client_context,
+            context: Arc::new(client_context),
         };
 
         // Set fees low forever

@@ -69,7 +69,7 @@ mod aead {
     }
 }
 
-impl<'c> MintClient<'c> {
+impl MintClient {
     /// Prepare an encrypted backup and send it to federation for storing
     pub async fn back_up_ecash_to_federation(&self) -> Result<()> {
         let backup = self.prepare_ecash_backup().await?;

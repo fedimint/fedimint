@@ -22,6 +22,7 @@ pub mod hashes {
 /// Implements the [RFC5869] hash based key derivation function using the hash function `H`.
 ///
 /// [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
+#[derive(Clone)]
 pub struct Hkdf<H: BitcoinHash> {
     prk: Hmac<H>,
 }
