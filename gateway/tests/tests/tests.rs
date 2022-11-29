@@ -6,7 +6,10 @@ use anyhow::Result;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::{
     config::GatewayConfig,
-    rpc::{rpc_client::RpcClient, BalancePayload, DepositAddressPayload, RegisterFedPayload},
+    rpc::{
+        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, RegisterFedPayload,
+        WithdrawPayload,
+    },
 };
 use mint_client::api::WsFederationConnect;
 use mint_client::FederationId;
@@ -118,11 +121,28 @@ async fn test_gateway_authentication() -> Result<()> {
     // *  `deposit` with correct password succeeds
     // *  `deposit` with incorrect password fails
 
-    // TODO:
     // Test gateway authentication on `withdraw` function
     // *  `withdraw` with correct password succeeds
     // *  `withdraw` with incorrect password fails
-    let _peg_out_addr = bitcoin.get_new_address();
+    let payload = WithdrawPayload {
+        federation_id,
+        amount: bitcoin::Amount::from_sat(100),
+        address: bitcoin.get_new_address(),
+    };
+    assert_eq!(
+        client
+            .withdraw("withdraw".to_string(), payload.clone())
+            .await?
+            .status(),
+        401
+    );
+    assert_ne!(
+        client
+            .withdraw(gw_password.clone(), payload,)
+            .await?
+            .status(),
+        401
+    );
 
     task_group.shutdown_join_all().await
 }

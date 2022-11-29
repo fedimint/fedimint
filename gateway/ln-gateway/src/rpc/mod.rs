@@ -78,7 +78,7 @@ pub struct DepositPayload {
     pub transaction: Transaction,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WithdrawPayload {
     pub federation_id: FederationId,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
