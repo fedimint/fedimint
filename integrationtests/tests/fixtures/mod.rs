@@ -929,11 +929,7 @@ impl FederationTest {
             let db = database_gen();
             let mut task_group = task_group.clone();
 
-            let mint = Mint::new(
-                cfg.get_module_config("mint").unwrap(),
-                db.clone(),
-                all_decoders(),
-            );
+            let mint = Mint::new(cfg.get_module_config("mint").unwrap());
 
             let wallet = Wallet::new_with_bitcoind(
                 cfg.get_module_config("wallet").unwrap(),

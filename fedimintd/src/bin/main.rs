@@ -96,11 +96,7 @@ async fn main() -> anyhow::Result<()> {
 
     task_group.install_kill_handler();
 
-    let mint = fedimint_core::modules::mint::Mint::new(
-        cfg.get_module_config("mint")?,
-        db.clone(),
-        all_decoders(),
-    );
+    let mint = fedimint_core::modules::mint::Mint::new(cfg.get_module_config("mint")?);
 
     let wallet = Wallet::new_with_bitcoind(
         cfg.get_module_config("wallet")?,
