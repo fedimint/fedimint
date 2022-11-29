@@ -44,13 +44,26 @@ async fn test_gateway_authentication() -> Result<()> {
     // Create an RPC client
     let client = RpcClient::new(gw_announce_address);
 
-    // Register a test federation
+    // Test gateway authentication on `register_federation` function
+    // *  `register_federation` with correct password succeeds
+    // *  `register_federation` with incorrect password fails
     let payload = RegisterFedPayload {
         connect: serde_json::to_string(&WsFederationConnect { members: vec![] })?,
     };
-    client
-        .register_federation(gw_password.clone(), payload)
-        .await?;
+    assert_eq!(
+        client
+            .register_federation("registerfed".to_string(), payload.clone())
+            .await?
+            .status(),
+        401
+    );
+    assert_ne!(
+        client
+            .register_federation(gw_password.clone(), payload)
+            .await?
+            .status(),
+        401
+    );
 
     // Test gateway authentication on `get_info` function
     // *  `get_info` with correct password succeeds
@@ -94,11 +107,6 @@ async fn test_gateway_authentication() -> Result<()> {
     // *  `withdraw` with correct password succeeds
     // *  `withdraw` with incorrect password fails
     let _peg_out_addr = bitcoin.get_new_address();
-
-    // TODO:
-    // Test gateway authentication on `register_federation` function
-    // *  `register_federation` with correct password succeeds
-    // *  `register_federation` with incorrect password fails
 
     task_group.shutdown_join_all().await
 }
