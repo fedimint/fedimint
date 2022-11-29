@@ -57,7 +57,7 @@ pub struct ReceivePaymentPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfoPayload;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
 }

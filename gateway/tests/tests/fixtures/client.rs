@@ -72,10 +72,12 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
     }
 
     fn save_config(&self, _config: GatewayClientConfig) -> Result<(), LnGatewayError> {
-        unimplemented!()
+        // noop: don't save configs
+        Ok(())
     }
 
     fn load_configs(&self) -> Result<Vec<GatewayClientConfig>, LnGatewayError> {
+        // noop: return empty config list
         Ok([].into())
     }
 }
