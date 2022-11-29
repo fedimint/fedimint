@@ -152,8 +152,47 @@
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
-<span class="kw">use </span>std::{
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    fmt::Debug,
     fs::File,
     path::{Path, PathBuf},
     sync::Arc,
@@ -161,14 +200,55 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::{
+    config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
-    dyn_newtype_define,
+    dyn_newtype_define, NumPeers,
 };
 <span class="kw">use </span>fedimint_server::config::load_from_file;
-<span class="kw">use </span>mint_client::{Client, FederationId, GatewayClientConfig};
+<span class="kw">use </span>mint_client::{
+    api::{WsFederationApi, WsFederationConnect},
+    query::CurrentConsensus,
+    Client, FederationId, GatewayClientConfig,
+};
+<span class="kw">use </span>secp256k1::{KeyPair, PublicKey};
 <span class="kw">use </span>tracing::{debug, warn};
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use crate</span>::{LnGatewayError, <span class="prelude-ty">Result</span>};
+
+<span class="kw">pub trait </span>IDbFactory: Debug {
+    <span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId, _path: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt;;
+}
+
+<span class="macro">dyn_newtype_define!</span>(
+    <span class="doccomment">/// Arc reference to a database factory
+    </span><span class="attr">#[derive(Clone)]
+    </span><span class="kw">pub </span>DbFactory(Arc&lt;IDbFactory&gt;)
+);
+
+<span class="doccomment">/// A factory that creates in-memory databases
+</span><span class="attr">#[derive(Default, Debug, Clone)]
+</span><span class="kw">pub struct </span>MemDbFactory;
+
+<span class="kw">impl </span>IDbFactory <span class="kw">for </span>MemDbFactory {
+    <span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, _federation_id: FederationId, _path: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt; {
+        <span class="prelude-val">Ok</span>(MemDatabase::new().into())
+    }
+}
+
+<span class="doccomment">/// A factory that creates RocksDb database instances
+</span><span class="attr">#[derive(Default, Debug, Clone)]
+</span><span class="kw">pub struct </span>RocksDbFactory;
+
+<span class="kw">impl </span>IDbFactory <span class="kw">for </span>RocksDbFactory {
+    <span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId, path: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt; {
+        <span class="kw">let </span>db_path = path.join(<span class="macro">format!</span>(<span class="string">&quot;{}.db&quot;</span>, federation_id.hash()));
+        <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
+            .expect(<span class="string">&quot;Error opening new rocks DB&quot;</span>)
+            .into();
+        <span class="prelude-val">Ok</span>(db)
+    }
+}
 
 <span class="doccomment">/// Trait for gateway federation client builders
 </span><span class="attr">#[async_trait]
@@ -176,58 +256,86 @@
     <span class="doccomment">/// Build a new gateway federation client
     </span><span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt;;
 
-    <span class="doccomment">/// Create a new database for the gateway federation client
-    </span><span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt;;
+    <span class="doccomment">/// Create a new gateway federation client config from connect info
+    </span><span class="kw">async fn </span>create_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        connect: WsFederationConnect,
+        node_pubkey: PublicKey,
+        announce_address: Url,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt;;
 
     <span class="doccomment">/// Save and persist the configuration of the gateway federation client
     </span><span class="kw">fn </span>save_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
-    <span class="kw">fn </span>load_configs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt;;
+    <span class="doccomment">/// Load all gateway client configs from the work directory
+    </span><span class="kw">fn </span>load_configs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
-  <span class="doccomment">/// Arc reference to a Gateway federation client builder
-  </span><span class="attr">#[derive(Clone)]
-  </span><span class="kw">pub </span>GatewayClientBuilder(Arc&lt;IGatewayClientBuilder&gt;)
+    <span class="doccomment">/// dyn newtype for a Gateway federation client builder
+    </span><span class="attr">#[derive(Clone)]
+    </span><span class="kw">pub </span>GatewayClientBuilder(Arc&lt;IGatewayClientBuilder&gt;)
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>RocksDbGatewayClientBuilder {
-    <span class="kw">pub </span>work_dir: PathBuf,
+</span><span class="kw">pub struct </span>StandardGatewayClientBuilder {
+    work_dir: PathBuf,
+    db_factory: DbFactory,
 }
 
-<span class="doccomment">/// Default gateway clinet builder which constructs clients with RocksDb
-/// and saves the config at the given work directory
-</span><span class="kw">impl </span>RocksDbGatewayClientBuilder {
-    <span class="kw">pub fn </span>new(work_dir: PathBuf) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ work_dir }
+<span class="kw">impl </span>StandardGatewayClientBuilder {
+    <span class="kw">pub fn </span>new(work_dir: PathBuf, db_factory: DbFactory) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            work_dir,
+            db_factory,
+        }
     }
 }
 
-<span class="doccomment">/// Builds a new federation client with RocksDb
-/// On successful build, the configuration is saved to a file at the builder work directory
-</span><span class="attr">#[async_trait]
-</span><span class="kw">impl </span>IGatewayClientBuilder <span class="kw">for </span>RocksDbGatewayClientBuilder {
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>IGatewayClientBuilder <span class="kw">for </span>StandardGatewayClientBuilder {
     <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt; {
         <span class="kw">let </span>federation_id = FederationId(config.client_config.federation_name.clone());
 
-        <span class="kw">let </span>db = <span class="self">self</span>.create_database(federation_id)<span class="question-mark">?</span>;
+        <span class="kw">let </span>db = <span class="self">self
+            </span>.db_factory
+            .create_database(federation_id, <span class="self">self</span>.work_dir.clone())<span class="question-mark">?</span>;
         <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
 
         <span class="prelude-val">Ok</span>(Client::new(config, db, ctx).<span class="kw">await</span>)
     }
 
-    <span class="doccomment">/// Create a client database
-    </span><span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt; {
-        <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{}.db&quot;</span>, federation_id.hash()));
-        <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
-            .expect(<span class="string">&quot;Error opening DB&quot;</span>)
-            .into();
-        <span class="prelude-val">Ok</span>(db)
+    <span class="kw">async fn </span>create_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        connect: WsFederationConnect,
+        node_pubkey: PublicKey,
+        announce_address: Url,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
+        <span class="kw">let </span>api = WsFederationApi::new(connect.members);
+
+        <span class="kw">let </span>client_cfg: ClientConfig = api
+            .request(
+                <span class="string">&quot;/config&quot;</span>,
+                (),
+                CurrentConsensus::new(api.peers().one_honest()),
+            )
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Failed to get client config&quot;</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
+        <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
+        <span class="kw">let </span>kp_fed = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>rng);
+
+        <span class="prelude-val">Ok</span>(GatewayClientConfig {
+            client_config: client_cfg,
+            redeem_key: kp_fed,
+            timelock_delta: <span class="number">10</span>,
+            node_pub_key: node_pubkey,
+            api: announce_address,
+        })
     }
 
-    <span class="doccomment">/// Persist federation client cfg to [`&lt;federation_id&gt;.json`] file
-    </span><span class="kw">fn </span>save_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">fn </span>save_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>federation_id = FederationId(config.client_config.federation_name.clone());
 
         <span class="kw">let </span>path: PathBuf = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{}.json&quot;</span>, federation_id.hash()));
@@ -274,36 +382,6 @@
                     .ok()
             })
             .collect())
-    }
-}
-
-<span class="comment">// Builds a new federation client with MemoryDb
-</span><span class="attr">#[derive(Default, Debug, Clone)]
-</span><span class="kw">pub struct </span>MemoryDbGatewayClientBuilder {}
-
-<span class="attr">#[async_trait]
-</span><span class="kw">impl </span>IGatewayClientBuilder <span class="kw">for </span>MemoryDbGatewayClientBuilder {
-    <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt; {
-        <span class="kw">let </span>federation_id = FederationId(config.client_config.federation_name.clone());
-
-        <span class="kw">let </span>db = <span class="self">self</span>.create_database(federation_id)<span class="question-mark">?</span>;
-        <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
-
-        <span class="prelude-val">Ok</span>(Client::new(config, db, ctx).<span class="kw">await</span>)
-    }
-
-    <span class="doccomment">/// Create a client database
-    </span><span class="kw">fn </span>create_database(<span class="kw-2">&amp;</span><span class="self">self</span>, _federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt; {
-        <span class="prelude-val">Ok</span>(MemDatabase::new().into())
-    }
-
-    <span class="doccomment">/// Persist gateway federation client cfg
-    </span><span class="kw">fn </span>save_config(<span class="kw-2">&amp;</span><span class="self">self</span>, _config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">unimplemented!</span>()
-    }
-
-    <span class="kw">fn </span>load_configs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[])
     }
 }
 </code></pre></div>
