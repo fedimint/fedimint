@@ -24,7 +24,7 @@ use url::Url;
 use crate::{LnGatewayError, Result};
 
 pub trait IDbFactory: Debug {
-    fn create_database(&self, federation_id: FederationId, _path: PathBuf) -> Result<Database>;
+    fn create_database(&self, federation_id: FederationId, path: PathBuf) -> Result<Database>;
 }
 
 dyn_newtype_define!(
