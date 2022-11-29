@@ -19,6 +19,7 @@ const CHACHA20_POLY1305: &[u8; 8] = b"c20p1305";
 pub struct ChildId(pub u64);
 
 /// Secret key that allows deriving child secret keys
+#[derive(Clone)]
 pub struct DerivableSecret {
     // TODO: wrap in some secret protecting wrappers maybe?
     kdf: Hkdf<Sha512>,

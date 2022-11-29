@@ -4,6 +4,7 @@ pub mod decode_stub;
 pub mod incoming;
 pub mod outgoing;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
@@ -39,12 +40,12 @@ use crate::utils::ClientContext;
 use crate::FederationId;
 
 #[derive(Debug)]
-pub struct LnClient<'c> {
+pub struct LnClient {
     pub config: LightningModuleClientConfig,
-    pub context: &'c ClientContext,
+    pub context: Arc<ClientContext>,
 }
 
-impl<'a> ClientModulePlugin for LnClient<'a> {
+impl ClientModulePlugin for LnClient {
     type Decoder = <LightningModule as ServerModulePlugin>::Decoder;
     type Module = LightningModule;
     const MODULE_KEY: ModuleKey = MODULE_KEY_LN;
@@ -79,7 +80,7 @@ impl<'a> ClientModulePlugin for LnClient<'a> {
 }
 
 #[allow(dead_code)]
-impl<'c> LnClient<'c> {
+impl LnClient {
     /// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
     /// till the block height defined by `timelock`, after that we can claim our money back.
     pub async fn create_outgoing_output<'a, 'b>(
@@ -503,7 +504,7 @@ mod tests {
 
         let client = LnClient {
             config: client_config,
-            context: &client_context,
+            context: Arc::new(client_context),
         };
 
         fed.lock().await.set_block_height(1);

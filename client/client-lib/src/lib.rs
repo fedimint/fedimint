@@ -10,6 +10,7 @@ pub mod wallet;
 
 use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
@@ -149,7 +150,7 @@ impl From<GatewayClientConfig> for LightningGateway {
 
 pub struct Client<C> {
     config: C,
-    context: ClientContext,
+    context: Arc<ClientContext>,
     #[allow(unused)]
     root_secret: DerivableSecret,
 }
@@ -199,7 +200,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .as_ref()
                 .get_module::<LightningModuleClientConfig>("ln")
                 .expect("needs lightning module client config"),
-            context: &self.context,
+            context: self.context.clone(),
         }
     }
 
@@ -210,7 +211,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .as_ref()
                 .get_module::<MintClientConfig>("mint")
                 .expect("needs mint module client config"),
-            context: &self.context,
+            context: self.context.clone(),
             secret: self.root_secret.child_key(MINT_SECRET_CHILD_ID),
         }
     }
@@ -223,7 +224,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .get_module::<WalletClientConfig>("wallet")
                 .expect("needs wallet module client config"),
 
-            context: &self.context,
+            context: self.context.clone(),
         }
     }
 
@@ -257,7 +258,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let root_secret = Self::get_secret(&db).await;
         Self {
             config,
-            context: ClientContext { db, api, secp },
+            context: Arc::new(ClientContext { db, api, secp }),
             root_secret,
         }
     }

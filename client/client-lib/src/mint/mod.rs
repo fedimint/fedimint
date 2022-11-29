@@ -2,6 +2,7 @@ pub mod db;
 pub mod decode_stub;
 
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
@@ -37,10 +38,10 @@ const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
-#[derive(Debug)]
-pub struct MintClient<'c> {
+#[derive(Debug, Clone)]
+pub struct MintClient {
     pub config: MintClientConfig,
-    pub context: &'c ClientContext,
+    pub context: Arc<ClientContext>,
     pub secret: DerivableSecret,
 }
 
@@ -100,7 +101,7 @@ pub struct SpendableNote {
     pub spend_key: KeyPair,
 }
 
-impl<'a> ClientModulePlugin for MintClient<'a> {
+impl ClientModulePlugin for MintClient {
     type Decoder = <Mint as ServerModulePlugin>::Decoder;
     type Module = Mint;
     const MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
@@ -126,7 +127,7 @@ impl<'a> ClientModulePlugin for MintClient<'a> {
     }
 }
 
-impl<'c> MintClient<'c> {
+impl MintClient {
     pub fn start_dbtx(&self) -> DatabaseTransaction<'_> {
         self.context.db.begin_transaction(ModuleRegistry::default())
     }
@@ -663,7 +664,7 @@ mod tests {
 
     async fn issue_tokens<'a>(
         fed: &'a tokio::sync::Mutex<Fed>,
-        client: &'a MintClient<'a>,
+        client: &'a MintClient,
         client_db: &'a Database,
         amt: Amount,
     ) {
@@ -696,14 +697,15 @@ mod tests {
     async fn create_output() {
         let (fed, client_config, client_context) = new_mint_and_client().await;
 
+        let context = Arc::new(client_context);
         let client = MintClient {
             config: client_config,
-            context: &client_context,
+            context: context.clone(),
             secret: DerivableSecret::new(&[], &[]),
         };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sat(12);
-        issue_tokens(&fed, &client, &client_context.db, ISSUE_AMOUNT).await;
+        issue_tokens(&fed, &client, &context.db, ISSUE_AMOUNT).await;
 
         assert_eq!(client.coins().total_amount(), ISSUE_AMOUNT)
     }
@@ -713,13 +715,15 @@ mod tests {
         const SPEND_AMOUNT: Amount = Amount::from_sat(21);
 
         let (fed, client_config, client_context) = new_mint_and_client().await;
+
+        let context = Arc::new(client_context);
         let client = MintClient {
             config: client_config,
-            context: &client_context,
+            context: context.clone(),
             secret: DerivableSecret::new(&[], &[]),
         };
 
-        issue_tokens(&fed, &client, &client_context.db, SPEND_AMOUNT * 2).await;
+        issue_tokens(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
 
         // Spending works
         let mut dbtx = client
@@ -809,34 +813,36 @@ mod tests {
 
         let db = fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap();
 
-        let client: MintClient<'static> = MintClient {
+        let client: MintClient = MintClient {
             config: MintClientConfig {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
             },
-            context: Box::leak(Box::new(ClientContext {
+            context: Arc::new(ClientContext {
                 db: db.into(),
                 api: WsFederationApi::new(vec![]).into(),
                 secp: Default::default(),
-            })),
+            }),
             secret: DerivableSecret::new(&[], &[]),
         };
+        let client_copy = client.clone();
 
-        let client_ref: &'static MintClient<'static> = Box::leak(Box::new(client));
-
-        let issuance_thread = || {
+        let issuance_thread = move || {
             (0..ITERATIONS)
-                .filter_map(|_| {
-                    block_on(async {
-                        let (_, nonce) = client_ref.new_ecash_note(secp256k1_zkp::SECP256K1).await;
-                        Some(nonce)
-                    })
+                .filter_map({
+                    |_| {
+                        let client = client_copy.clone();
+                        block_on(async {
+                            let (_, nonce) = client.new_ecash_note(secp256k1_zkp::SECP256K1).await;
+                            Some(nonce)
+                        })
+                    }
                 })
                 .collect::<Vec<BlindNonce>>()
         };
 
         let threads = (0..4)
-            .map(|_| std::thread::spawn(issuance_thread))
+            .map(|_| std::thread::spawn(issuance_thread.clone()))
             .collect::<Vec<_>>();
         let results = threads
             .into_iter()
@@ -855,7 +861,7 @@ mod tests {
         // Ensure all notes are unique
         assert_eq!(result_count, result_count_deduplicated);
 
-        let last_idx = client_ref
+        let last_idx = client
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
