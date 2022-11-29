@@ -105,10 +105,6 @@ pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
     btc_rpc: BitcoindRpc,
-    // TODO: remove DB altogether
-    // Only to be used for non-consensus read operations
-    non_consensus_db: Database,
-    decoders: ModuleRegistry<Decoder>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -374,18 +370,14 @@ impl ServerModulePlugin for Wallet {
 
     async fn consensus_proposal<'a>(
         &'a self,
-        _dbtx: &DatabaseTransaction<'_>,
+        dbtx: &DatabaseTransaction<'_>,
     ) -> Vec<Self::ConsensusItem> {
-        let dbtx = self
-            .non_consensus_db
-            .begin_transaction(self.decoders.clone());
-
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
         // In case the wallet just got created the height is not committed to the DB yet but will
         // be set to 0 first, so we can assume that here.
-        let last_consensus_height = self.consensus_height(&dbtx).unwrap_or(0);
+        let last_consensus_height = self.consensus_height(dbtx).unwrap_or(0);
 
         let proposed_height = if our_target_height >= last_consensus_height {
             our_target_height
@@ -700,26 +692,19 @@ impl ServerModulePlugin for Wallet {
 
     fn output_status(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<Self::OutputOutcome> {
-        self.non_consensus_db
-            .begin_transaction(self.decoders.clone())
-            .get_value(&PegOutBitcoinTransaction(out_point))
+        dbtx.get_value(&PegOutBitcoinTransaction(out_point))
             .expect("DB error")
     }
 
-    fn audit(&self, _dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
-        let dbtx = self
-            .non_consensus_db
-            .begin_transaction(self.decoders.clone());
-        audit.add_items(&dbtx, &UTXOPrefixKey, |_, v| {
-            v.amount.to_sat() as i64 * 1000
-        });
-        audit.add_items(&dbtx, &UnsignedTransactionPrefixKey, |_, v| {
+    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
+        audit.add_items(dbtx, &UTXOPrefixKey, |_, v| v.amount.to_sat() as i64 * 1000);
+        audit.add_items(dbtx, &UnsignedTransactionPrefixKey, |_, v| {
             v.change.to_sat() as i64 * 1000
         });
-        audit.add_items(&dbtx, &PendingTransactionPrefixKey, |_, v| {
+        audit.add_items(dbtx, &PendingTransactionPrefixKey, |_, v| {
             v.change.to_sat() as i64 * 1000
         });
     }
@@ -732,14 +717,13 @@ impl ServerModulePlugin for Wallet {
         vec![
             api_endpoint! {
                 "/block_height",
-                async |module: &Wallet, _dbtx, _params: ()| -> u32 {
-                    Ok(module.consensus_height(&module.non_consensus_db.begin_transaction(module.decoders.clone())).unwrap_or(0))
+                async |module: &Wallet, dbtx, _params: ()| -> u32 {
+                    Ok(module.consensus_height(&dbtx).unwrap_or(0))
                 }
             },
             api_endpoint! {
                 "/peg_out_fees",
-                async |module: &Wallet, _dbtx, params: (Address, u64)| -> Option<PegOutFees> {
-                    let dbtx = module.non_consensus_db.begin_transaction(module.decoders.clone());
+                async |module: &Wallet, dbtx, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
                     let consensus = module.current_round_consensus(&dbtx).unwrap();
                     let tx = module.offline_wallet().create_tx(
@@ -795,8 +779,6 @@ impl Wallet {
             cfg,
             secp: Default::default(),
             btc_rpc: bitcoind_rpc,
-            non_consensus_db: db,
-            decoders,
         };
 
         Ok(wallet)
