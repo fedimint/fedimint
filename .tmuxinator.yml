@@ -27,7 +27,7 @@ windows:
           - fg
         - ln1:
           - sleep 5 # wait for bitcoind and federation
-          - gateway-cli generate-config 127.0.0.1:8080 $FM_CFG_DIR #generate gateway config
+          - gateway-cli generate-config 127.0.0.1:8080 'http://127.0.0.1:8080' $FM_CFG_DIR #generate gateway config
           - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/ln_gateway --fedimint-cfg=$FM_CFG_DIR &
           - echo $! >> $FM_PID_FILE
           - fg
