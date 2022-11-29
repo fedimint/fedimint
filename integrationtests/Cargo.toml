@@ -13,7 +13,7 @@ path = "tests/tests.rs"
 [dev-dependencies]
 anyhow = "1.0.66"
 assert_matches = "1.5.0"
-async-trait = "0.1.42"
+async-trait = "0.1.59"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 cln-rpc = "0.1.0"
