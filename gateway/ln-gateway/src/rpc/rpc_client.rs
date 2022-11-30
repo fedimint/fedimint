@@ -1,6 +1,6 @@
 use std::result::Result;
 
-use reqwest::{Error, Response};
+pub use reqwest::{Error, Response};
 use serde::Serialize;
 use url::Url;
 
