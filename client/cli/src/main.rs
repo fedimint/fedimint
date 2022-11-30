@@ -17,8 +17,8 @@ use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableNote;
 use mint_client::query::CurrentConsensus;
 use mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, parse_node_pub_key,
-    serialize_coins,
+    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
+    serialize_ecash,
 };
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
@@ -205,13 +205,13 @@ enum Command {
 
     /// Reissue tokens received from a third party to avoid double spends
     Reissue {
-        #[clap(value_parser = parse_coins)]
+        #[clap(value_parser = parse_ecash)]
         coins: TieredMulti<SpendableNote>,
     },
 
     /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     Validate {
-        #[clap(value_parser = parse_coins)]
+        #[clap(value_parser = parse_ecash)]
         coins: TieredMulti<SpendableNote>,
     },
 
@@ -441,7 +441,7 @@ async fn handle_command(
         }
         Command::Spend { amount } => client.spend_ecash(amount, rng).await.transform(
             |v| CliOutput::Spend {
-                token: (serialize_coins(&v)),
+                token: (serialize_ecash(&v)),
             },
             CliErrorKind::GeneralFederationError,
             "failed to execute spend (no further information)",

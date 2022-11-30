@@ -4,20 +4,24 @@ use std::str::FromStr;
 use bitcoin::{secp256k1, Network};
 use fedimint_api::core::Decoder;
 use fedimint_api::db::Database;
-use fedimint_api::encoding::Decodable;
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{ParseAmountError, TieredMulti};
 use lightning_invoice::Currency;
 
 use crate::api::FederationApi;
 use crate::mint::SpendableNote;
 
-pub fn parse_coins(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
+pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
     let bytes = base64::decode(s)?;
-    Ok(bincode::deserialize(&bytes)?)
+    Ok(Decodable::consensus_decode(
+        &mut std::io::Cursor::new(bytes),
+        &BTreeMap::<_, Decoder>::new(),
+    )?)
 }
 
-pub fn serialize_coins(c: &TieredMulti<SpendableNote>) -> String {
-    let bytes = bincode::serialize(&c).unwrap();
+pub fn serialize_ecash(c: &TieredMulti<SpendableNote>) -> String {
+    let mut bytes = Vec::new();
+    Encodable::consensus_encode(c, &mut bytes).expect("encodes correctly");
     base64::encode(&bytes)
 }
 
