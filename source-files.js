@@ -21,7 +21,6 @@ var sourcesIndex = JSON.parse('{\
 "hkdf":["",[],["lib.rs"]],\
 "ln_gateway":["",[["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","cln.rs","config.rs","lib.rs","ln.rs","utils.rs"]],\
 "mint_client":["",[["ln",[],["db.rs","decode_stub.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","decode_stub.rs","mod.rs"]],["wallet",[],["db.rs","decode_stub.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","query.rs","secrets.rs","transaction.rs","utils.rs"]],\
-"mint_rpc_client":["",[],["mint-rpc-client.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
 }');
 createSourceSidebar();

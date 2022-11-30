@@ -650,6 +650,33 @@
 <a href="#650" id="650">650</a>
 <a href="#651" id="651">651</a>
 <a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -667,7 +694,7 @@
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>mint_client::api::{WsFederationApi, WsFederationConnect};
 <span class="kw">use </span>mint_client::mint::SpendableNote;
-<span class="kw">use </span>mint_client::query::CurrentConsensus;
+<span class="kw">use </span>mint_client::query::{CurrentConsensus, EventuallyConsistent};
 <span class="kw">use </span>mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     serialize_ecash,
@@ -684,6 +711,11 @@
     VersionHash {
         hash: String,
     },
+
+    UntypedApiOutput {
+        value: Value,
+    },
+
     PegInAddress {
         address: Address,
     },
@@ -846,6 +878,14 @@
     </span>VersionHash,
     <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed
     </span>PegInAddress,
+
+    <span class="doccomment">/// Send direct method call to the API, waiting for all peers to agree on a response
+    </span>Api {
+        method: String,
+        <span class="doccomment">/// JSON args that will be serialized and send with the request
+        </span><span class="attr">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
+        </span>arg: String,
+    },
 
     <span class="doccomment">/// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
     </span>PegIn {
@@ -1044,6 +1084,20 @@
     <span class="kw-2">mut </span>rng: rand::rngs::OsRng,
 ) -&gt; CliResult {
     <span class="kw">match </span>cli.command {
+        Command::Api { method, arg } =&gt; {
+            <span class="kw">let </span>arg: Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
+            <span class="kw">let </span>ws_api = WsFederationApi::from_config(client.config().as_ref());
+            <span class="kw">let </span>response: Value = ws_api
+                .request(
+                    <span class="kw-2">&amp;</span>method,
+                    arg,
+                    EventuallyConsistent::new(ws_api.peers().len()),
+                )
+                .<span class="kw">await
+                </span>.unwrap();
+
+            <span class="prelude-val">Ok</span>(CliOutput::UntypedApiOutput { value: response })
+        }
         Command::VersionHash =&gt; <span class="prelude-val">Ok</span>(CliOutput::VersionHash {
             hash: <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>).to_string(),
         }),

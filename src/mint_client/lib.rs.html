@@ -1336,18 +1336,6 @@
 <a href="#1336" id="1336">1336</a>
 <a href="#1337" id="1337">1337</a>
 <a href="#1338" id="1338">1338</a>
-<a href="#1339" id="1339">1339</a>
-<a href="#1340" id="1340">1340</a>
-<a href="#1341" id="1341">1341</a>
-<a href="#1342" id="1342">1342</a>
-<a href="#1343" id="1343">1343</a>
-<a href="#1344" id="1344">1344</a>
-<a href="#1345" id="1345">1345</a>
-<a href="#1346" id="1346">1346</a>
-<a href="#1347" id="1347">1347</a>
-<a href="#1348" id="1348">1348</a>
-<a href="#1349" id="1349">1349</a>
-<a href="#1350" id="1350">1350</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1375,7 +1363,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 <span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_api::{ServerModulePlugin, TieredMulti};
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -1583,19 +1571,7 @@
     }
 
     <span class="kw">pub async fn </span>new(config: T, db: Database, secp: Secp256k1&lt;All&gt;) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>api = api::WsFederationApi::new(
-            config
-                .as_ref()
-                .nodes
-                .iter()
-                .enumerate()
-                .map(|(id, node)| {
-                    <span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16); <span class="comment">// FIXME: potentially wrong, currently works imo
-                    </span><span class="kw">let </span>url = node.url.clone();
-                    (peer_id, url)
-                })
-                .collect(),
-        );
+        <span class="kw">let </span>api = api::WsFederationApi::from_config(config.as_ref());
         <span class="self">Self</span>::new_with_api(config, db, api.into(), secp).<span class="kw">await
     </span>}
 

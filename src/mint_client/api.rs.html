@@ -800,6 +800,21 @@
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
 <a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1221,6 +1236,21 @@
     <span class="doccomment">/// Creates a new API client
     </span><span class="kw">pub fn </span>new(members: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new_with_client(members)
+    }
+
+    <span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(
+            config
+                .nodes
+                .iter()
+                .enumerate()
+                .map(|(id, node)| {
+                    <span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16); <span class="comment">// FIXME: potentially wrong, currently works imo
+                    </span><span class="kw">let </span>url = node.url.clone();
+                    (peer_id, url)
+                })
+                .collect(),
+        )
     }
 }
 
