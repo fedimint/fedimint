@@ -1,9 +1,11 @@
 mod fixtures;
 
+use std::future::Future;
 use std::net::SocketAddr;
 
 use anyhow::Result;
 use fixtures::{fixtures, Fixtures};
+use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
@@ -46,6 +48,7 @@ async fn test_gateway_authentication() -> Result<()> {
 
     // Create an RPC client
     let client = RpcClient::new(gw_announce_address);
+    let client_ref = &client;
 
     // Test gateway authentication on `register_federation` function
     // *  `register_federation` with correct password succeeds
@@ -53,26 +56,16 @@ async fn test_gateway_authentication() -> Result<()> {
     let payload = RegisterFedPayload {
         connect: serde_json::to_string(&WsFederationConnect { members: vec![] })?,
     };
-    assert_eq!(
-        client
-            .register_federation("registerfed".to_string(), payload.clone())
-            .await?
-            .status(),
-        401
-    );
-    assert_ne!(
-        client
-            .register_federation(gw_password.clone(), payload)
-            .await?
-            .status(),
-        401
-    );
+
+    test_auth(&gw_password, move |pw| {
+        client_ref.register_federation(pw, payload.clone())
+    })
+    .await?;
 
     // Test gateway authentication on `get_info` function
     // *  `get_info` with correct password succeeds
     // *  `get_info` with incorrect password fails
-    assert_eq!(client.get_info(gw_password.clone()).await?.status(), 200);
-    assert_eq!(client.get_info("getinfo".to_string()).await?.status(), 401);
+    test_auth(&gw_password, |pw| client_ref.get_info(pw)).await?;
 
     // Test gateway authentication on `get_balance` function
     // *  `get_balance` with correct password succeeds
@@ -80,20 +73,10 @@ async fn test_gateway_authentication() -> Result<()> {
     let payload = BalancePayload {
         federation_id: federation_id.clone(),
     };
-    assert_eq!(
-        client
-            .get_balance("getbalance".to_string(), payload.clone())
-            .await?
-            .status(),
-        401
-    );
-    assert_ne!(
-        client
-            .get_balance(gw_password.clone(), payload,)
-            .await?
-            .status(),
-        401
-    );
+    test_auth(&gw_password, move |pw| {
+        client_ref.get_balance(pw, payload.clone())
+    })
+    .await?;
 
     // Test gateway authentication on `get_deposit_address` function
     // *  `get_deposit_address` with correct password succeeds
@@ -101,20 +84,10 @@ async fn test_gateway_authentication() -> Result<()> {
     let payload = DepositAddressPayload {
         federation_id: federation_id.clone(),
     };
-    assert_eq!(
-        client
-            .get_deposit_address("getdepositaddress".to_string(), payload.clone())
-            .await?
-            .status(),
-        401
-    );
-    assert_ne!(
-        client
-            .get_deposit_address(gw_password.clone(), payload,)
-            .await?
-            .status(),
-        401
-    );
+    test_auth(&gw_password, move |pw| {
+        client_ref.get_deposit_address(pw, payload.clone())
+    })
+    .await?;
 
     // TODO:
     // Test gateway authentication on `deposit` function
@@ -129,20 +102,21 @@ async fn test_gateway_authentication() -> Result<()> {
         amount: bitcoin::Amount::from_sat(100),
         address: bitcoin.get_new_address(),
     };
-    assert_eq!(
-        client
-            .withdraw("withdraw".to_string(), payload.clone())
-            .await?
-            .status(),
-        401
-    );
-    assert_ne!(
-        client
-            .withdraw(gw_password.clone(), payload,)
-            .await?
-            .status(),
-        401
-    );
+    test_auth(&gw_password, |pw| client_ref.withdraw(pw, payload.clone())).await?;
 
     task_group.shutdown_join_all().await
+}
+
+async fn test_auth<Fut>(gw_password: &str, func: impl Fn(String) -> Fut) -> Result<()>
+where
+    Fut: Future<Output = Result<Response, Error>>,
+{
+    assert_eq!(
+        // use random password here
+        func("foobar123456789".to_string()).await?.status(),
+        401
+    );
+    assert_ne!(func(gw_password.to_string()).await?.status(), 401);
+
+    Ok(())
 }
