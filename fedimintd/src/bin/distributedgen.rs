@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::ClientConfig;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -166,7 +165,7 @@ async fn main() {
         } => {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
             let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK));
-            let (server, client) = if let Ok(v) = run_dkg(
+            let server = if let Ok(v) = run_dkg(
                 bind_address,
                 &dir_out_path,
                 denominations,
@@ -192,7 +191,7 @@ async fn main() {
 
             let client_path: PathBuf = dir_out_path.join("client.json");
             let client_file = fs::File::create(client_path).expect("Could not create cfg file");
-            serde_json::to_writer_pretty(client_file, &client).unwrap();
+            serde_json::to_writer_pretty(client_file, &server.to_client_config()).unwrap();
         }
         Command::VersionHash => {
             println!("{}", env!("GIT_HASH"));
@@ -248,7 +247,7 @@ async fn run_dkg(
     finality_delay: u32,
     pk: rustls::PrivateKey,
     task_group: &mut TaskGroup,
-) -> Cancellable<(ServerConfig, ClientConfig)> {
+) -> Cancellable<ServerConfig> {
     let peers: BTreeMap<PeerId, PeerServerParams> = certs
         .into_iter()
         .sorted()

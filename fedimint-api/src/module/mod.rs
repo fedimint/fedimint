@@ -198,7 +198,7 @@ pub trait FederationModuleConfigGen {
         peers: &[PeerId],
         params: &ModuleConfigGenParams,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>>;
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>>;
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig>;
 

@@ -283,49 +283,44 @@ async fn distributed_config(
     _max_evil: usize,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
-    let configs: Cancellable<Vec<(PeerId, (ServerConfig, ClientConfig))>> =
-        join_all(peers.iter().map(|peer| {
-            let params = params.clone();
-            let peers = peers.to_vec();
+    let configs: Cancellable<Vec<(PeerId, ServerConfig)>> = join_all(peers.iter().map(|peer| {
+        let params = params.clone();
+        let peers = peers.to_vec();
 
-            let mut task_group = task_group.clone();
+        let mut task_group = task_group.clone();
 
-            async move {
-                let our_params = params[peer].clone();
-                let server_conn = connect(
-                    our_params.server_dkg.clone(),
-                    our_params.tls.clone(),
-                    &mut task_group,
-                )
-                .await;
-                let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
+        async move {
+            let our_params = params[peer].clone();
+            let server_conn = connect(
+                our_params.server_dkg.clone(),
+                our_params.tls.clone(),
+                &mut task_group,
+            )
+            .await;
+            let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
-                let rng = OsRng;
-                let cfg = ServerConfig::distributed_gen(
-                    &connections,
-                    peer,
-                    &peers,
-                    &our_params,
-                    rng,
-                    &mut task_group,
-                );
-                (*peer, cfg.await.expect("generation failed"))
-            }
-        }))
-        .await
-        .into_iter()
-        .map(|(peer_id, maybe_cancelled)| maybe_cancelled.map(|v| (peer_id, v)))
-        .collect();
+            let rng = OsRng;
+            let cfg = ServerConfig::distributed_gen(
+                &connections,
+                peer,
+                &peers,
+                &our_params,
+                rng,
+                &mut task_group,
+            );
+            (*peer, cfg.await.expect("generation failed"))
+        }
+    }))
+    .await
+    .into_iter()
+    .map(|(peer_id, maybe_cancelled)| maybe_cancelled.map(|v| (peer_id, v)))
+    .collect();
 
     let configs = configs?;
 
-    let (_, (_, client_config)) = configs.first().unwrap().clone();
-    let server_configs = configs
-        .into_iter()
-        .map(|(peer, (server, _))| (peer, server))
-        .collect();
+    let (_, config) = configs.first().unwrap().clone();
 
-    Ok((server_configs, client_config))
+    Ok((configs.into_iter().collect(), config.to_client_config()))
 }
 
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {

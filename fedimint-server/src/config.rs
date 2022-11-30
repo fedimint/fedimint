@@ -109,9 +109,9 @@ impl ServerConfig {
         let nodes = self
             .peers
             .iter()
-            .map(|(peer_id, peer)| Node {
+            .map(|(_peer_id, peer)| Node {
                 url: peer.api_addr.clone(),
-                name: format!("node #{}", peer_id),
+                name: peer.name.clone(),
             })
             .collect();
 
@@ -274,12 +274,12 @@ impl ServerConfig {
         params: &ServerConfigParams,
         mut rng: impl RngCore + CryptoRng,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<(Self, ClientConfig)>> {
+    ) -> anyhow::Result<Cancellable<Self>> {
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
-            let (server, client) =
+            let (server, _) =
                 Self::trusted_dealer_gen(peers, &HashMap::from([(*our_id, params.clone())]), rng);
-            return Ok(Ok((server[our_id].clone(), client)));
+            return Ok(Ok(server[our_id].clone()));
         }
         info!("Peer {} running distributed key generation...", our_id);
 
@@ -314,7 +314,7 @@ impl ServerConfig {
             ("ln", Box::new(LightningModuleConfigGen)),
         ];
 
-        let mut module_cfgs: Vec<(&'static str, (_, _))> = vec![];
+        let mut module_cfgs: Vec<(&'static str, _)> = vec![];
 
         for (name, gen) in module_config_gens {
             module_cfgs.push((
@@ -350,23 +350,14 @@ impl ServerConfig {
             epoch_pk_set: epoch_pks,
             modules: module_cfgs
                 .iter()
-                .map(|(name, cfgs)| (name.to_string(), cfgs.0.clone()))
+                .map(|(name, cfgs)| (name.to_string(), cfgs.clone()))
                 .collect(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
         };
 
-        let client = ClientConfig {
-            federation_name: params.federation_name.clone(),
-            nodes: params.api.nodes("ws://", params.tls.peer_names.clone()),
-            modules: module_cfgs
-                .iter()
-                .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))
-                .collect(),
-        };
-
         info!("Distributed key generation has completed successfully!");
 
-        Ok(Ok((server, client)))
+        Ok(Ok(server))
     }
 }
 

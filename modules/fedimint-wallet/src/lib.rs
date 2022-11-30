@@ -20,7 +20,7 @@ use config::WalletClientConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
-    TypedClientModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
@@ -265,7 +265,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         peers: &[PeerId],
         params: &ModuleConfigGenParams,
         _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>> {
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
@@ -319,13 +319,8 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
             network,
             finality_delay,
         );
-        let client_cfg = WalletClientConfig::new(
-            wallet_cfg.peg_in_descriptor.clone(),
-            network,
-            finality_delay,
-        );
 
-        Ok(Ok((wallet_cfg.to_erased(), client_cfg.to_erased())))
+        Ok(Ok(wallet_cfg.to_erased()))
     }
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
