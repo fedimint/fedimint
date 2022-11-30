@@ -440,7 +440,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .generate_unconfirmed_invoice_and_submit(payment_amount, "".into(), &mut rng(), None)
             .await
             .unwrap();
-        fed.run_consensus_epochs(1).await;
+        fed.run_consensus_epochs(2).await;
 
         let invoice = user
             .client
