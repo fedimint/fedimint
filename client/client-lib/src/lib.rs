@@ -25,7 +25,7 @@ use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
+use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_api::{ServerModulePlugin, TieredMulti};
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -233,19 +233,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     }
 
     pub async fn new(config: T, db: Database, secp: Secp256k1<All>) -> Self {
-        let api = api::WsFederationApi::new(
-            config
-                .as_ref()
-                .nodes
-                .iter()
-                .enumerate()
-                .map(|(id, node)| {
-                    let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                    let url = node.url.clone();
-                    (peer_id, url)
-                })
-                .collect(),
-        );
+        let api = api::WsFederationApi::from_config(config.as_ref());
         Self::new_with_api(config, db, api.into(), secp).await
     }
 
