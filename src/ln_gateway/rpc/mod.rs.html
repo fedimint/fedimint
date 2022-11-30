@@ -236,7 +236,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>RegisterFedPayload {
     <span class="kw">pub </span>connect: String,
 }
@@ -251,12 +251,12 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>InfoPayload;
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>BalancePayload {
     <span class="kw">pub </span>federation_id: FederationId,
 }
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>DepositAddressPayload {
     <span class="kw">pub </span>federation_id: FederationId,
 }
@@ -272,7 +272,7 @@
     </span><span class="kw">pub </span>transaction: Transaction,
 }
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>WithdrawPayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
