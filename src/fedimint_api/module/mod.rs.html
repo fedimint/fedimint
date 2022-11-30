@@ -530,7 +530,7 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Cancellable&lt;(ServerModuleConfig, ClientModuleConfig)&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt;;
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;
 

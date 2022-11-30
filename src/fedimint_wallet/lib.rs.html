@@ -1528,11 +1528,6 @@
 <a href="#1528" id="1528">1528</a>
 <a href="#1529" id="1529">1529</a>
 <a href="#1530" id="1530">1530</a>
-<a href="#1531" id="1531">1531</a>
-<a href="#1532" id="1532">1532</a>
-<a href="#1533" id="1533">1533</a>
-<a href="#1534" id="1534">1534</a>
-<a href="#1535" id="1535">1535</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1555,7 +1550,7 @@
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
     ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
-    TypedClientModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
@@ -1800,7 +1795,7 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Cancellable&lt;(ServerModuleConfig, ClientModuleConfig)&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
@@ -1854,13 +1849,8 @@
             network,
             finality_delay,
         );
-        <span class="kw">let </span>client_cfg = WalletClientConfig::new(
-            wallet_cfg.peg_in_descriptor.clone(),
-            network,
-            finality_delay,
-        );
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((wallet_cfg.to_erased(), client_cfg.to_erased())))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(wallet_cfg.to_erased()))
     }
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {

@@ -630,15 +630,6 @@
 <a href="#630" id="630">630</a>
 <a href="#631" id="631">631</a>
 <a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -750,9 +741,9 @@
         <span class="kw">let </span>nodes = <span class="self">self
             </span>.peers
             .iter()
-            .map(|(peer_id, peer)| Node {
+            .map(|(_peer_id, peer)| Node {
                 url: peer.api_addr.clone(),
-                name: <span class="macro">format!</span>(<span class="string">&quot;node #{}&quot;</span>, peer_id),
+                name: peer.name.clone(),
             })
             .collect();
 
@@ -915,12 +906,12 @@
         params: <span class="kw-2">&amp;</span>ServerConfigParams,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Cancellable&lt;(<span class="self">Self</span>, ClientConfig)&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Cancellable&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="comment">// in case we are running by ourselves, avoid DKG
         </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
-            <span class="kw">let </span>(server, client) =
+            <span class="kw">let </span>(server, <span class="kw">_</span>) =
                 <span class="self">Self</span>::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>HashMap::from([(<span class="kw-2">*</span>our_id, params.clone())]), rng);
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server[our_id].clone(), client)));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server[our_id].clone()));
         }
         <span class="macro">info!</span>(<span class="string">&quot;Peer {} running distributed key generation...&quot;</span>, our_id);
 
@@ -955,7 +946,7 @@
             (<span class="string">&quot;ln&quot;</span>, Box::new(LightningModuleConfigGen)),
         ];
 
-        <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, (<span class="kw">_</span>, <span class="kw">_</span>))&gt; = <span class="macro">vec!</span>[];
+        <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, <span class="kw">_</span>)&gt; = <span class="macro">vec!</span>[];
 
         <span class="kw">for </span>(name, gen) <span class="kw">in </span>module_config_gens {
             module_cfgs.push((
@@ -991,23 +982,14 @@
             epoch_pk_set: epoch_pks,
             modules: module_cfgs
                 .iter()
-                .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">0</span>.clone()))
+                .map(|(name, cfgs)| (name.to_string(), cfgs.clone()))
                 .collect(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
         };
 
-        <span class="kw">let </span>client = ClientConfig {
-            federation_name: params.federation_name.clone(),
-            nodes: params.api.nodes(<span class="string">&quot;ws://&quot;</span>, params.tls.peer_names.clone()),
-            modules: module_cfgs
-                .iter()
-                .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">1</span>.clone()))
-                .collect(),
-        };
-
         <span class="macro">info!</span>(<span class="string">&quot;Distributed key generation has completed successfully!&quot;</span>);
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((server, client)))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server))
     }
 }
 
