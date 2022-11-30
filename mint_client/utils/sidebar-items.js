@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["from_hex",""],["network_to_currency",""],["parse_bitcoin_amount",""],["parse_coins",""],["parse_fedimint_amount",""],["parse_node_pub_key",""],["serialize_coins",""]],"struct":[["ClientContext",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["from_hex",""],["network_to_currency",""],["parse_bitcoin_amount",""],["parse_ecash",""],["parse_fedimint_amount",""],["parse_node_pub_key",""],["serialize_ecash",""]],"struct":[["ClientContext",""]]};
