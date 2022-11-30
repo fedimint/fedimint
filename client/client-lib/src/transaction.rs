@@ -6,7 +6,7 @@ use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_core::modules::ln::contracts::ContractOutcome;
 use fedimint_core::modules::ln::LightningOutputOutcome;
-use fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput, SignRequest};
+use fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput};
 use fedimint_core::outcome::legacy::OutputOutcome;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::transaction::legacy::{Input, Output, Transaction};
@@ -167,7 +167,7 @@ impl TransactionBuilder {
             let (request, blind_nonce) = coin_gen().await;
             amount_requests.push(((amt, request), (amt, blind_nonce)));
         }
-        let (coin_finalization_data, sig_req): (NoteIssuanceRequests, SignRequest) =
+        let (coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
             amount_requests.into_iter().unzip();
 
         debug!(

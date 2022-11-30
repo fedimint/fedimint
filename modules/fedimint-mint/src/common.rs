@@ -6,7 +6,7 @@ use fedimint_api::core::{ConsensusItem, Decoder, Input, Output, OutputOutcome, P
 use fedimint_api::encoding::Decodable;
 use fedimint_api::encoding::DecodeError;
 
-use crate::{MintConsensusItem, MintInput, MintOutput, MintOutputOutcome};
+use crate::{MintInput, MintOutput, MintOutputConfirmation, MintOutputOutcome};
 
 #[derive(Debug, Default, Clone)]
 pub struct MintModuleDecoder;
@@ -39,9 +39,8 @@ impl PluginDecode for MintModuleDecoder {
     fn decode_consensus_item(
         mut r: &mut dyn io::Read,
     ) -> Result<fedimint_api::core::ConsensusItem, DecodeError> {
-        Ok(ConsensusItem::from(MintConsensusItem::consensus_decode(
-            &mut r,
-            &BTreeMap::<_, Decoder>::new(),
-        )?))
+        Ok(ConsensusItem::from(
+            MintOutputConfirmation::consensus_decode(&mut r, &BTreeMap::<_, Decoder>::new())?,
+        ))
     }
 }
