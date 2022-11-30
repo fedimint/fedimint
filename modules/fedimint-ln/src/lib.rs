@@ -212,7 +212,7 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
         peers: &[PeerId],
         _params: &ModuleConfigGenParams,
         _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>> {
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
         let g1 = if let Ok(g1) = dkg.run_g1(MODULE_KEY_LN, connections, &mut OsRng).await {
             g1
@@ -223,25 +223,13 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
         let (pks, sks) = g1[&()].threshold_crypto();
 
         let server = LightningModuleConfig {
-            threshold_pub_keys: pks.clone(),
+            threshold_pub_keys: pks,
             threshold_sec_key: SerdeSecret(sks),
             threshold: peers.threshold(),
             fee_consensus: Default::default(),
         };
 
-        let client = LightningModuleClientConfig {
-            threshold_pub_key: pks.public_key(),
-            fee_consensus: Default::default(),
-        };
-
-        Ok(Ok((
-            serde_json::to_value(&server)
-                .expect("serialization can't fail")
-                .into(),
-            serde_json::to_value(&client)
-                .expect("serialization can't fail")
-                .into(),
-        )))
+        Ok(Ok(server.to_erased()))
     }
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {

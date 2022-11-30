@@ -206,7 +206,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
         peers: &[PeerId],
         params: &ModuleConfigGenParams,
         _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<(ServerModuleConfig, ClientModuleConfig)>> {
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let mut dkg = DkgRunner::multi(
             params.mint_amounts.to_vec(),
             peers.threshold(),
@@ -247,24 +247,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
             threshold: peers.threshold(),
         };
 
-        let client = MintClientConfig {
-            tbs_pks: amounts_keys
-                .iter()
-                .map(|(amount, (pks, _))| {
-                    (*amount, AggregatePublicKey(pks.evaluate(0).to_affine()))
-                })
-                .collect(),
-            fee_consensus: Default::default(),
-        };
-
-        Ok(Ok((
-            serde_json::to_value(server)
-                .expect("serialization can't fail")
-                .into(),
-            serde_json::to_value(client)
-                .expect("serialization can't fail")
-                .into(),
-        )))
+        Ok(Ok(server.to_erased()))
     }
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
