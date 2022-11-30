@@ -1451,6 +1451,7 @@ dependencies = [
  "mint-client",
  "portpicker",
  "rand",
+ "serde_json",
  "threshold_crypto",
  "tokio",
  "url",

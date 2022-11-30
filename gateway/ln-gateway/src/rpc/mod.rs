@@ -42,7 +42,7 @@ impl GatewayRpcSender {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RegisterFedPayload {
     pub connect: String,
 }
@@ -57,12 +57,12 @@ pub struct ReceivePaymentPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfoPayload;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositAddressPayload {
     pub federation_id: FederationId,
 }
@@ -78,7 +78,7 @@ pub struct DepositPayload {
     pub transaction: Transaction,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WithdrawPayload {
     pub federation_id: FederationId,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]

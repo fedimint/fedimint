@@ -4,7 +4,14 @@ use std::net::SocketAddr;
 
 use anyhow::Result;
 use fixtures::{fixtures, Fixtures};
-use ln_gateway::{config::GatewayConfig, rpc::rpc_client::RpcClient};
+use ln_gateway::{
+    config::GatewayConfig,
+    rpc::{
+        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, RegisterFedPayload,
+        WithdrawPayload,
+    },
+};
+use mint_client::api::WsFederationConnect;
 use mint_client::FederationId;
 use url::Url;
 
@@ -40,37 +47,102 @@ async fn test_gateway_authentication() -> Result<()> {
     // Create an RPC client
     let client = RpcClient::new(gw_announce_address);
 
+    // Test gateway authentication on `register_federation` function
+    // *  `register_federation` with correct password succeeds
+    // *  `register_federation` with incorrect password fails
+    let payload = RegisterFedPayload {
+        connect: serde_json::to_string(&WsFederationConnect { members: vec![] })?,
+    };
+    assert_eq!(
+        client
+            .register_federation("registerfed".to_string(), payload.clone())
+            .await?
+            .status(),
+        401
+    );
+    assert_ne!(
+        client
+            .register_federation(gw_password.clone(), payload)
+            .await?
+            .status(),
+        401
+    );
+
     // Test gateway authentication on `get_info` function
     // *  `get_info` with correct password succeeds
     // *  `get_info` with incorrect password fails
-    assert_eq!(client.get_info(gw_password).await?.status(), 200);
+    assert_eq!(client.get_info(gw_password.clone()).await?.status(), 200);
     assert_eq!(client.get_info("getinfo".to_string()).await?.status(), 401);
 
-    // TODO:
     // Test gateway authentication on `get_balance` function
     // *  `get_balance` with correct password succeeds
     // *  `get_balance` with incorrect password fails
+    let payload = BalancePayload {
+        federation_id: federation_id.clone(),
+    };
+    assert_eq!(
+        client
+            .get_balance("getbalance".to_string(), payload.clone())
+            .await?
+            .status(),
+        401
+    );
+    assert_ne!(
+        client
+            .get_balance(gw_password.clone(), payload,)
+            .await?
+            .status(),
+        401
+    );
 
-    // TODO:
     // Test gateway authentication on `get_deposit_address` function
     // *  `get_deposit_address` with correct password succeeds
     // *  `get_deposit_address` with incorrect password fails
+    let payload = DepositAddressPayload {
+        federation_id: federation_id.clone(),
+    };
+    assert_eq!(
+        client
+            .get_deposit_address("getdepositaddress".to_string(), payload.clone())
+            .await?
+            .status(),
+        401
+    );
+    assert_ne!(
+        client
+            .get_deposit_address(gw_password.clone(), payload,)
+            .await?
+            .status(),
+        401
+    );
 
     // TODO:
     // Test gateway authentication on `deposit` function
     // *  `deposit` with correct password succeeds
     // *  `deposit` with incorrect password fails
 
-    // TODO:
     // Test gateway authentication on `withdraw` function
     // *  `withdraw` with correct password succeeds
     // *  `withdraw` with incorrect password fails
-    let _peg_out_addr = bitcoin.get_new_address();
-
-    // TODO:
-    // Test gateway authentication on `register_federation` function
-    // *  `register_federation` with correct password succeeds
-    // *  `register_federation` with incorrect password fails
+    let payload = WithdrawPayload {
+        federation_id,
+        amount: bitcoin::Amount::from_sat(100),
+        address: bitcoin.get_new_address(),
+    };
+    assert_eq!(
+        client
+            .withdraw("withdraw".to_string(), payload.clone())
+            .await?
+            .status(),
+        401
+    );
+    assert_ne!(
+        client
+            .withdraw(gw_password.clone(), payload,)
+            .await?
+            .status(),
+        401
+    );
 
     task_group.shutdown_join_all().await
 }
