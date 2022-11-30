@@ -15,7 +15,7 @@ use fedimint_core::modules::ln::ContractAccount;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableNote;
-use mint_client::query::CurrentConsensus;
+use mint_client::query::{CurrentConsensus, EventuallyConsistent};
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     serialize_ecash,
@@ -32,6 +32,11 @@ enum CliOutput {
     VersionHash {
         hash: String,
     },
+
+    UntypedApiOutput {
+        value: Value,
+    },
+
     PegInAddress {
         address: Address,
     },
@@ -194,6 +199,14 @@ enum Command {
     VersionHash,
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
+
+    /// Send direct method call to the API, waiting for all peers to agree on a response
+    Api {
+        method: String,
+        /// JSON args that will be serialized and send with the request
+        #[clap(default_value = "null")]
+        arg: String,
+    },
 
     /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
     PegIn {
@@ -392,6 +405,20 @@ async fn handle_command(
     mut rng: rand::rngs::OsRng,
 ) -> CliResult {
     match cli.command {
+        Command::Api { method, arg } => {
+            let arg: Value = serde_json::from_str(&arg).unwrap();
+            let ws_api = WsFederationApi::from_config(client.config().as_ref());
+            let response: Value = ws_api
+                .request(
+                    &method,
+                    arg,
+                    EventuallyConsistent::new(ws_api.peers().len()),
+                )
+                .await
+                .unwrap();
+
+            Ok(CliOutput::UntypedApiOutput { value: response })
+        }
         Command::VersionHash => Ok(CliOutput::VersionHash {
             hash: env!("GIT_HASH").to_string(),
         }),

@@ -420,6 +420,21 @@ impl WsFederationApi<WsClient> {
     pub fn new(members: Vec<(PeerId, Url)>) -> Self {
         Self::new_with_client(members)
     }
+
+    pub fn from_config(config: &ClientConfig) -> Self {
+        Self::new(
+            config
+                .nodes
+                .iter()
+                .enumerate()
+                .map(|(id, node)| {
+                    let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
+                    let url = node.url.clone();
+                    (peer_id, url)
+                })
+                .collect(),
+        )
+    }
 }
 
 impl<C> WsFederationApi<C> {
