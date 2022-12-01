@@ -43,12 +43,10 @@ pub enum Commands {
     /// Display high-level information about the Gateway
     Info,
     /// Check gateway balance
-    /// TODO: add federation id to scope the federation for which we want a pegin address
     Balance { federation_id: FederationId },
     /// Generate a new peg-in address, funds sent to it can later be claimed
     Address { federation_id: FederationId },
     /// Deposit funds into a gateway federation
-    /// TODO: add federation id to scope the federation for which we want a pegin address
     Deposit {
         federation_id: FederationId,
         /// The TxOutProof which was created from sending BTC to the pegin-address
@@ -58,7 +56,6 @@ pub enum Commands {
         transaction: Transaction,
     },
     /// Claim funds from a gateway federation
-    /// TODO: add federation id to scope the federation for which we want a pegin address
     Withdraw {
         federation_id: FederationId,
         /// The amount to withdraw
