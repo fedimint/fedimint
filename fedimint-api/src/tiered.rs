@@ -5,6 +5,11 @@ use fedimint_api::Amount;
 use serde::{Deserialize, Serialize};
 use tbs::{PublicKeyShare, SecretKeyShare};
 
+use crate::{
+    core::ModuleDecode,
+    encoding::{Decodable, DecodeError, Encodable, ModuleRegistry},
+};
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct InvalidAmountTierError(pub Amount);
 
@@ -58,5 +63,29 @@ impl Tiered<SecretKeyShare> {
 impl<T> FromIterator<(Amount, T)> for Tiered<T> {
     fn from_iter<I: IntoIterator<Item = (Amount, T)>>(iter: I) -> Self {
         Tiered(iter.into_iter().collect())
+    }
+}
+
+impl<C> Encodable for Tiered<C>
+where
+    C: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        self.0.consensus_encode(writer)
+    }
+}
+
+impl<C> Decodable for Tiered<C>
+where
+    C: Decodable,
+{
+    fn consensus_decode<M, D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
+        Ok(Tiered(BTreeMap::consensus_decode(d, modules)?))
     }
 }
