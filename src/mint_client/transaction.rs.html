@@ -299,7 +299,7 @@
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractOutcome;
 <span class="kw">use </span>fedimint_core::modules::ln::LightningOutputOutcome;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput, SignRequest};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput};
 <span class="kw">use </span>fedimint_core::outcome::legacy::OutputOutcome;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::transaction::legacy::{Input, Output, Transaction};
@@ -460,7 +460,7 @@
             <span class="kw">let </span>(request, blind_nonce) = coin_gen().<span class="kw">await</span>;
             amount_requests.push(((amt, request), (amt, blind_nonce)));
         }
-        <span class="kw">let </span>(coin_finalization_data, sig_req): (NoteIssuanceRequests, SignRequest) =
+        <span class="kw">let </span>(coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
             amount_requests.into_iter().unzip();
 
         <span class="macro">debug!</span>(

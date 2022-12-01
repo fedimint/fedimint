@@ -872,6 +872,8 @@
 <a href="#872" id="872">872</a>
 <a href="#873" id="873">873</a>
 <a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -889,7 +891,9 @@
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, ServerModulePlugin, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Mint, MintOutputOutcome, Nonce, Note, SigResponse};
+<span class="kw">use </span>fedimint_core::modules::mint::{
+    BlindNonce, Mint, MintOutputOutcome, Nonce, Note, OutputOutcome,
+};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -1221,12 +1225,12 @@
 }
 
 <span class="kw">impl </span>NoteIssuanceRequests {
-    <span class="doccomment">/// Finalize the issuance request using a [`SigResponse`] from the mint containing the blind
+    <span class="doccomment">/// Finalize the issuance request using a [`OutputOutcome`] from the mint containing the blind
     /// signatures for all coins in this `IssuanceRequest`. It also takes the mint&#39;s
     /// [`AggregatePublicKey`] to validate the supplied blind signatures.
     </span><span class="kw">pub fn </span>finalize(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        bsigs: SigResponse,
+        bsigs: OutputOutcome,
         mint_pub_key: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
     ) -&gt; std::result::Result&lt;TieredMulti&lt;SpendableNote&gt;, CoinFinalizationError&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.coins.structural_eq(<span class="kw-2">&amp;</span>bsigs.<span class="number">0</span>) {

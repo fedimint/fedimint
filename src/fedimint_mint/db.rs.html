@@ -170,7 +170,7 @@
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
-<span class="kw">use crate</span>::{Nonce, PartialSigResponse, SigResponse};
+<span class="kw">use crate</span>::{Nonce, OutputConfirmationSignatures, OutputOutcome};
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -215,7 +215,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedPartialSignatureKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
-    <span class="kw">type </span>Value = PartialSigResponse;
+    <span class="kw">type </span>Value = OutputConfirmationSignatures;
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
@@ -224,7 +224,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedPartialSignaturesKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = ProposedPartialSignatureKey;
-    <span class="kw">type </span>Value = PartialSigResponse;
+    <span class="kw">type </span>Value = OutputConfirmationSignatures;
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -236,7 +236,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ReceivedPartialSignatureKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
-    <span class="kw">type </span>Value = PartialSigResponse;
+    <span class="kw">type </span>Value = OutputConfirmationSignatures;
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
@@ -247,7 +247,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ReceivedPartialSignatureKeyOutputPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = ReceivedPartialSignatureKey;
-    <span class="kw">type </span>Value = PartialSigResponse;
+    <span class="kw">type </span>Value = OutputConfirmationSignatures;
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
@@ -256,7 +256,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ReceivedPartialSignaturesKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = ReceivedPartialSignatureKey;
-    <span class="kw">type </span>Value = PartialSigResponse;
+    <span class="kw">type </span>Value = OutputConfirmationSignatures;
 }
 
 <span class="doccomment">/// Transaction id and output index identifying an output outcome
@@ -266,7 +266,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputOutcomeKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
-    <span class="kw">type </span>Value = SigResponse;
+    <span class="kw">type </span>Value = OutputOutcome;
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
@@ -275,7 +275,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputOutcomeKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = OutputOutcomeKey;
-    <span class="kw">type </span>Value = SigResponse;
+    <span class="kw">type </span>Value = OutputOutcome;
 }
 
 <span class="doccomment">/// Represents the amounts of issued (signed) and redeemed (verified) coins for auditing

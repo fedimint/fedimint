@@ -1239,6 +1239,9 @@
 <a href="#1239" id="1239">1239</a>
 <a href="#1240" id="1240">1240</a>
 <a href="#1241" id="1241">1241</a>
+<a href="#1242" id="1242">1242</a>
+<a href="#1243" id="1243">1243</a>
+<a href="#1244" id="1244">1244</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1310,26 +1313,27 @@
     decoders: ModuleRegistry&lt;Decoder&gt;,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>PartiallySignedRequest {
-    <span class="kw">pub </span>out_point: OutPoint,
-    <span class="kw">pub </span>partial_signature: PartialSigResponse,
+<span class="doccomment">/// A consenus item from one of the federation members contributing partials signatures to blind nonces submitted in it
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>MintOutputConfirmation {
+    <span class="doccomment">/// Reference to a Federation Transaction containing an [`MintOutput`] with `BlindNonce`s the signatures` are for
+    </span><span class="kw">pub </span>out_point: OutPoint,
+    <span class="doccomment">/// (Partial) signatures
+    </span><span class="kw">pub </span>signatures: OutputConfirmationSignatures,
 }
 
-<span class="doccomment">/// Request to blind sign a certain amount of coins
-</span><span class="attr">#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Default, Deserialize, Serialize, Encodable, Decodable,
-)]
-</span><span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>TieredMulti&lt;BlindNonce&gt;);
-
 <span class="comment">// FIXME: optimize out blinded msg by making the mint remember it
-</span><span class="doccomment">/// Blind signature share for a [`SignRequest`]
+</span><span class="doccomment">/// Blind signature share from one Federation peer for a single [`MintOutput`]
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>PartialSigResponse(<span class="kw">pub </span>TieredMulti&lt;(tbs::BlindedMessage, tbs::BlindedSignatureShare)&gt;);
+</span><span class="kw">pub struct </span>OutputConfirmationSignatures(
+    <span class="kw">pub </span>TieredMulti&lt;(tbs::BlindedMessage, tbs::BlindedSignatureShare)&gt;,
+);
 
-<span class="doccomment">/// Blind signature for a [`SignRequest`]
+<span class="doccomment">/// Result of Federation members confirming [`MintOutput`] by contributing partial signatures via [`MintOutputConfirmation`]
+///
+/// A set of full blinded singatures.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>SigResponse(<span class="kw">pub </span>TieredMulti&lt;tbs::BlindedSignature&gt;);
+</span><span class="kw">pub struct </span>OutputOutcome(<span class="kw">pub </span>TieredMulti&lt;tbs::BlindedSignature&gt;);
 
 <span class="doccomment">/// An verifiable one time use IOU from the mint.
 ///
@@ -1506,14 +1510,13 @@
 )]
 </span><span class="kw">pub struct </span>MintInput(<span class="kw">pub </span>TieredMulti&lt;Note&gt;);
 <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(
+    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+)]
 </span><span class="kw">pub struct </span>MintOutput(<span class="kw">pub </span>TieredMulti&lt;BlindNonce&gt;);
 <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>MintOutputOutcome(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;SigResponse&gt;);
-<span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>MintConsensusItem(<span class="kw">pub </span>PartiallySignedRequest);
+</span><span class="kw">pub struct </span>MintOutputOutcome(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;OutputOutcome&gt;);
 
 <span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>Mint {
@@ -1521,7 +1524,7 @@
     <span class="kw">type </span>Input = MintInput;
     <span class="kw">type </span>Output = MintOutput;
     <span class="kw">type </span>OutputOutcome = MintOutputOutcome;
-    <span class="kw">type </span>ConsensusItem = MintConsensusItem;
+    <span class="kw">type </span>ConsensusItem = MintOutputConfirmation;
     <span class="kw">type </span>VerificationCache = VerificationCache;
 
     <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_api::encoding::ModuleKey {
@@ -1543,11 +1546,11 @@
             .begin_transaction(<span class="self">self</span>.decoders.clone())
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
-                <span class="kw">let </span>(key, partial_signature) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                MintConsensusItem(PartiallySignedRequest {
+                <span class="kw">let </span>(key, signatures) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                MintOutputConfirmation {
                     out_point: key.request_id,
-                    partial_signature,
-                })
+                    signatures,
+                }
             })
             .collect()
     }
@@ -1562,7 +1565,7 @@
                 dbtx,
                 peer,
                 consensus_item.out_point,
-                consensus_item.<span class="number">0</span>.partial_signature,
+                consensus_item.signatures,
             )
             .<span class="kw">await
         </span>}
@@ -1984,8 +1987,11 @@
         <span class="self">self</span>.pub_key.clone()
     }
 
-    <span class="kw">fn </span>blind_sign(<span class="kw-2">&amp;</span><span class="self">self</span>, output: TieredMulti&lt;BlindNonce&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;PartialSigResponse, MintError&gt; {
-        <span class="prelude-val">Ok</span>(PartialSigResponse(output.map(
+    <span class="kw">fn </span>blind_sign(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: TieredMulti&lt;BlindNonce&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputConfirmationSignatures, MintError&gt; {
+        <span class="prelude-val">Ok</span>(OutputConfirmationSignatures(output.map(
             |amt, msg| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, InvalidAmountTierError&gt; {
                 <span class="kw">let </span>sec_key = <span class="self">self</span>.sec_key.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>;
                 <span class="kw">let </span>blind_signature = sign_blinded_msg(msg.<span class="number">0</span>, <span class="kw-2">*</span>sec_key);
@@ -1996,9 +2002,9 @@
 
     <span class="kw">fn </span>combine(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        our_contribution: <span class="prelude-ty">Option</span>&lt;PartialSigResponse&gt;,
-        partial_sigs: Vec&lt;(PeerId, PartialSigResponse)&gt;,
-    ) -&gt; (<span class="prelude-ty">Result</span>&lt;SigResponse, CombineError&gt;, MintShareErrors) {
+        our_contribution: <span class="prelude-ty">Option</span>&lt;OutputConfirmationSignatures&gt;,
+        partial_sigs: Vec&lt;(PeerId, OutputConfirmationSignatures)&gt;,
+    ) -&gt; (<span class="prelude-ty">Result</span>&lt;OutputOutcome, CombineError&gt;, MintShareErrors) {
         <span class="comment">// Terminate early if there are not enough shares
         </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.cfg.threshold {
             <span class="kw">return </span>(
@@ -2121,7 +2127,7 @@
             <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span>(<span class="prelude-val">Err</span>(e), MintShareErrors(peer_errors)),
         };
 
-        (<span class="prelude-val">Ok</span>(SigResponse(bsigs)), MintShareErrors(peer_errors))
+        (<span class="prelude-val">Ok</span>(OutputOutcome(bsigs)), MintShareErrors(peer_errors))
     }
 
     <span class="kw">async fn </span>process_partial_signature&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -2129,7 +2135,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         peer: PeerId,
         output_id: OutPoint,
-        partial_sig: PartialSigResponse,
+        partial_sig: OutputConfirmationSignatures,
     ) {
         <span class="kw">if </span>dbtx
             .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(output_id))
@@ -2189,13 +2195,13 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;SignRequest&gt; <span class="kw">for </span>TieredMulti&lt;BlindNonce&gt; {
-    <span class="kw">fn </span>from(sig_req: SignRequest) -&gt; <span class="self">Self </span>{
+<span class="kw">impl </span>From&lt;MintOutput&gt; <span class="kw">for </span>TieredMulti&lt;BlindNonce&gt; {
+    <span class="kw">fn </span>from(sig_req: MintOutput) -&gt; <span class="self">Self </span>{
         sig_req.<span class="number">0
     </span>}
 }
 
-<span class="kw">impl </span>Extend&lt;(Amount, BlindNonce)&gt; <span class="kw">for </span>SignRequest {
+<span class="kw">impl </span>Extend&lt;(Amount, BlindNonce)&gt; <span class="kw">for </span>MintOutput {
     <span class="kw">fn </span>extend&lt;T: IntoIterator&lt;Item = (Amount, BlindNonce)&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: T) {
         <span class="self">self</span>.<span class="number">0</span>.extend(iter)
     }
@@ -2206,7 +2212,7 @@
     MintInput,
     MintOutput,
     MintOutputOutcome,
-    MintConsensusItem,
+    MintOutputConfirmation,
     VerificationCache
 );
 
