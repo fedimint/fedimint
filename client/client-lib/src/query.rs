@@ -7,7 +7,7 @@ use fedimint_core::epoch::EpochHistory;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use threshold_crypto::PublicKey;
-use tracing::warn;
+use tracing::debug;
 
 use crate::api::{FedResponse, Result};
 use crate::ApiError;
@@ -187,7 +187,7 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
                     .find(|(prev_result, _)| prev_result == &result)
                 {
                     if peers.contains(&peer) {
-                        warn!(prev = ?prev_result, new = ?result, peer = %peer, "Ignoring duplicate response from peer");
+                        debug!(prev = ?prev_result, new = ?result, peer = %peer, "Ignoring duplicate response from peer");
                     } else {
                         peers.insert(peer);
                     }

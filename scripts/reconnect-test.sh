@@ -12,34 +12,33 @@ server3=$(tail -3 $FM_PID_FILE | head -1)
 server2=$(tail -2 $FM_PID_FILE | head -1)
 server1=$(tail -1 $FM_PID_FILE | head -1)
 
+function kill_server() {
+  echo "Killing server $1..."
+  kill $1
+  tail --pid=$1 -f /dev/null
+  echo "Killed server $1..."
+}
+
 mine_blocks 110
 await_block_sync
-
-# FIXME should await a response from all 4 peers instead of this hack
-sleep 15
+await_all_peers
 
 # test a peer missing out on epochs and needing to rejoin
-echo "Kill server1..."
-kill $server1
+kill_server $server1
 mine_blocks 100
-await_block_sync
-mine_blocks 100
-await_block_sync
-./scripts/start-fed.sh
-
-# FIXME should await a response from all 4 peers instead of this hack
-sleep 15
-echo "Kill server2..."
-kill $server2
 await_block_sync
 
-# now test what happens if consensus needs to be restarted
-sleep 15
-echo "Kill server3..."
-kill $server3
-echo "Kill server4..."
-kill $server4
-sleep 15
 ./scripts/start-fed.sh
+await_all_peers
+echo "Server 1 successfully rejoined!"
+
+## now test what happens if consensus needs to be restarted
+kill_server $server2
 mine_blocks 100
 await_block_sync
+kill_server $server3
+kill_server $server4
+
+./scripts/start-fed.sh
+await_all_peers
+echo "Successfully restarted consensus!"

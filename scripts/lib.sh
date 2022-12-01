@@ -27,6 +27,10 @@ function await_block_sync() {
   echo "Mint at ${EXPECTED_BLOCK_HEIGHT}H"
 }
 
+function await_all_peers() {
+  $FM_MINT_CLIENT api /wallet/block_height
+}
+
 function await_server_on_port() {
   until nc -z 127.0.0.1 $1
   do
