@@ -232,7 +232,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::OutputOutcomeKeyPrefix,
                         MintRange::OutputOutcomeKey,
-                        fedimint_mint::SigResponse,
+                        fedimint_mint::OutputOutcome,
                         mint,
                         "Output Outcomes"
                     );
@@ -242,7 +242,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::ProposedPartialSignaturesKeyPrefix,
                         MintRange::ProposedPartialSignatureKey,
-                        fedimint_mint::PartialSigResponse,
+                        fedimint_mint::OutputConfirmationSignatures,
                         mint,
                         "Proposed Signature Shares"
                     );
@@ -252,7 +252,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::ReceivedPartialSignaturesKeyPrefix,
                         MintRange::ReceivedPartialSignatureKey,
-                        fedimint_mint::PartialSigResponse,
+                        fedimint_mint::OutputConfirmationSignatures,
                         mint,
                         "User Ecash Backup"
                     );

@@ -69,26 +69,27 @@ pub struct Mint {
     decoders: ModuleRegistry<Decoder>,
 }
 
+/// A consenus item from one of the federation members contributing partials signatures to blind nonces submitted in it
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct PartiallySignedRequest {
+pub struct MintOutputConfirmation {
+    /// Reference to a Federation Transaction containing an [`MintOutput`] with `BlindNonce`s the signatures` are for
     pub out_point: OutPoint,
-    pub partial_signature: PartialSigResponse,
+    /// (Partial) signatures
+    pub signatures: OutputConfirmationSignatures,
 }
 
-/// Request to blind sign a certain amount of coins
-#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Default, Deserialize, Serialize, Encodable, Decodable,
-)]
-pub struct SignRequest(pub TieredMulti<BlindNonce>);
-
 // FIXME: optimize out blinded msg by making the mint remember it
-/// Blind signature share for a [`SignRequest`]
+/// Blind signature share from one Federation peer for a single [`MintOutput`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct PartialSigResponse(pub TieredMulti<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
+pub struct OutputConfirmationSignatures(
+    pub TieredMulti<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>,
+);
 
-/// Blind signature for a [`SignRequest`]
+/// Result of Federation members confirming [`MintOutput`] by contributing partial signatures via [`MintOutputConfirmation`]
+///
+/// A set of full blinded singatures.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct SigResponse(pub TieredMulti<tbs::BlindedSignature>);
+pub struct OutputOutcome(pub TieredMulti<tbs::BlindedSignature>);
 
 /// An verifiable one time use IOU from the mint.
 ///
@@ -265,14 +266,13 @@ impl FederationModuleConfigGen for MintConfigGenerator {
 )]
 pub struct MintInput(pub TieredMulti<Note>);
 #[autoimpl(Deref, DerefMut using self.0)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(
+    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+)]
 pub struct MintOutput(pub TieredMulti<BlindNonce>);
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputOutcome(pub Option<SigResponse>);
-#[autoimpl(Deref, DerefMut using self.0)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct MintConsensusItem(pub PartiallySignedRequest);
+pub struct MintOutputOutcome(pub Option<OutputOutcome>);
 
 #[async_trait(?Send)]
 impl ServerModulePlugin for Mint {
@@ -280,7 +280,7 @@ impl ServerModulePlugin for Mint {
     type Input = MintInput;
     type Output = MintOutput;
     type OutputOutcome = MintOutputOutcome;
-    type ConsensusItem = MintConsensusItem;
+    type ConsensusItem = MintOutputConfirmation;
     type VerificationCache = VerificationCache;
 
     fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
@@ -302,11 +302,11 @@ impl ServerModulePlugin for Mint {
             .begin_transaction(self.decoders.clone())
             .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
-                let (key, partial_signature) = res.expect("DB error");
-                MintConsensusItem(PartiallySignedRequest {
+                let (key, signatures) = res.expect("DB error");
+                MintOutputConfirmation {
                     out_point: key.request_id,
-                    partial_signature,
-                })
+                    signatures,
+                }
             })
             .collect()
     }
@@ -321,7 +321,7 @@ impl ServerModulePlugin for Mint {
                 dbtx,
                 peer,
                 consensus_item.out_point,
-                consensus_item.0.partial_signature,
+                consensus_item.signatures,
             )
             .await
         }
@@ -743,8 +743,11 @@ impl Mint {
         self.pub_key.clone()
     }
 
-    fn blind_sign(&self, output: TieredMulti<BlindNonce>) -> Result<PartialSigResponse, MintError> {
-        Ok(PartialSigResponse(output.map(
+    fn blind_sign(
+        &self,
+        output: TieredMulti<BlindNonce>,
+    ) -> Result<OutputConfirmationSignatures, MintError> {
+        Ok(OutputConfirmationSignatures(output.map(
             |amt, msg| -> Result<_, InvalidAmountTierError> {
                 let sec_key = self.sec_key.tier(&amt)?;
                 let blind_signature = sign_blinded_msg(msg.0, *sec_key);
@@ -755,9 +758,9 @@ impl Mint {
 
     fn combine(
         &self,
-        our_contribution: Option<PartialSigResponse>,
-        partial_sigs: Vec<(PeerId, PartialSigResponse)>,
-    ) -> (Result<SigResponse, CombineError>, MintShareErrors) {
+        our_contribution: Option<OutputConfirmationSignatures>,
+        partial_sigs: Vec<(PeerId, OutputConfirmationSignatures)>,
+    ) -> (Result<OutputOutcome, CombineError>, MintShareErrors) {
         // Terminate early if there are not enough shares
         if partial_sigs.len() < self.cfg.threshold {
             return (
@@ -880,7 +883,7 @@ impl Mint {
             Err(e) => return (Err(e), MintShareErrors(peer_errors)),
         };
 
-        (Ok(SigResponse(bsigs)), MintShareErrors(peer_errors))
+        (Ok(OutputOutcome(bsigs)), MintShareErrors(peer_errors))
     }
 
     async fn process_partial_signature<'a>(
@@ -888,7 +891,7 @@ impl Mint {
         dbtx: &mut DatabaseTransaction<'a>,
         peer: PeerId,
         output_id: OutPoint,
-        partial_sig: PartialSigResponse,
+        partial_sig: OutputConfirmationSignatures,
     ) {
         if dbtx
             .get_value(&OutputOutcomeKey(output_id))
@@ -948,13 +951,13 @@ impl Nonce {
     }
 }
 
-impl From<SignRequest> for TieredMulti<BlindNonce> {
-    fn from(sig_req: SignRequest) -> Self {
+impl From<MintOutput> for TieredMulti<BlindNonce> {
+    fn from(sig_req: MintOutput) -> Self {
         sig_req.0
     }
 }
 
-impl Extend<(Amount, BlindNonce)> for SignRequest {
+impl Extend<(Amount, BlindNonce)> for MintOutput {
     fn extend<T: IntoIterator<Item = (Amount, BlindNonce)>>(&mut self, iter: T) {
         self.0.extend(iter)
     }
@@ -965,7 +968,7 @@ plugin_types_trait_impl!(
     MintInput,
     MintOutput,
     MintOutputOutcome,
-    MintConsensusItem,
+    MintOutputConfirmation,
     VerificationCache
 );
 

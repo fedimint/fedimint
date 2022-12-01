@@ -13,7 +13,7 @@ use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
 use fedimint_mint::config::MintClientConfig;
-use fedimint_mint::{MintConsensusItem, PartialSigResponse, PartiallySignedRequest};
+use fedimint_mint::{MintOutputConfirmation, OutputConfirmationSignatures};
 use fedimint_server::all_decoders;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::legacy::Output;
@@ -438,10 +438,10 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
         .await;
     let out_point = fed.database_add_coins_for_user(&user, sats(2000)).await;
     let bad_proposal = vec![ConsensusItem::Module(
-        MintConsensusItem(PartiallySignedRequest {
+        MintOutputConfirmation {
             out_point,
-            partial_signature: PartialSigResponse(TieredMulti::default()),
-        })
+            signatures: OutputConfirmationSignatures(TieredMulti::default()),
+        }
         .into(),
     )];
 
