@@ -33,15 +33,17 @@ use fedimint_api::TieredMulti;
 use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
+use fedimint_mint::config::MintClientConfig;
 use fedimint_mint::{Mint, MintOutput};
 use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
-use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::consensus::{ConsensusOutcome, ConsensusProposal};
+use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
+use fedimint_server::transaction::legacy::Transaction;
 use fedimint_server::{all_decoders, consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
@@ -61,6 +63,7 @@ use ln_gateway::{
     rpc::GatewayRequest,
     LnGateway,
 };
+use mint_client::transaction::TransactionBuilder;
 use mint_client::{
     api::WsFederationApi, mint::SpendableNote, Client, FederationId, GatewayClient,
     GatewayClientConfig, UserClient, UserClientConfig,
@@ -87,6 +90,10 @@ pub fn rng() -> OsRng {
     OsRng
 }
 
+pub fn msats(amount: u64) -> Amount {
+    Amount::from_msat(amount)
+}
+
 pub fn sats(amount: u64) -> Amount {
     Amount::from_sat(amount)
 }
@@ -111,7 +118,7 @@ pub struct Fixtures {
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
 /// federation nodes starting at port 4000.
-pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result<Fixtures> {
+pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
@@ -127,7 +134,7 @@ pub async fn fixtures(num_peers: u16, amount_tiers: &[Amount]) -> anyhow::Result
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
     let params = ServerConfigParams::gen_local(
         &peers,
-        amount_tiers.to_vec(),
+        Amount::from_sat(1000),
         base_port,
         "test",
         "127.0.0.1:18443",
@@ -473,6 +480,35 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
     }
 }
 
+impl UserTest<UserClientConfig> {
+    pub async fn create_tx(&self, builder: TransactionBuilder) -> Transaction {
+        let tbs_pks = self
+            .config
+            .0
+            .get_module::<MintClientConfig>("mint")
+            .unwrap()
+            .tbs_pks;
+        let context = self.client.mint_client().context;
+        let mut dbtx = context.db.begin_transaction(all_decoders());
+
+        builder
+            .build(
+                sats(0),
+                &mut dbtx,
+                |amount| async move {
+                    self.client
+                        .mint_client()
+                        .new_ecash_note(&secp(), amount)
+                        .await
+                },
+                &secp(),
+                &tbs_pks,
+                rng(),
+            )
+            .await
+    }
+}
+
 pub struct FederationTest {
     servers: Vec<Rc<RefCell<ServerTest>>>,
     last_consensus: Rc<RefCell<ConsensusOutcome>>,
@@ -531,15 +567,18 @@ impl FederationTest {
     }
 
     /// Submit a fedimint transaction to all federation servers
-    pub fn submit_transaction(&self, transaction: fedimint_server::transaction::Transaction) {
+    pub fn submit_transaction(
+        &self,
+        transaction: fedimint_server::transaction::Transaction,
+    ) -> Result<(), TransactionSubmissionError> {
         for server in &self.servers {
             server
                 .borrow_mut()
                 .fedimint
                 .consensus
-                .submit_transaction(transaction.clone())
-                .unwrap();
+                .submit_transaction(transaction.clone())?;
         }
+        Ok(())
     }
 
     /// Returns a fixture that only calls on a subset of the peers.  Note that PeerIds are always

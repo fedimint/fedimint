@@ -36,14 +36,10 @@ enum Command {
         #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
         bitcoind_rpc: String,
 
-        /// Available denominations of notes issues by the federation (comma separated)
-        #[arg(
-            long = "denominations",
-            value_delimiter = ',',
-            num_args = 1..,
-            required = true
-        )]
-        denominations: Vec<Amount>,
+        /// Max denomination of notes issued by the federation (in millisats)
+        /// default = 1 BTC
+        #[arg(long = "max_denomination", default_value = "100000000000")]
+        max_denomination: Amount,
 
         /// Federation name
         #[arg(long = "federation-name", default_value = "Hals_trusty_mint")]
@@ -61,7 +57,7 @@ fn main() {
             dir_out_path: cfg_path,
             num_nodes: nodes,
             base_port,
-            denominations: amount_tiers,
+            max_denomination,
             federation_name,
             bitcoind_rpc,
         } => {
@@ -76,7 +72,7 @@ fn main() {
             );
             let params = ServerConfigParams::gen_local(
                 &peers,
-                amount_tiers.to_vec(),
+                max_denomination,
                 base_port,
                 &federation_name,
                 &bitcoind_rpc,

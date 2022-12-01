@@ -80,14 +80,6 @@ pub struct Peer {
     pub name: String,
 }
 
-pub struct FederationeConfigGenParams {
-    pub mint_amounts: Vec<Amount>,
-    pub bitcoin_rpc: BitcoindRpcCfg,
-
-    /// extra options for extra settings and modules
-    pub other: BTreeMap<String, serde_json::Value>,
-}
-
 #[derive(Debug, Clone)]
 /// network config for a server
 pub struct ServerConfigParams {
@@ -95,8 +87,7 @@ pub struct ServerConfigParams {
     pub hbbft: NetworkConfig,
     pub api: NetworkConfig,
     pub server_dkg: NetworkConfig,
-    // TODO: delete unused dkgs
-    pub amount_tiers: Vec<Amount>,
+    pub max_denomination: Amount,
     pub federation_name: String,
     pub bitcoind_rpc: String,
 
@@ -201,7 +192,7 @@ impl ServerConfig {
         let peer0 = &params[&PeerId::from(0)];
 
         let module_cfg_gen_params = ModuleConfigGenParams {
-            mint_amounts: peer0.amount_tiers.clone(),
+            mint_amounts: ServerConfigParams::gen_denominations(peer0.max_denomination),
             // TODO: FIXME: meh
             bitcoin_rpc: BitcoindRpcCfg {
                 btc_rpc_address: peer0.bitcoind_rpc.clone(),
@@ -297,7 +288,7 @@ impl ServerConfig {
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
 
         let module_cfg_gen_params = ModuleConfigGenParams {
-            mint_amounts: params.amount_tiers.clone(),
+            mint_amounts: ServerConfigParams::gen_denominations(params.max_denomination),
             bitcoin_rpc: BitcoindRpcCfg {
                 btc_rpc_address: params.bitcoind_rpc.clone(),
                 btc_rpc_user: "bitcoin".into(),
@@ -410,6 +401,19 @@ pub struct PeerServerParams {
 }
 
 impl ServerConfigParams {
+    /// Generates denominations as powers of 2 until a `max`
+    pub fn gen_denominations(max: Amount) -> Vec<Amount> {
+        let mut amounts = vec![];
+
+        let mut denomination = Amount::from_msat(1);
+        while denomination < max {
+            amounts.push(denomination);
+            denomination = denomination * 2;
+        }
+
+        amounts
+    }
+
     pub fn peers(&self) -> BTreeMap<PeerId, Peer> {
         self.hbbft
             .peers
@@ -434,7 +438,7 @@ impl ServerConfigParams {
         bind_address: String,
         key: rustls::PrivateKey,
         our_id: PeerId,
-        amount_tiers: Vec<Amount>,
+        max_denomination: Amount,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
         bitcoind_rpc: String,
@@ -463,7 +467,7 @@ impl ServerConfigParams {
             hbbft: Self::gen_network(&bind_address, &our_id, 0, peers),
             api: Self::gen_network(&bind_address, &our_id, 1, peers),
             server_dkg: Self::gen_network(&bind_address, &our_id, 2, peers),
-            amount_tiers,
+            max_denomination,
             federation_name,
             bitcoind_rpc,
             other: vec![
@@ -499,7 +503,7 @@ impl ServerConfigParams {
     /// config for servers running on different ports on a local network
     pub fn gen_local(
         peers: &[PeerId],
-        amount_tiers: Vec<Amount>,
+        max_denomination: Amount,
         base_port: u16,
         federation_name: &str,
         bitcoind_rpc: &str,
@@ -532,7 +536,7 @@ impl ServerConfigParams {
                     "127.0.0.1".to_string(),
                     keys[peer].1.clone(),
                     *peer,
-                    amount_tiers.clone(),
+                    max_denomination,
                     &peer_params,
                     federation_name.to_string(),
                     bitcoind_rpc.to_string(),
