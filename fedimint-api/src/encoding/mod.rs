@@ -452,6 +452,60 @@ impl std::fmt::Display for DecodeError {
     }
 }
 
+impl<K, V> Encodable for BTreeMap<K, V>
+where
+    K: Encodable,
+    V: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut len = 0;
+        len += (self.len() as u64).consensus_encode(writer)?;
+        for (k, v) in self.iter() {
+            len += k.consensus_encode(writer)?;
+            len += v.consensus_encode(writer)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<K, V> Decodable for BTreeMap<K, V>
+where
+    K: Decodable + Ord,
+    V: Decodable,
+{
+    fn consensus_decode<M, D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecode,
+    {
+        let mut res = BTreeMap::new();
+        let len = u64::consensus_decode(d, modules)?;
+        for _ in 0..len {
+            let amt = K::consensus_decode(d, modules)?;
+            let v = V::consensus_decode(d, modules)?;
+            res.insert(amt, v);
+        }
+        Ok(res)
+    }
+}
+
+#[test]
+fn encode_decode_btreemap() {
+    let t = BTreeMap::from([("a".to_string(), 1u32), ("b".to_string(), 2)]);
+
+    let mut buf = vec![];
+
+    t.consensus_encode(&mut buf).unwrap();
+
+    assert_eq!(
+        t,
+        Decodable::consensus_decode::<Decoder, _>(&mut buf.as_slice(), &BTreeMap::default())
+            .unwrap()
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
