@@ -568,6 +568,8 @@
 <a href="#568" id="568">568</a>
 <a href="#569" id="569">569</a>
 <a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -823,9 +825,11 @@
                 EpochHistory::new(last_outcome.epoch, contributions, <span class="kw-2">&amp;</span>prev_epoch)
             } <span class="kw">else </span>{
                 <span class="kw">let </span>epoch_pk = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
-                <span class="kw">let </span>result = <span class="self">self</span>.api.fetch_epoch_history(epoch_num, epoch_pk).<span class="kw">await</span>;
-                result.map_err(|<span class="kw">_</span>| EpochVerifyError::MissingPreviousEpoch)<span class="question-mark">?
-            </span>};
+                <span class="self">self</span>.api
+                    .fetch_epoch_history(epoch_num, epoch_pk)
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;fetches history&quot;</span>)
+            };
 
             current_epoch.verify_hash(<span class="kw-2">&amp;</span>prev_epoch)<span class="question-mark">?</span>;
             epochs.push(current_epoch.clone());

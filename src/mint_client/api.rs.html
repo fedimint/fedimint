@@ -815,7 +815,10 @@
 <a href="#815" id="815">815</a>
 <a href="#816" id="816">816</a>
 <a href="#817" id="817">817</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
+<span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1382,6 +1385,7 @@
         <span class="comment">// Delegates the response handling to the `QueryStrategy` with an exponential back-off
         // with every new set of requests
         </span><span class="kw">let </span><span class="kw-2">mut </span>delay_ms = <span class="number">10</span>;
+        <span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
         <span class="kw">loop </span>{
             <span class="kw">match </span>futures.next().<span class="kw">await </span>{
                 <span class="prelude-val">Some</span>(result) =&gt; <span class="kw">match </span>strategy.process(result) {
@@ -1392,7 +1396,7 @@
                             }
                         }
                         sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
-                        delay_ms <span class="kw-2">*</span>= <span class="number">2</span>;
+                        delay_ms = min(max_delay_ms, delay_ms * <span class="number">2</span>);
                     }
                     QueryStep::Continue =&gt; {}
                     QueryStep::Finished(result) =&gt; <span class="kw">return </span>result,
