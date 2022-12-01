@@ -137,7 +137,7 @@ impl TransactionBuilder {
         coin_gen: F,
         tbs_pks: &Tiered<AggregatePublicKey>,
     ) where
-        F: FnMut() -> Fut,
+        F: FnMut(Amount) -> Fut,
         Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
     {
         let (coin_finalization_data, coin_output) =
@@ -158,13 +158,13 @@ impl TransactionBuilder {
         tbs_pks: &Tiered<AggregatePublicKey>,
     ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>)
     where
-        F: FnMut() -> Fut,
+        F: FnMut(Amount) -> Fut,
         Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
     {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
         for (amt, ()) in TieredMulti::represent_amount(amount, tbs_pks).into_iter() {
-            let (request, blind_nonce) = coin_gen().await;
+            let (request, blind_nonce) = coin_gen(amt).await;
             amount_requests.push(((amt, request), (amt, blind_nonce)));
         }
         let (coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
@@ -190,7 +190,7 @@ impl TransactionBuilder {
         mut rng: R,
     ) -> Transaction
     where
-        F: FnMut() -> Fut,
+        F: FnMut(Amount) -> Fut,
         Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
     {
         // add change

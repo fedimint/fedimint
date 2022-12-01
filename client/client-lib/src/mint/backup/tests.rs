@@ -19,7 +19,9 @@ fn sanity_ecash_backup_align() {
 fn sanity_ecash_backup_decode_encode() -> Result<()> {
     let orig = PlaintextEcashBackup {
         notes: TieredMulti::from_iter([]),
-        last_idx: NoteIndex::from_u64(3),
+        last_idx: Tiered::from_iter(
+            [(Amount::from_milli_sats(1), NoteIndex::from_u64(3))].into_iter(),
+        ),
         epoch: 0,
     };
 
@@ -34,7 +36,9 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
 fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
     let orig = PlaintextEcashBackup {
         notes: TieredMulti::from_iter([]),
-        last_idx: NoteIndex::from_u64(3),
+        last_idx: Tiered::from_iter(
+            [(Amount::from_milli_sats(1), NoteIndex::from_u64(3))].into_iter(),
+        ),
         epoch: 1,
     };
 

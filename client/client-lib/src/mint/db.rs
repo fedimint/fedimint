@@ -79,8 +79,17 @@ impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
     type Value = NoteIssuanceRequests;
 }
 
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct LastECashNoteIndexKeyPrefix;
+
+impl DatabaseKeyPrefixConst for LastECashNoteIndexKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::LastECashNoteIndex as u8;
+    type Key = LastECashNoteIndexKey;
+    type Value = u64;
+}
+
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-pub struct LastECashNoteIndexKey;
+pub struct LastECashNoteIndexKey(pub Amount);
 
 impl DatabaseKeyPrefixConst for LastECashNoteIndexKey {
     const DB_PREFIX: u8 = DbKeyPrefix::LastECashNoteIndex as u8;

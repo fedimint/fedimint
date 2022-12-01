@@ -534,16 +534,14 @@ impl<'a> DatabaseDump<'a> {
                     );
                 }
                 ClientMintRange::DbKeyPrefix::LastECashNoteIndex => {
-                    let last_ecash_note = self
-                        .read_only
-                        .get_value(&ClientMintRange::LastECashNoteIndexKey)
-                        .unwrap();
-                    if let Some(last_ecash_note) = last_ecash_note {
-                        mint_client.insert(
-                            "Last e-cash note index".to_string(),
-                            Box::new(last_ecash_note),
-                        );
-                    }
+                    push_db_pair_items!(
+                        self,
+                        ClientMintRange::LastECashNoteIndexKeyPrefix,
+                        ClientMintRange::LastECashNoteIndexKey,
+                        u64,
+                        mint_client,
+                        "Last e-cash note index"
+                    );
                 }
             }
         }

@@ -376,7 +376,11 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .receive_coins(
                 amount,
                 &mut dbtx,
-                || async { self.mint_client().new_ecash_note(&self.context.secp).await },
+                |note_amount| async move {
+                    self.mint_client()
+                        .new_ecash_note(&self.context.secp, note_amount)
+                        .await
+                },
                 create_tx,
             )
             .await;
@@ -465,7 +469,11 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             tx.input_coins(coins.clone())?;
             tx.output_coins(
                 amount,
-                move || async { self.mint_client().new_ecash_note(&self.context.secp).await },
+                |note_amount| async move {
+                    self.mint_client()
+                        .new_ecash_note(&self.context.secp, note_amount)
+                        .await
+                },
                 &self.mint_client().config.tbs_pks,
             )
             .await;

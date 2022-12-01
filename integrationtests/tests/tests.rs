@@ -823,11 +823,12 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         .tbs_pks;
     let context = &user.client.mint_client().context;
     let mut dbtx = context.db.begin_transaction(all_decoders());
+    let client = &user.client;
     let tx = builder
         .build(
             sats(0),
             &mut dbtx,
-            || async { user.client.mint_client().new_ecash_note(&secp()).await },
+            |amount| async move { client.mint_client().new_ecash_note(&secp(), amount).await },
             &secp(),
             tbs_pks,
             rng(),
