@@ -253,8 +253,10 @@ impl FedimintServer {
                 EpochHistory::new(last_outcome.epoch, contributions, &prev_epoch)
             } else {
                 let epoch_pk = self.cfg.epoch_pk_set.public_key();
-                let result = self.api.fetch_epoch_history(epoch_num, epoch_pk).await;
-                result.map_err(|_| EpochVerifyError::MissingPreviousEpoch)?
+                self.api
+                    .fetch_epoch_history(epoch_num, epoch_pk)
+                    .await
+                    .expect("fetches history")
             };
 
             current_epoch.verify_hash(&prev_epoch)?;

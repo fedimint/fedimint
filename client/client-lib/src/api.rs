@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -565,6 +566,7 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
         // Delegates the response handling to the `QueryStrategy` with an exponential back-off
         // with every new set of requests
         let mut delay_ms = 10;
+        let max_delay_ms = 1000;
         loop {
             match futures.next().await {
                 Some(result) => match strategy.process(result) {
@@ -575,7 +577,7 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
                             }
                         }
                         sleep(Duration::from_millis(delay_ms)).await;
-                        delay_ms *= 2;
+                        delay_ms = min(max_delay_ms, delay_ms * 2);
                     }
                     QueryStep::Continue => {}
                     QueryStep::Finished(result) => return result,
