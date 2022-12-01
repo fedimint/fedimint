@@ -9,8 +9,8 @@ use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, RegisterFedPayload,
-        WithdrawPayload,
+        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, DepositPayload,
+        RegisterFedPayload, WithdrawPayload,
     },
 };
 use mint_client::api::WsFederationConnect;
@@ -56,7 +56,6 @@ async fn test_gateway_authentication() -> Result<()> {
     let payload = RegisterFedPayload {
         connect: serde_json::to_string(&WsFederationConnect { members: vec![] })?,
     };
-
     test_auth(&gw_password, move |pw| {
         client_ref.register_federation(pw, payload.clone())
     })
@@ -89,10 +88,22 @@ async fn test_gateway_authentication() -> Result<()> {
     })
     .await?;
 
-    // TODO:
     // Test gateway authentication on `deposit` function
     // *  `deposit` with correct password succeeds
     // *  `deposit` with incorrect password fails
+    let (proof, tx) = bitcoin.send_and_mine_block(
+        &bitcoin.get_new_address(),
+        bitcoin::Amount::from_btc(1.0).unwrap(),
+    );
+    let payload = DepositPayload {
+        federation_id: federation_id.clone(),
+        txout_proof: proof,
+        transaction: tx,
+    };
+    test_auth(&gw_password, move |pw| {
+        client_ref.deposit(pw, payload.clone())
+    })
+    .await?;
 
     // Test gateway authentication on `withdraw` function
     // *  `withdraw` with correct password succeeds

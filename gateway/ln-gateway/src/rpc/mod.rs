@@ -67,7 +67,7 @@ pub struct DepositAddressPayload {
     pub federation_id: FederationId,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositPayload {
     pub federation_id: FederationId,
     pub txout_proof: TxOutProof,
