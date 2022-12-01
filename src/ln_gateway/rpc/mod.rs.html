@@ -261,7 +261,7 @@
     <span class="kw">pub </span>federation_id: FederationId,
 }
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>DepositPayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>txout_proof: TxOutProof,
