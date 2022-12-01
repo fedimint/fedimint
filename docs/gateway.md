@@ -54,15 +54,15 @@ Commands:
   generate-config  Ganerate gateway configuration NOTE: This command can only be used on a local gateway
   version-hash     Display CLI version hash
   info             Display high-level information about the Gateway
-  balance          Check gateway balance TODO: add federation id to scope the federation for which we want a pegin address
+  balance          Check gateway balance
   address          Generate a new peg-in address, funds sent to it can later be claimed
-  deposit          Deposit funds into a gateway federation TODO: add federation id to scope the federation for which we want a pegin address
-  withdraw         Claim funds from a gateway federation TODO: add federation id to scope the federation for which we want a pegin address
+  deposit          Deposit funds into a gateway federation
+  withdraw         Claim funds from a gateway federation
   register-fed     Register federation with the gateway
   help             Print this message or the help of the given subcommand(s)
 
 Options:
-  -u, --url <URL>                  The address of the gateway webserver [default: http://localhost:8080]
+  -a, --address <ADDRESS>          The address of the gateway webserver [default: http://127.0.0.1:8080]
       --rpcpassword <RPCPASSWORD>  WARNING: Passing in a password from the command line may be less secure!
   -h, --help                       Print help information
   -V, --version                    Print version information
