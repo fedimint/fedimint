@@ -363,6 +363,8 @@ impl ServerModulePlugin for Wallet {
         if self.consensus_proposal(dbtx).await.len() == 1 {
             while our_target_height <= last_consensus_height {
                 our_target_height = self.target_height().await;
+                // FIXME: remove after modularization finishes
+                #[cfg(not(target_family = "wasm"))]
                 sleep(Duration::from_millis(1000)).await;
             }
         }
@@ -1419,6 +1421,8 @@ pub async fn run_broadcast_pending_tx(
 ) {
     while !tg_handle.is_shutting_down() {
         broadcast_pending_tx(db.begin_transaction(modules.clone()), &rpc).await;
+        // FIXME: remove after modularization finishes
+        #[cfg(not(target_family = "wasm"))]
         fedimint_api::task::sleep(Duration::from_secs(10)).await;
     }
 }
