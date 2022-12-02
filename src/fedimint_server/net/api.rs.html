@@ -229,6 +229,9 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -329,30 +332,30 @@
         </span><span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, <span class="kw">move </span>|params, state| {
-                Box::pin(<span class="kw">async move </span>{
-                    <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
-                    <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    </span>AssertUnwindSafe((handler)(<span class="kw-2">&amp;</span>state.fedimint, params))
-                        .catch_unwind()
-                        .<span class="kw">await
-                        </span>.map_err(|<span class="kw">_</span>| {
-                            <span class="macro">error!</span>(path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;</span>);
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                <span class="number">500</span>,
-                                <span class="string">&quot;API handler panicked&quot;</span>,
-                                <span class="prelude-val">None</span>::&lt;()&gt;,
-                            )))
-                        })<span class="question-mark">?
-                        </span>.map_err(|e| {
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
-                            )))
-                        })
-                })
+            .register_async_method(path, <span class="kw">move </span>|params, state| <span class="kw">async move </span>{
+                <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
+                <span class="kw">let </span>fedimint = <span class="kw-2">&amp;</span>state.fedimint;
+                <span class="kw">let </span>dbtx = fedimint.database_transaction();
+                <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                // end up with an inconsistent state in theory. In practice most API functions
+                // are only reading and the few that do write anything are atomic. Lastly, this
+                // is only the last line of defense
+                </span>AssertUnwindSafe((handler)(fedimint, dbtx, params))
+                    .catch_unwind()
+                    .<span class="kw">await
+                    </span>.map_err(|<span class="kw">_</span>| {
+                        <span class="macro">error!</span>(path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;</span>);
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            <span class="number">500</span>,
+                            <span class="string">&quot;API handler panicked&quot;</span>,
+                            <span class="prelude-val">None</span>::&lt;()&gt;,
+                        )))
+                    })<span class="question-mark">?
+                    </span>.map_err(|e| {
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
+                        )))
+                    })
             })
             .expect(<span class="string">&quot;Failed to register async method&quot;</span>);
     }
@@ -374,36 +377,37 @@
         <span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, <span class="kw">move </span>|params, state| {
-                Box::pin(<span class="kw">async move </span>{
-                    <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
-                    <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    </span>AssertUnwindSafe((handler)(
-                        state
-                            .fedimint
-                            .modules
-                            .get(<span class="kw-2">&amp;</span>module_key)
-                            .expect(<span class="string">&quot;Module exists if it was registered&quot;</span>),
-                        params,
-                    ))
-                    .catch_unwind()
-                    .<span class="kw">await
-                    </span>.map_err(|<span class="kw">_</span>| {
-                        <span class="macro">error!</span>(path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;</span>);
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            <span class="number">500</span>,
-                            <span class="string">&quot;API handler panicked&quot;</span>,
-                            <span class="prelude-val">None</span>::&lt;()&gt;,
-                        )))
-                    })<span class="question-mark">?
-                    </span>.map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
-                        )))
-                    })
+            .register_async_method(path, <span class="kw">move </span>|params, state| <span class="kw">async move </span>{
+                <span class="comment">// Hack to avoid Sync/Send issues
+                </span><span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
+                <span class="kw">let </span>fedimint = <span class="kw-2">&amp;</span>state.fedimint;
+                <span class="kw">let </span>dbtx = fedimint.database_transaction();
+                <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                // end up with an inconsistent state in theory. In practice most API functions
+                // are only reading and the few that do write anything are atomic. Lastly, this
+                // is only the last line of defense
+                </span>AssertUnwindSafe((handler)(
+                    fedimint
+                        .modules
+                        .get(<span class="kw-2">&amp;</span>module_key)
+                        .expect(<span class="string">&quot;Module exists if it was registered&quot;</span>),
+                    dbtx,
+                    params,
+                ))
+                .catch_unwind()
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| {
+                    <span class="macro">error!</span>(path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;</span>);
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        <span class="number">500</span>,
+                        <span class="string">&quot;API handler panicked&quot;</span>,
+                        <span class="prelude-val">None</span>::&lt;()&gt;,
+                    )))
+                })<span class="question-mark">?
+                </span>.map_err(|e| {
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
+                    )))
                 })
             })
             .expect(<span class="string">&quot;Failed to register async method&quot;</span>);
@@ -414,7 +418,7 @@
     <span class="macro">vec!</span>[
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, transaction: serde_json::Value| -&gt; TransactionId {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, transaction: serde_json::Value| -&gt; TransactionId {
                 <span class="comment">// deserializing Transaction from json Value always fails
                 // we need to convert it to string first
                 </span><span class="kw">let </span>string = serde_json::to_string(<span class="kw-2">&amp;</span>transaction).map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
@@ -423,14 +427,16 @@
 
                 <span class="kw">let </span>tx_id = transaction.tx_hash();
 
-                fedimint.submit_transaction(transaction).map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
+                fedimint.submit_transaction(transaction)
+                    .<span class="kw">await
+                    </span>.map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(tx_id)
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, tx_hash: TransactionId| -&gt; TransactionStatus {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, tx_hash: TransactionId| -&gt; TransactionStatus {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Recieved request&quot;</span>);
 
                 <span class="kw">let </span>tx_status = fedimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;transaction not found&quot;</span>)))<span class="question-mark">?</span>;
@@ -441,20 +447,20 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_epoch_history&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, epoch: u64| -&gt; SerdeEpochHistory {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, epoch: u64| -&gt; SerdeEpochHistory {
                 <span class="kw">let </span>epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>epoch).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/epoch&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _v: ()| -&gt; u64 {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, _v: ()| -&gt; u64 {
                 <span class="prelude-val">Ok</span>(fedimint.get_last_epoch().ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/config&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _v: ()| -&gt; ClientConfig {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, _v: ()| -&gt; ClientConfig {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.to_client_config())
             }
         },

@@ -901,19 +901,6 @@
 <a href="#901" id="901">901</a>
 <a href="#902" id="902">902</a>
 <a href="#903" id="903">903</a>
-<a href="#904" id="904">904</a>
-<a href="#905" id="905">905</a>
-<a href="#906" id="906">906</a>
-<a href="#907" id="907">907</a>
-<a href="#908" id="908">908</a>
-<a href="#909" id="909">909</a>
-<a href="#910" id="910">910</a>
-<a href="#911" id="911">911</a>
-<a href="#912" id="912">912</a>
-<a href="#913" id="913">913</a>
-<a href="#914" id="914">914</a>
-<a href="#915" id="915">915</a>
-<a href="#916" id="916">916</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -943,9 +930,9 @@
     ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_LN};
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
+<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
@@ -999,9 +986,6 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LightningModule {
     cfg: LightningModuleConfig,
-    <span class="comment">// TODO: remove DB all together
-    </span>non_consensus_db: Database,
-    decoders: ModuleRegistry&lt;Decoder&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -1161,7 +1145,7 @@
     }
 }
 
-<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>LightningModule {
     <span class="kw">type </span>Decoder = LightningModuleDecoder;
     <span class="kw">type </span>Input = LightningInput;
@@ -1178,16 +1162,17 @@
         LightningModuleDecoder
     }
 
-    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">if </span><span class="self">self</span>.consensus_proposal().<span class="kw">await</span>.is_empty() {
+    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        <span class="kw">if </span><span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.is_empty() {
             std::future::pending().<span class="kw">await
         </span>}
     }
 
-    <span class="kw">async fn </span>consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
-        <span class="self">self</span>.non_consensus_db
-            .begin_transaction(<span class="self">self</span>.decoders.clone())
-            .find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
+    <span class="kw">async fn </span>consensus_proposal(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
+        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(ProposeDecryptionShareKey(contract_id), share) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 LightningConsensusItem { contract_id, share }
@@ -1220,10 +1205,10 @@
         LightningVerificationCache
     }
 
-    <span class="kw">fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
@@ -1242,7 +1227,7 @@
 
         <span class="kw">let </span>pub_key = <span class="kw">match </span>account.contract {
             FundedContract::Outgoing(outgoing) =&gt; {
-                <span class="kw">if </span>outgoing.timelock &gt; block_height(interconnect) &amp;&amp; !outgoing.cancelled {
+                <span class="kw">if </span>outgoing.timelock &gt; block_height(interconnect).<span class="kw">await </span>&amp;&amp; !outgoing.cancelled {
                     <span class="comment">// If the timelock hasn&#39;t expired yet …
                     </span><span class="kw">let </span>preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         <span class="kw-2">&amp;</span>input
@@ -1300,7 +1285,9 @@
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::Input,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, dbtx, cache, input)<span class="question-mark">?</span>;
+        <span class="kw">let </span>meta = <span class="self">self
+            </span>.validate_input(interconnect, dbtx, cache, input)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>account_db_key = ContractKey(input.contract_id);
         <span class="kw">let </span><span class="kw-2">mut </span>contract_account = dbtx
@@ -1317,7 +1304,7 @@
 
     <span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">match </span>output {
@@ -1650,21 +1637,19 @@
         bad_peers
     }
 
-    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
-        <span class="self">self</span>.non_consensus_db
-            .begin_transaction(<span class="self">self</span>.decoders.clone())
-            .get_value(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point))
+    <span class="kw">fn </span>output_status(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
+        dbtx.get_value(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point))
             .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        audit.add_items(
-            <span class="kw-2">&amp;</span><span class="self">self
-                </span>.non_consensus_db
-                .begin_transaction(<span class="self">self</span>.decoders.clone()),
-            <span class="kw-2">&amp;</span>ContractKeyPrefix,
-            |<span class="kw">_</span>, v| -(v.amount.milli_sat <span class="kw">as </span>i64),
-        );
+    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit.add_items(dbtx, <span class="kw-2">&amp;</span>ContractKeyPrefix, |<span class="kw">_</span>, v| {
+            -(v.amount.milli_sat <span class="kw">as </span>i64)
+        });
     }
 
     <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
@@ -1675,23 +1660,23 @@
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/account&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, contract_id: ContractId| -&gt; ContractAccount {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, contract_id: ContractId| -&gt; ContractAccount {
                     module
-                        .get_contract_account(<span class="kw-2">&amp;</span>module.non_consensus_db.begin_transaction(module.decoders.clone()), contract_id)
+                        .get_contract_account(<span class="kw-2">&amp;mut </span>dbtx, contract_id)
                         .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/offers&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, _params: ()| -&gt; Vec&lt;IncomingContractOffer&gt; {
-                    <span class="prelude-val">Ok</span>(module.get_offers(<span class="kw-2">&amp;</span>module.non_consensus_db.begin_transaction(module.decoders.clone())))
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, _params: ()| -&gt; Vec&lt;IncomingContractOffer&gt; {
+                    <span class="prelude-val">Ok</span>(module.get_offers(<span class="kw-2">&amp;mut </span>dbtx))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/offer&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
                     <span class="kw">let </span>offer = module
-                        .get_offer(<span class="kw-2">&amp;</span>module.non_consensus_db.begin_transaction(module.decoders.clone()), payment_hash)
+                        .get_offer(<span class="kw-2">&amp;mut </span>dbtx, payment_hash)
                         .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
 
                     <span class="macro">debug!</span>(%payment_hash, <span class="string">&quot;Sending offer info&quot;</span>);
@@ -1700,16 +1685,15 @@
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/list_gateways&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
-                    <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;</span>module.non_consensus_db.begin_transaction(module.decoders.clone())))
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
+                    <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>dbtx))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/register_gateway&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, gateway: LightningGateway| -&gt; () {
-                    futures::executor::block_on( <span class="kw">async </span>{
-                       module.register_gateway(gateway).<span class="kw">await</span>;
-                    });
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, gateway: LightningGateway| -&gt; () {
+                    module.register_gateway(<span class="kw-2">&amp;mut </span>dbtx, gateway).<span class="kw">await</span>;
+                    dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                     <span class="prelude-val">Ok</span>(())
                 }
             },
@@ -1718,16 +1702,8 @@
 }
 
 <span class="kw">impl </span>LightningModule {
-    <span class="kw">pub fn </span>new(
-        cfg: LightningModuleConfig,
-        db: Database,
-        decoders: ModuleRegistry&lt;Decoder&gt;,
-    ) -&gt; <span class="self">Self </span>{
-        LightningModule {
-            cfg,
-            non_consensus_db: db,
-            decoders,
-        }
+    <span class="kw">pub fn </span>new(cfg: LightningModuleConfig) -&gt; <span class="self">Self </span>{
+        LightningModule { cfg }
     }
 
     <span class="kw">fn </span>validate_decryption_share(
@@ -1744,13 +1720,13 @@
 
     <span class="kw">pub fn </span>get_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>OfferKey(payment_hash)).expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>get_offers(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction) -&gt; Vec&lt;IncomingContractOffer&gt; {
+    <span class="kw">pub fn </span>get_offers(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction) -&gt; Vec&lt;IncomingContractOffer&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>OfferKeyPrefix)
             .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .collect()
@@ -1758,26 +1734,26 @@
 
     <span class="kw">pub fn </span>get_contract_account(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         contract_id: ContractId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ContractKey(contract_id)).expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction) -&gt; Vec&lt;LightningGateway&gt; {
+    <span class="kw">pub fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction) -&gt; Vec&lt;LightningGateway&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
             .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .collect()
     }
 
-    <span class="kw">pub async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
-            </span>.non_consensus_db
-            .begin_transaction(<span class="self">self</span>.decoders.clone());
+    <span class="kw">pub async fn </span>register_gateway(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        gateway: LightningGateway,
+    ) {
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(gateway.node_pub_key), <span class="kw-2">&amp;</span>gateway)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>);
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 }
 
@@ -1790,15 +1766,13 @@
     LightningVerificationCache
 );
 
-<span class="kw">fn </span>block_height(interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect) -&gt; u32 {
+<span class="kw">async fn </span>block_height(interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect) -&gt; u32 {
     <span class="comment">// This is a future because we are normally reading from a network socket. But for internal
     // calls the data is available instantly in one go, so we can just block on it.
-    </span><span class="kw">let </span>body = futures::executor::block_on(interconnect.call(
-        <span class="string">&quot;wallet&quot;</span>,
-        <span class="string">&quot;/block_height&quot;</span>.to_owned(),
-        Default::default(),
-    ))
-    .expect(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);
+    </span><span class="kw">let </span>body = interconnect
+        .call(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;/block_height&quot;</span>.to_owned(), Default::default())
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);
 
     serde_json::from_value(body).expect(<span class="string">&quot;Malformed block height response from wallet module!&quot;</span>)
 }

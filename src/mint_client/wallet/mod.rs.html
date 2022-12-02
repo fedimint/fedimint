@@ -863,7 +863,7 @@
         <span class="macro">assert!</span>(btc_rpc.is_btc_sent_to(amount, addr).<span class="kw">await</span>);
 
         <span class="kw">let </span>wallet_value = fed.lock().<span class="kw">await</span>.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(<span class="kw-2">&amp;</span>db.begin_transaction(ModuleRegistry::default()))
+            wallet.get_wallet_value(<span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()))
         });
         <span class="macro">assert_eq!</span>(wallet_value, bitcoin::Amount::from_sat(<span class="number">0</span>));
 
@@ -873,7 +873,7 @@
         fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 
         <span class="kw">let </span>wallet_value = fed.lock().<span class="kw">await</span>.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(<span class="kw-2">&amp;</span>db.begin_transaction(ModuleRegistry::default()))
+            wallet.get_wallet_value(<span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()))
         });
         <span class="macro">assert!</span>(wallet_value &gt; bitcoin::Amount::from_sat(<span class="number">0</span>));
     }

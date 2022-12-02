@@ -1232,17 +1232,7 @@
 <a href="#1232" id="1232">1232</a>
 <a href="#1233" id="1233">1233</a>
 <a href="#1234" id="1234">1234</a>
-<a href="#1235" id="1235">1235</a>
-<a href="#1236" id="1236">1236</a>
-<a href="#1237" id="1237">1237</a>
-<a href="#1238" id="1238">1238</a>
-<a href="#1239" id="1239">1239</a>
-<a href="#1240" id="1240">1240</a>
-<a href="#1241" id="1241">1241</a>
-<a href="#1242" id="1242">1242</a>
-<a href="#1243" id="1243">1243</a>
-<a href="#1244" id="1244">1244</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::ops::Sub;
@@ -1256,9 +1246,9 @@
     scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_MINT};
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
+<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -1276,7 +1266,7 @@
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>rayon::iter::{ParallelBridge, ParallelIterator};
+<span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 <span class="kw">use </span>secp256k1_zkp::SECP256K1;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{
@@ -1309,8 +1299,6 @@
     sec_key: Tiered&lt;SecretKeyShare&gt;,
     pub_key_shares: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
     pub_key: HashMap&lt;Amount, AggregatePublicKey&gt;,
-    non_consensus_db: Database,
-    decoders: ModuleRegistry&lt;Decoder&gt;,
 }
 
 <span class="doccomment">/// A consenus item from one of the federation members contributing partials signatures to blind nonces submitted in it
@@ -1518,7 +1506,7 @@
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>MintOutputOutcome(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;OutputOutcome&gt;);
 
-<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>Mint {
     <span class="kw">type </span>Decoder = MintModuleDecoder;
     <span class="kw">type </span>Input = MintInput;
@@ -1535,20 +1523,21 @@
         MintModuleDecoder
     }
 
-    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">if </span><span class="self">self</span>.consensus_proposal().<span class="kw">await</span>.is_empty() {
+    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        <span class="kw">if </span><span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.is_empty() {
             std::future::pending().<span class="kw">await
         </span>}
     }
 
-    <span class="kw">async fn </span>consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
-        <span class="self">self</span>.non_consensus_db
-            .begin_transaction(<span class="self">self</span>.decoders.clone())
-            .find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
+    <span class="kw">async fn </span>consensus_proposal(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
+        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(key, signatures) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 MintOutputConfirmation {
-                    out_point: key.request_id,
+                    out_point: key.out_point,
                     signatures,
                 }
             })
@@ -1594,10 +1583,10 @@
         VerificationCache { valid_coins }
     }
 
-    <span class="kw">fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
@@ -1645,7 +1634,9 @@
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::Input,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, dbtx, cache, input)<span class="question-mark">?</span>;
+        <span class="kw">let </span>meta = <span class="self">self
+            </span>.validate_input(interconnect, dbtx, cache, input)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>(amount, coin) <span class="kw">in </span>input.iter_items() {
             <span class="kw">let </span>key = NonceKey(coin.<span class="number">0</span>.clone());
@@ -1660,7 +1651,7 @@
 
     <span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = output.iter_items().find_map(|(amount, <span class="kw">_</span>)| {
@@ -1693,14 +1684,9 @@
             </span>.blind_sign(output.clone().<span class="number">0</span>)
             .into_module_error_other()<span class="question-mark">?</span>;
 
-        dbtx.insert_new_entry(
-            <span class="kw-2">&amp;</span>ProposedPartialSignatureKey {
-                request_id: out_point,
-            },
-            <span class="kw-2">&amp;</span>partial_sig,
-        )
-        .<span class="kw">await
-        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey { out_point }, <span class="kw-2">&amp;</span>partial_sig)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>MintAuditItemKey::Issuance(out_point),
             <span class="kw-2">&amp;</span>output.total_amount(),
@@ -1716,75 +1702,92 @@
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
+        <span class="kw">struct </span>IssuanceData {
+            out_point: OutPoint,
+            <span class="comment">// TODO: remove Option, make it mandatory
+            // TODO: make it only the message, remove msg from PartialSigResponse
+            </span>our_contribution: <span class="prelude-ty">Option</span>&lt;OutputConfirmationSignatures&gt;,
+            signature_shares: Vec&lt;(PeerId, OutputConfirmationSignatures)&gt;,
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = BTreeSet::new();
+
         <span class="comment">// Finalize partial signatures for which we now have enough shares
-        </span><span class="kw">let </span>req_psigs = dbtx
+        </span><span class="kw">let </span>issuance_requests = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 <span class="kw">let </span>(key, partial_sig) = entry_res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.request_id, (key.peer_id, partial_sig))
             })
-            .into_group_map();
-
-        <span class="comment">// TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn&#39;t need consensus)
-        </span><span class="kw">let </span>par_map = req_psigs
+            .into_group_map()
             .into_iter()
-            .map(|(issuance_id, shares)| <span class="kw">async move </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
-                <span class="comment">// FIXME: this specific instance is safe, but we should never directly read from the DB
-                </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
-                    </span>.non_consensus_db
-                    .begin_transaction(<span class="self">self</span>.decoders.clone());
-                <span class="kw">let </span>proposal_key = ProposedPartialSignatureKey {
-                    request_id: issuance_id,
-                };
+            .map(|(out_point, signature_shares)| {
+                <span class="kw">let </span>proposal_key = ProposedPartialSignatureKey { out_point };
                 <span class="kw">let </span>our_contribution = dbtx.get_value(<span class="kw-2">&amp;</span>proposal_key).expect(<span class="string">&quot;DB error&quot;</span>);
-                <span class="kw">let </span>(bsig, errors) = <span class="self">self</span>.combine(our_contribution, shares.clone());
 
-                <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible
-                </span>errors.<span class="number">0</span>.iter().for_each(|(peer, error)| {
-                    <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for {:?}&quot;</span>, peer, error);
-                    drop_peers.push(<span class="kw-2">*</span>peer);
-                });
-
-                <span class="kw">match </span>bsig {
-                    <span class="prelude-val">Ok</span>(blind_signature) =&gt; {
-                        <span class="macro">debug!</span>(
-                            %issuance_id,
-                            <span class="string">&quot;Successfully combined signature shares&quot;</span>,
-                        );
-
-                        <span class="kw">for </span>(peer, <span class="kw">_</span>) <span class="kw">in </span>shares.into_iter() {
-                            dbtx.remove_entry(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKey {
-                                request_id: issuance_id,
-                                peer_id: peer,
-                            })
-                            .<span class="kw">await
-                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-                        }
-
-                        dbtx.remove_entry(<span class="kw-2">&amp;</span>proposal_key).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-
-                        dbtx.insert_entry(<span class="kw-2">&amp;</span>OutputOutcomeKey(issuance_id), <span class="kw-2">&amp;</span>blind_signature)
-                            .<span class="kw">await
-                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-                    }
-                    <span class="prelude-val">Err</span>(CombineError::TooFewShares(got, <span class="kw">_</span>)) =&gt; {
-                        <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers.sub(<span class="kw-2">&amp;</span>HashSet::from_iter(got)) {
-                            <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for not contributing shares&quot;</span>, peer);
-                            drop_peers.push(peer);
-                        }
-                    }
-                    <span class="prelude-val">Err</span>(error) =&gt; {
-                        <span class="macro">warn!</span>(%error, <span class="string">&quot;Could not combine shares&quot;</span>);
-                    }
+                IssuanceData {
+                    out_point,
+                    our_contribution,
+                    signature_shares,
                 }
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-                dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-                drop_peers
+        <span class="kw">let </span>issuance_results = issuance_requests
+            .into_par_iter()
+            .map(|issuance_data| {
+                <span class="kw">let </span>(bsig, errors) = <span class="self">self</span>.combine(
+                    issuance_data.our_contribution.clone(),
+                    issuance_data.signature_shares.clone(),
+                );
+                (issuance_data, bsig, errors)
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">for </span>(issuance_data, bsig_res, errors) <span class="kw">in </span>issuance_results {
+            <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible
+            </span>errors.<span class="number">0</span>.iter().for_each(|(peer, error)| {
+                <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for {:?}&quot;</span>, peer, error);
+                drop_peers.insert(<span class="kw-2">*</span>peer);
             });
 
-        <span class="kw">let </span>par_batches = futures::future::join_all(par_map).<span class="kw">await</span>;
-        <span class="kw">let </span>dropped_peers = par_batches.iter().flatten().copied().collect();
+            <span class="kw">match </span>bsig_res {
+                <span class="prelude-val">Ok</span>(blind_signature) =&gt; {
+                    <span class="macro">debug!</span>(
+                        out_point = %issuance_data.out_point,
+                        <span class="string">&quot;Successfully combined signature shares&quot;</span>,
+                    );
+
+                    <span class="kw">for </span>(peer, <span class="kw">_</span>) <span class="kw">in </span>issuance_data.signature_shares.into_iter() {
+                        dbtx.remove_entry(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKey {
+                            request_id: issuance_data.out_point,
+                            peer_id: peer,
+                        })
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                    }
+
+                    dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey {
+                        out_point: issuance_data.out_point,
+                    })
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>OutputOutcomeKey(issuance_data.out_point), <span class="kw-2">&amp;</span>blind_signature)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                }
+                <span class="prelude-val">Err</span>(CombineError::TooFewShares(got, <span class="kw">_</span>)) =&gt; {
+                    <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers.sub(<span class="kw-2">&amp;</span>HashSet::from_iter(got)) {
+                        <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for not contributing shares&quot;</span>, peer);
+                        drop_peers.insert(peer);
+                    }
+                }
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">warn!</span>(%error, <span class="string">&quot;Could not combine shares&quot;</span>);
+                }
+            }
+        }
 
         <span class="kw">let </span><span class="kw-2">mut </span>redemptions = Amount::from_sat(<span class="number">0</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>issuances = Amount::from_sat(<span class="number">0</span>);
@@ -1813,17 +1816,16 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        dropped_peers
+        drop_peers.into_iter().collect()
     }
 
-    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
-        <span class="kw">let </span>dbtx = <span class="self">self
-            </span>.non_consensus_db
-            .begin_transaction(<span class="self">self</span>.decoders.clone());
+    <span class="kw">fn </span>output_status(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
         <span class="kw">let </span>we_proposed = dbtx
-            .get_value(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey {
-                request_id: out_point,
-            })
+            .get_value(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey { out_point })
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some();
         <span class="kw">let </span>was_consensus_outcome = dbtx
@@ -1845,19 +1847,13 @@
         </span>}
     }
 
-    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        audit.add_items(
-            <span class="kw-2">&amp;</span><span class="self">self
-                </span>.non_consensus_db
-                .begin_transaction(<span class="self">self</span>.decoders.clone()),
-            <span class="kw-2">&amp;</span>MintAuditItemKeyPrefix,
-            |k, v| <span class="kw">match </span>k {
-                MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; -(v.milli_sat <span class="kw">as </span>i64),
-                MintAuditItemKey::IssuanceTotal =&gt; -(v.milli_sat <span class="kw">as </span>i64),
-                MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; v.milli_sat <span class="kw">as </span>i64,
-                MintAuditItemKey::RedemptionTotal =&gt; v.milli_sat <span class="kw">as </span>i64,
-            },
-        );
+    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit.add_items(dbtx, <span class="kw-2">&amp;</span>MintAuditItemKeyPrefix, |k, v| <span class="kw">match </span>k {
+            MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; -(v.milli_sat <span class="kw">as </span>i64),
+            MintAuditItemKey::IssuanceTotal =&gt; -(v.milli_sat <span class="kw">as </span>i64),
+            MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; v.milli_sat <span class="kw">as </span>i64,
+            MintAuditItemKey::RedemptionTotal =&gt; v.milli_sat <span class="kw">as </span>i64,
+        });
     }
 
     <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
@@ -1868,16 +1864,18 @@
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/backup&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, request: SignedBackupRequest| -&gt; () {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, dbtx, request: SignedBackupRequest| -&gt; () {
                     module
-                        .handle_backup_request(request).<span class="kw">await
-                </span>}
+                        .handle_backup_request(<span class="kw-2">&amp;mut </span>dbtx, request).<span class="kw">await</span><span class="question-mark">?</span>;
+                    dbtx.commit_tx().<span class="kw">await</span>.map_err(|e| ApiError::new(<span class="number">1000</span>, <span class="macro">format!</span>(<span class="string">&quot;Transaction error: {}&quot;</span>, e)))<span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>(())
+                }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/recover&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, id: secp256k1_zkp::XOnlyPublicKey| -&gt; Vec&lt;u8&gt; {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -&gt; Vec&lt;u8&gt; {
                     module
-                        .handle_recover_request(id).<span class="kw">await
+                        .handle_recover_request(<span class="kw-2">&amp;mut </span>dbtx, id).<span class="kw">await
                         </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Backup not found&quot;</span>)))
                 }
             },
@@ -1886,14 +1884,14 @@
 }
 
 <span class="kw">impl </span>Mint {
-    <span class="kw">async fn </span>handle_backup_request(<span class="kw-2">&amp;</span><span class="self">self</span>, request: SignedBackupRequest) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
+    <span class="kw">async fn </span>handle_backup_request(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        request: SignedBackupRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="kw">let </span>request = request
             .verify_valid(SECP256K1)
             .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;invalid request&quot;</span>.into()))<span class="question-mark">?</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
-            </span>.non_consensus_db
-            .begin_transaction(<span class="self">self</span>.decoders.clone());
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = dbtx
             .get_value(<span class="kw-2">&amp;</span>EcashBackupKey(request.id))
@@ -1917,10 +1915,12 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>handle_recover_request(<span class="kw-2">&amp;</span><span class="self">self</span>, id: secp256k1_zkp::XOnlyPublicKey) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt; {
-        <span class="self">self</span>.non_consensus_db
-            .begin_transaction(<span class="self">self</span>.decoders.clone())
-            .get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id))
+    <span class="kw">async fn </span>handle_recover_request(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        id: secp256k1_zkp::XOnlyPublicKey,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt; {
+        dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .map(|res| res.data)
     }
@@ -1933,7 +1933,7 @@
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    </span><span class="kw">pub fn </span>new(cfg: MintConfig, db: Database, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; Mint {
+    </span><span class="kw">pub fn </span>new(cfg: MintConfig) -&gt; Mint {
         <span class="macro">assert!</span>(cfg.tbs_sks.tiers().count() &gt; <span class="number">0</span>);
 
         <span class="comment">// The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -1978,8 +1978,6 @@
             sec_key: cfg.tbs_sks,
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
-            non_consensus_db: db,
-            decoders,
         }
     }
 
@@ -2265,18 +2263,12 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
-    <span class="kw">use </span>fedimint_api::core::{Decoder, MODULE_KEY_MINT};
-    <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
     <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
-    <span class="kw">use crate</span>::{
-        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, MintModuleDecoder,
-        PeerErrorType,
-    };
+    <span class="kw">use crate</span>::{BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, PeerErrorType};
 
     <span class="kw">const </span>THRESHOLD: usize = <span class="number">1</span>;
     <span class="kw">const </span>MINTS: usize = <span class="number">5</span>;
@@ -2298,15 +2290,7 @@
         <span class="kw">let </span>(mint_cfg, client_cfg) = build_configs();
         <span class="kw">let </span>mints = mint_cfg
             .into_iter()
-            .map(|config| {
-                Mint::new(
-                    config.to_typed().unwrap(),
-                    MemDatabase::new().into(),
-                    <span class="macro">vec!</span>[(MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder))]
-                        .into_iter()
-                        .collect(),
-                )
-            })
+            .map(|config| Mint::new(config.to_typed().unwrap()))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span>agg_pk = <span class="kw-2">*</span>client_cfg
@@ -2468,22 +2452,18 @@
         <span class="kw">let </span>(mint_server_cfg1, <span class="kw">_</span>) = build_configs();
         <span class="kw">let </span>(mint_server_cfg2, <span class="kw">_</span>) = build_configs();
 
-        Mint::new(
-            MintConfig {
-                threshold: THRESHOLD,
-                tbs_sks: mint_server_cfg1[<span class="number">0</span>]
-                    .to_typed::&lt;MintConfig&gt;()
-                    .unwrap()
-                    .tbs_sks,
-                peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>]
-                    .to_typed::&lt;MintConfig&gt;()
-                    .unwrap()
-                    .peer_tbs_pks,
-                fee_consensus: FeeConsensus::default(),
-            },
-            MemDatabase::new().into(),
-            ModuleRegistry::default(),
-        );
+        Mint::new(MintConfig {
+            threshold: THRESHOLD,
+            tbs_sks: mint_server_cfg1[<span class="number">0</span>]
+                .to_typed::&lt;MintConfig&gt;()
+                .unwrap()
+                .tbs_sks,
+            peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>]
+                .to_typed::&lt;MintConfig&gt;()
+                .unwrap()
+                .peer_tbs_pks,
+            fee_consensus: FeeConsensus::default(),
+        });
     }
 }
 </code></pre></div>

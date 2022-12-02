@@ -209,7 +209,7 @@
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ProposedPartialSignatureKey {
-    <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
+    <span class="kw">pub </span>out_point: OutPoint, <span class="comment">// tx + output idx
 </span>}
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedPartialSignatureKey {

@@ -591,16 +591,6 @@
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
@@ -931,12 +921,11 @@
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
     <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
-    <span class="kw">use </span>fedimint_api::core::{Decoder, OutputOutcome, MODULE_KEY_LN};
+    <span class="kw">use </span>fedimint_api::core::OutputOutcome;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
-    <span class="kw">use </span>fedimint_core::modules::ln::common::LightningModuleDecoder;
     <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
@@ -996,7 +985,7 @@
                 .<span class="kw">await
                 </span>.fetch_from_all(|m, db| {
                     m.get_contract_account(
-                        <span class="kw-2">&amp;</span>db.begin_transaction(ModuleRegistry::default()),
+                        <span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()),
                         contract,
                     )
                 })
@@ -1064,30 +1053,21 @@
         }
     }
 
-    <span class="kw">fn </span>ln_decoders() -&gt; ModuleRegistry {
-        <span class="macro">vec!</span>[(MODULE_KEY_LN, Decoder::from_typed(LightningModuleDecoder))]
-            .into_iter()
-            .collect()
-    }
-
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
         Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
         LightningModuleClientConfig,
         ClientContext,
     ) {
-        <span class="kw">let </span>fed =
-            Arc::new(tokio::sync::Mutex::new(
-                FakeFed::&lt;LightningModule&gt;::new(
-                    <span class="number">4</span>,
-                    |cfg, db| <span class="kw">async move </span>{
-                        <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>, db, ln_decoders()))
-                    },
-                    <span class="kw-2">&amp;</span>ModuleConfigGenParams::fake_config_gen_params(),
-                    <span class="kw-2">&amp;</span>LightningModuleConfigGen,
-                )
-                .<span class="kw">await
-                </span>.unwrap(),
-            ));
+        <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
+            FakeFed::&lt;LightningModule&gt;::new(
+                <span class="number">4</span>,
+                |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>)) },
+                <span class="kw-2">&amp;</span>ModuleConfigGenParams::fake_config_gen_params(),
+                <span class="kw-2">&amp;</span>LightningModuleConfigGen,
+            )
+            .<span class="kw">await
+            </span>.unwrap(),
+        ));
         <span class="kw">let </span>api = FakeApi { mint: fed.clone() };
         <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
@@ -1185,12 +1165,12 @@
         <span class="kw">let </span>contract_data = refund_inputs.into_iter().next().unwrap();
         <span class="kw">let </span>(refund_key, refund_input) =
             client.create_refund_outgoing_contract_input(<span class="kw-2">&amp;</span>contract_data);
-        <span class="macro">assert!</span>(fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>refund_input).is_err());
+        <span class="macro">assert!</span>(fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>refund_input).<span class="kw">await</span>.is_err());
 
         <span class="comment">// We need to compensate for the wallet&#39;s confirmation target
         </span>fed.lock().<span class="kw">await</span>.set_block_height(timelock <span class="kw">as </span>u64);
 
-        <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>refund_input).unwrap();
+        <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>refund_input).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key).<span class="number">0</span>;
         <span class="macro">assert_eq!</span>(meta.keys, <span class="macro">vec!</span>[refund_pk]);
         <span class="macro">assert_eq!</span>(meta.amount.amount, expected_amount);

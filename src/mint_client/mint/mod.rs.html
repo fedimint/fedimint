@@ -875,19 +875,6 @@
 <a href="#875" id="875">875</a>
 <a href="#876" id="876">876</a>
 <a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1389,7 +1376,6 @@
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
     <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
-    <span class="kw">use </span>fedimint_api::core::{Decoder, MODULE_KEY_MINT};
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
@@ -1398,7 +1384,6 @@
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-    <span class="kw">use </span>fedimint_core::modules::mint::common::MintModuleDecoder;
     <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
     <span class="kw">use </span>fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
@@ -1517,35 +1502,24 @@
         }
     }
 
-    <span class="kw">fn </span>mint_decoders() -&gt; ModuleRegistry {
-        <span class="macro">vec!</span>[(MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder))]
-            .into_iter()
-            .collect()
-    }
-
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
         Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
         MintClientConfig,
         ClientContext,
     ) {
-        <span class="kw">let </span>fed =
-            Arc::new(
-                tokio::sync::Mutex::new(
-                    FakeFed::&lt;Mint&gt;::new(
-                        <span class="number">4</span>,
-                        |cfg, db| <span class="kw">async move </span>{
-                            <span class="prelude-val">Ok</span>(Mint::new(cfg.to_typed().unwrap(), db, mint_decoders()))
-                        },
-                        <span class="kw-2">&amp;</span>ModuleConfigGenParams {
-                            mint_amounts: <span class="macro">vec!</span>[Amount::from_sat(<span class="number">1</span>), Amount::from_sat(<span class="number">10</span>)],
-                            ..ModuleConfigGenParams::fake_config_gen_params()
-                        },
-                        <span class="kw-2">&amp;</span>MintConfigGenerator,
-                    )
-                    .<span class="kw">await
-                    </span>.unwrap(),
-                ),
-            );
+        <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
+            FakeFed::&lt;Mint&gt;::new(
+                <span class="number">4</span>,
+                |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Mint::new(cfg.to_typed().unwrap())) },
+                <span class="kw-2">&amp;</span>ModuleConfigGenParams {
+                    mint_amounts: <span class="macro">vec!</span>[Amount::from_sat(<span class="number">1</span>), Amount::from_sat(<span class="number">10</span>)],
+                    ..ModuleConfigGenParams::fake_config_gen_params()
+                },
+                <span class="kw-2">&amp;</span>MintConfigGenerator,
+            )
+            .<span class="kw">await
+            </span>.unwrap(),
+        ));
 
         <span class="kw">let </span>api = FakeApi { mint: fed.clone() };
 
@@ -1652,7 +1626,7 @@
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
+        <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);
         <span class="macro">assert_eq!</span>(
             meta.keys,
@@ -1671,7 +1645,7 @@
         </span><span class="macro">assert_eq!</span>(client.coins().total_amount(), SPEND_AMOUNT);
 
         <span class="comment">// Double spends aren&#39;t possible
-        </span><span class="macro">assert!</span>(fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).is_err());
+        </span><span class="macro">assert!</span>(fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).<span class="kw">await</span>.is_err());
 
         <span class="comment">// We can exactly spend the remainder
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client
@@ -1695,7 +1669,7 @@
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
+        <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);
         <span class="macro">assert_eq!</span>(
             meta.keys,

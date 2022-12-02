@@ -330,6 +330,26 @@
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 
@@ -407,7 +427,11 @@
     <span class="kw">type </span>Param: serde::de::DeserializeOwned + Send;
     <span class="kw">type </span>Response: serde::Serialize;
 
-    <span class="kw">async fn </span>handle(state: <span class="kw-2">&amp;</span><span class="self">Self</span>::State, params: <span class="self">Self</span>::Param) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Response, ApiError&gt;;
+    <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+        state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
+        dbtx: fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        params: <span class="self">Self</span>::Param,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Response, ApiError&gt;;
 }
 
 <span class="attr">#[doc(hidden)]
@@ -432,7 +456,7 @@
 </span><span class="macro">macro_rules! </span>__api_endpoint {
     (
         <span class="macro-nonterminal">$path</span>:expr,
-        <span class="kw">async </span>|<span class="macro-nonterminal">$state</span>:ident: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$state_ty</span>:ty, <span class="macro-nonterminal">$param</span>:ident: <span class="macro-nonterminal">$param_ty</span>:ty| -&gt; <span class="macro-nonterminal">$resp_ty</span>:ty <span class="macro-nonterminal">$body</span>:block
+        <span class="kw">async </span>|<span class="macro-nonterminal">$state</span>:ident: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$state_ty</span>:ty, <span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$param</span>:ident: <span class="macro-nonterminal">$param_ty</span>:ty| -&gt; <span class="macro-nonterminal">$resp_ty</span>:ty <span class="macro-nonterminal">$body</span>:block
     ) =&gt; {{
         <span class="kw">struct </span>Endpoint;
 
@@ -443,8 +467,9 @@
             <span class="kw">type </span>Param = <span class="macro-nonterminal">$param_ty</span>;
             <span class="kw">type </span>Response = <span class="macro-nonterminal">$resp_ty</span>;
 
-            <span class="kw">async fn </span>handle(
-                <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>::State,
+            <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+                <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
+                <span class="kw-2">mut </span><span class="macro-nonterminal">$dbtx</span>: fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
             ) -&gt; ::std::result::Result&lt;<span class="self">Self</span>::Response, <span class="macro-nonterminal">$crate::module::ApiError</span>&gt; {
                 <span class="macro-nonterminal">$body
@@ -453,13 +478,14 @@
 
         ApiEndpoint {
             path: &lt;Endpoint <span class="kw">as </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint</span>&gt;::PATH,
-            handler: Box::new(|m, param| {
+            handler: Box::new(|m, dbtx, param| {
                 Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span>params = <span class="macro-nonterminal">$crate::module::__reexports::serde_json::from_value</span>(param)
                         .map_err(|e| <span class="macro-nonterminal">$crate::module::ApiError::bad_request</span>(e.to_string()))<span class="question-mark">?</span>;
 
                     <span class="kw">let </span>ret =
-                        &lt;Endpoint <span class="kw">as </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint</span>&gt;::handle(m, params).<span class="kw">await</span><span class="question-mark">?</span>;
+                        &lt;Endpoint <span class="kw">as </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint</span>&gt;::handle(m, dbtx, params)
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(<span class="macro-nonterminal">$crate::module::__reexports::serde_json::to_value</span>(ret)
                         .expect(<span class="string">&quot;encoding error&quot;</span>))
                 })
@@ -471,8 +497,15 @@
 <span class="kw">pub use </span>__api_endpoint <span class="kw">as </span>api_endpoint;
 
 <span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; = BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;;
-<span class="kw">type </span>HandlerFn&lt;M&gt; =
-    Box&lt;<span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M, serde_json::Value) -&gt; HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; + Sync + Send&gt;;
+<span class="kw">type </span>HandlerFn&lt;M&gt; = Box&lt;
+    <span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(
+            <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M,
+            fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+            serde_json::Value,
+        ) -&gt; HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt;
+        + Send
+        + Sync,
+&gt;;
 
 <span class="doccomment">/// Definition of an API endpoint defined by a module `M`.
 </span><span class="kw">pub struct </span>ApiEndpoint&lt;M&gt; {
@@ -537,7 +570,7 @@
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
 }
 
-<span class="attr">#[async_trait(<span class="question-mark">?</span>Send)]
+<span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ServerModulePlugin: Debug + Sized {
     <span class="kw">type </span>Decoder: PluginDecode;
     <span class="kw">type </span>Input: PluginInput;
@@ -551,10 +584,13 @@
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
-    </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>);
+    </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);
 
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
-    </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt;;
+    </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -579,10 +615,10 @@
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    </span><span class="kw">fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    </span><span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
@@ -608,7 +644,7 @@
     /// and merely generate a warning.
     </span><span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;</span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
@@ -643,13 +679,17 @@
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    </span><span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt;;
+    </span><span class="kw">fn </span>output_status(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt;;
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
     ///
     /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
     /// and consensus should halt.
-    </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit);
+    </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit);
 
     <span class="doccomment">/// Defines the prefix for API endpoints defined by the module.
     ///

@@ -616,6 +616,11 @@
 <a href="#616" id="616">616</a>
 <a href="#617" id="617">617</a>
 <a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -750,7 +755,11 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>submit_transaction(
+    <span class="kw">pub fn </span>database_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders())
+    }
+
+    <span class="kw">pub async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         transaction: Transaction,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionSubmissionError&gt; {
@@ -767,7 +776,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>pub_keys = Vec::new();
 
         <span class="comment">// Create read-only DB tx so that the read state is consistent
-        </span><span class="kw">let </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
             <span class="kw">let </span>module = <span class="self">self
@@ -776,7 +785,11 @@
                 .expect(<span class="string">&quot;Parsing the input should fail if the module doesn&#39;t exist&quot;</span>);
 
             <span class="kw">let </span>cache = module.build_verification_cache(<span class="kw-2">&amp;</span>[input.clone()]);
-            <span class="kw">let </span>meta = module.validate_input(<span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(), <span class="kw-2">&amp;</span>dbtx, <span class="kw-2">&amp;</span>cache, input)<span class="question-mark">?</span>;
+            <span class="kw">let </span>interconnect = <span class="self">self</span>.build_interconnect();
+            <span class="kw">let </span>meta = module
+                .validate_input(<span class="kw-2">&amp;</span>interconnect, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>cache, input)
+                .<span class="kw">await
+                </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
 
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
@@ -788,24 +801,23 @@
                 </span>.modules
                 .get(<span class="kw-2">&amp;</span>output.module_key())
                 .expect(<span class="string">&quot;Parsing the input should fail if the module doesn&#39;t exist&quot;</span>);
-            <span class="kw">let </span>amount = module.validate_output(<span class="kw-2">&amp;</span>dbtx, output)<span class="question-mark">?</span>;
+            <span class="kw">let </span>amount = module
+                .validate_output(<span class="kw-2">&amp;mut </span>dbtx, output)
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
             funding_verifier.add_output(amount);
         }
 
         funding_verifier.verify_funding()<span class="question-mark">?</span>;
 
-        futures::executor::block_on(<span class="kw">async </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
-            <span class="kw">let </span>new = dbtx
-                .insert_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(tx_hash), <span class="kw-2">&amp;</span>transaction)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;DB error&quot;</span>);
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        <span class="kw">let </span>new = dbtx
+            .insert_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(tx_hash), <span class="kw-2">&amp;</span>transaction)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-            <span class="kw">if </span>new.is_some() {
-                <span class="macro">warn!</span>(<span class="string">&quot;Added consensus item was already in consensus queue&quot;</span>);
-            }
-        });
+        <span class="kw">if </span>new.is_some() {
+            <span class="macro">warn!</span>(<span class="string">&quot;Added consensus item was already in consensus queue&quot;</span>);
+        }
 
         <span class="self">self</span>.transaction_notify.notify_one();
         <span class="prelude-val">Ok</span>(())
@@ -999,16 +1011,21 @@
         <span class="kw">let </span>proposal_futures = <span class="self">self
             </span>.modules
             .iter()
-            .map(|(<span class="kw">_</span>, module)| module.await_consensus_proposal())
+            .map(|(<span class="kw">_</span>, module)| {
+                Box::pin(<span class="kw">async </span>{
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
+                    module.await_consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await
+                </span>})
+            })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         select_all(proposal_futures).<span class="kw">await</span>;
     }
 
     <span class="kw">pub async fn </span>get_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusProposal {
-        <span class="kw">let </span>drop_peers = <span class="self">self
-            </span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
+
+        <span class="kw">let </span>drop_peers = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>DropPeerKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>key = res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span>;
@@ -1016,9 +1033,7 @@
             </span>})
             .collect();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;ConsensusItem&gt; = <span class="self">self
-            </span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
+        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;ConsensusItem&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposedTransactionKeyPrefix)
             .map(|res| {
                 <span class="kw">let </span>(_key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1029,25 +1044,15 @@
         <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.values() {
             items.extend(
                 module
-                    .consensus_proposal()
+                    .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx)
                     .<span class="kw">await
                     </span>.into_iter()
                     .map(ConsensusItem::Module),
             );
         }
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = <span class="self">self
-            </span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
-            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
-            .unwrap()
-        {
-            <span class="kw">let </span>last_epoch = <span class="self">self
-                </span>.db
-                .begin_transaction(<span class="self">self</span>.decoders())
-                .get_value(<span class="kw-2">&amp;</span>epoch)
-                .unwrap()
-                .unwrap();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = dbtx.get_value(<span class="kw-2">&amp;</span>LastEpochKey).unwrap() {
+            <span class="kw">let </span>last_epoch = dbtx.get_value(<span class="kw-2">&amp;</span>epoch).unwrap().unwrap();
             <span class="kw">let </span>sig = <span class="self">self</span>.cfg.epoch_sks.<span class="number">0</span>.sign(last_epoch.hash);
             <span class="kw">let </span>item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
             items.push(item);
@@ -1079,7 +1084,8 @@
                     input,
                     caches.get_cache(input.module_key()),
                 )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+                .<span class="kw">await
+                </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
         }
@@ -1095,7 +1101,10 @@
                 .get(<span class="kw-2">&amp;</span>output.module_key())
                 .expect(<span class="string">&quot;Parsing the input should fail if the module doesn&#39;t exist&quot;</span>);
 
-            <span class="kw">let </span>amount = module.apply_output(dbtx, <span class="kw-2">&amp;</span>output, out_point).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>amount = module
+                .apply_output(dbtx, <span class="kw-2">&amp;</span>output, out_point)
+                .<span class="kw">await
+                </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
             funding_verifier.add_output(amount);
         }
 
@@ -1108,9 +1117,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::outcome::TransactionStatus&gt; {
-        <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; = <span class="self">self
-            </span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
+
+        <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; = dbtx
             .get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid))
             .expect(<span class="string">&quot;DB error&quot;</span>);
 
@@ -1129,7 +1138,7 @@
                         </span>.modules
                         .get(<span class="kw-2">&amp;</span>output.module_key())
                         .expect(<span class="string">&quot;Module exists because parsing succeeded&quot;</span>)
-                        .output_status(outpoint)
+                        .output_status(<span class="kw-2">&amp;mut </span>dbtx, outpoint)
                         .expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
                     (<span class="kw-2">&amp;</span>outcome).into()
                 })
@@ -1179,9 +1188,10 @@
     }
 
     <span class="kw">pub fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
         <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.values() {
-            module.audit(<span class="kw-2">&amp;mut </span>audit)
+            module.audit(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>audit)
         }
         audit
     }
@@ -1229,8 +1239,8 @@
 </span><span class="kw">pub enum </span>TransactionSubmissionError {
     <span class="attr">#[error(<span class="string">&quot;High level transaction error: {0}&quot;</span>)]
     </span>TransactionError(<span class="attr">#[from] </span>TransactionError),
-    <span class="attr">#[error(<span class="string">&quot;Module input or output error: {0}&quot;</span>)]
-    </span>ModuleError(<span class="attr">#[from] </span>ModuleError),
+    <span class="attr">#[error(<span class="string">&quot;Module input or output error in tx {0}: {1}&quot;</span>)]
+    </span>ModuleError(TransactionId, ModuleError),
     <span class="attr">#[error(<span class="string">&quot;Transaction conflict error&quot;</span>)]
     </span>TransactionConflictError,
 }

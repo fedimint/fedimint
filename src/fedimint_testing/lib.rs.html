@@ -327,6 +327,13 @@
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -364,7 +371,7 @@
 
 <span class="kw">impl</span>&lt;Module&gt; FakeFed&lt;Module&gt;
 <span class="kw">where
-    </span>Module: ServerModulePlugin + <span class="lifetime">&#39;static</span>,
+    </span>Module: ServerModulePlugin + <span class="lifetime">&#39;static </span>+ Send + Sync,
     Module::ConsensusItem: Clone,
     Module::OutputOutcome: Eq + Debug,
     Module::Decoder: Sync + Send + <span class="lifetime">&#39;static</span>,
@@ -403,32 +410,40 @@
         <span class="self">self</span>.block_height.store(bh, Ordering::Relaxed);
     }
 
-    <span class="kw">pub fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>Module::Input) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
+    <span class="kw">pub async fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>Module::Input) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
-        <span class="kw">let </span>results = <span class="self">self</span>.members.iter().map(|(<span class="kw">_</span>, member, db)| {
+        <span class="kw">async fn </span>member_validate&lt;M: ServerModulePlugin&gt;(
+            member: <span class="kw-2">&amp;</span>M,
+            dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+            fake_ic: <span class="kw-2">&amp;</span>FakeInterconnect,
+            input: <span class="kw-2">&amp;</span>M::Input,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
             <span class="kw">let </span>cache = member.build_verification_cache(std::iter::once(input));
             <span class="kw">let </span>InputMeta {
                 amount,
                 puk_keys: pub_keys,
-            } = member.validate_input(
-                <span class="kw-2">&amp;</span>fake_ic,
-                <span class="kw-2">&amp;</span>db.begin_transaction(<span class="self">self</span>.decoders()),
-                <span class="kw-2">&amp;</span>cache,
-                input,
-            )<span class="question-mark">?</span>;
+            } = member.validate_input(fake_ic, dbtx, <span class="kw-2">&amp;</span>cache, input).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(TestInputMeta {
                 amount,
                 keys: pub_keys,
             })
-        });
-        assert_all_equal_result(results)
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
+        <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(<span class="self">self</span>.decoders());
+            results.push(member_validate(member, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>fake_ic, input).<span class="kw">await</span>);
+            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB tx failed&quot;</span>);
+        }
+
+        assert_all_equal_result(results.into_iter())
     }
 
     <span class="kw">pub fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>Module::Output) -&gt; bool {
         <span class="kw">let </span>results = <span class="self">self</span>.members.iter().map(|(<span class="kw">_</span>, member, db)| {
             member
-                .validate_output(<span class="kw-2">&amp;</span>db.begin_transaction(<span class="self">self</span>.decoders()), output)
+                .validate_output(<span class="kw-2">&amp;mut </span>db.begin_transaction(<span class="self">self</span>.decoders()), output)
                 .is_err()
         });
         assert_all_equal(results)
@@ -448,13 +463,14 @@
         </span>&lt;Module <span class="kw">as </span>ServerModulePlugin&gt;::Input: Send + Sync,
     {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
+        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
 
         <span class="comment">// TODO: only include some of the proposals for realism
         </span><span class="kw">let </span><span class="kw-2">mut </span>consensus = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>(id, member, _db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
+        <span class="kw">for </span>(id, member, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             consensus.extend(
                 member
-                    .consensus_proposal()
+                    .consensus_proposal(<span class="kw-2">&amp;mut </span>db.begin_transaction(decoders.clone()))
                     .<span class="kw">await
                     </span>.into_iter()
                     .map(|ci| (<span class="kw-2">*</span>id, ci)),
@@ -500,11 +516,9 @@
         // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
         // main consensus loop into another thread to optimize latency. This test will probably fail
         // then.
-        </span>assert_all_equal(
-            <span class="self">self</span>.members
-                .iter()
-                .map(|(<span class="kw">_</span>, member, <span class="kw">_</span>)| member.output_status(out_point)),
-        )
+        </span>assert_all_equal(<span class="self">self</span>.members.iter().map(|(<span class="kw">_</span>, member, db)| {
+            member.output_status(<span class="kw-2">&amp;mut </span>db.begin_transaction(<span class="self">self</span>.decoders()), out_point)
+        }))
     }
 
     <span class="kw">pub async fn </span>patch_dbs&lt;U&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, update: U)
