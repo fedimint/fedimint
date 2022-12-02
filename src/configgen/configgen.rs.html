@@ -97,10 +97,6 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
@@ -139,14 +135,10 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:18443&quot;</span>)]
         </span>bitcoind_rpc: String,
 
-        <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
-        </span><span class="attr">#[arg(
-            long = <span class="string">&quot;denominations&quot;</span>,
-            value_delimiter = <span class="string">&#39;,&#39;</span>,
-            num_args = <span class="number">1</span>..,
-            required = <span class="bool-val">true
-        </span>)]
-        </span>denominations: Vec&lt;Amount&gt;,
+        <span class="doccomment">/// Max denomination of notes issued by the federation (in millisats)
+        /// default = 1 BTC
+        </span><span class="attr">#[arg(long = <span class="string">&quot;max_denomination&quot;</span>, default_value = <span class="string">&quot;100000000000&quot;</span>)]
+        </span>max_denomination: Amount,
 
         <span class="doccomment">/// Federation name
         </span><span class="attr">#[arg(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hals_trusty_mint&quot;</span>)]
@@ -164,7 +156,7 @@
             dir_out_path: cfg_path,
             num_nodes: nodes,
             base_port,
-            denominations: amount_tiers,
+            max_denomination,
             federation_name,
             bitcoind_rpc,
         } =&gt; {
@@ -179,7 +171,7 @@
             );
             <span class="kw">let </span>params = ServerConfigParams::gen_local(
                 <span class="kw-2">&amp;</span>peers,
-                amount_tiers.to_vec(),
+                max_denomination,
                 base_port,
                 <span class="kw-2">&amp;</span>federation_name,
                 <span class="kw-2">&amp;</span>bitcoind_rpc,

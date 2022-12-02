@@ -308,11 +308,6 @@
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
@@ -387,15 +382,10 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:18443&quot;</span>)]
         </span>bitcoind_rpc: String,
 
-        <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
-        /// default = 1 msat - 1M sats by powers of 10
-        </span><span class="attr">#[arg(
-        long = <span class="string">&quot;denominations&quot;</span>,
-        value_delimiter = <span class="string">&#39;,&#39;</span>,
-        num_args = <span class="number">1</span>..,
-        default_value = <span class="string">&quot;1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000&quot;
-        </span>)]
-        </span>denominations: Vec&lt;Amount&gt;,
+        <span class="doccomment">/// Max denomination of notes issued by the federation (in millisats)
+        /// default = 1 BTC
+        </span><span class="attr">#[arg(long = <span class="string">&quot;max_denomination&quot;</span>, default_value = <span class="string">&quot;100000000000&quot;</span>)]
+        </span>max_denomination: Amount,
 
         <span class="doccomment">/// The bitcoin network that fedimint will be running on
         </span><span class="attr">#[arg(long = <span class="string">&quot;network&quot;</span>, default_value = <span class="string">&quot;regtest&quot;</span>)]
@@ -473,7 +463,7 @@
             certs,
             bind_address,
             bitcoind_rpc,
-            denominations,
+            max_denomination,
             network,
             finality_delay,
             password,
@@ -483,7 +473,7 @@
             <span class="kw">let </span>server = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = run_dkg(
                 bind_address,
                 <span class="kw-2">&amp;</span>dir_out_path,
-                denominations,
+                max_denomination,
                 federation_name,
                 certs,
                 bitcoind_rpc,
@@ -554,7 +544,7 @@
 </span><span class="kw">async fn </span>run_dkg(
     bind_address: String,
     dir_out_path: <span class="kw-2">&amp;</span>Path,
-    denominations: Vec&lt;Amount&gt;,
+    max_denomination: Amount,
     federation_name: String,
     certs: Vec&lt;String&gt;,
     bitcoind_rpc: String,
@@ -582,7 +572,7 @@
         bind_address,
         pk,
         our_id,
-        denominations,
+        max_denomination,
         <span class="kw-2">&amp;</span>peers,
         federation_name,
         bitcoind_rpc,

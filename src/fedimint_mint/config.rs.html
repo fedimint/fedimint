@@ -77,6 +77,10 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -84,6 +88,7 @@
 <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
 
@@ -136,6 +141,9 @@
             <span class="self">self</span>.peer_tbs_pks.get(identity).unwrap().as_map().clone();
         <span class="kw">if </span>sks != pks {
             <span class="macro">bail!</span>(<span class="string">&quot;Mint private key doesn&#39;t match pubkey share&quot;</span>);
+        }
+        <span class="kw">if </span>!sks.keys().contains(<span class="kw-2">&amp;</span>Amount::from_msat(<span class="number">1</span>)) {
+            <span class="macro">bail!</span>(<span class="string">&quot;No msat 1 denomination&quot;</span>);
         }
 
         <span class="prelude-val">Ok</span>(())

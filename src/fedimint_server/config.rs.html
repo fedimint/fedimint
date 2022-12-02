@@ -630,6 +630,10 @@
 <a href="#630" id="630">630</a>
 <a href="#631" id="631">631</a>
 <a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -712,14 +716,6 @@
     </span><span class="kw">pub </span>name: String,
 }
 
-<span class="kw">pub struct </span>FederationeConfigGenParams {
-    <span class="kw">pub </span>mint_amounts: Vec&lt;Amount&gt;,
-    <span class="kw">pub </span>bitcoin_rpc: BitcoindRpcCfg,
-
-    <span class="doccomment">/// extra options for extra settings and modules
-    </span><span class="kw">pub </span>other: BTreeMap&lt;String, serde_json::Value&gt;,
-}
-
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="doccomment">/// network config for a server
 </span><span class="kw">pub struct </span>ServerConfigParams {
@@ -727,8 +723,7 @@
     <span class="kw">pub </span>hbbft: NetworkConfig,
     <span class="kw">pub </span>api: NetworkConfig,
     <span class="kw">pub </span>server_dkg: NetworkConfig,
-    <span class="comment">// TODO: delete unused dkgs
-    </span><span class="kw">pub </span>amount_tiers: Vec&lt;Amount&gt;,
+    <span class="kw">pub </span>max_denomination: Amount,
     <span class="kw">pub </span>federation_name: String,
     <span class="kw">pub </span>bitcoind_rpc: String,
 
@@ -833,7 +828,7 @@
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
 
         <span class="kw">let </span>module_cfg_gen_params = ModuleConfigGenParams {
-            mint_amounts: peer0.amount_tiers.clone(),
+            mint_amounts: ServerConfigParams::gen_denominations(peer0.max_denomination),
             <span class="comment">// TODO: FIXME: meh
             </span>bitcoin_rpc: BitcoindRpcCfg {
                 btc_rpc_address: peer0.bitcoind_rpc.clone(),
@@ -929,7 +924,7 @@
         <span class="kw">let </span>(epoch_pks, epoch_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
 
         <span class="kw">let </span>module_cfg_gen_params = ModuleConfigGenParams {
-            mint_amounts: params.amount_tiers.clone(),
+            mint_amounts: ServerConfigParams::gen_denominations(params.max_denomination),
             bitcoin_rpc: BitcoindRpcCfg {
                 btc_rpc_address: params.bitcoind_rpc.clone(),
                 btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
@@ -1042,6 +1037,19 @@
 }
 
 <span class="kw">impl </span>ServerConfigParams {
+    <span class="doccomment">/// Generates denominations as powers of 2 until a `max`
+    </span><span class="kw">pub fn </span>gen_denominations(max: Amount) -&gt; Vec&lt;Amount&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>amounts = <span class="macro">vec!</span>[];
+
+        <span class="kw">let </span><span class="kw-2">mut </span>denomination = Amount::from_msat(<span class="number">1</span>);
+        <span class="kw">while </span>denomination &lt; max {
+            amounts.push(denomination);
+            denomination = denomination * <span class="number">2</span>;
+        }
+
+        amounts
+    }
+
     <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, Peer&gt; {
         <span class="self">self</span>.hbbft
             .peers
@@ -1066,7 +1074,7 @@
         bind_address: String,
         key: rustls::PrivateKey,
         our_id: PeerId,
-        amount_tiers: Vec&lt;Amount&gt;,
+        max_denomination: Amount,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
         federation_name: String,
         bitcoind_rpc: String,
@@ -1095,7 +1103,7 @@
             hbbft: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">0</span>, peers),
             api: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">1</span>, peers),
             server_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">2</span>, peers),
-            amount_tiers,
+            max_denomination,
             federation_name,
             bitcoind_rpc,
             other: <span class="macro">vec!</span>[
@@ -1131,7 +1139,7 @@
     <span class="doccomment">/// config for servers running on different ports on a local network
     </span><span class="kw">pub fn </span>gen_local(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        amount_tiers: Vec&lt;Amount&gt;,
+        max_denomination: Amount,
         base_port: u16,
         federation_name: <span class="kw-2">&amp;</span>str,
         bitcoind_rpc: <span class="kw-2">&amp;</span>str,
@@ -1164,7 +1172,7 @@
                     <span class="string">&quot;127.0.0.1&quot;</span>.to_string(),
                     keys[peer].<span class="number">1</span>.clone(),
                     <span class="kw-2">*</span>peer,
-                    amount_tiers.clone(),
+                    max_denomination,
                     <span class="kw-2">&amp;</span>peer_params,
                     federation_name.to_string(),
                     bitcoind_rpc.to_string(),
