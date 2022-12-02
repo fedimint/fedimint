@@ -874,6 +874,20 @@
 <a href="#874" id="874">874</a>
 <a href="#875" id="875">875</a>
 <a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1033,20 +1047,24 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>get_last_note_index(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; NoteIndex {
+    <span class="kw">pub fn </span>get_last_note_index(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        amount: Amount,
+    ) -&gt; NoteIndex {
         NoteIndex(
-            dbtx.get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey)
+            dbtx.get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount))
                 .expect(<span class="string">&quot;DB error&quot;</span>)
                 .unwrap_or(<span class="number">0</span>),
         )
     }
 
-    <span class="kw">async fn </span>new_note_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DerivableSecret {
+    <span class="kw">async fn </span>new_note_secret(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; DerivableSecret {
         <span class="kw">let </span><span class="kw-2">mut </span>new_idx;
         <span class="kw">loop </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx();
-            new_idx = <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx).next();
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>LastECashNoteIndexKey, <span class="kw-2">&amp;</span>new_idx.as_u64())
+            new_idx = <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).next();
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.as_u64())
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>);
             <span class="kw">if </span>dbtx.commit_tx().<span class="kw">await</span>.is_ok() {
@@ -1056,14 +1074,16 @@
 
         <span class="self">self</span>.secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) <span class="comment">// TODO: cache
-            </span>.child_key(ChildId(new_idx.as_u64()))
+            </span>.child_key(ChildId(amount.milli_sat))
+            .child_key(ChildId(new_idx.as_u64()))
     }
 
     <span class="kw">pub async fn </span>new_ecash_note&lt;C: Signing&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
+        amount: Amount,
     ) -&gt; (NoteIssuanceRequest, BlindNonce) {
-        <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret().<span class="kw">await</span>;
+        <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(amount).<span class="kw">await</span>;
         NoteIssuanceRequest::new(ctx, secret)
     }
 
@@ -1092,7 +1112,7 @@
             .build(
                 change_required,
                 <span class="kw-2">&amp;mut </span>dbtx,
-                || <span class="kw">async </span>{ <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp).<span class="kw">await </span>},
+                |note_amount| <span class="kw">async move </span>{ <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, note_amount).<span class="kw">await </span>},
                 <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp,
                 <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
                 rng,
@@ -1118,7 +1138,7 @@
     ) <span class="kw">where
         </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
         Fut: futures::Future&lt;Output = OutPoint&gt;,
-        G: FnMut() -&gt; GFut,
+        G: FnMut(Amount) -&gt; GFut,
         GFut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
@@ -1554,7 +1574,11 @@
             .receive_coins(
                 amt,
                 <span class="kw-2">&amp;mut </span>dbtx,
-                || <span class="kw">async </span>{ client.new_ecash_note(secp256k1_zkp::SECP256K1).<span class="kw">await </span>},
+                |note_amount| <span class="kw">async move </span>{
+                    client
+                        .new_ecash_note(secp256k1_zkp::SECP256K1, note_amount)
+                        .<span class="kw">await
+                </span>},
                 |output| <span class="kw">async </span>{
                     <span class="comment">// Agree on output
                     </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
@@ -1615,11 +1639,12 @@
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
         <span class="kw">let </span>(spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
+        <span class="kw">let </span>client = <span class="kw-2">&amp;</span>client;
         builder
             .build(
                 Amount::from_sat(<span class="number">0</span>),
                 <span class="kw-2">&amp;mut </span>dbtx,
-                || <span class="kw">async </span>{ client.new_ecash_note(secp).<span class="kw">await </span>},
+                |note_amount| <span class="kw">async move </span>{ client.new_ecash_note(secp, note_amount).<span class="kw">await </span>},
                 secp,
                 tbs_pks,
                 rng,
@@ -1662,7 +1687,7 @@
             .build(
                 Amount::from_sat(<span class="number">0</span>),
                 <span class="kw-2">&amp;mut </span>dbtx,
-                || <span class="kw">async </span>{ client.new_ecash_note(secp).<span class="kw">await </span>},
+                |note_amount| <span class="kw">async move </span>{ client.new_ecash_note(secp, note_amount).<span class="kw">await </span>},
                 secp,
                 tbs_pks,
                 rng,
@@ -1704,6 +1729,7 @@
             secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
         <span class="kw">let </span>client_copy = client.clone();
+        <span class="kw">let </span>amount = Amount::from_milli_sats(<span class="number">1</span>);
 
         <span class="kw">let </span>issuance_thread = <span class="kw">move </span>|| {
             (<span class="number">0</span>..ITERATIONS)
@@ -1711,7 +1737,9 @@
                     |<span class="kw">_</span>| {
                         <span class="kw">let </span>client = client_copy.clone();
                         block_on(<span class="kw">async </span>{
-                            <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client.new_ecash_note(secp256k1_zkp::SECP256K1).<span class="kw">await</span>;
+                            <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client
+                                .new_ecash_note(secp256k1_zkp::SECP256K1, amount)
+                                .<span class="kw">await</span>;
                             <span class="prelude-val">Some</span>(nonce)
                         })
                     }
@@ -1743,7 +1771,7 @@
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey)
+            .get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount))
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .unwrap_or(<span class="number">0</span>);
         <span class="comment">// Ensure we didn&#39;t skip any keys

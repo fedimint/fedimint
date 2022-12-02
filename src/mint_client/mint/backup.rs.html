@@ -214,6 +214,11 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -337,7 +342,12 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx();
         <span class="kw">let </span>notes = <span class="self">self</span>.get_available_notes(<span class="kw-2">&amp;mut </span>dbtx);
-        <span class="kw">let </span>last_idx = <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx);
+        <span class="kw">let </span>last_idx = Tiered::from_iter(
+            <span class="self">self</span>.config
+                .tbs_pks
+                .tiers()
+                .map(|<span class="kw-2">&amp;</span>amount| (amount, <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount))),
+        );
 
         <span class="prelude-val">Ok</span>(PlaintextEcashBackup {
             notes,
@@ -369,7 +379,7 @@
 </span><span class="kw">pub struct </span>PlaintextEcashBackup {
     notes: TieredMulti&lt;SpendableNote&gt;,
     epoch: u64,
-    last_idx: NoteIndex,
+    last_idx: Tiered&lt;NoteIndex&gt;,
 }
 
 <span class="kw">impl </span>PlaintextEcashBackup {

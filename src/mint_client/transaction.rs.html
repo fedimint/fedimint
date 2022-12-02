@@ -430,7 +430,7 @@
         coin_gen: F,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
     ) <span class="kw">where
-        </span>F: FnMut() -&gt; Fut,
+        </span>F: FnMut(Amount) -&gt; Fut,
         Fut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
     {
         <span class="kw">let </span>(coin_finalization_data, coin_output) =
@@ -451,13 +451,13 @@
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
     ) -&gt; (NoteIssuanceRequests, TieredMulti&lt;BlindNonce&gt;)
     <span class="kw">where
-        </span>F: FnMut() -&gt; Fut,
+        </span>F: FnMut(Amount) -&gt; Fut,
         Fut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>amount_requests: Vec&lt;((Amount, NoteIssuanceRequest), (Amount, BlindNonce))&gt; =
             Vec::new();
         <span class="kw">for </span>(amt, ()) <span class="kw">in </span>TieredMulti::represent_amount(amount, tbs_pks).into_iter() {
-            <span class="kw">let </span>(request, blind_nonce) = coin_gen().<span class="kw">await</span>;
+            <span class="kw">let </span>(request, blind_nonce) = coin_gen(amt).<span class="kw">await</span>;
             amount_requests.push(((amt, request), (amt, blind_nonce)));
         }
         <span class="kw">let </span>(coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
@@ -483,7 +483,7 @@
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; Transaction
     <span class="kw">where
-        </span>F: FnMut() -&gt; Fut,
+        </span>F: FnMut(Amount) -&gt; Fut,
         Fut: futures::Future&lt;Output = (NoteIssuanceRequest, BlindNonce)&gt;,
     {
         <span class="comment">// add change
