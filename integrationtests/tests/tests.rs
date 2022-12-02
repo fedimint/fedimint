@@ -12,9 +12,9 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
-
+use fedimint_mint::config::MintClientConfig;
 use fedimint_mint::{MintOutputConfirmation, OutputConfirmationSignatures};
-
+use fedimint_server::all_decoders;
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::legacy::Output;
@@ -824,8 +824,25 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
-    let tx = user.create_tx(builder).await;
-    fed.submit_transaction(tx.into_type_erased()).unwrap();
+    let tbs_pks = &user
+        .config
+        .0
+        .get_module::<MintClientConfig>("mint")?
+        .tbs_pks;
+    let context = &user.client.mint_client().context;
+    let mut dbtx = context.db.begin_transaction(all_decoders());
+    let client = &user.client;
+    let tx = builder
+        .build(
+            sats(0),
+            &mut dbtx,
+            |amount| async move { client.mint_client().new_ecash_note(&secp(), amount).await },
+            &secp(),
+            tbs_pks,
+            rng(),
+        )
+        .await;
+    fed.submit_transaction(tx.into_type_erased()).await.unwrap();
     fed.run_consensus_epochs(1).await; // process offer
 
     // Gateway escrows ecash to trigger preimage decryption by the federation
@@ -1071,7 +1088,7 @@ async fn unbalanced_transactions_get_rejected() -> Result<()> {
         .input_coins(user.client.mint_client().coins())
         .unwrap();
     let tx = user.create_tx(builder).await;
-    let response = fed.submit_transaction(tx.into_type_erased());
+    let response = fed.submit_transaction(tx.into_type_erased()).await;
 
     assert_matches!(
         response,

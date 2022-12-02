@@ -75,7 +75,11 @@ pub trait TypedApiEndpoint {
     type Param: serde::de::DeserializeOwned + Send;
     type Response: serde::Serialize;
 
-    async fn handle(state: &Self::State, params: Self::Param) -> Result<Self::Response, ApiError>;
+    async fn handle<'a, 'b>(
+        state: &'a Self::State,
+        dbtx: fedimint_api::db::DatabaseTransaction<'b>,
+        params: Self::Param,
+    ) -> Result<Self::Response, ApiError>;
 }
 
 #[doc(hidden)]
@@ -100,7 +104,7 @@ pub mod __reexports {
 macro_rules! __api_endpoint {
     (
         $path:expr,
-        async |$state:ident: &$state_ty:ty, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
+        async |$state:ident: &$state_ty:ty, $dbtx:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
     ) => {{
         struct Endpoint;
 
@@ -111,8 +115,9 @@ macro_rules! __api_endpoint {
             type Param = $param_ty;
             type Response = $resp_ty;
 
-            async fn handle(
-                $state: &Self::State,
+            async fn handle<'a, 'b>(
+                $state: &'a Self::State,
+                mut $dbtx: fedimint_api::db::DatabaseTransaction<'b>,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
@@ -121,13 +126,14 @@ macro_rules! __api_endpoint {
 
         ApiEndpoint {
             path: <Endpoint as $crate::module::TypedApiEndpoint>::PATH,
-            handler: Box::new(|m, param| {
+            handler: Box::new(|m, dbtx, param| {
                 Box::pin(async move {
                     let params = $crate::module::__reexports::serde_json::from_value(param)
                         .map_err(|e| $crate::module::ApiError::bad_request(e.to_string()))?;
 
                     let ret =
-                        <Endpoint as $crate::module::TypedApiEndpoint>::handle(m, params).await?;
+                        <Endpoint as $crate::module::TypedApiEndpoint>::handle(m, dbtx, params)
+                            .await?;
                     Ok($crate::module::__reexports::serde_json::to_value(ret)
                         .expect("encoding error"))
                 })
@@ -139,8 +145,15 @@ macro_rules! __api_endpoint {
 pub use __api_endpoint as api_endpoint;
 
 type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
-type HandlerFn<M> =
-    Box<dyn for<'a> Fn(&'a M, serde_json::Value) -> HandlerFnReturn<'a> + Sync + Send>;
+type HandlerFn<M> = Box<
+    dyn for<'a> Fn(
+            &'a M,
+            fedimint_api::db::DatabaseTransaction<'a>,
+            serde_json::Value,
+        ) -> HandlerFnReturn<'a>
+        + Send
+        + Sync,
+>;
 
 /// Definition of an API endpoint defined by a module `M`.
 pub struct ApiEndpoint<M> {
@@ -205,7 +218,7 @@ pub trait FederationModuleConfigGen {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait ServerModulePlugin: Debug + Sized {
     type Decoder: PluginDecode;
     type Input: PluginInput;
@@ -219,10 +232,13 @@ pub trait ServerModulePlugin: Debug + Sized {
     fn decoder(&self) -> Self::Decoder;
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self);
+    async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut DatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal<'a>(&'a self) -> Vec<Self::ConsensusItem>;
+    async fn consensus_proposal<'a>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Vec<Self::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -247,10 +263,10 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input<'a, 'b>(
+    async fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -276,7 +292,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// and merely generate a warning.
     fn validate_output(
         &self,
-        dbtx: &DatabaseTransaction,
+        dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -311,13 +327,17 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome>;
+    fn output_status(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<Self::OutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, audit: &mut Audit);
+    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Sub;
@@ -12,9 +12,9 @@ use fedimint_api::config::{
     scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_MINT};
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
+use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -32,7 +32,7 @@ use fedimint_api::{
 use impl_tools::autoimpl;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use rayon::iter::{ParallelBridge, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use secp256k1_zkp::SECP256K1;
 use serde::{Deserialize, Serialize};
 use tbs::{
@@ -65,8 +65,6 @@ pub struct Mint {
     sec_key: Tiered<SecretKeyShare>,
     pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
-    non_consensus_db: Database,
-    decoders: ModuleRegistry<Decoder>,
 }
 
 /// A consenus item from one of the federation members contributing partials signatures to blind nonces submitted in it
@@ -274,7 +272,7 @@ pub struct MintOutput(pub TieredMulti<BlindNonce>);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct MintOutputOutcome(pub Option<OutputOutcome>);
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ServerModulePlugin for Mint {
     type Decoder = MintModuleDecoder;
     type Input = MintInput;
@@ -291,20 +289,21 @@ impl ServerModulePlugin for Mint {
         MintModuleDecoder
     }
 
-    async fn await_consensus_proposal(&self) {
-        if self.consensus_proposal().await.is_empty() {
+    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
+        if self.consensus_proposal(dbtx).await.is_empty() {
             std::future::pending().await
         }
     }
 
-    async fn consensus_proposal(&self) -> Vec<Self::ConsensusItem> {
-        self.non_consensus_db
-            .begin_transaction(self.decoders.clone())
-            .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
+    async fn consensus_proposal(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Vec<Self::ConsensusItem> {
+        dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 let (key, signatures) = res.expect("DB error");
                 MintOutputConfirmation {
-                    out_point: key.request_id,
+                    out_point: key.out_point,
                     signatures,
                 }
             })
@@ -350,10 +349,10 @@ impl ServerModulePlugin for Mint {
         VerificationCache { valid_coins }
     }
 
-    fn validate_input<'a, 'b>(
+    async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        dbtx: &DatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
@@ -401,7 +400,9 @@ impl ServerModulePlugin for Mint {
         input: &'b Self::Input,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(interconnect, dbtx, cache, input)?;
+        let meta = self
+            .validate_input(interconnect, dbtx, cache, input)
+            .await?;
 
         for (amount, coin) in input.iter_items() {
             let key = NonceKey(coin.0.clone());
@@ -416,7 +417,7 @@ impl ServerModulePlugin for Mint {
 
     fn validate_output(
         &self,
-        _dbtx: &DatabaseTransaction,
+        _dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
@@ -449,14 +450,9 @@ impl ServerModulePlugin for Mint {
             .blind_sign(output.clone().0)
             .into_module_error_other()?;
 
-        dbtx.insert_new_entry(
-            &ProposedPartialSignatureKey {
-                request_id: out_point,
-            },
-            &partial_sig,
-        )
-        .await
-        .expect("DB Error");
+        dbtx.insert_new_entry(&ProposedPartialSignatureKey { out_point }, &partial_sig)
+            .await
+            .expect("DB Error");
         dbtx.insert_new_entry(
             &MintAuditItemKey::Issuance(out_point),
             &output.total_amount(),
@@ -472,75 +468,92 @@ impl ServerModulePlugin for Mint {
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
+        struct IssuanceData {
+            out_point: OutPoint,
+            // TODO: remove Option, make it mandatory
+            // TODO: make it only the message, remove msg from PartialSigResponse
+            our_contribution: Option<OutputConfirmationSignatures>,
+            signature_shares: Vec<(PeerId, OutputConfirmationSignatures)>,
+        }
+
+        let mut drop_peers = BTreeSet::new();
+
         // Finalize partial signatures for which we now have enough shares
-        let req_psigs = dbtx
+        let issuance_requests = dbtx
             .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
                 (key.request_id, (key.peer_id, partial_sig))
             })
-            .into_group_map();
-
-        // TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn't need consensus)
-        let par_map = req_psigs
+            .into_group_map()
             .into_iter()
-            .map(|(issuance_id, shares)| async move {
-                let mut drop_peers = Vec::<PeerId>::new();
-                // FIXME: this specific instance is safe, but we should never directly read from the DB
-                let mut dbtx = self
-                    .non_consensus_db
-                    .begin_transaction(self.decoders.clone());
-                let proposal_key = ProposedPartialSignatureKey {
-                    request_id: issuance_id,
-                };
+            .map(|(out_point, signature_shares)| {
+                let proposal_key = ProposedPartialSignatureKey { out_point };
                 let our_contribution = dbtx.get_value(&proposal_key).expect("DB error");
-                let (bsig, errors) = self.combine(our_contribution, shares.clone());
 
-                // FIXME: validate shares before writing to DB to make combine infallible
-                errors.0.iter().for_each(|(peer, error)| {
-                    error!("Dropping {:?} for {:?}", peer, error);
-                    drop_peers.push(*peer);
-                });
-
-                match bsig {
-                    Ok(blind_signature) => {
-                        debug!(
-                            %issuance_id,
-                            "Successfully combined signature shares",
-                        );
-
-                        for (peer, _) in shares.into_iter() {
-                            dbtx.remove_entry(&ReceivedPartialSignatureKey {
-                                request_id: issuance_id,
-                                peer_id: peer,
-                            })
-                            .await
-                            .expect("DB Error");
-                        }
-
-                        dbtx.remove_entry(&proposal_key).await.expect("DB Error");
-
-                        dbtx.insert_entry(&OutputOutcomeKey(issuance_id), &blind_signature)
-                            .await
-                            .expect("DB Error");
-                    }
-                    Err(CombineError::TooFewShares(got, _)) => {
-                        for peer in consensus_peers.sub(&HashSet::from_iter(got)) {
-                            error!("Dropping {:?} for not contributing shares", peer);
-                            drop_peers.push(peer);
-                        }
-                    }
-                    Err(error) => {
-                        warn!(%error, "Could not combine shares");
-                    }
+                IssuanceData {
+                    out_point,
+                    our_contribution,
+                    signature_shares,
                 }
+            })
+            .collect::<Vec<_>>();
 
-                dbtx.commit_tx().await.expect("DB Error");
-                drop_peers
+        let issuance_results = issuance_requests
+            .into_par_iter()
+            .map(|issuance_data| {
+                let (bsig, errors) = self.combine(
+                    issuance_data.our_contribution.clone(),
+                    issuance_data.signature_shares.clone(),
+                );
+                (issuance_data, bsig, errors)
+            })
+            .collect::<Vec<_>>();
+
+        for (issuance_data, bsig_res, errors) in issuance_results {
+            // FIXME: validate shares before writing to DB to make combine infallible
+            errors.0.iter().for_each(|(peer, error)| {
+                error!("Dropping {:?} for {:?}", peer, error);
+                drop_peers.insert(*peer);
             });
 
-        let par_batches = futures::future::join_all(par_map).await;
-        let dropped_peers = par_batches.iter().flatten().copied().collect();
+            match bsig_res {
+                Ok(blind_signature) => {
+                    debug!(
+                        out_point = %issuance_data.out_point,
+                        "Successfully combined signature shares",
+                    );
+
+                    for (peer, _) in issuance_data.signature_shares.into_iter() {
+                        dbtx.remove_entry(&ReceivedPartialSignatureKey {
+                            request_id: issuance_data.out_point,
+                            peer_id: peer,
+                        })
+                        .await
+                        .expect("DB Error");
+                    }
+
+                    dbtx.remove_entry(&ProposedPartialSignatureKey {
+                        out_point: issuance_data.out_point,
+                    })
+                    .await
+                    .expect("DB Error");
+
+                    dbtx.insert_entry(&OutputOutcomeKey(issuance_data.out_point), &blind_signature)
+                        .await
+                        .expect("DB Error");
+                }
+                Err(CombineError::TooFewShares(got, _)) => {
+                    for peer in consensus_peers.sub(&HashSet::from_iter(got)) {
+                        error!("Dropping {:?} for not contributing shares", peer);
+                        drop_peers.insert(peer);
+                    }
+                }
+                Err(error) => {
+                    warn!(%error, "Could not combine shares");
+                }
+            }
+        }
 
         let mut redemptions = Amount::from_sat(0);
         let mut issuances = Amount::from_sat(0);
@@ -569,17 +582,16 @@ impl ServerModulePlugin for Mint {
             .await
             .expect("DB Error");
 
-        dropped_peers
+        drop_peers.into_iter().collect()
     }
 
-    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
-        let dbtx = self
-            .non_consensus_db
-            .begin_transaction(self.decoders.clone());
+    fn output_status(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<Self::OutputOutcome> {
         let we_proposed = dbtx
-            .get_value(&ProposedPartialSignatureKey {
-                request_id: out_point,
-            })
+            .get_value(&ProposedPartialSignatureKey { out_point })
             .expect("DB error")
             .is_some();
         let was_consensus_outcome = dbtx
@@ -601,19 +613,13 @@ impl ServerModulePlugin for Mint {
         }
     }
 
-    fn audit(&self, audit: &mut Audit) {
-        audit.add_items(
-            &self
-                .non_consensus_db
-                .begin_transaction(self.decoders.clone()),
-            &MintAuditItemKeyPrefix,
-            |k, v| match k {
-                MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
-                MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
-                MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
-                MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
-            },
-        );
+    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
+        audit.add_items(dbtx, &MintAuditItemKeyPrefix, |k, v| match k {
+            MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
+            MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
+            MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
+            MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
+        });
     }
 
     fn api_base_name(&self) -> &'static str {
@@ -624,16 +630,18 @@ impl ServerModulePlugin for Mint {
         vec![
             api_endpoint! {
                 "/backup",
-                async |module: &Mint, request: SignedBackupRequest| -> () {
+                async |module: &Mint, dbtx, request: SignedBackupRequest| -> () {
                     module
-                        .handle_backup_request(request).await
+                        .handle_backup_request(&mut dbtx, request).await?;
+                    dbtx.commit_tx().await.map_err(|e| ApiError::new(1000, format!("Transaction error: {}", e)))?;
+                    Ok(())
                 }
             },
             api_endpoint! {
                 "/recover",
-                async |module: &Mint, id: secp256k1_zkp::XOnlyPublicKey| -> Vec<u8> {
+                async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Vec<u8> {
                     module
-                        .handle_recover_request(id).await
+                        .handle_recover_request(&mut dbtx, id).await
                         .ok_or_else(|| ApiError::not_found(String::from("Backup not found")))
                 }
             },
@@ -642,14 +650,14 @@ impl ServerModulePlugin for Mint {
 }
 
 impl Mint {
-    async fn handle_backup_request(&self, request: SignedBackupRequest) -> Result<(), ApiError> {
+    async fn handle_backup_request(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        request: SignedBackupRequest,
+    ) -> Result<(), ApiError> {
         let request = request
             .verify_valid(SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
-
-        let mut dbtx = self
-            .non_consensus_db
-            .begin_transaction(self.decoders.clone());
 
         if let Some(prev) = dbtx
             .get_value(&EcashBackupKey(request.id))
@@ -673,10 +681,12 @@ impl Mint {
         Ok(())
     }
 
-    async fn handle_recover_request(&self, id: secp256k1_zkp::XOnlyPublicKey) -> Option<Vec<u8>> {
-        self.non_consensus_db
-            .begin_transaction(self.decoders.clone())
-            .get_value(&EcashBackupKey(id))
+    async fn handle_recover_request(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        id: secp256k1_zkp::XOnlyPublicKey,
+    ) -> Option<Vec<u8>> {
+        dbtx.get_value(&EcashBackupKey(id))
             .expect("DB error")
             .map(|res| res.data)
     }
@@ -689,7 +699,7 @@ impl Mint {
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(cfg: MintConfig, db: Database, decoders: ModuleRegistry<Decoder>) -> Mint {
+    pub fn new(cfg: MintConfig) -> Mint {
         assert!(cfg.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -734,8 +744,6 @@ impl Mint {
             sec_key: cfg.tbs_sks,
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
-            non_consensus_db: db,
-            decoders,
         }
     }
 
@@ -1021,18 +1029,12 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
-    use fedimint_api::core::{Decoder, MODULE_KEY_MINT};
-    use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::encoding::ModuleRegistry;
     use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{
-        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, MintModuleDecoder,
-        PeerErrorType,
-    };
+    use crate::{BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, PeerErrorType};
 
     const THRESHOLD: usize = 1;
     const MINTS: usize = 5;
@@ -1054,15 +1056,7 @@ mod test {
         let (mint_cfg, client_cfg) = build_configs();
         let mints = mint_cfg
             .into_iter()
-            .map(|config| {
-                Mint::new(
-                    config.to_typed().unwrap(),
-                    MemDatabase::new().into(),
-                    vec![(MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder))]
-                        .into_iter()
-                        .collect(),
-                )
-            })
+            .map(|config| Mint::new(config.to_typed().unwrap()))
             .collect::<Vec<_>>();
 
         let agg_pk = *client_cfg
@@ -1224,21 +1218,17 @@ mod test {
         let (mint_server_cfg1, _) = build_configs();
         let (mint_server_cfg2, _) = build_configs();
 
-        Mint::new(
-            MintConfig {
-                threshold: THRESHOLD,
-                tbs_sks: mint_server_cfg1[0]
-                    .to_typed::<MintConfig>()
-                    .unwrap()
-                    .tbs_sks,
-                peer_tbs_pks: mint_server_cfg2[0]
-                    .to_typed::<MintConfig>()
-                    .unwrap()
-                    .peer_tbs_pks,
-                fee_consensus: FeeConsensus::default(),
-            },
-            MemDatabase::new().into(),
-            ModuleRegistry::default(),
-        );
+        Mint::new(MintConfig {
+            threshold: THRESHOLD,
+            tbs_sks: mint_server_cfg1[0]
+                .to_typed::<MintConfig>()
+                .unwrap()
+                .tbs_sks,
+            peer_tbs_pks: mint_server_cfg2[0]
+                .to_typed::<MintConfig>()
+                .unwrap()
+                .peer_tbs_pks,
+            fee_consensus: FeeConsensus::default(),
+        });
     }
 }

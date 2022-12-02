@@ -20,8 +20,12 @@ impl Audit {
         }
     }
 
-    pub fn add_items<KP, F>(&mut self, dbtx: &DatabaseTransaction, key_prefix: &KP, to_milli_sat: F)
-    where
+    pub fn add_items<KP, F>(
+        &mut self,
+        dbtx: &mut DatabaseTransaction,
+        key_prefix: &KP,
+        to_milli_sat: F,
+    ) where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + 'static,
         F: Fn(KP::Key, KP::Value) -> i64,
     {

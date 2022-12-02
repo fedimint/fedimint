@@ -567,7 +567,8 @@ impl FederationTest {
     }
 
     /// Submit a fedimint transaction to all federation servers
-    pub fn submit_transaction(
+    #[allow(clippy::await_holding_refcell_ref)] // TODO: fix, it's just a test
+    pub async fn submit_transaction(
         &self,
         transaction: fedimint_server::transaction::Transaction,
     ) -> Result<(), TransactionSubmissionError> {
@@ -576,7 +577,8 @@ impl FederationTest {
                 .borrow_mut()
                 .fedimint
                 .consensus
-                .submit_transaction(transaction.clone())?;
+                .submit_transaction(transaction.clone())
+                .await?;
         }
         Ok(())
     }
@@ -806,7 +808,7 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap()
-            .consensus_height(&server.consensus.db.begin_transaction(all_decoders()))
+            .consensus_height(&mut server.consensus.db.begin_transaction(all_decoders()))
             .unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
@@ -927,11 +929,7 @@ impl FederationTest {
             let db = database_gen();
             let mut task_group = task_group.clone();
 
-            let mint = Mint::new(
-                cfg.get_module_config("mint").unwrap(),
-                db.clone(),
-                all_decoders(),
-            );
+            let mint = Mint::new(cfg.get_module_config("mint").unwrap());
 
             let wallet = Wallet::new_with_bitcoind(
                 cfg.get_module_config("wallet").unwrap(),
@@ -943,11 +941,7 @@ impl FederationTest {
             .await
             .expect("Couldn't create wallet");
 
-            let ln = LightningModule::new(
-                cfg.get_module_config("ln").unwrap(),
-                db.clone(),
-                all_decoders(),
-            );
+            let ln = LightningModule::new(cfg.get_module_config("ln").unwrap());
 
             let mut consensus = FedimintConsensus::new(cfg.clone(), db.clone());
             consensus.register_module(mint.into());

@@ -96,9 +96,9 @@ macro_rules! module_plugin_trait_define {
 
         impl<T> $module_ty for T
         where
-            T: $plugin_ty + DynEncodable + 'static,
+            T: $plugin_ty + DynEncodable + 'static + Send + Sync,
         {
-            fn as_any(&self) -> &(dyn Any + 'static) {
+            fn as_any(&self) -> &(dyn Any + 'static + Send + Sync) {
                 self
             }
 
@@ -316,7 +316,7 @@ impl Decoder {
 ///
 /// General purpose code should use [`Input`] instead
 pub trait ModuleInput: Debug + DynEncodable {
-    fn as_any(&self) -> &(dyn Any + 'static);
+    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> Input;
     fn dyn_hash(&self) -> u64;
@@ -346,7 +346,7 @@ newtype_impl_eq_passthrough!(Input);
 ///
 /// General purpose code should use [`Output`] instead
 pub trait ModuleOutput: Debug + DynEncodable {
-    fn as_any(&self) -> &(dyn Any + 'static);
+    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     fn module_key(&self) -> ModuleKey;
 
     fn clone(&self) -> Output;
@@ -377,7 +377,7 @@ pub enum FinalizationError {
 }
 
 pub trait ModuleOutputOutcome: Debug + DynEncodable {
-    fn as_any(&self) -> &(dyn Any + 'static);
+    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     /// Module key
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> OutputOutcome;
@@ -415,7 +415,7 @@ dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
 newtype_impl_eq_passthrough!(OutputOutcome);
 
 pub trait ModuleConsensusItem: Debug + DynEncodable {
-    fn as_any(&self) -> &(dyn Any + 'static);
+    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     /// Module key
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> ConsensusItem;

@@ -25,7 +25,8 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
                     .find(|endpoint| endpoint.path == path)
                     .ok_or_else(|| ApiError::not_found(String::from("Method not found")))?;
 
-                return (endpoint.handler)(module, data).await;
+                return (endpoint.handler)(module, self.fedimint.database_transaction(), data)
+                    .await;
             }
         }
         panic!("Module not registered: {}", module_name);

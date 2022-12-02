@@ -499,7 +499,6 @@ mod tests {
     use bitcoin::Address;
     use fedimint_api::backup::SignedBackupRequest;
     use fedimint_api::config::ModuleConfigGenParams;
-    use fedimint_api::core::{Decoder, MODULE_KEY_MINT};
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::encoding::ModuleRegistry;
@@ -508,7 +507,6 @@ mod tests {
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-    use fedimint_core::modules::mint::common::MintModuleDecoder;
     use fedimint_core::modules::mint::config::MintClientConfig;
     use fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
     use fedimint_core::modules::wallet::PegOutFees;
@@ -627,35 +625,24 @@ mod tests {
         }
     }
 
-    fn mint_decoders() -> ModuleRegistry {
-        vec![(MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder))]
-            .into_iter()
-            .collect()
-    }
-
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         MintClientConfig,
         ClientContext,
     ) {
-        let fed =
-            Arc::new(
-                tokio::sync::Mutex::new(
-                    FakeFed::<Mint>::new(
-                        4,
-                        |cfg, db| async move {
-                            Ok(Mint::new(cfg.to_typed().unwrap(), db, mint_decoders()))
-                        },
-                        &ModuleConfigGenParams {
-                            mint_amounts: vec![Amount::from_sat(1), Amount::from_sat(10)],
-                            ..ModuleConfigGenParams::fake_config_gen_params()
-                        },
-                        &MintConfigGenerator,
-                    )
-                    .await
-                    .unwrap(),
-                ),
-            );
+        let fed = Arc::new(tokio::sync::Mutex::new(
+            FakeFed::<Mint>::new(
+                4,
+                |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
+                &ModuleConfigGenParams {
+                    mint_amounts: vec![Amount::from_sat(1), Amount::from_sat(10)],
+                    ..ModuleConfigGenParams::fake_config_gen_params()
+                },
+                &MintConfigGenerator,
+            )
+            .await
+            .unwrap(),
+        ));
 
         let api = FakeApi { mint: fed.clone() };
 
@@ -762,7 +749,7 @@ mod tests {
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
-        let meta = fed.lock().await.verify_input(&input).unwrap();
+        let meta = fed.lock().await.verify_input(&input).await.unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
             meta.keys,
@@ -781,7 +768,7 @@ mod tests {
         assert_eq!(client.coins().total_amount(), SPEND_AMOUNT);
 
         // Double spends aren't possible
-        assert!(fed.lock().await.verify_input(&input).is_err());
+        assert!(fed.lock().await.verify_input(&input).await.is_err());
 
         // We can exactly spend the remainder
         let mut dbtx = client
@@ -805,7 +792,7 @@ mod tests {
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
-        let meta = fed.lock().await.verify_input(&input).unwrap();
+        let meta = fed.lock().await.verify_input(&input).await.unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
             meta.keys,

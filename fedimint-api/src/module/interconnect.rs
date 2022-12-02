@@ -4,7 +4,7 @@ use super::ApiError;
 
 /// Provides an interface to call APIs of other modules
 #[async_trait]
-pub trait ModuleInterconect {
+pub trait ModuleInterconect: Sync + Send {
     /// Simulates a call to an API endpoint of another module.
     /// This has lower latency.
     async fn call(

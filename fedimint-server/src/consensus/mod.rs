@@ -132,7 +132,11 @@ impl FedimintConsensus {
             .collect()
     }
 
-    pub fn submit_transaction(
+    pub fn database_transaction(&self) -> DatabaseTransaction<'_> {
+        self.db.begin_transaction(self.decoders())
+    }
+
+    pub async fn submit_transaction(
         &self,
         transaction: Transaction,
     ) -> Result<(), TransactionSubmissionError> {
@@ -149,7 +153,7 @@ impl FedimintConsensus {
         let mut pub_keys = Vec::new();
 
         // Create read-only DB tx so that the read state is consistent
-        let dbtx = self.db.begin_transaction(self.decoders());
+        let mut dbtx = self.db.begin_transaction(self.decoders());
 
         for input in &transaction.inputs {
             let module = self
@@ -158,7 +162,11 @@ impl FedimintConsensus {
                 .expect("Parsing the input should fail if the module doesn't exist");
 
             let cache = module.build_verification_cache(&[input.clone()]);
-            let meta = module.validate_input(&self.build_interconnect(), &dbtx, &cache, input)?;
+            let interconnect = self.build_interconnect();
+            let meta = module
+                .validate_input(&interconnect, &mut dbtx, &cache, input)
+                .await
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
 
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
@@ -170,24 +178,23 @@ impl FedimintConsensus {
                 .modules
                 .get(&output.module_key())
                 .expect("Parsing the input should fail if the module doesn't exist");
-            let amount = module.validate_output(&dbtx, output)?;
+            let amount = module
+                .validate_output(&mut dbtx, output)
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
         }
 
         funding_verifier.verify_funding()?;
 
-        futures::executor::block_on(async {
-            let mut dbtx = self.db.begin_transaction(self.decoders());
-            let new = dbtx
-                .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
-                .await
-                .expect("DB error");
-            dbtx.commit_tx().await.expect("DB Error");
+        let new = dbtx
+            .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
+            .await
+            .expect("DB error");
+        dbtx.commit_tx().await.expect("DB Error");
 
-            if new.is_some() {
-                warn!("Added consensus item was already in consensus queue");
-            }
-        });
+        if new.is_some() {
+            warn!("Added consensus item was already in consensus queue");
+        }
 
         self.transaction_notify.notify_one();
         Ok(())
@@ -381,16 +388,21 @@ impl FedimintConsensus {
         let proposal_futures = self
             .modules
             .iter()
-            .map(|(_, module)| module.await_consensus_proposal())
+            .map(|(_, module)| {
+                Box::pin(async {
+                    let mut dbtx = self.database_transaction();
+                    module.await_consensus_proposal(&mut dbtx).await
+                })
+            })
             .collect::<Vec<_>>();
 
         select_all(proposal_futures).await;
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
-        let drop_peers = self
-            .db
-            .begin_transaction(self.decoders())
+        let mut dbtx = self.database_transaction();
+
+        let drop_peers = dbtx
             .find_by_prefix(&DropPeerKeyPrefix)
             .map(|res| {
                 let key = res.expect("DB error").0;
@@ -398,9 +410,7 @@ impl FedimintConsensus {
             })
             .collect();
 
-        let mut items: Vec<ConsensusItem> = self
-            .db
-            .begin_transaction(self.decoders())
+        let mut items: Vec<ConsensusItem> = dbtx
             .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
@@ -411,25 +421,15 @@ impl FedimintConsensus {
         for module in self.modules.values() {
             items.extend(
                 module
-                    .consensus_proposal()
+                    .consensus_proposal(&mut dbtx)
                     .await
                     .into_iter()
                     .map(ConsensusItem::Module),
             );
         }
 
-        if let Some(epoch) = self
-            .db
-            .begin_transaction(self.decoders())
-            .get_value(&LastEpochKey)
-            .unwrap()
-        {
-            let last_epoch = self
-                .db
-                .begin_transaction(self.decoders())
-                .get_value(&epoch)
-                .unwrap()
-                .unwrap();
+        if let Some(epoch) = dbtx.get_value(&LastEpochKey).unwrap() {
+            let last_epoch = dbtx.get_value(&epoch).unwrap().unwrap();
             let sig = self.cfg.epoch_sks.0.sign(last_epoch.hash);
             let item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
             items.push(item);
@@ -461,7 +461,8 @@ impl FedimintConsensus {
                     input,
                     caches.get_cache(input.module_key()),
                 )
-                .await?;
+                .await
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             pub_keys.push(meta.puk_keys);
             funding_verifier.add_input(meta.amount);
         }
@@ -477,7 +478,10 @@ impl FedimintConsensus {
                 .get(&output.module_key())
                 .expect("Parsing the input should fail if the module doesn't exist");
 
-            let amount = module.apply_output(dbtx, &output, out_point).await?;
+            let amount = module
+                .apply_output(dbtx, &output, out_point)
+                .await
+                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
         }
 
@@ -490,9 +494,9 @@ impl FedimintConsensus {
         &self,
         txid: TransactionId,
     ) -> Option<crate::outcome::TransactionStatus> {
-        let accepted: Option<AcceptedTransaction> = self
-            .db
-            .begin_transaction(self.decoders())
+        let mut dbtx = self.database_transaction();
+
+        let accepted: Option<AcceptedTransaction> = dbtx
             .get_value(&AcceptedTransactionKey(txid))
             .expect("DB error");
 
@@ -511,7 +515,7 @@ impl FedimintConsensus {
                         .modules
                         .get(&output.module_key())
                         .expect("Module exists because parsing succeeded")
-                        .output_status(outpoint)
+                        .output_status(&mut dbtx, outpoint)
                         .expect("the transaction was processed, so should be known");
                     (&outcome).into()
                 })
@@ -561,9 +565,10 @@ impl FedimintConsensus {
     }
 
     pub fn audit(&self) -> Audit {
+        let mut dbtx = self.database_transaction();
         let mut audit = Audit::default();
         for module in self.modules.values() {
-            module.audit(&mut audit)
+            module.audit(&mut dbtx, &mut audit)
         }
         audit
     }
@@ -611,8 +616,8 @@ impl Default for FundingVerifier {
 pub enum TransactionSubmissionError {
     #[error("High level transaction error: {0}")]
     TransactionError(#[from] TransactionError),
-    #[error("Module input or output error: {0}")]
-    ModuleError(#[from] ModuleError),
+    #[error("Module input or output error in tx {0}: {1}")]
+    ModuleError(TransactionId, ModuleError),
     #[error("Transaction conflict error")]
     TransactionConflictError,
 }

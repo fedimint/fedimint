@@ -328,12 +328,11 @@ mod tests {
     use bitcoin::Address;
     use fedimint_api::backup::SignedBackupRequest;
     use fedimint_api::config::ModuleConfigGenParams;
-    use fedimint_api::core::{Decoder, OutputOutcome, MODULE_KEY_LN};
+    use fedimint_api::core::OutputOutcome;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::encoding::ModuleRegistry;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
-    use fedimint_core::modules::ln::common::LightningModuleDecoder;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
@@ -393,7 +392,7 @@ mod tests {
                 .await
                 .fetch_from_all(|m, db| {
                     m.get_contract_account(
-                        &db.begin_transaction(ModuleRegistry::default()),
+                        &mut db.begin_transaction(ModuleRegistry::default()),
                         contract,
                     )
                 })
@@ -461,30 +460,21 @@ mod tests {
         }
     }
 
-    fn ln_decoders() -> ModuleRegistry {
-        vec![(MODULE_KEY_LN, Decoder::from_typed(LightningModuleDecoder))]
-            .into_iter()
-            .collect()
-    }
-
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         LightningModuleClientConfig,
         ClientContext,
     ) {
-        let fed =
-            Arc::new(tokio::sync::Mutex::new(
-                FakeFed::<LightningModule>::new(
-                    4,
-                    |cfg, db| async move {
-                        Ok(LightningModule::new(cfg.to_typed()?, db, ln_decoders()))
-                    },
-                    &ModuleConfigGenParams::fake_config_gen_params(),
-                    &LightningModuleConfigGen,
-                )
-                .await
-                .unwrap(),
-            ));
+        let fed = Arc::new(tokio::sync::Mutex::new(
+            FakeFed::<LightningModule>::new(
+                4,
+                |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
+                &ModuleConfigGenParams::fake_config_gen_params(),
+                &LightningModuleConfigGen,
+            )
+            .await
+            .unwrap(),
+        ));
         let api = FakeApi { mint: fed.clone() };
         let client_config = fed.lock().await.client_cfg().clone();
 
@@ -582,12 +572,12 @@ mod tests {
         let contract_data = refund_inputs.into_iter().next().unwrap();
         let (refund_key, refund_input) =
             client.create_refund_outgoing_contract_input(&contract_data);
-        assert!(fed.lock().await.verify_input(&refund_input).is_err());
+        assert!(fed.lock().await.verify_input(&refund_input).await.is_err());
 
         // We need to compensate for the wallet's confirmation target
         fed.lock().await.set_block_height(timelock as u64);
 
-        let meta = fed.lock().await.verify_input(&refund_input).unwrap();
+        let meta = fed.lock().await.verify_input(&refund_input).await.unwrap();
         let refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key).0;
         assert_eq!(meta.keys, vec![refund_pk]);
         assert_eq!(meta.amount.amount, expected_amount);
