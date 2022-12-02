@@ -98,35 +98,30 @@ fn attach_endpoints(
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
-            .register_method(path, move |params, state| {
-                // Hack to avoid Sync/Send issues
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async move {
-                        let params = params.one::<serde_json::Value>()?;
-                        let fedimint = &state.fedimint;
-                        let dbtx = fedimint.database_transaction();
-                        // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                        // end up with an inconsistent state in theory. In practice most API functions
-                        // are only reading and the few that do write anything are atomic. Lastly, this
-                        // is only the last line of defense
-                        AssertUnwindSafe((handler)(fedimint, dbtx, params))
-                            .catch_unwind()
-                            .await
-                            .map_err(|_| {
-                                error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
-                                jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                    500,
-                                    "API handler panicked",
-                                    None::<()>,
-                                )))
-                            })?
-                            .map_err(|e| {
-                                jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                    e.code, e.message, None::<()>,
-                                )))
-                            })
+            .register_async_method(path, move |params, state| async move {
+                let params = params.one::<serde_json::Value>()?;
+                let fedimint = &state.fedimint;
+                let dbtx = fedimint.database_transaction();
+                // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                // end up with an inconsistent state in theory. In practice most API functions
+                // are only reading and the few that do write anything are atomic. Lastly, this
+                // is only the last line of defense
+                AssertUnwindSafe((handler)(fedimint, dbtx, params))
+                    .catch_unwind()
+                    .await
+                    .map_err(|_| {
+                        error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            500,
+                            "API handler panicked",
+                            None::<()>,
+                        )))
+                    })?
+                    .map_err(|e| {
+                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                            e.code, e.message, None::<()>,
+                        )))
                     })
-                })
             })
             .expect("Failed to register async method");
     }
@@ -148,41 +143,37 @@ fn attach_endpoints_erased(
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
-            .register_method(path, move |params, state| {
+            .register_async_method(path, move |params, state| async move {
                 // Hack to avoid Sync/Send issues
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async move {
-                        let params = params.one::<serde_json::Value>()?;
-                        let fedimint = &state.fedimint;
-                        let dbtx = fedimint.database_transaction();
-                        // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                        // end up with an inconsistent state in theory. In practice most API functions
-                        // are only reading and the few that do write anything are atomic. Lastly, this
-                        // is only the last line of defense
-                        AssertUnwindSafe((handler)(
-                            fedimint
-                                .modules
-                                .get(&module_key)
-                                .expect("Module exists if it was registered"),
-                            dbtx,
-                            params,
-                        ))
-                        .catch_unwind()
-                        .await
-                        .map_err(|_| {
-                            error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                500,
-                                "API handler panicked",
-                                None::<()>,
-                            )))
-                        })?
-                        .map_err(|e| {
-                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                                e.code, e.message, None::<()>,
-                            )))
-                        })
-                    })
+                let params = params.one::<serde_json::Value>()?;
+                let fedimint = &state.fedimint;
+                let dbtx = fedimint.database_transaction();
+                // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                // end up with an inconsistent state in theory. In practice most API functions
+                // are only reading and the few that do write anything are atomic. Lastly, this
+                // is only the last line of defense
+                AssertUnwindSafe((handler)(
+                    fedimint
+                        .modules
+                        .get(&module_key)
+                        .expect("Module exists if it was registered"),
+                    dbtx,
+                    params,
+                ))
+                .catch_unwind()
+                .await
+                .map_err(|_| {
+                    error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        500,
+                        "API handler panicked",
+                        None::<()>,
+                    )))
+                })?
+                .map_err(|e| {
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        e.code, e.message, None::<()>,
+                    )))
                 })
             })
             .expect("Failed to register async method");
