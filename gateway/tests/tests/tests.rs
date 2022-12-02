@@ -2,6 +2,7 @@ mod fixtures;
 
 use std::future::Future;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::Result;
 use fixtures::{fixtures, Fixtures};
@@ -12,6 +13,7 @@ use ln_gateway::{
         rpc_client::RpcClient, BalancePayload, DepositAddressPayload, DepositPayload,
         RegisterFedPayload, WithdrawPayload,
     },
+    utils::retry,
 };
 use mint_client::api::WsFederationConnect;
 use mint_client::FederationId;
@@ -46,9 +48,8 @@ async fn test_gateway_authentication() -> Result<()> {
         })
         .await;
 
-    // Create an RPC client
-    let client = RpcClient::new(gw_announce_address);
-    let client_ref = &client;
+    // Create an RPC client reference
+    let client_ref = &RpcClient::new(gw_announce_address);
 
     // Test gateway authentication on `register_federation` function
     // *  `register_federation` with correct password succeeds
@@ -118,16 +119,41 @@ async fn test_gateway_authentication() -> Result<()> {
     task_group.shutdown_join_all().await
 }
 
+/// Test that a given endpoint/functionality of func fails with the wrong password but works with the correct one
 async fn test_auth<Fut>(gw_password: &str, func: impl Fn(String) -> Fut) -> Result<()>
 where
     Fut: Future<Output = Result<Response, Error>>,
 {
     assert_eq!(
-        // use random password here
-        func("foobar123456789".to_string()).await?.status(),
+        retry(
+            "fn".to_string(),
+            || async {
+                func(format!("foobar{}", gw_password))
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))
+            },
+            Duration::from_secs(1),
+            3,
+        )
+        .await?
+        .status(),
         401
     );
-    assert_ne!(func(gw_password.to_string()).await?.status(), 401);
+    assert_ne!(
+        retry(
+            "fn".to_string(),
+            || async {
+                func(gw_password.to_string())
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))
+            },
+            Duration::from_secs(1),
+            3,
+        )
+        .await?
+        .status(),
+        401
+    );
 
     Ok(())
 }
