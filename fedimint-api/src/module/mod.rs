@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-use futures::future::LocalBoxFuture;
+use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
 use thiserror::Error;
 
@@ -65,7 +65,7 @@ impl ApiError {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait TypedApiEndpoint {
     type State: Sync;
 
@@ -108,7 +108,7 @@ macro_rules! __api_endpoint {
     ) => {{
         struct Endpoint;
 
-        #[async_trait::async_trait(?Send)]
+        #[async_trait::async_trait]
         impl $crate::module::TypedApiEndpoint for Endpoint {
             const PATH: &'static str = $path;
             type State = $state_ty;
@@ -144,7 +144,7 @@ macro_rules! __api_endpoint {
 
 pub use __api_endpoint as api_endpoint;
 
-type HandlerFnReturn<'a> = LocalBoxFuture<'a, Result<serde_json::Value, ApiError>>;
+type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
 type HandlerFn<M> = Box<
     dyn for<'a> Fn(
             &'a M,
@@ -218,7 +218,7 @@ pub trait FederationModuleConfigGen {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait ServerModulePlugin: Debug + Sized {
     type Decoder: PluginDecode;
     type Input: PluginInput;
@@ -232,12 +232,12 @@ pub trait ServerModulePlugin: Debug + Sized {
     fn decoder(&self) -> Self::Decoder;
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self, dbtx: &DatabaseTransaction<'_>);
+    async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut DatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<Self::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
@@ -292,7 +292,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// and merely generate a warning.
     fn validate_output(
         &self,
-        dbtx: &DatabaseTransaction,
+        dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -337,7 +337,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit);
+    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///

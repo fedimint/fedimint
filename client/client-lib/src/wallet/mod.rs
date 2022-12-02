@@ -423,7 +423,7 @@ mod tests {
         assert!(btc_rpc.is_btc_sent_to(amount, addr).await);
 
         let wallet_value = fed.lock().await.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(&db.begin_transaction(ModuleRegistry::default()))
+            wallet.get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
         });
         assert_eq!(wallet_value, bitcoin::Amount::from_sat(0));
 
@@ -433,7 +433,7 @@ mod tests {
         fed.lock().await.consensus_round(&[], &[]).await;
 
         let wallet_value = fed.lock().await.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(&db.begin_transaction(ModuleRegistry::default()))
+            wallet.get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
         });
         assert!(wallet_value > bitcoin::Amount::from_sat(0));
     }

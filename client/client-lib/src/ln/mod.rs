@@ -392,7 +392,7 @@ mod tests {
                 .await
                 .fetch_from_all(|m, db| {
                     m.get_contract_account(
-                        &db.begin_transaction(ModuleRegistry::default()),
+                        &mut db.begin_transaction(ModuleRegistry::default()),
                         contract,
                     )
                 })

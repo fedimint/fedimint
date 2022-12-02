@@ -9,7 +9,7 @@ pub struct FedimintInterconnect<'a> {
     pub fedimint: &'a FedimintConsensus,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
     async fn call(
         &self,

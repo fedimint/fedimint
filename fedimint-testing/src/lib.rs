@@ -35,7 +35,7 @@ pub struct TestInputMeta {
 
 impl<Module> FakeFed<Module>
 where
-    Module: ServerModulePlugin + 'static,
+    Module: ServerModulePlugin + 'static + Send + Sync,
     Module::ConsensusItem: Clone,
     Module::OutputOutcome: Eq + Debug,
     Module::Decoder: Sync + Send + 'static,
@@ -107,7 +107,7 @@ where
     pub fn verify_output(&self, output: &Module::Output) -> bool {
         let results = self.members.iter().map(|(_, member, db)| {
             member
-                .validate_output(&db.begin_transaction(self.decoders()), output)
+                .validate_output(&mut db.begin_transaction(self.decoders()), output)
                 .is_err()
         });
         assert_all_equal(results)
@@ -134,7 +134,7 @@ where
         for (id, member, db) in &mut self.members {
             consensus.extend(
                 member
-                    .consensus_proposal(&db.begin_transaction(decoders.clone()))
+                    .consensus_proposal(&mut db.begin_transaction(decoders.clone()))
                     .await
                     .into_iter()
                     .map(|ci| (*id, ci)),
@@ -323,7 +323,7 @@ impl FakeInterconnect {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ModuleInterconect for FakeInterconnect {
     async fn call(
         &self,

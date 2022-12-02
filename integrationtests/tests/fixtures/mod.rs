@@ -808,7 +808,7 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap()
-            .consensus_height(&server.consensus.db.begin_transaction(all_decoders()))
+            .consensus_height(&mut server.consensus.db.begin_transaction(all_decoders()))
             .unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 

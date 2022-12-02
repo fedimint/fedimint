@@ -338,7 +338,7 @@ pub struct WalletOutput(pub PegOut);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletVerificationCache;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ServerModulePlugin for Wallet {
     type Decoder = WalletModuleDecoder;
     type Input = WalletInput;
@@ -356,7 +356,7 @@ impl ServerModulePlugin for Wallet {
         WalletModuleDecoder
     }
 
-    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) {
+    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
         let mut our_target_height = self.target_height().await;
         let last_consensus_height = self.consensus_height(dbtx).unwrap_or(0);
 
@@ -370,7 +370,7 @@ impl ServerModulePlugin for Wallet {
 
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<Self::ConsensusItem> {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
@@ -533,7 +533,7 @@ impl ServerModulePlugin for Wallet {
 
     fn validate_output(
         &self,
-        dbtx: &DatabaseTransaction,
+        dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if !is_address_valid_for_network(&output.recipient, self.cfg.network) {
@@ -699,7 +699,7 @@ impl ServerModulePlugin for Wallet {
             .expect("DB error")
     }
 
-    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
+    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
         audit.add_items(dbtx, &UTXOPrefixKey, |_, v| v.amount.to_sat() as i64 * 1000);
         audit.add_items(dbtx, &UnsignedTransactionPrefixKey, |_, v| {
             v.change.to_sat() as i64 * 1000
@@ -718,18 +718,18 @@ impl ServerModulePlugin for Wallet {
             api_endpoint! {
                 "/block_height",
                 async |module: &Wallet, dbtx, _params: ()| -> u32 {
-                    Ok(module.consensus_height(&dbtx).unwrap_or(0))
+                    Ok(module.consensus_height(&mut dbtx).unwrap_or(0))
                 }
             },
             api_endpoint! {
                 "/peg_out_fees",
                 async |module: &Wallet, dbtx, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let consensus = module.current_round_consensus(&dbtx).unwrap();
+                    let consensus = module.current_round_consensus(&mut dbtx).unwrap();
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
-                        module.available_utxos(&dbtx),
+                        module.available_utxos(&mut dbtx),
                         consensus.fee_rate,
                         &consensus.randomness_beacon
                     );
@@ -958,7 +958,10 @@ impl Wallet {
         median_proposal
     }
 
-    pub fn current_round_consensus(&self, dbtx: &DatabaseTransaction) -> Option<RoundConsensus> {
+    pub fn current_round_consensus(
+        &self,
+        dbtx: &mut DatabaseTransaction,
+    ) -> Option<RoundConsensus> {
         dbtx.get_value(&RoundConsensusKey).expect("DB error")
     }
 
@@ -971,7 +974,7 @@ impl Wallet {
         our_network_height.saturating_sub(self.cfg.finality_delay)
     }
 
-    pub fn consensus_height(&self, dbtx: &DatabaseTransaction) -> Option<u32> {
+    pub fn consensus_height(&self, dbtx: &mut DatabaseTransaction) -> Option<u32> {
         self.current_round_consensus(dbtx).map(|rc| rc.block_height)
     }
 
@@ -1075,7 +1078,7 @@ impl Wallet {
         }
     }
 
-    fn block_is_known(&self, dbtx: &DatabaseTransaction, block_hash: BlockHash) -> bool {
+    fn block_is_known(&self, dbtx: &mut DatabaseTransaction, block_hash: BlockHash) -> bool {
         dbtx.get_value(&BlockHashKey(block_hash))
             .expect("DB error")
             .is_some()
@@ -1083,7 +1086,7 @@ impl Wallet {
 
     fn create_peg_out_tx(
         &self,
-        dbtx: &DatabaseTransaction,
+        dbtx: &mut DatabaseTransaction,
         peg_out: &PegOut,
     ) -> Option<UnsignedTransaction> {
         let change_tweak = self
@@ -1099,13 +1102,13 @@ impl Wallet {
         )
     }
 
-    fn available_utxos(&self, dbtx: &DatabaseTransaction) -> Vec<(UTXOKey, SpendableUTXO)> {
+    fn available_utxos(&self, dbtx: &mut DatabaseTransaction) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .collect::<Result<_, _>>()
             .expect("DB error")
     }
 
-    pub fn get_wallet_value(&self, dbtx: &DatabaseTransaction) -> bitcoin::Amount {
+    pub fn get_wallet_value(&self, dbtx: &mut DatabaseTransaction) -> bitcoin::Amount {
         let sat_sum = self
             .available_utxos(dbtx)
             .into_iter()

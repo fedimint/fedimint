@@ -179,7 +179,7 @@ impl FedimintConsensus {
                 .get(&output.module_key())
                 .expect("Parsing the input should fail if the module doesn't exist");
             let amount = module
-                .validate_output(&dbtx, output)
+                .validate_output(&mut dbtx, output)
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
         }
@@ -385,18 +385,22 @@ impl FedimintConsensus {
     }
 
     pub async fn await_consensus_proposal(&self) {
-        let dbtx = self.database_transaction();
         let proposal_futures = self
             .modules
             .iter()
-            .map(|(_, module)| module.await_consensus_proposal(&dbtx))
+            .map(|(_, module)| {
+                Box::pin(async {
+                    let mut dbtx = self.database_transaction();
+                    module.await_consensus_proposal(&mut dbtx).await
+                })
+            })
             .collect::<Vec<_>>();
 
         select_all(proposal_futures).await;
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
-        let dbtx = self.database_transaction();
+        let mut dbtx = self.database_transaction();
 
         let drop_peers = dbtx
             .find_by_prefix(&DropPeerKeyPrefix)
@@ -417,7 +421,7 @@ impl FedimintConsensus {
         for module in self.modules.values() {
             items.extend(
                 module
-                    .consensus_proposal(&dbtx)
+                    .consensus_proposal(&mut dbtx)
                     .await
                     .into_iter()
                     .map(ConsensusItem::Module),
@@ -561,10 +565,10 @@ impl FedimintConsensus {
     }
 
     pub fn audit(&self) -> Audit {
-        let dbtx = self.database_transaction();
+        let mut dbtx = self.database_transaction();
         let mut audit = Audit::default();
         for module in self.modules.values() {
-            module.audit(&dbtx, &mut audit)
+            module.audit(&mut dbtx, &mut audit)
         }
         audit
     }

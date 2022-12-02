@@ -12,10 +12,8 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
-
-use fedimint_mint::{MintOutputConfirmation, OutputConfirmationSignatures};
-
 use fedimint_mint::config::MintClientConfig;
+use fedimint_mint::{MintOutputConfirmation, OutputConfirmationSignatures};
 use fedimint_server::all_decoders;
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;

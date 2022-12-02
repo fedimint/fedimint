@@ -272,7 +272,7 @@ pub struct MintOutput(pub TieredMulti<BlindNonce>);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct MintOutputOutcome(pub Option<OutputOutcome>);
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ServerModulePlugin for Mint {
     type Decoder = MintModuleDecoder;
     type Input = MintInput;
@@ -289,13 +289,16 @@ impl ServerModulePlugin for Mint {
         MintModuleDecoder
     }
 
-    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) {
+    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
         if self.consensus_proposal(dbtx).await.is_empty() {
             std::future::pending().await
         }
     }
 
-    async fn consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) -> Vec<Self::ConsensusItem> {
+    async fn consensus_proposal(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Vec<Self::ConsensusItem> {
         dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 let (key, signatures) = res.expect("DB error");
@@ -414,7 +417,7 @@ impl ServerModulePlugin for Mint {
 
     fn validate_output(
         &self,
-        _dbtx: &DatabaseTransaction,
+        _dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
@@ -610,7 +613,7 @@ impl ServerModulePlugin for Mint {
         }
     }
 
-    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
+    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
         audit.add_items(dbtx, &MintAuditItemKeyPrefix, |k, v| match k {
             MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
             MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
@@ -638,7 +641,7 @@ impl ServerModulePlugin for Mint {
                 "/recover",
                 async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Vec<u8> {
                     module
-                        .handle_recover_request(&dbtx, id).await
+                        .handle_recover_request(&mut dbtx, id).await
                         .ok_or_else(|| ApiError::not_found(String::from("Backup not found")))
                 }
             },
@@ -680,7 +683,7 @@ impl Mint {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<Vec<u8>> {
         dbtx.get_value(&EcashBackupKey(id))

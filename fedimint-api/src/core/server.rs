@@ -19,7 +19,7 @@ use crate::module::{
 };
 
 pub trait ModuleVerificationCache: Debug {
-    fn as_any(&self) -> &(dyn Any + 'static);
+    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> VerificationCache;
 }
@@ -37,7 +37,7 @@ impl<T> ModuleVerificationCache for T
 where
     T: PluginVerificationCache + 'static,
 {
-    fn as_any(&self) -> &(dyn Any + 'static) {
+    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync) {
         self
     }
 
@@ -52,7 +52,7 @@ where
 /// Backend side module interface
 ///
 /// Server side Fedimint mondule needs to implement this trait.
-#[async_trait(?Send)]
+#[async_trait]
 pub trait IServerModule: Debug {
     fn module_key(&self) -> ModuleKey;
 
@@ -69,10 +69,10 @@ pub trait IServerModule: Debug {
     fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>);
+    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) -> Vec<ConsensusItem>;
+    async fn consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -123,7 +123,7 @@ pub trait IServerModule: Debug {
     /// and merely generate a warning.
     fn validate_output(
         &self,
-        dbtx: &DatabaseTransaction,
+        dbtx: &mut DatabaseTransaction,
         output: &Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -168,7 +168,7 @@ pub trait IServerModule: Debug {
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit);
+    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///
@@ -209,10 +209,10 @@ impl ModuleDecode for ServerModule {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<T> IServerModule for T
 where
-    T: ServerModulePlugin + 'static,
+    T: ServerModulePlugin + 'static + Sync,
     <T as ServerModulePlugin>::Decoder: Sync + Send + 'static,
 {
     fn module_key(&self) -> ModuleKey {
@@ -244,12 +244,12 @@ where
     }
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) {
+    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
         <Self as ServerModulePlugin>::await_consensus_proposal(self, dbtx).await
     }
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self, dbtx: &DatabaseTransaction<'_>) -> Vec<ConsensusItem> {
+    async fn consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<ConsensusItem> {
         <Self as ServerModulePlugin>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
@@ -367,7 +367,7 @@ where
     /// and merely generate a warning.
     fn validate_output(
         &self,
-        dbtx: &DatabaseTransaction,
+        dbtx: &mut DatabaseTransaction,
         output: &Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModulePlugin>::validate_output(
@@ -436,7 +436,7 @@ where
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, dbtx: &DatabaseTransaction<'_>, audit: &mut Audit) {
+    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
         <Self as ServerModulePlugin>::audit(self, dbtx, audit)
     }
 
