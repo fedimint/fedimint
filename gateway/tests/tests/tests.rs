@@ -2,6 +2,7 @@ mod fixtures;
 
 use std::future::Future;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::Result;
 use fixtures::{fixtures, Fixtures};
@@ -12,6 +13,7 @@ use ln_gateway::{
         rpc_client::RpcClient, BalancePayload, DepositAddressPayload, DepositPayload,
         RegisterFedPayload, WithdrawPayload,
     },
+    utils::retry,
 };
 use mint_client::api::WsFederationConnect;
 use mint_client::FederationId;
@@ -124,10 +126,35 @@ where
 {
     assert_eq!(
         // use random password here
-        func("foobar123456789".to_string()).await?.status(),
+        retry(
+            "fn".to_string(),
+            || async {
+                func("foobar123456789".to_string())
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))
+            },
+            Duration::from_secs(1),
+            3,
+        )
+        .await?
+        .status(),
         401
     );
-    assert_ne!(func(gw_password.to_string()).await?.status(), 401);
+    assert_ne!(
+        retry(
+            "fn".to_string(),
+            || async {
+                func(gw_password.to_string())
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))
+            },
+            Duration::from_secs(1),
+            3,
+        )
+        .await?
+        .status(),
+        401
+    );
 
     Ok(())
 }
