@@ -96,6 +96,16 @@ pub struct LightningInput {
     pub witness: Option<Preimage>,
 }
 
+impl std::fmt::Display for LightningInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Lightning Contract {} with amount {}",
+            self.contract_id, self.amount
+        )
+    }
+}
+
 /// Represents an output of the Lightning module.
 ///
 /// There are three sub-types:
@@ -122,6 +132,38 @@ pub enum LightningOutput {
     },
 }
 
+impl std::fmt::Display for LightningOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LightningOutput::Contract(ContractOutput { amount, contract }) => match contract {
+                Contract::Account(acc) => {
+                    write!(f, "LN Account Contract for {} key {}", amount, acc.key)
+                }
+                Contract::Incoming(incoming) => {
+                    write!(
+                        f,
+                        "LN Incoming Contract for {} hash {}",
+                        amount, incoming.hash
+                    )
+                }
+                Contract::Outgoing(outgoing) => {
+                    write!(
+                        f,
+                        "LN Outgoing Contract for {} hash {}",
+                        amount, outgoing.hash
+                    )
+                }
+            },
+            LightningOutput::Offer(offer) => {
+                write!(f, "LN offer for {} with hash {}", offer.amount, offer.hash)
+            }
+            LightningOutput::CancelOutgoing { contract, .. } => {
+                write!(f, "LN outgoing contract cancellation {}", contract)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractOutput {
     pub amount: fedimint_api::Amount,
@@ -145,6 +187,19 @@ pub enum LightningOutputOutcome {
     },
 }
 
+impl std::fmt::Display for LightningOutputOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LightningOutputOutcome::Contract { id, .. } => {
+                write!(f, "LN Contract {}", id)
+            }
+            LightningOutputOutcome::Offer { id } => {
+                write!(f, "LN Offer {}", id)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
@@ -156,6 +211,12 @@ pub struct LightningGateway {
 pub struct LightningConsensusItem {
     pub contract_id: ContractId,
     pub share: PreimageDecryptionShare,
+}
+
+impl std::fmt::Display for LightningConsensusItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LN Decryption Share for contract {}", self.contract_id)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
