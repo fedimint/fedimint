@@ -12,11 +12,13 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
-use fedimint_mint::config::MintClientConfig;
+
 use fedimint_mint::{MintOutputConfirmation, OutputConfirmationSignatures};
-use fedimint_server::all_decoders;
+
+use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::legacy::Output;
+use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
@@ -27,7 +29,7 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use tokio::time::timeout;
 use tracing::debug;
 
-use crate::fixtures::{assert_ci, create_user_client, peers, FederationTest, UserTest};
+use crate::fixtures::{assert_ci, create_user_client, msats, peers, FederationTest, UserTest};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {
@@ -39,7 +41,7 @@ async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
 
     let peg_in_address = user.client.get_new_pegin_address(rng()).await;
     let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(peg_in_amount));
@@ -66,7 +68,7 @@ async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {
         .await
         .unwrap();
     assert!(matches!(
-            assert_ci(fed.last_consensus_items().first().unwrap()), 
+            assert_ci(fed.last_consensus_items().first().unwrap()),
             PegOutSignature(PegOutSignatureItem {
                 txid,
                 ..
@@ -92,7 +94,7 @@ async fn peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let peg_out_amount = Amount::from_sat(1000);
     let peg_out_address = bitcoin.get_new_address();
 
@@ -119,7 +121,7 @@ async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let address1 = bitcoin.get_new_address();
     let address2 = bitcoin.get_new_address();
 
@@ -149,7 +151,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let address1 = bitcoin.get_new_address();
     let address2 = bitcoin.get_new_address();
 
@@ -184,7 +186,7 @@ async fn ecash_can_be_exchanged_directly_between_users() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(4, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(4).await?;
 
     let user_receive = UserTest::new(Arc::new(
         create_user_client(
@@ -218,7 +220,7 @@ async fn ecash_cannot_double_spent_with_different_nodes() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
     fed.mine_and_mint(&user1, &*bitcoin, sats(5000)).await;
     let ecash = fed.spend_ecash(&user1, sats(2000)).await;
 
@@ -251,7 +253,7 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(100), sats(500)]).await?;
+    } = fixtures(2).await?;
 
     let user_receive = UserTest::new(Arc::new(
         create_user_client(
@@ -261,16 +263,21 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         )
         .await,
     ));
-
-    fed.mine_and_mint(&user_send, &*bitcoin, sats(1100)).await;
-    assert_eq!(
-        user_send.coin_amounts(),
-        vec![sats(100), sats(500), sats(500)]
-    );
+    fed.mine_and_mint(&user_send, &*bitcoin, sats(1000)).await;
+    let coins = vec![
+        msats(64),
+        msats(512),
+        msats(16384),
+        msats(65536),
+        msats(131072),
+        msats(262144),
+        msats(524288),
+    ];
+    assert_eq!(user_send.coin_amounts(), coins);
 
     user_receive
         .client
-        .receive_coins(sats(400), |coins| async {
+        .receive_coins(msats(327744), |coins| async {
             user_send
                 .client
                 .pay_to_blind_nonces(coins, rng())
@@ -282,11 +289,12 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
     user_receive
-        .assert_coin_amounts(vec![sats(100), sats(100), sats(100), sats(100)])
+        .assert_coin_amounts(vec![msats(64), msats(65536), msats(262144)])
         .await;
     user_send
-        .assert_coin_amounts(vec![sats(100), sats(100), sats(500)])
+        .assert_coin_amounts(vec![msats(512), msats(16384), msats(131072), msats(524288)])
         .await;
+
     assert_eq!(fed.max_balance_sheet(), 0);
 
     task_group.shutdown_join_all().await
@@ -320,7 +328,7 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(4, &[sats(1), sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(4).await?;
     fed.mine_and_mint(&user, &*bitcoin, sats(3000)).await;
 
     let peg_out_address = bitcoin.get_new_address();
@@ -355,7 +363,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
         gateway,
         task_group,
         ..
-    } = fixtures(4, &[sats(100), sats(1000)]).await?;
+    } = fixtures(4).await?;
     let payment_amount = sats(2000);
     fed.mine_and_mint(&gateway.user, &*bitcoin, sats(3000))
         .await;
@@ -411,7 +419,7 @@ async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(4, &[sats(100), sats(1000)]).await?;
+    } = fixtures(4).await?;
     fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
         .await;
     fed.database_add_coins_for_user(&user, sats(2000)).await;
@@ -433,7 +441,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(4, &[sats(100), sats(1000)]).await?;
+    } = fixtures(4).await?;
     fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
         .await;
     let out_point = fed.database_add_coins_for_user(&user, sats(2000)).await;
@@ -464,7 +472,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         lightning,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
 
     // Fund the gateway so it can route internal payments
     fed.mine_and_mint(&gateway.user, &*bitcoin, sats(2000))
@@ -573,7 +581,7 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
         lightning,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let invoice = lightning.invoice(sats(1000), None).await;
 
     fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
@@ -627,7 +635,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         lightning,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
 
     // Fund the gateway so it can route internal payments
     fed.mine_and_mint(&gateway.user, &*bitcoin, sats(2000))
@@ -705,7 +713,7 @@ async fn set_lightning_invoice_expiry() -> Result<()> {
         lightning,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let invoice = lightning.invoice(sats(1000), 600.into());
     assert_eq!(invoice.await.expiry_time(), Duration::from_secs(600));
 
@@ -723,7 +731,7 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         gateway,
         task_group,
         ..
-    } = fixtures(2, &[sats(1000), sats(100)]).await?;
+    } = fixtures(2).await?;
     fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
         .await;
     assert_eq!(user.total_coins(), sats(0));
@@ -799,7 +807,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         gateway,
         task_group,
         ..
-    } = fixtures(2, &[sats(1000), sats(100)]).await?;
+    } = fixtures(2).await?;
     fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
         .await;
     assert_eq!(user.total_coins(), sats(0));
@@ -816,25 +824,8 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
-    let tbs_pks = &user
-        .config
-        .0
-        .get_module::<MintClientConfig>("mint")?
-        .tbs_pks;
-    let context = &user.client.mint_client().context;
-    let mut dbtx = context.db.begin_transaction(all_decoders());
-    let client = &user.client;
-    let tx = builder
-        .build(
-            sats(0),
-            &mut dbtx,
-            |amount| async move { client.mint_client().new_ecash_note(&secp(), amount).await },
-            &secp(),
-            tbs_pks,
-            rng(),
-        )
-        .await;
-    fed.submit_transaction(tx.into_type_erased());
+    let tx = user.create_tx(builder).await;
+    fed.submit_transaction(tx.into_type_erased()).unwrap();
     fed.run_consensus_epochs(1).await; // process offer
 
     // Gateway escrows ecash to trigger preimage decryption by the federation
@@ -885,7 +876,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
         lightning,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let invoice = lightning.invoice(sats(1000), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -932,7 +923,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()
         lightning,
         task_group,
         ..
-    } = fixtures(2, &[sats(10), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let invoice = lightning.invoice(sats(1000), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -983,7 +974,7 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
 
     let user_receive = UserTest::new(Arc::new(
         create_user_client(
@@ -1023,7 +1014,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let peg_in_address = user.client.get_new_pegin_address(rng()).await;
     bitcoin.mine_blocks(100);
     let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(1000));
@@ -1055,7 +1046,7 @@ async fn audit_negative_balance_sheet_panics() {
         user,
         task_group,
         ..
-    }) = fixtures(2, &[sats(100), sats(1000)]).await
+    }) = fixtures(2).await
     {
         fed.mint_coins_for_user(&user, sats(2000)).await;
         fed.run_consensus_epochs(1).await;
@@ -1069,21 +1060,23 @@ async fn unbalanced_transactions_get_rejected() -> Result<()> {
         fed,
         user,
         bitcoin,
-        lightning,
         task_group,
         ..
-    } = fixtures(2, &[sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
+
     // cannot make change for this invoice (results in unbalanced tx)
-    let invoice = lightning.invoice(sats(777), None);
+    fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
+    let mut builder = TransactionBuilder::default();
+    builder
+        .input_coins(user.client.mint_client().coins())
+        .unwrap();
+    let tx = user.create_tx(builder).await;
+    let response = fed.submit_transaction(tx.into_type_erased());
 
-    fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
-    let response = user
-        .client
-        .fund_outgoing_ln_contract(invoice.await, rng())
-        .await;
-
-    // TODO return a more useful error
-    assert!(response.is_err());
+    assert_matches!(
+        response,
+        Err(TransactionError(UnbalancedTransaction { .. }))
+    );
 
     task_group.shutdown_join_all().await
 }
@@ -1096,7 +1089,7 @@ async fn can_have_federations_with_one_peer() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(1, &[sats(100), sats(1000)]).await?;
+    } = fixtures(1).await?;
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     user.assert_total_coins(sats(1000)).await;
 
@@ -1111,7 +1104,7 @@ async fn can_get_signed_epoch_history() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
@@ -1135,7 +1128,7 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(4, &[sats(100), sats(1000)]).await?;
+    } = fixtures(4).await?;
 
     // Keep peer 3 out of consensus
     bitcoin.mine_blocks(110);
@@ -1177,7 +1170,7 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
         bitcoin,
         task_group,
         ..
-    } = fixtures(2, &[sats(100), sats(1000)]).await?;
+    } = fixtures(2).await?;
     let peer0 = fed.subset_peers(&[0]);
     let peer1 = fed.subset_peers(&[1]);
 

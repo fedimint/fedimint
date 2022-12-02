@@ -72,15 +72,10 @@ enum Command {
         #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
         bitcoind_rpc: String,
 
-        /// Available denominations of notes issues by the federation (comma separated)
-        /// default = 1 msat - 1M sats by powers of 10
-        #[arg(
-        long = "denominations",
-        value_delimiter = ',',
-        num_args = 1..,
-        default_value = "1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000"
-        )]
-        denominations: Vec<Amount>,
+        /// Max denomination of notes issued by the federation (in millisats)
+        /// default = 1 BTC
+        #[arg(long = "max_denomination", default_value = "100000000000")]
+        max_denomination: Amount,
 
         /// The bitcoin network that fedimint will be running on
         #[arg(long = "network", default_value = "regtest")]
@@ -158,7 +153,7 @@ async fn main() {
             certs,
             bind_address,
             bitcoind_rpc,
-            denominations,
+            max_denomination,
             network,
             finality_delay,
             password,
@@ -168,7 +163,7 @@ async fn main() {
             let server = if let Ok(v) = run_dkg(
                 bind_address,
                 &dir_out_path,
-                denominations,
+                max_denomination,
                 federation_name,
                 certs,
                 bitcoind_rpc,
@@ -239,7 +234,7 @@ fn salt_file_path_from_file_path(file_path: &Path) -> PathBuf {
 async fn run_dkg(
     bind_address: String,
     dir_out_path: &Path,
-    denominations: Vec<Amount>,
+    max_denomination: Amount,
     federation_name: String,
     certs: Vec<String>,
     bitcoind_rpc: String,
@@ -267,7 +262,7 @@ async fn run_dkg(
         bind_address,
         pk,
         our_id,
-        denominations,
+        max_denomination,
         &peers,
         federation_name,
         bitcoind_rpc,

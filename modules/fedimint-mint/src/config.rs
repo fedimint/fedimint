@@ -5,6 +5,7 @@ use anyhow::bail;
 use fedimint_api::config::{ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
 
@@ -57,6 +58,9 @@ impl TypedServerModuleConfig for MintConfig {
             self.peer_tbs_pks.get(identity).unwrap().as_map().clone();
         if sks != pks {
             bail!("Mint private key doesn't match pubkey share");
+        }
+        if !sks.keys().contains(&Amount::from_msat(1)) {
+            bail!("No msat 1 denomination");
         }
 
         Ok(())
