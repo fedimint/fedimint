@@ -199,13 +199,7 @@ where
     C: Encodable,
 {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += (self.iter_items().count() as u64).consensus_encode(writer)?;
-        for (amount, i) in self.iter_items() {
-            len += amount.consensus_encode(writer)?;
-            len += i.consensus_encode(writer)?;
-        }
-        Ok(len)
+        self.0.consensus_encode(writer)
     }
 }
 
@@ -220,14 +214,7 @@ where
     where
         M: ModuleDecode,
     {
-        let mut res = BTreeMap::new();
-        let len = u64::consensus_decode(d, modules)?;
-        for _ in 0..len {
-            let amt = Amount::consensus_decode(d, modules)?;
-            let v = C::consensus_decode(d, modules)?;
-            res.entry(amt).or_insert_with(Vec::new).push(v);
-        }
-        Ok(TieredMulti(res))
+        Ok(TieredMulti(BTreeMap::consensus_decode(d, modules)?))
     }
 }
 

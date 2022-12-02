@@ -121,7 +121,12 @@ impl MintClient {
 
         let mut dbtx = self.start_dbtx();
         let notes = self.get_available_notes(&mut dbtx);
-        let last_idx = self.get_last_note_index(&mut dbtx);
+        let last_idx = Tiered::from_iter(
+            self.config
+                .tbs_pks
+                .tiers()
+                .map(|&amount| (amount, self.get_last_note_index(&mut dbtx, amount))),
+        );
 
         Ok(PlaintextEcashBackup {
             notes,
@@ -153,7 +158,7 @@ impl MintClient {
 pub struct PlaintextEcashBackup {
     notes: TieredMulti<SpendableNote>,
     epoch: u64,
-    last_idx: NoteIndex,
+    last_idx: Tiered<NoteIndex>,
 }
 
 impl PlaintextEcashBackup {

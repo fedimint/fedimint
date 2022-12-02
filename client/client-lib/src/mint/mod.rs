@@ -157,20 +157,24 @@ impl MintClient {
             .collect()
     }
 
-    pub fn get_last_note_index(&self, dbtx: &mut DatabaseTransaction<'_>) -> NoteIndex {
+    pub fn get_last_note_index(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        amount: Amount,
+    ) -> NoteIndex {
         NoteIndex(
-            dbtx.get_value(&LastECashNoteIndexKey)
+            dbtx.get_value(&LastECashNoteIndexKey(amount))
                 .expect("DB error")
                 .unwrap_or(0),
         )
     }
 
-    async fn new_note_secret(&self) -> DerivableSecret {
+    async fn new_note_secret(&self, amount: Amount) -> DerivableSecret {
         let mut new_idx;
         loop {
             let mut dbtx = self.start_dbtx();
-            new_idx = self.get_last_note_index(&mut dbtx).next();
-            dbtx.insert_entry(&LastECashNoteIndexKey, &new_idx.as_u64())
+            new_idx = self.get_last_note_index(&mut dbtx, amount).next();
+            dbtx.insert_entry(&LastECashNoteIndexKey(amount), &new_idx.as_u64())
                 .await
                 .expect("DB error");
             if dbtx.commit_tx().await.is_ok() {
@@ -180,14 +184,16 @@ impl MintClient {
 
         self.secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
+            .child_key(ChildId(amount.milli_sat))
             .child_key(ChildId(new_idx.as_u64()))
     }
 
     pub async fn new_ecash_note<C: Signing>(
         &self,
         ctx: &Secp256k1<C>,
+        amount: Amount,
     ) -> (NoteIssuanceRequest, BlindNonce) {
-        let secret = self.new_note_secret().await;
+        let secret = self.new_note_secret(amount).await;
         NoteIssuanceRequest::new(ctx, secret)
     }
 
@@ -216,7 +222,7 @@ impl MintClient {
             .build(
                 change_required,
                 &mut dbtx,
-                || async { self.new_ecash_note(&self.context.secp).await },
+                |note_amount| async move { self.new_ecash_note(&self.context.secp, note_amount).await },
                 &self.context.secp,
                 &self.config.tbs_pks,
                 rng,
@@ -242,7 +248,7 @@ impl MintClient {
     ) where
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
-        G: FnMut() -> GFut,
+        G: FnMut(Amount) -> GFut,
         GFut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
     {
         let mut builder = TransactionBuilder::default();
@@ -678,7 +684,11 @@ mod tests {
             .receive_coins(
                 amt,
                 &mut dbtx,
-                || async { client.new_ecash_note(secp256k1_zkp::SECP256K1).await },
+                |note_amount| async move {
+                    client
+                        .new_ecash_note(secp256k1_zkp::SECP256K1, note_amount)
+                        .await
+                },
                 |output| async {
                     // Agree on output
                     let mut fed = block_on(fed.lock());
@@ -739,11 +749,12 @@ mod tests {
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
+        let client = &client;
         builder
             .build(
                 Amount::from_sat(0),
                 &mut dbtx,
-                || async { client.new_ecash_note(secp).await },
+                |note_amount| async move { client.new_ecash_note(secp, note_amount).await },
                 secp,
                 tbs_pks,
                 rng,
@@ -786,7 +797,7 @@ mod tests {
             .build(
                 Amount::from_sat(0),
                 &mut dbtx,
-                || async { client.new_ecash_note(secp).await },
+                |note_amount| async move { client.new_ecash_note(secp, note_amount).await },
                 secp,
                 tbs_pks,
                 rng,
@@ -828,6 +839,7 @@ mod tests {
             secret: DerivableSecret::new(&[], &[]),
         };
         let client_copy = client.clone();
+        let amount = Amount::from_milli_sats(1);
 
         let issuance_thread = move || {
             (0..ITERATIONS)
@@ -835,7 +847,9 @@ mod tests {
                     |_| {
                         let client = client_copy.clone();
                         block_on(async {
-                            let (_, nonce) = client.new_ecash_note(secp256k1_zkp::SECP256K1).await;
+                            let (_, nonce) = client
+                                .new_ecash_note(secp256k1_zkp::SECP256K1, amount)
+                                .await;
                             Some(nonce)
                         })
                     }
@@ -867,7 +881,7 @@ mod tests {
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .get_value(&LastECashNoteIndexKey)
+            .get_value(&LastECashNoteIndexKey(amount))
             .expect("DB error")
             .unwrap_or(0);
         // Ensure we didn't skip any keys
