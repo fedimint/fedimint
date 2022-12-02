@@ -85,11 +85,12 @@ For deriving e-cash notes we define the following derivation path:
 
 * **module_id**: The mint module has id `0`
 * **mint_module_key_type**: The key type of e-cash tokens inside the mint module is `0`
+* **amount**: The value of the note (in msats)
 * **index**: Index of the e-cash note to be minted, automatically incremented
 * **key_type**: `0` for the secp256k1 spend key, `1` for the BLS12-381 blinding key
 
 ```
-[federation_id, module_id, mint_module_key_type, index, key_type]
+[federation_id, module_id, mint_module_key_type, amount, index, key_type]
 ```
 
 The **spend keys** are secp256k1 secret keys. Their corresponding compressed public key is used as the
@@ -97,6 +98,12 @@ e-cash note nonce.
 
 The **blinding keys** are BLS12-381 secret keys and are used to blind the e-cash note nonces and to unblind
 issued blind signatures.
+
+The **amount** is included in the path to prevent hypothetical attacks where a malicious
+user would race to mint notes with the same blind nonce, but a different amount trying to
+confuse the recovery code to use a smaller denomination version and loose money. By
+including **amount** in the derivation, the e-cash recovery code knows the expected
+denomination beforehand.
 
 [^1]: See BSI [TR-03111] section 4.1.1 and [TR-02102] section B.4 for details.
 
