@@ -48,9 +48,8 @@ async fn test_gateway_authentication() -> Result<()> {
         })
         .await;
 
-    // Create an RPC client
-    let client = RpcClient::new(gw_announce_address);
-    let client_ref = &client;
+    // Create an RPC client reference
+    let client_ref = &RpcClient::new(gw_announce_address);
 
     // Test gateway authentication on `register_federation` function
     // *  `register_federation` with correct password succeeds
@@ -120,16 +119,16 @@ async fn test_gateway_authentication() -> Result<()> {
     task_group.shutdown_join_all().await
 }
 
+/// Test that a given endpoint/functionality of func fails with the wrong password but works with the correct one
 async fn test_auth<Fut>(gw_password: &str, func: impl Fn(String) -> Fut) -> Result<()>
 where
     Fut: Future<Output = Result<Response, Error>>,
 {
     assert_eq!(
-        // use random password here
         retry(
             "fn".to_string(),
             || async {
-                func("foobar123456789".to_string())
+                func(format!("foobar{}", gw_password))
                     .await
                     .map_err(|e| anyhow::anyhow!(e))
             },
