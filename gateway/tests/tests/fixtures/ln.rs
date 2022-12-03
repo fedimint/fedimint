@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -7,6 +7,7 @@ use fedimint_ln::contracts::Preimage;
 use lightning_invoice::Invoice;
 use ln_gateway::ln::{LightningError, LnRpc};
 use rand::rngs::OsRng;
+use tokio::sync::Mutex;
 
 pub struct MockLnRpc {
     pub preimage: Preimage,
@@ -39,7 +40,7 @@ impl LnRpc for MockLnRpc {
         _max_delay: u64,
         _max_fee_percent: f64,
     ) -> Result<Preimage, LightningError> {
-        *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
+        *self.amount_sent.lock().await += invoice.amount_milli_satoshis().unwrap();
 
         Ok(self.preimage.clone())
     }

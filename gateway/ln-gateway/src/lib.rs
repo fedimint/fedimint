@@ -9,7 +9,7 @@ pub mod utils;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -24,7 +24,7 @@ use mint_client::{
     FederationId, GatewayClient,
 };
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
 
 use crate::{
@@ -94,10 +94,10 @@ impl LnGateway {
         }
     }
 
-    fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
         self.actors
             .lock()
-            .map_err(|_| LnGatewayError::Other(anyhow::anyhow!("Failed to select an actor")))?
+            .await
             .get(&federation_id.hash())
             .cloned()
             .ok_or(LnGatewayError::UnknownFederation)
@@ -120,9 +120,10 @@ impl LnGateway {
                 .expect("Failed to create actor"),
         );
 
-        if let Ok(mut actors) = self.actors.lock() {
-            actors.insert(federation_id.hash(), actor.clone());
-        }
+        self.actors
+            .lock()
+            .await
+            .insert(federation_id.hash(), actor.clone());
         Ok(actor)
     }
 
@@ -167,15 +168,18 @@ impl LnGateway {
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        if let Ok(actors) = self.actors.lock() {
-            return Ok(GatewayInfo {
-                version_hash: env!("GIT_HASH").to_string(),
-                federations: actors.iter().map(|(_, actor)| actor.id.clone()).collect(),
-            });
-        }
-        Err(LnGatewayError::Other(anyhow::anyhow!(
-            "Failed to fetch gateway get info"
-        )))
+        let federations = self
+            .actors
+            .lock()
+            .await
+            .iter()
+            .map(|(_, actor)| actor.id.clone())
+            .collect();
+
+        Ok(GatewayInfo {
+            federations,
+            version_hash: env!("GIT_HASH").to_string(),
+        })
     }
 
     async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
@@ -188,7 +192,8 @@ impl LnGateway {
         // FIXME: Issue 664: We should avoid having a special reference to a federation
         // all requests, including `ReceivePaymentPayload`, should contain the federation id
         // TODO: Parse federation id from routing hint in htlc_accepted message
-        self.select_actor(self.config.default_federation.clone())?
+        self.select_actor(self.config.default_federation.clone())
+            .await?
             .buy_preimage_internal(&payment_hash, &invoice_amount)
             .await
     }
@@ -199,7 +204,7 @@ impl LnGateway {
             contract_id,
         } = payload;
 
-        let actor = self.select_actor(federation_id)?;
+        let actor = self.select_actor(federation_id).await?;
         let outpoint = actor.pay_invoice(self.ln_rpc.clone(), contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
@@ -208,13 +213,15 @@ impl LnGateway {
     }
 
     async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
-        self.select_actor(payload.federation_id)?
+        self.select_actor(payload.federation_id)
+            .await?
             .get_balance()
             .await
     }
 
     async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
-        self.select_actor(payload.federation_id)?
+        self.select_actor(payload.federation_id)
+            .await?
             .get_deposit_address()
             .await
     }
@@ -226,7 +233,8 @@ impl LnGateway {
             federation_id,
         } = payload;
 
-        self.select_actor(federation_id)?
+        self.select_actor(federation_id)
+            .await?
             .deposit(txout_proof, transaction)
             .await
     }
@@ -238,7 +246,8 @@ impl LnGateway {
             federation_id,
         } = payload;
 
-        self.select_actor(federation_id)?
+        self.select_actor(federation_id)
+            .await?
             .withdraw(amount, address)
             .await
     }
