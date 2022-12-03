@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use async_trait::async_trait;
 use bitcoin::{secp256k1, Address};
 use fedimint_api::{backup::SignedBackupRequest, TransactionId};
@@ -16,6 +14,7 @@ use fedimint_core::{
     transaction::legacy::Transaction as LegacyTransaction,
 };
 use mint_client::api::{ApiError, IFederationApi};
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub struct MockApi {
@@ -67,14 +66,14 @@ impl IFederationApi for MockApi {
         Ok(self
             .gateway
             .lock()
-            .expect("failed to read registered gateways")
+            .await
             .clone()
             .into_iter()
             .collect::<Vec<LightningGateway>>())
     }
 
     async fn register_gateway(&self, gateway: LightningGateway) -> Result<(), ApiError> {
-        *self.gateway.lock().expect("Failed to register gateway") = Some(gateway);
+        *self.gateway.lock().await = Some(gateway);
         Ok(())
     }
 
