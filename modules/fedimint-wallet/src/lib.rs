@@ -80,6 +80,19 @@ pub enum WalletConsensusItem {
     PegOutSignature(PegOutSignatureItem),
 }
 
+impl std::fmt::Display for WalletConsensusItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WalletConsensusItem::RoundConsensus(rc) => {
+                write!(f, "Wallet Block Height {}", rc.block_height)
+            }
+            WalletConsensusItem::PegOutSignature(sig) => {
+                write!(f, "Wallet PegOut signature for Bitcoin TxId {}", sig.txid)
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RoundConsensusItem {
     pub block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
@@ -192,6 +205,12 @@ pub struct PegOut {
 /// Contains the Bitcoin transaction id of the transaction created by the withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletOutputOutcome(pub bitcoin::Txid);
+
+impl std::fmt::Display for WalletOutputOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Wallet PegOut Bitcoin TxId {}", self.0)
+    }
+}
 
 pub struct WalletConfigGenerator;
 
@@ -331,9 +350,26 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletInput(pub Box<PegInProof>);
+
+impl std::fmt::Display for WalletInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Wallet PegIn with Bitcoin TxId {}",
+            self.0.outpoint().txid
+        )
+    }
+}
+
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletOutput(pub PegOut);
+
+impl std::fmt::Display for WalletOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Wallet PegOut {} to {}", self.0.amount, self.0.recipient)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletVerificationCache;

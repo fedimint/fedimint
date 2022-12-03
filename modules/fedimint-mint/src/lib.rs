@@ -263,14 +263,52 @@ impl FederationModuleConfigGen for MintConfigGenerator {
     Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
 )]
 pub struct MintInput(pub TieredMulti<Note>);
+
+impl std::fmt::Display for MintInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mint Coins {}", self.0.total_amount())
+    }
+}
+
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(
     Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
 )]
 pub struct MintOutput(pub TieredMulti<BlindNonce>);
+
+impl std::fmt::Display for MintOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mint Coins {}", self.0.total_amount())
+    }
+}
+
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct MintOutputOutcome(pub Option<OutputOutcome>);
+
+impl std::fmt::Display for MintOutputOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Some(sigs) => {
+                write!(f, "Minted notes of value {}", sigs.0.total_amount())
+            }
+            None => {
+                write!(f, "To-be-minted notes")
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for MintOutputConfirmation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Mint Blind Signature Shares worth {} for {}",
+            self.signatures.0.total_amount(),
+            self.out_point
+        )
+    }
+}
 
 #[async_trait]
 impl ServerModulePlugin for Mint {

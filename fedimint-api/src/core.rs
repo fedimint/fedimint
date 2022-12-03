@@ -4,7 +4,7 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::io;
 use std::io::Read;
 use std::sync::Arc;
@@ -87,7 +87,7 @@ macro_rules! module_plugin_trait_define {
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
         pub trait $plugin_ty:
-            std::fmt::Debug + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
+            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
         {
             fn module_key(&self) -> ModuleKey;
 
@@ -194,6 +194,17 @@ macro_rules! newtype_impl_eq_passthrough {
         }
 
         impl Eq for $newtype {}
+    };
+}
+
+/// Implementes the `Display` trait for dyn newtypes whose traits implement `Display`
+macro_rules! newtype_impl_display_passthrough {
+    ($newtype:ty) => {
+        impl std::fmt::Display for $newtype {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Display::fmt(&self.0, f)
+            }
+        }
     };
 }
 
@@ -315,7 +326,7 @@ impl Decoder {
 /// Something that can be an [`Input`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Input`] instead
-pub trait ModuleInput: Debug + DynEncodable {
+pub trait ModuleInput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> Input;
@@ -342,10 +353,12 @@ dyn_newtype_impl_dyn_clone_passhthrough!(Input);
 
 newtype_impl_eq_passthrough!(Input);
 
+newtype_impl_display_passthrough!(Input);
+
 /// Something that can be an [`Output`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Output`] instead
-pub trait ModuleOutput: Debug + DynEncodable {
+pub trait ModuleOutput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     fn module_key(&self) -> ModuleKey;
 
@@ -372,11 +385,13 @@ dyn_newtype_impl_dyn_clone_passhthrough!(Output);
 
 newtype_impl_eq_passthrough!(Output);
 
+newtype_impl_display_passthrough!(Output);
+
 pub enum FinalizationError {
     SomethingWentWrong,
 }
 
-pub trait ModuleOutputOutcome: Debug + DynEncodable {
+pub trait ModuleOutputOutcome: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     /// Module key
     fn module_key(&self) -> ModuleKey;
@@ -414,7 +429,9 @@ dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
 
 newtype_impl_eq_passthrough!(OutputOutcome);
 
-pub trait ModuleConsensusItem: Debug + DynEncodable {
+newtype_impl_display_passthrough!(OutputOutcome);
+
+pub trait ModuleConsensusItem: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
     /// Module key
     fn module_key(&self) -> ModuleKey;
@@ -441,6 +458,8 @@ module_dyn_newtype_impl_encode_decode! {
 dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
 
 newtype_impl_eq_passthrough!(ConsensusItem);
+
+newtype_impl_display_passthrough!(ConsensusItem);
 
 #[derive(Encodable, Decodable)]
 pub struct Signature;
@@ -492,6 +511,12 @@ mod tests {
             struct Foo {
                 key: u16,
                 data: u16,
+            }
+
+            impl std::fmt::Display for Foo {
+                fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    unimplemented!();
+                }
             }
 
             impl $trait for Foo {
