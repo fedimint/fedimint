@@ -483,6 +483,7 @@ dependencies = [
  "clap_derive",
  "clap_lex",
  "once_cell",
+ "strsim",
 ]
 
 [[package]]
