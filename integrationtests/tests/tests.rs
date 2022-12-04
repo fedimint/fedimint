@@ -17,6 +17,7 @@
 //! is thus undesirable.
 mod fixtures;
 
+use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -38,6 +39,7 @@ use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
 use fedimint_wallet_server::common::{PegOutFees, PegOutSignatureItem, Rbf};
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
+use mint_client::ln::LnClientError;
 use mint_client::mint::MintClient;
 use mint_client::transaction::legacy::Output;
 use mint_client::transaction::TransactionBuilder;
@@ -786,6 +788,34 @@ async fn set_lightning_invoice_expiry() -> Result<()> {
         assert_eq!(invoice.await.expiry_time(), Duration::from_secs(600));
     })
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn client_cannot_pay_expired_invoice() -> Result<()> {
+    let Fixtures {
+        fed,
+        user,
+        bitcoin,
+        lightning,
+        task_group,
+        ..
+    } = fixtures(2).await?;
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(1100)).await;
+    fed.run_consensus_epochs(1).await;
+    let invoice = lightning.invoice(sats(1000), 1.into());
+    // This does not work correctly. It should sleep 2 seconds so that the invoice is expired when fund_outgoing_ln_contract is called
+    thread::sleep(Duration::from_secs(2));
+    fed.run_consensus_epochs(1).await;
+
+    let response = user.client.fund_outgoing_ln_contract(invoice.await, rng());
+
+    // response should be an error but it returns a funded contract
+    assert_matches!(
+        response.await,
+        Err(ClientError::LnClientError(LnClientError::ExpiredInvoice))
+    );
+    task_group.shutdown_join_all().await
 }
 
 #[tokio::test(flavor = "multi_thread")]

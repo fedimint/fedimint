@@ -801,8 +801,8 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 "/clock_time",
-                async |module: &LightningModule, dbtx, _params: ()| -> SystemTime {
-                   Ok(module.consensus_clock_time(&mut dbtx).await.unwrap_or(UNIX_EPOCH))
+                async |module: &Lightning, dbtx, _params: ()| -> SystemTime {
+                   Ok(module.consensus_clock_time(dbtx).await.unwrap_or(UNIX_EPOCH))
                 }
             },
             api_endpoint! {
@@ -926,20 +926,21 @@ impl Lightning {
 
     pub async fn current_round_consensus(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> Option<RoundConsensus> {
-        dbtx.get_value(&RoundConsensusKey).await.expect("DB error")
+        dbtx.get_value(&RoundConsensusKey).await
     }
 
     pub async fn consensus_clock_time(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> Option<SystemTime> {
         self.current_round_consensus(dbtx)
             .await
             .map(|rc| rc.clock_time)
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct LightningVerificationCache;
 
