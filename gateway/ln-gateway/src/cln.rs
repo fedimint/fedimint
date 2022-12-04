@@ -77,8 +77,8 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
 
         match pubkey_result {
             Ok(Response::Getinfo(r)) => {
-                let node_pubkey_bytes = r.id;
-                Ok(secp256k1::PublicKey::from_slice(&node_pubkey_bytes.to_vec()).unwrap())
+                let node_pubkey = r.id;
+                Ok(secp256k1::PublicKey::from_slice(&node_pubkey.serialize()).unwrap())
             }
             Ok(_) => panic!("Core lightning sent wrong message"),
             Err(e) => panic!("Failed to fetch core-lightning node pubkey {:?}", e),
@@ -99,14 +99,14 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
             .await
             .call(cln_rpc::Request::Pay(model::PayRequest {
                 bolt11: invoice.to_string(),
-                msatoshi: None,
+                amount_msat: None,
                 label: None,
                 riskfactor: None,
                 maxfeepercent: Some(max_fee_percent),
                 retry_for: None,
                 maxdelay: Some(max_delay as u16),
                 exemptfee: None,
-                localofferid: None,
+                localinvreqid: None,
                 exclude: None,
                 maxfee: None,
                 description: None,
@@ -151,7 +151,7 @@ async fn htlc_accepted_hook(
 }
 
 pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<ClnRpcRef, Error> {
-    if let Some(plugin) = Builder::new(sender, stdin(), stdout())
+    if let Some(plugin) = Builder::new(stdin(), stdout())
         .option(options::ConfigOption::new(
             "fedimint-cfg",
             // FIXME: cln_plugin doesn't support parameters without defaults
@@ -170,7 +170,7 @@ pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<ClnRpcRef, Error>
             handle.await?
         })
         .dynamic() // Allow reloading the plugin
-        .start()
+        .start(sender)
         .await?
     {
         let work_dir = match plugin.option("fedimint-cfg") {
