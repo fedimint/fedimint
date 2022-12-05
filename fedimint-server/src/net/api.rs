@@ -205,7 +205,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
             async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
-                let tx_status = fedimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
+                let tx_status = fedimint.transaction_status(tx_hash).await.ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
 
                 debug!(transaction = %tx_hash, "Sending outcome");
                 Ok(tx_status)
@@ -214,14 +214,14 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         api_endpoint! {
             "/fetch_epoch_history",
             async |fedimint: &FedimintConsensus, _dbtx, epoch: u64| -> SerdeEpochHistory {
-                let epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
+                let epoch = fedimint.epoch_history(epoch).await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
                 Ok((&epoch).into())
             }
         },
         api_endpoint! {
             "/epoch",
             async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> u64 {
-                Ok(fedimint.get_last_epoch().ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?)
+                Ok(fedimint.get_last_epoch().await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?)
             }
         },
         api_endpoint! {

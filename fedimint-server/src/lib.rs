@@ -199,6 +199,7 @@ impl FedimintServer {
             .db
             .begin_transaction(self.consensus.decoders())
             .get_value(&LastEpochKey)
+            .await
             .expect("DB error");
         let last_saved_epoch = last_saved_response.map(|e| e.0);
 
@@ -236,16 +237,20 @@ impl FedimintServer {
             .db
             .begin_transaction(self.consensus.decoders())
             .get_value(&LastEpochKey)
+            .await
             .unwrap();
 
         let download_epoch_num = saved_epoch_key.map(|e| e.0 + 1).unwrap_or(0);
-        let mut prev_epoch = saved_epoch_key.and_then(|e| {
-            self.consensus
+        let mut prev_epoch = None;
+        if saved_epoch_key.is_some() {
+            prev_epoch = self
+                .consensus
                 .db
                 .begin_transaction(self.consensus.decoders())
-                .get_value(&e)
+                .get_value(&saved_epoch_key.unwrap())
+                .await
                 .unwrap()
-        });
+        }
 
         for epoch_num in download_epoch_num..=last_outcome.epoch {
             let current_epoch = if epoch_num == last_outcome.epoch {
@@ -300,7 +305,8 @@ impl FedimintServer {
             .consensus
             .db
             .begin_transaction(self.consensus.decoders())
-            .get_value(&LastEpochKey);
+            .get_value(&LastEpochKey)
+            .await;
         let next_epoch = last_saved.expect("DB error").map(|e| e.0 + 1).unwrap_or(0);
         consensus_peers.insert(self.cfg.identity, next_epoch);
 
@@ -351,7 +357,9 @@ impl FedimintServer {
                 }
                 Ok(Ok((peer, EpochMessage::RejoinRequest))) => {
                     let msg = EpochMessage::Rejoin(
-                        self.last_signed_epoch(next_epoch).map(|eh| (&eh).into()),
+                        self.last_signed_epoch(next_epoch)
+                            .await
+                            .map(|eh| (&eh).into()),
                         next_epoch,
                     );
                     self.connections.send(&[peer], msg).await?;
@@ -469,7 +477,7 @@ impl FedimintServer {
         match msg {
             (_, EpochMessage::Rejoin(_, _)) => Ok(vec![]),
             (peer, EpochMessage::RejoinRequest) => {
-                let last_signed = self.last_signed_epoch(self.hbbft.epoch());
+                let last_signed = self.last_signed_epoch(self.hbbft.epoch()).await;
 
                 let msg = EpochMessage::Rejoin(
                     last_signed.map(|eh| (&eh).into()),
@@ -512,13 +520,14 @@ impl FedimintServer {
     }
 
     /// Searches back in saved epoch history for the last signed epoch
-    fn last_signed_epoch(&self, mut epoch: u64) -> Option<EpochHistory> {
+    async fn last_signed_epoch(&self, mut epoch: u64) -> Option<EpochHistory> {
         loop {
             let query = self
                 .consensus
                 .db
                 .begin_transaction(self.consensus.decoders())
-                .get_value(&EpochHistoryKey(epoch));
+                .get_value(&EpochHistoryKey(epoch))
+                .await;
             match query.expect("DB error") {
                 Some(result) if result.signature.is_some() => break Some(result),
                 _ if epoch == 0 => break None,

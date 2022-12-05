@@ -192,12 +192,16 @@ impl LnClient {
             _ => Err(LnClientError::WrongAccountType),
         }
     }
-    pub fn refundable_outgoing_contracts(&self, block_height: u64) -> Vec<OutgoingContractData> {
+    pub async fn refundable_outgoing_contracts(
+        &self,
+        block_height: u64,
+    ) -> Vec<OutgoingContractData> {
         // TODO: unify block height type
         self.context
             .db
             .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
+            .await
             .filter_map(|res| {
                 let (_key, outgoing_data) = res.expect("DB error");
                 let cancelled = outgoing_data.contract_account.contract.cancelled;
@@ -266,12 +270,13 @@ impl LnClient {
         dbtx.commit_tx().await.expect("DB Error");
     }
 
-    pub fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
+    pub async fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
         let confirmed_invoice = self
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
             .get_value(&ConfirmedInvoiceKey(contract_id))
+            .await
             .expect("Db error")
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
         Ok(confirmed_invoice)
@@ -370,6 +375,7 @@ mod tests {
                         txid: tx,
                         out_idx: 0,
                     })
+                    .await
                     .unwrap(),
                 ))],
             })
@@ -390,12 +396,14 @@ mod tests {
                 .mint
                 .lock()
                 .await
-                .fetch_from_all(|m, db| {
+                .fetch_from_all(|m, db| async {
                     m.get_contract_account(
                         &mut db.begin_transaction(ModuleRegistry::default()),
                         contract,
                     )
+                    .await
                 })
+                .await
                 .unwrap())
         }
 
@@ -566,8 +574,11 @@ mod tests {
 
         assert!(client
             .refundable_outgoing_contracts((timelock - 1) as u64)
+            .await
             .is_empty());
-        let refund_inputs = client.refundable_outgoing_contracts((timelock) as u64);
+        let refund_inputs = client
+            .refundable_outgoing_contracts((timelock) as u64)
+            .await;
         assert_eq!(refund_inputs.len(), 1);
         let contract_data = refund_inputs.into_iter().next().unwrap();
         let (refund_key, refund_input) =

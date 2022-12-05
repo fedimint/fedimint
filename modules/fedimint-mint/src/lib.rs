@@ -338,6 +338,7 @@ impl ServerModulePlugin for Mint {
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<Self::ConsensusItem> {
         dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
+            .await
             .map(|res| {
                 let (key, signatures) = res.expect("DB error");
                 MintOutputConfirmation {
@@ -394,30 +395,26 @@ impl ServerModulePlugin for Mint {
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
-        input
-            .iter_items()
-            .try_for_each(|(amount, coin)| {
-                let coin_valid = verification_cache
-                    .valid_coins
-                    .get(coin) // We validated the coin
-                    .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
-                    .unwrap_or(false); // If we didn't validate the coin return false
+        for (amount, coin) in input.iter_items() {
+            let coin_valid = verification_cache
+                .valid_coins
+                .get(coin) // We validated the coin
+                .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
+                .unwrap_or(false); // If we didn't validate the coin return false
 
-                if !coin_valid {
-                    return Err(MintError::InvalidSignature);
-                }
+            if !coin_valid {
+                return Err(MintError::InvalidSignature).into_module_error_other();
+            }
 
-                if dbtx
-                    .get_value(&NonceKey(coin.0.clone()))
-                    .expect("DB error")
-                    .is_some()
-                {
-                    return Err(MintError::SpentCoin);
-                }
-
-                Ok(())
-            })
-            .into_module_error_other()?;
+            if dbtx
+                .get_value(&NonceKey(coin.0.clone()))
+                .await
+                .expect("DB error")
+                .is_some()
+            {
+                return Err(MintError::SpentCoin).into_module_error_other();
+            }
+        }
 
         Ok(InputMeta {
             amount: TransactionItemAmount {
@@ -453,7 +450,7 @@ impl ServerModulePlugin for Mint {
         Ok(meta)
     }
 
-    fn validate_output(
+    async fn validate_output(
         &self,
         _dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
@@ -480,7 +477,7 @@ impl ServerModulePlugin for Mint {
         output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx, output)?;
+        let amount = self.validate_output(dbtx, output).await?;
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
@@ -517,25 +514,26 @@ impl ServerModulePlugin for Mint {
         let mut drop_peers = BTreeSet::new();
 
         // Finalize partial signatures for which we now have enough shares
-        let issuance_requests = dbtx
+        let issuance_requests_iter = dbtx
             .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
+            .await
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
                 (key.request_id, (key.peer_id, partial_sig))
             })
             .into_group_map()
-            .into_iter()
-            .map(|(out_point, signature_shares)| {
-                let proposal_key = ProposedPartialSignatureKey { out_point };
-                let our_contribution = dbtx.get_value(&proposal_key).expect("DB error");
+            .into_iter();
+        let mut issuance_requests = Vec::new();
+        for (out_point, signature_shares) in issuance_requests_iter {
+            let proposal_key = ProposedPartialSignatureKey { out_point };
+            let our_contribution = dbtx.get_value(&proposal_key).await.expect("DB error");
 
-                IssuanceData {
-                    out_point,
-                    our_contribution,
-                    signature_shares,
-                }
-            })
-            .collect::<Vec<_>>();
+            issuance_requests.push(IssuanceData {
+                out_point,
+                our_contribution,
+                signature_shares,
+            });
+        }
 
         let issuance_results = issuance_requests
             .into_par_iter()
@@ -597,6 +595,7 @@ impl ServerModulePlugin for Mint {
         let mut issuances = Amount::from_sat(0);
         let remove_audit_keys = dbtx
             .find_by_prefix(&MintAuditItemKeyPrefix)
+            .await
             .map(|res| {
                 let (key, amount) = res.expect("DB error");
                 match key {
@@ -623,23 +622,26 @@ impl ServerModulePlugin for Mint {
         drop_peers.into_iter().collect()
     }
 
-    fn output_status(
+    async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<Self::OutputOutcome> {
         let we_proposed = dbtx
             .get_value(&ProposedPartialSignatureKey { out_point })
+            .await
             .expect("DB error")
             .is_some();
         let was_consensus_outcome = dbtx
             .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix {
                 request_id: out_point,
             })
+            .await
             .any(|res| res.is_ok());
 
         let final_sig = dbtx
             .get_value(&OutputOutcomeKey(out_point))
+            .await
             .expect("DB error");
 
         if final_sig.is_some() {
@@ -651,13 +653,15 @@ impl ServerModulePlugin for Mint {
         }
     }
 
-    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
-        audit.add_items(dbtx, &MintAuditItemKeyPrefix, |k, v| match k {
-            MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
-            MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
-            MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
-            MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
-        });
+    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
+        audit
+            .add_items(dbtx, &MintAuditItemKeyPrefix, |k, v| match k {
+                MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
+                MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
+                MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
+                MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
+            })
+            .await;
     }
 
     fn api_base_name(&self) -> &'static str {
@@ -699,6 +703,7 @@ impl Mint {
 
         if let Some(prev) = dbtx
             .get_value(&EcashBackupKey(request.id))
+            .await
             .expect("DB error")
         {
             if request.timestamp <= prev.timestamp {
@@ -725,6 +730,7 @@ impl Mint {
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<Vec<u8>> {
         dbtx.get_value(&EcashBackupKey(id))
+            .await
             .expect("DB error")
             .map(|res| res.data)
     }
@@ -941,6 +947,7 @@ impl Mint {
     ) {
         if dbtx
             .get_value(&OutputOutcomeKey(output_id))
+            .await
             .expect("DB error")
             .is_some()
         {

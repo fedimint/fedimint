@@ -71,7 +71,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         Ok(val)
     }
 
-    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.0.snapshot().get(key)?)
     }
 
@@ -81,7 +81,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         Ok(val)
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let prefix = key_prefix.to_vec();
         let mut options = rocksdb::ReadOptions::default();
         options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
@@ -126,7 +126,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         panic!("Cannot insert into a read only transaction");
     }
 
-    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.0.get(key)?)
     }
 
@@ -134,7 +134,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         panic!("Cannot remove from a read only transaction");
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let prefix = key_prefix.to_vec();
         Box::new(
             self.0

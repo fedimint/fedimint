@@ -495,7 +495,7 @@ async fn handle_command(
             }
         }
         Command::Info => {
-            let coins = client.coins();
+            let coins = client.coins().await;
             let details_vec = coins
                 .iter_tiers()
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))

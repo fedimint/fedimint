@@ -456,9 +456,10 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
     }
 
     /// Returns the amount denominations of all coins from lowest to highest
-    pub fn coin_amounts(&self) -> Vec<Amount> {
+    pub async fn coin_amounts(&self) -> Vec<Amount> {
         self.client
             .coins()
+            .await
             .iter_tiers()
             .flat_map(|(a, c)| repeat(*a).take(c.len()))
             .sorted()
@@ -466,17 +467,17 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
     }
 
     /// Returns sum total of all coins
-    pub fn total_coins(&self) -> Amount {
-        self.client.coins().total_amount()
+    pub async fn total_coins(&self) -> Amount {
+        self.client.coins().await.total_amount()
     }
 
     pub async fn assert_total_coins(&self, amount: Amount) {
         self.client.fetch_all_coins().await;
-        assert_eq!(self.total_coins(), amount);
+        assert_eq!(self.total_coins().await, amount);
     }
     pub async fn assert_coin_amounts(&self, amounts: Vec<Amount>) {
         self.client.fetch_all_coins().await;
-        assert_eq!(self.coin_amounts(), amounts);
+        assert_eq!(self.coin_amounts().await, amounts);
     }
 }
 
@@ -611,7 +612,12 @@ impl FederationTest {
         user: &UserTest<C>,
         amount: Amount,
     ) -> TieredMulti<SpendableNote> {
-        let coins = user.client.mint_client().select_coins(amount).unwrap();
+        let coins = user
+            .client
+            .mint_client()
+            .select_coins(amount)
+            .await
+            .unwrap();
         if coins.total_amount() == amount {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
         }
@@ -663,6 +669,7 @@ impl FederationTest {
             .client
             .wallet_client()
             .create_pegin_input(txout_proof, btc_transaction)
+            .await
             .unwrap();
 
         for server in &self.servers {
@@ -800,16 +807,18 @@ impl FederationTest {
 
     /// Returns true if the fed would produce an empty epoch proposal (no new information)
     fn empty_proposal(server: &FedimintServer) -> bool {
-        let height = server
+        let wallet = server
             .consensus
             .modules
             .get(&MODULE_KEY_WALLET)
             .unwrap()
             .as_any()
             .downcast_ref::<Wallet>()
-            .unwrap()
-            .consensus_height(&mut server.consensus.db.begin_transaction(all_decoders()))
-            .unwrap_or(0);
+            .unwrap();
+        let height = block_on(
+            wallet.consensus_height(&mut server.consensus.db.begin_transaction(all_decoders())),
+        )
+        .unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
         for item in proposal.items {
@@ -899,14 +908,9 @@ impl FederationTest {
             .max_by_key(|c| c.epoch)
             .unwrap();
         let mut last_consensus = self.last_consensus.borrow_mut();
-        let audit = self
-            .servers
-            .first()
-            .unwrap()
-            .borrow()
-            .fedimint
-            .consensus
-            .audit();
+        let current_consensus = &self.servers.first().unwrap().borrow().fedimint.consensus;
+
+        let audit = block_on(current_consensus.audit());
 
         if last_consensus.is_empty() || last_consensus.epoch < new_consensus.epoch {
             info!("{}", consensus::debug::epoch_message(&new_consensus));

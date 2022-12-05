@@ -98,27 +98,35 @@ impl WalletClient {
         address
     }
 
-    pub fn create_pegin_input(
+    pub async fn create_pegin_input(
         &self,
         txout_proof: TxOutProof,
         btc_transaction: bitcoin::Transaction,
     ) -> Result<(KeyPair, PegInProof)> {
-        let (output_idx, secret_tweak_key_bytes) = btc_transaction
-            .output
-            .iter()
-            .enumerate()
-            .find_map(|(idx, out)| {
+        let output_function = || async {
+            for (idx, out) in btc_transaction.output.iter().enumerate() {
                 debug!(output_script = ?out.script_pubkey);
-                self.context
+                let result = self
+                    .context
                     .db
                     .begin_transaction(ModuleRegistry::default())
                     .get_value(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
+                    .await
                     .expect("DB error")
-                    .map(|tweak_secret| (idx, tweak_secret))
-            })
+                    .map(|tweak_secret| (idx, tweak_secret));
+                if result.is_some() {
+                    return result;
+                }
+            }
+            None
+        };
+
+        let (output_idx, secret_tweak_key_bytes) = output_function()
+            .await
             .ok_or(WalletClientError::NoMatchingPegInFound)?;
+
         let secret_tweak_key =
             bitcoin::KeyPair::from_seckey_slice(&self.context.secp, &secret_tweak_key_bytes)
                 .expect("sec key was generated and saved by us");
@@ -422,9 +430,15 @@ mod tests {
         fedimint_api::task::sleep(Duration::from_secs(12)).await;
         assert!(btc_rpc.is_btc_sent_to(amount, addr).await);
 
-        let wallet_value = fed.lock().await.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
-        });
+        let wallet_value = fed
+            .lock()
+            .await
+            .fetch_from_all(|wallet, db| async {
+                wallet
+                    .get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
+                    .await
+            })
+            .await;
         assert_eq!(wallet_value, bitcoin::Amount::from_sat(0));
 
         // test change recognition, wallet should hold some sats
@@ -432,9 +446,15 @@ mod tests {
         btc_rpc.set_block_height(301).await;
         fed.lock().await.consensus_round(&[], &[]).await;
 
-        let wallet_value = fed.lock().await.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
-        });
+        let wallet_value = fed
+            .lock()
+            .await
+            .fetch_from_all(|wallet, db| async {
+                wallet
+                    .get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
+                    .await
+            })
+            .await;
         assert!(wallet_value > bitcoin::Amount::from_sat(0));
     }
 }

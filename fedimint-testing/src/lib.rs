@@ -104,13 +104,17 @@ where
         assert_all_equal_result(results.into_iter())
     }
 
-    pub fn verify_output(&self, output: &Module::Output) -> bool {
-        let results = self.members.iter().map(|(_, member, db)| {
-            member
-                .validate_output(&mut db.begin_transaction(self.decoders()), output)
-                .is_err()
-        });
-        assert_all_equal(results)
+    pub async fn verify_output(&self, output: &Module::Output) -> bool {
+        let mut results = Vec::new();
+        for (_, member, db) in self.members.iter() {
+            results.push(
+                member
+                    .validate_output(&mut db.begin_transaction(self.decoders()), output)
+                    .await
+                    .is_err(),
+            );
+        }
+        assert_all_equal(results.into_iter())
     }
 
     fn decoders(&self) -> ModuleRegistry<Decoder> {
@@ -175,14 +179,20 @@ where
         }
     }
 
-    pub fn output_outcome(&self, out_point: OutPoint) -> Option<Module::OutputOutcome> {
+    pub async fn output_outcome(&self, out_point: OutPoint) -> Option<Module::OutputOutcome> {
         // Since every member is in the same epoch they should have the same internal state, even
         // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
         // main consensus loop into another thread to optimize latency. This test will probably fail
         // then.
-        assert_all_equal(self.members.iter().map(|(_, member, db)| {
-            member.output_status(&mut db.begin_transaction(self.decoders()), out_point)
-        }))
+        let mut results = Vec::new();
+        for (_, member, db) in self.members.iter() {
+            results.push(
+                member
+                    .output_status(&mut db.begin_transaction(self.decoders()), out_point)
+                    .await,
+            );
+        }
+        assert_all_equal(results.into_iter())
     }
 
     pub async fn patch_dbs<U>(&mut self, update: U)
@@ -234,16 +244,17 @@ where
         Ok(serde_json::from_value(self.client_cfg.0.clone())?)
     }
 
-    pub fn fetch_from_all<O, F>(&mut self, fetch: F) -> O
+    pub async fn fetch_from_all<'a: 'b, 'b, O, F, Fut>(&'a mut self, fetch: F) -> O
     where
-        O: Debug + Eq,
-        F: Fn(&mut Module, &Database) -> O,
+        O: Debug + Eq + Send,
+        F: Fn(&'b mut Module, &'b mut Database) -> Fut,
+        Fut: futures::Future<Output = O> + Send,
     {
-        assert_all_equal(
-            self.members
-                .iter_mut()
-                .map(|(_, member, db)| fetch(member, db)),
-        )
+        let mut results = Vec::new();
+        for (_, member, db) in self.members.iter_mut() {
+            results.push(fetch(member, db).await);
+        }
+        assert_all_equal(results.into_iter())
     }
 }
 
