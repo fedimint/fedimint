@@ -1906,9 +1906,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.16.0"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74c8f8f21b684623d23be8b6fcb101594f4e95d8a505ffd0568de863d93668f4"
+checksum = "965de52763f2004bc91ac5bcec504192440f0b568a5d621c59d9dbd6f886c3fb"
 dependencies = [
  "anyhow",
  "futures-channel",
@@ -2007,9 +2007,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.16.0"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea609539b5062f856a43652fd01d8ed8df40cd4d7067be6f6b7ce81d8bbd03be"
+checksum = "0b83daeecfc6517cfe210df24e570fb06213533dfb990318fae781f4c7119dd9"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
