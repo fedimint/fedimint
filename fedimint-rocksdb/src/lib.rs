@@ -49,8 +49,9 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
     }
 }
 
+#[async_trait]
 impl IDatabase for RocksDb {
-    fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
+    async fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
         let rocksdb_tx = RocksDbTransaction(
@@ -58,7 +59,7 @@ impl IDatabase for RocksDb {
                 .transaction_opt(&WriteOptions::default(), &optimistic_options),
         );
         let mut tx = DatabaseTransaction::new(rocksdb_tx, decoders);
-        tx.set_tx_savepoint();
+        tx.set_tx_savepoint().await;
         tx
     }
 }
@@ -115,7 +116,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         }
     }
 
-    fn set_tx_savepoint(&mut self) {
+    async fn set_tx_savepoint(&mut self) {
         self.0.set_savepoint();
     }
 }
@@ -158,7 +159,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         panic!("Cannot rollback a read only transaction");
     }
 
-    fn set_tx_savepoint(&mut self) {
+    async fn set_tx_savepoint(&mut self) {
         panic!("Cannot set a savepoint in a read only transaction");
     }
 }

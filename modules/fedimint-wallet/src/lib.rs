@@ -1483,7 +1483,7 @@ pub async fn run_broadcast_pending_tx(
     tg_handle: &TaskHandle,
 ) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(db.begin_transaction(modules.clone()), &rpc).await;
+        broadcast_pending_tx(db.begin_transaction(modules.clone()).await, &rpc).await;
         // FIXME: remove after modularization finishes
         #[cfg(not(target_family = "wasm"))]
         fedimint_api::task::sleep(Duration::from_secs(10)).await;

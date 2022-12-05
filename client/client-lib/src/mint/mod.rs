@@ -166,8 +166,11 @@ impl ClientModulePlugin for MintClient {
 }
 
 impl MintClient {
-    pub fn start_dbtx(&self) -> DatabaseTransaction<'_> {
-        self.context.db.begin_transaction(ModuleRegistry::default())
+    pub async fn start_dbtx(&self) -> DatabaseTransaction<'_> {
+        self.context
+            .db
+            .begin_transaction(ModuleRegistry::default())
+            .await
     }
 
     /// Adds the final amounts of `change` to the tx before submitting it
@@ -183,7 +186,7 @@ impl MintClient {
         }
         let txid = tx.tx_hash();
 
-        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default()).await;
 
         // remove the spent ecash from the DB
         let mut input_ecash: Vec<(Amount, SpendableNote)> = vec![];
@@ -276,6 +279,7 @@ impl MintClient {
 
     pub async fn coins(&self) -> TieredMulti<SpendableNote> {
         self.start_dbtx()
+            .await
             .find_by_prefix(&CoinKeyPrefix)
             .await
             .map(|res| {
@@ -315,7 +319,7 @@ impl MintClient {
     async fn new_note_secret(&self, amount: Amount) -> DerivableSecret {
         let mut new_idx;
         loop {
-            let mut dbtx = self.start_dbtx();
+            let mut dbtx = self.start_dbtx().await;
             new_idx = self.get_next_note_index(&mut dbtx, amount).await;
             dbtx.insert_entry(&NextECashNoteIndexKey(amount), &new_idx.next().as_u64())
                 .await
@@ -386,6 +390,7 @@ impl MintClient {
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
+            .await
             .get_value(&OutputFinalizationKey(outpoint))
             .await
             .expect("DB error")
@@ -423,6 +428,7 @@ impl MintClient {
         self.context
             .db
             .begin_transaction(ModuleRegistry::default())
+            .await
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .await
             .map(|res| {
@@ -441,7 +447,11 @@ impl MintClient {
         let stream = active_issuances
             .into_iter()
             .map(|(out_point, _)| async move {
-                let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
+                let mut dbtx = self
+                    .context
+                    .db
+                    .begin_transaction(ModuleRegistry::default())
+                    .await;
                 loop {
                     match self.fetch_coins(&mut dbtx, out_point).await {
                         Ok(_) => {
@@ -784,7 +794,7 @@ mod tests {
         let txid = TransactionId::from_inner([0x42; 32]);
         let out_point = OutPoint { txid, out_idx: 0 };
 
-        let mut dbtx = client_db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = client_db.begin_transaction(ModuleRegistry::default()).await;
         client
             .receive_coins(amt, &mut dbtx, |output| async {
                 // Agree on output
@@ -839,7 +849,8 @@ mod tests {
         let dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default());
+            .begin_transaction(ModuleRegistry::default())
+            .await;
         let mut builder = TransactionBuilder::default();
         let secp = &client.context.secp;
         let _tbs_pks = &client.config.tbs_pks;
@@ -881,7 +892,8 @@ mod tests {
         let dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default());
+            .begin_transaction(ModuleRegistry::default())
+            .await;
         let mut builder = TransactionBuilder::default();
         let coins = client.select_coins(SPEND_AMOUNT).await.unwrap();
         let rng = rand::rngs::OsRng;
@@ -972,6 +984,7 @@ mod tests {
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
+            .await
             .get_value(&NextECashNoteIndexKey(amount))
             .await
             .expect("DB error")

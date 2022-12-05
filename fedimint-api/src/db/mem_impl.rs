@@ -45,8 +45,9 @@ impl MemDatabase {
     }
 }
 
+#[async_trait]
 impl IDatabase for MemDatabase {
-    fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
+    async fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
         let db_copy = self.data.lock().unwrap().clone();
         let memtx = MemTransaction {
             operations: Vec::new(),
@@ -58,7 +59,7 @@ impl IDatabase for MemDatabase {
         };
 
         let mut tx = DatabaseTransaction::new(memtx, decoders);
-        tx.set_tx_savepoint();
+        tx.set_tx_savepoint().await;
         tx
     }
 }
@@ -136,7 +137,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         }
     }
 
-    fn set_tx_savepoint(&mut self) {
+    async fn set_tx_savepoint(&mut self) {
         self.savepoint = self.tx_data.clone();
         self.num_savepoint_operations = self.num_pending_operations;
     }
