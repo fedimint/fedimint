@@ -1174,7 +1174,7 @@
             }
         }
         Command::Info =&gt; {
-            <span class="kw">let </span>coins = client.coins();
+            <span class="kw">let </span>coins = client.coins().<span class="kw">await</span>;
             <span class="kw">let </span>details_vec = coins
                 .iter_tiers()
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))

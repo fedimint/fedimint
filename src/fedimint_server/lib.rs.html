@@ -570,6 +570,15 @@
 <a href="#570" id="570">570</a>
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -771,7 +780,8 @@
             .db
             .begin_transaction(<span class="self">self</span>.consensus.decoders())
             .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
-            .expect(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="kw">let </span>last_saved_epoch = last_saved_response.map(|e| e.<span class="number">0</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>outcomes: Vec&lt;ConsensusOutcome&gt; = <span class="macro">vec!</span>[];
@@ -808,16 +818,20 @@
             .db
             .begin_transaction(<span class="self">self</span>.consensus.decoders())
             .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
-            .unwrap();
+            .<span class="kw">await
+            </span>.unwrap();
 
         <span class="kw">let </span>download_epoch_num = saved_epoch_key.map(|e| e.<span class="number">0 </span>+ <span class="number">1</span>).unwrap_or(<span class="number">0</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>prev_epoch = saved_epoch_key.and_then(|e| {
-            <span class="self">self</span>.consensus
+        <span class="kw">let </span><span class="kw-2">mut </span>prev_epoch = <span class="prelude-val">None</span>;
+        <span class="kw">if </span>saved_epoch_key.is_some() {
+            prev_epoch = <span class="self">self
+                </span>.consensus
                 .db
                 .begin_transaction(<span class="self">self</span>.consensus.decoders())
-                .get_value(<span class="kw-2">&amp;</span>e)
-                .unwrap()
-        });
+                .get_value(<span class="kw-2">&amp;</span>saved_epoch_key.unwrap())
+                .<span class="kw">await
+                </span>.unwrap()
+        }
 
         <span class="kw">for </span>epoch_num <span class="kw">in </span>download_epoch_num..=last_outcome.epoch {
             <span class="kw">let </span>current_epoch = <span class="kw">if </span>epoch_num == last_outcome.epoch {
@@ -872,7 +886,8 @@
             </span>.consensus
             .db
             .begin_transaction(<span class="self">self</span>.consensus.decoders())
-            .get_value(<span class="kw-2">&amp;</span>LastEpochKey);
+            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
+            .<span class="kw">await</span>;
         <span class="kw">let </span>next_epoch = last_saved.expect(<span class="string">&quot;DB error&quot;</span>).map(|e| e.<span class="number">0 </span>+ <span class="number">1</span>).unwrap_or(<span class="number">0</span>);
         consensus_peers.insert(<span class="self">self</span>.cfg.identity, next_epoch);
 
@@ -923,7 +938,9 @@
                 }
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((peer, EpochMessage::RejoinRequest))) =&gt; {
                     <span class="kw">let </span>msg = EpochMessage::Rejoin(
-                        <span class="self">self</span>.last_signed_epoch(next_epoch).map(|eh| (<span class="kw-2">&amp;</span>eh).into()),
+                        <span class="self">self</span>.last_signed_epoch(next_epoch)
+                            .<span class="kw">await
+                            </span>.map(|eh| (<span class="kw-2">&amp;</span>eh).into()),
                         next_epoch,
                     );
                     <span class="self">self</span>.connections.send(<span class="kw-2">&amp;</span>[peer], msg).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1041,7 +1058,7 @@
         <span class="kw">match </span>msg {
             (<span class="kw">_</span>, EpochMessage::Rejoin(<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[]),
             (peer, EpochMessage::RejoinRequest) =&gt; {
-                <span class="kw">let </span>last_signed = <span class="self">self</span>.last_signed_epoch(<span class="self">self</span>.hbbft.epoch());
+                <span class="kw">let </span>last_signed = <span class="self">self</span>.last_signed_epoch(<span class="self">self</span>.hbbft.epoch()).<span class="kw">await</span>;
 
                 <span class="kw">let </span>msg = EpochMessage::Rejoin(
                     last_signed.map(|eh| (<span class="kw-2">&amp;</span>eh).into()),
@@ -1084,13 +1101,14 @@
     }
 
     <span class="doccomment">/// Searches back in saved epoch history for the last signed epoch
-    </span><span class="kw">fn </span>last_signed_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;EpochHistory&gt; {
+    </span><span class="kw">async fn </span>last_signed_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;EpochHistory&gt; {
         <span class="kw">loop </span>{
             <span class="kw">let </span>query = <span class="self">self
                 </span>.consensus
                 .db
                 .begin_transaction(<span class="self">self</span>.consensus.decoders())
-                .get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch));
+                .get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
+                .<span class="kw">await</span>;
             <span class="kw">match </span>query.expect(<span class="string">&quot;DB error&quot;</span>) {
                 <span class="prelude-val">Some</span>(result) <span class="kw">if </span>result.signature.is_some() =&gt; <span class="kw">break </span><span class="prelude-val">Some</span>(result),
                 <span class="kw">_ if </span>epoch == <span class="number">0 </span>=&gt; <span class="kw">break </span><span class="prelude-val">None</span>,

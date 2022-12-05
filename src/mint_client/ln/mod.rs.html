@@ -591,6 +591,17 @@
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
@@ -785,13 +796,17 @@
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(LnClientError::WrongAccountType),
         }
     }
-    <span class="kw">pub fn </span>refundable_outgoing_contracts(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) -&gt; Vec&lt;OutgoingContractData&gt; {
+    <span class="kw">pub async fn </span>refundable_outgoing_contracts(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        block_height: u64,
+    ) -&gt; Vec&lt;OutgoingContractData&gt; {
         <span class="comment">// TODO: unify block height type
         </span><span class="self">self</span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentKeyPrefix)
-            .filter_map(|res| {
+            .<span class="kw">await
+            </span>.filter_map(|res| {
                 <span class="kw">let </span>(_key, outgoing_data) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 <span class="kw">let </span>cancelled = outgoing_data.contract_account.contract.cancelled;
                 <span class="kw">let </span>timed_out =
@@ -859,13 +874,14 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
-    <span class="kw">pub fn </span>get_confirmed_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
+    <span class="kw">pub async fn </span>get_confirmed_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
         <span class="kw">let </span>confirmed_invoice = <span class="self">self
             </span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
             .get_value(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(contract_id))
-            .expect(<span class="string">&quot;Db error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Db error&quot;</span>)
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(confirmed_invoice)
     }
@@ -963,7 +979,8 @@
                         txid: tx,
                         out_idx: <span class="number">0</span>,
                     })
-                    .unwrap(),
+                    .<span class="kw">await
+                    </span>.unwrap(),
                 ))],
             })
         }
@@ -983,13 +1000,15 @@
                 </span>.mint
                 .lock()
                 .<span class="kw">await
-                </span>.fetch_from_all(|m, db| {
+                </span>.fetch_from_all(|m, db| <span class="kw">async </span>{
                     m.get_contract_account(
                         <span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()),
                         contract,
                     )
-                })
-                .unwrap())
+                    .<span class="kw">await
+                </span>})
+                .<span class="kw">await
+                </span>.unwrap())
         }
 
         <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;u64&gt; {
@@ -1159,8 +1178,11 @@
 
         <span class="macro">assert!</span>(client
             .refundable_outgoing_contracts((timelock - <span class="number">1</span>) <span class="kw">as </span>u64)
-            .is_empty());
-        <span class="kw">let </span>refund_inputs = client.refundable_outgoing_contracts((timelock) <span class="kw">as </span>u64);
+            .<span class="kw">await
+            </span>.is_empty());
+        <span class="kw">let </span>refund_inputs = client
+            .refundable_outgoing_contracts((timelock) <span class="kw">as </span>u64)
+            .<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(refund_inputs.len(), <span class="number">1</span>);
         <span class="kw">let </span>contract_data = refund_inputs.into_iter().next().unwrap();
         <span class="kw">let </span>(refund_key, refund_input) =

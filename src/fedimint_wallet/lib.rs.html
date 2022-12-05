@@ -1556,6 +1556,34 @@
 <a href="#1556" id="1556">1556</a>
 <a href="#1557" id="1557">1557</a>
 <a href="#1558" id="1558">1558</a>
+<a href="#1559" id="1559">1559</a>
+<a href="#1560" id="1560">1560</a>
+<a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
+<a href="#1563" id="1563">1563</a>
+<a href="#1564" id="1564">1564</a>
+<a href="#1565" id="1565">1565</a>
+<a href="#1566" id="1566">1566</a>
+<a href="#1567" id="1567">1567</a>
+<a href="#1568" id="1568">1568</a>
+<a href="#1569" id="1569">1569</a>
+<a href="#1570" id="1570">1570</a>
+<a href="#1571" id="1571">1571</a>
+<a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1952,7 +1980,7 @@
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">let </span><span class="kw-2">mut </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
-        <span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height(dbtx).unwrap_or(<span class="number">0</span>);
+        <span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
 
         <span class="kw">if </span><span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.len() == <span class="number">1 </span>{
             <span class="kw">while </span>our_target_height &lt;= last_consensus_height {
@@ -1973,7 +2001,7 @@
 
         <span class="comment">// In case the wallet just got created the height is not committed to the DB yet but will
         // be set to 0 first, so we can assume that here.
-        </span><span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height(dbtx).unwrap_or(<span class="number">0</span>);
+        </span><span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
 
         <span class="kw">let </span>proposed_height = <span class="kw">if </span>our_target_height &gt;= last_consensus_height {
             our_target_height
@@ -2000,7 +2028,8 @@
         });
 
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>PegOutTxSignatureCIPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;FB error&quot;</span>);
                 WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
                     txid: key.<span class="number">0</span>,
@@ -2076,7 +2105,7 @@
         _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">if </span>!<span class="self">self</span>.block_is_known(dbtx, input.proof_block()) {
+        <span class="kw">if </span>!<span class="self">self</span>.block_is_known(dbtx, input.proof_block()).<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::UnknownPegInProofBlock(input.proof_block()))
                 .into_module_error_other();
         }
@@ -2087,7 +2116,8 @@
 
         <span class="kw">if </span>dbtx
             .get_value(<span class="kw-2">&amp;</span>UTXOKey(input.outpoint()))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some()
         {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegInAlreadyClaimed).into_module_error_other();
@@ -2127,7 +2157,7 @@
         <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn </span>validate_output(
+    <span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
@@ -2139,7 +2169,7 @@
             ))
             .into_module_error_other();
         }
-        <span class="kw">let </span>consensus_fee_rate = <span class="self">self</span>.current_round_consensus(dbtx).unwrap().fee_rate;
+        <span class="kw">let </span>consensus_fee_rate = <span class="self">self</span>.current_round_consensus(dbtx).<span class="kw">await</span>.unwrap().fee_rate;
         <span class="kw">if </span>output.fees.fee_rate &lt; consensus_fee_rate {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegOutFeeRate(
                 output.fees.fee_rate,
@@ -2147,7 +2177,7 @@
             ))
             .into_module_error_other();
         }
-        <span class="kw">if </span><span class="self">self</span>.create_peg_out_tx(dbtx, output).is_none() {
+        <span class="kw">if </span><span class="self">self</span>.create_peg_out_tx(dbtx, output).<span class="kw">await</span>.is_none() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::NotEnoughSpendableUTXO).into_module_error_other();
         }
         <span class="prelude-val">Ok</span>(TransactionItemAmount {
@@ -2162,7 +2192,7 @@
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
         out_point: fedimint_api::OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output)<span class="question-mark">?</span>;
+        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
             amount = %output.amount, recipient = %output.recipient,
             <span class="string">&quot;Queuing peg-out&quot;</span>,
@@ -2170,7 +2200,8 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self
             </span>.create_peg_out_tx(dbtx, output)
-            .expect(<span class="string">&quot;Should have been validated&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Should have been validated&quot;</span>);
         <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
         <span class="kw">let </span>txid = tx.psbt.unsigned_tx.txid();
         <span class="macro">info!</span>(
@@ -2234,7 +2265,8 @@
         <span class="comment">// Sign and finalize any unsigned transactions that have signatures
         </span><span class="kw">let </span>unsigned_txs: Vec&lt;(UnsignedTransactionKey, UnsignedTransaction)&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey)
-            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
+            .<span class="kw">await
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
             .filter(|(<span class="kw">_</span>, unsigned)| !unsigned.signatures.is_empty())
             .collect();
 
@@ -2286,23 +2318,30 @@
         drop_peers
     }
 
-    <span class="kw">fn </span>output_status(
+    <span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        audit.add_items(dbtx, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| v.amount.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>);
-        audit.add_items(dbtx, <span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey, |<span class="kw">_</span>, v| {
-            v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000
-        </span>});
-        audit.add_items(dbtx, <span class="kw-2">&amp;</span>PendingTransactionPrefixKey, |<span class="kw">_</span>, v| {
-            v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000
-        </span>});
+    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit
+            .add_items(dbtx, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| v.amount.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>)
+            .<span class="kw">await</span>;
+        audit
+            .add_items(dbtx, <span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey, |<span class="kw">_</span>, v| {
+                v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000
+            </span>})
+            .<span class="kw">await</span>;
+        audit
+            .add_items(dbtx, <span class="kw-2">&amp;</span>PendingTransactionPrefixKey, |<span class="kw">_</span>, v| {
+                v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000
+            </span>})
+            .<span class="kw">await</span>;
     }
 
     <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
@@ -2314,18 +2353,18 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/block_height&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, dbtx, _params: ()| -&gt; u32 {
-                    <span class="prelude-val">Ok</span>(module.consensus_height(<span class="kw-2">&amp;mut </span>dbtx).unwrap_or(<span class="number">0</span>))
+                    <span class="prelude-val">Ok</span>(module.consensus_height(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/peg_out_fees&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, dbtx, params: (Address, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
                     <span class="kw">let </span>(address, sats) = params;
-                    <span class="kw">let </span>consensus = module.current_round_consensus(<span class="kw-2">&amp;mut </span>dbtx).unwrap();
+                    <span class="kw">let </span>consensus = module.current_round_consensus(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>.unwrap();
                     <span class="kw">let </span>tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
-                        module.available_utxos(<span class="kw-2">&amp;mut </span>dbtx),
+                        module.available_utxos(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>,
                         consensus.fee_rate,
                         <span class="kw-2">&amp;</span>consensus.randomness_beacon
                     );
@@ -2396,7 +2435,8 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>cache: BTreeMap&lt;Txid, UnsignedTransaction&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.<span class="number">0</span>, val)
             })
@@ -2538,7 +2578,7 @@
         proposals.sort_unstable();
         <span class="kw">let </span>median_proposal = proposals[proposals.len() / <span class="number">2</span>];
 
-        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_height(dbtx).unwrap_or(<span class="number">0</span>);
+        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
 
         <span class="kw">if </span>median_proposal &gt;= consensus_height {
             <span class="macro">debug!</span>(<span class="string">&quot;Setting consensus block height to {}&quot;</span>, median_proposal);
@@ -2554,11 +2594,11 @@
         median_proposal
     }
 
-    <span class="kw">pub fn </span>current_round_consensus(
+    <span class="kw">pub async fn </span>current_round_consensus(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;RoundConsensus&gt; {
-        dbtx.get_value(<span class="kw-2">&amp;</span>RoundConsensusKey).expect(<span class="string">&quot;DB error&quot;</span>)
+        dbtx.get_value(<span class="kw-2">&amp;</span>RoundConsensusKey).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>target_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
@@ -2570,8 +2610,10 @@
         our_network_height.saturating_sub(<span class="self">self</span>.cfg.finality_delay)
     }
 
-    <span class="kw">pub fn </span>consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
-        <span class="self">self</span>.current_round_consensus(dbtx).map(|rc| rc.block_height)
+    <span class="kw">pub async fn </span>consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
+        <span class="self">self</span>.current_round_consensus(dbtx)
+            .<span class="kw">await
+            </span>.map(|rc| rc.block_height)
     }
 
     <span class="kw">async fn </span>sync_up_to_consensus_height&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -2581,7 +2623,8 @@
     ) {
         <span class="kw">let </span>old_height = <span class="self">self
             </span>.consensus_height(dbtx)
-            .unwrap_or_else(|| new_height.saturating_sub(<span class="number">10</span>));
+            .<span class="kw">await
+            </span>.unwrap_or_else(|| new_height.saturating_sub(<span class="number">10</span>));
         <span class="kw">if </span>new_height &lt; old_height {
             <span class="macro">info!</span>(
                 new_height,
@@ -2616,7 +2659,8 @@
 
             </span><span class="kw">let </span>pending_transactions = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
-                .map(|res| {
+                .<span class="kw">await
+                </span>.map(|res| {
                     <span class="kw">let </span>(key, transaction) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                     (key.<span class="number">0</span>, transaction)
                 })
@@ -2674,40 +2718,51 @@
         }
     }
 
-    <span class="kw">fn </span>block_is_known(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction, block_hash: BlockHash) -&gt; bool {
+    <span class="kw">async fn </span>block_is_known(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        block_hash: BlockHash,
+    ) -&gt; bool {
         dbtx.get_value(<span class="kw-2">&amp;</span>BlockHashKey(block_hash))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some()
     }
 
-    <span class="kw">fn </span>create_peg_out_tx(
+    <span class="kw">async fn </span>create_peg_out_tx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         peg_out: <span class="kw-2">&amp;</span>PegOut,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;UnsignedTransaction&gt; {
         <span class="kw">let </span>change_tweak = <span class="self">self
             </span>.current_round_consensus(dbtx)
-            .unwrap()
+            .<span class="kw">await
+            </span>.unwrap()
             .randomness_beacon;
         <span class="self">self</span>.offline_wallet().create_tx(
             peg_out.amount,
             peg_out.recipient.script_pubkey(),
-            <span class="self">self</span>.available_utxos(dbtx),
+            <span class="self">self</span>.available_utxos(dbtx).<span class="kw">await</span>,
             peg_out.fees.fee_rate,
             <span class="kw-2">&amp;</span>change_tweak,
         )
     }
 
-    <span class="kw">fn </span>available_utxos(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction) -&gt; Vec&lt;(UTXOKey, SpendableUTXO)&gt; {
+    <span class="kw">async fn </span>available_utxos(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; Vec&lt;(UTXOKey, SpendableUTXO)&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>UTXOPrefixKey)
-            .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await
+            </span>.collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
             .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>get_wallet_value(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction) -&gt; bitcoin::Amount {
+    <span class="kw">pub async fn </span>get_wallet_value(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; bitcoin::Amount {
         <span class="kw">let </span>sat_sum = <span class="self">self
             </span>.available_utxos(dbtx)
-            .into_iter()
+            .<span class="kw">await
+            </span>.into_iter()
             .map(|(<span class="kw">_</span>, utxo)| utxo.amount.to_sat())
             .sum();
         bitcoin::Amount::from_sat(sat_sum)
@@ -3021,10 +3076,11 @@
     }
 }
 
-<span class="kw">pub async fn </span>broadcast_pending_tx(dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, rpc: <span class="kw-2">&amp;</span>BitcoindRpc) {
+<span class="kw">pub async fn </span>broadcast_pending_tx(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, rpc: <span class="kw-2">&amp;</span>BitcoindRpc) {
     <span class="kw">let </span>pending_tx = dbtx
         .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
-        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
+        .<span class="kw">await
+        </span>.collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
         .expect(<span class="string">&quot;DB error&quot;</span>);
 
     <span class="kw">for </span>(<span class="kw">_</span>, PendingTransaction { tx, .. }) <span class="kw">in </span>pending_tx {

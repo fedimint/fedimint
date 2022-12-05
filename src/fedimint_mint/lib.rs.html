@@ -1270,6 +1270,13 @@
 <a href="#1270" id="1270">1270</a>
 <a href="#1271" id="1271">1271</a>
 <a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1610,7 +1617,8 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, signatures) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 MintOutputConfirmation {
                     out_point: key.out_point,
@@ -1666,30 +1674,26 @@
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        input
-            .iter_items()
-            .try_for_each(|(amount, coin)| {
-                <span class="kw">let </span>coin_valid = verification_cache
-                    .valid_coins
-                    .get(coin) <span class="comment">// We validated the coin
-                    </span>.map(|coint_amount| <span class="kw-2">*</span>coint_amount == amount) <span class="comment">// It has the right amount tier
-                    </span>.unwrap_or(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the coin return false
+        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>input.iter_items() {
+            <span class="kw">let </span>coin_valid = verification_cache
+                .valid_coins
+                .get(coin) <span class="comment">// We validated the coin
+                </span>.map(|coint_amount| <span class="kw-2">*</span>coint_amount == amount) <span class="comment">// It has the right amount tier
+                </span>.unwrap_or(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the coin return false
 
-                </span><span class="kw">if </span>!coin_valid {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature);
-                }
+            </span><span class="kw">if </span>!coin_valid {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature).into_module_error_other();
+            }
 
-                <span class="kw">if </span>dbtx
-                    .get_value(<span class="kw-2">&amp;</span>NonceKey(coin.<span class="number">0</span>.clone()))
-                    .expect(<span class="string">&quot;DB error&quot;</span>)
-                    .is_some()
-                {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin);
-                }
-
-                <span class="prelude-val">Ok</span>(())
-            })
-            .into_module_error_other()<span class="question-mark">?</span>;
+            <span class="kw">if </span>dbtx
+                .get_value(<span class="kw-2">&amp;</span>NonceKey(coin.<span class="number">0</span>.clone()))
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB error&quot;</span>)
+                .is_some()
+            {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin).into_module_error_other();
+            }
+        }
 
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
@@ -1725,7 +1729,7 @@
         <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn </span>validate_output(
+    <span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
@@ -1752,7 +1756,7 @@
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output)<span class="question-mark">?</span>;
+        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// TODO: move actual signing to worker thread
         // TODO: get rid of clone
@@ -1789,25 +1793,26 @@
         <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = BTreeSet::new();
 
         <span class="comment">// Finalize partial signatures for which we now have enough shares
-        </span><span class="kw">let </span>issuance_requests = dbtx
+        </span><span class="kw">let </span>issuance_requests_iter = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignaturesKeyPrefix)
-            .map(|entry_res| {
+            .<span class="kw">await
+            </span>.map(|entry_res| {
                 <span class="kw">let </span>(key, partial_sig) = entry_res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.request_id, (key.peer_id, partial_sig))
             })
             .into_group_map()
-            .into_iter()
-            .map(|(out_point, signature_shares)| {
-                <span class="kw">let </span>proposal_key = ProposedPartialSignatureKey { out_point };
-                <span class="kw">let </span>our_contribution = dbtx.get_value(<span class="kw-2">&amp;</span>proposal_key).expect(<span class="string">&quot;DB error&quot;</span>);
+            .into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>issuance_requests = Vec::new();
+        <span class="kw">for </span>(out_point, signature_shares) <span class="kw">in </span>issuance_requests_iter {
+            <span class="kw">let </span>proposal_key = ProposedPartialSignatureKey { out_point };
+            <span class="kw">let </span>our_contribution = dbtx.get_value(<span class="kw-2">&amp;</span>proposal_key).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
 
-                IssuanceData {
-                    out_point,
-                    our_contribution,
-                    signature_shares,
-                }
-            })
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            issuance_requests.push(IssuanceData {
+                out_point,
+                our_contribution,
+                signature_shares,
+            });
+        }
 
         <span class="kw">let </span>issuance_results = issuance_requests
             .into_par_iter()
@@ -1869,7 +1874,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>issuances = Amount::from_sat(<span class="number">0</span>);
         <span class="kw">let </span>remove_audit_keys = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>MintAuditItemKeyPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, amount) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 <span class="kw">match </span>key {
                     MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; issuances += amount,
@@ -1895,24 +1901,27 @@
         drop_peers.into_iter().collect()
     }
 
-    <span class="kw">fn </span>output_status(
+    <span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
         <span class="kw">let </span>we_proposed = dbtx
             .get_value(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey { out_point })
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some();
         <span class="kw">let </span>was_consensus_outcome = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKeyOutputPrefix {
                 request_id: out_point,
             })
-            .any(|res| res.is_ok());
+            .<span class="kw">await
+            </span>.any(|res| res.is_ok());
 
         <span class="kw">let </span>final_sig = dbtx
             .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point))
-            .expect(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>);
 
         <span class="kw">if </span>final_sig.is_some() {
             <span class="prelude-val">Some</span>(MintOutputOutcome(final_sig))
@@ -1923,13 +1932,15 @@
         </span>}
     }
 
-    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        audit.add_items(dbtx, <span class="kw-2">&amp;</span>MintAuditItemKeyPrefix, |k, v| <span class="kw">match </span>k {
-            MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; -(v.milli_sat <span class="kw">as </span>i64),
-            MintAuditItemKey::IssuanceTotal =&gt; -(v.milli_sat <span class="kw">as </span>i64),
-            MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; v.milli_sat <span class="kw">as </span>i64,
-            MintAuditItemKey::RedemptionTotal =&gt; v.milli_sat <span class="kw">as </span>i64,
-        });
+    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit
+            .add_items(dbtx, <span class="kw-2">&amp;</span>MintAuditItemKeyPrefix, |k, v| <span class="kw">match </span>k {
+                MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; -(v.milli_sat <span class="kw">as </span>i64),
+                MintAuditItemKey::IssuanceTotal =&gt; -(v.milli_sat <span class="kw">as </span>i64),
+                MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; v.milli_sat <span class="kw">as </span>i64,
+                MintAuditItemKey::RedemptionTotal =&gt; v.milli_sat <span class="kw">as </span>i64,
+            })
+            .<span class="kw">await</span>;
     }
 
     <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
@@ -1971,7 +1982,8 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = dbtx
             .get_value(<span class="kw-2">&amp;</span>EcashBackupKey(request.id))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
         {
             <span class="kw">if </span>request.timestamp &lt;= prev.timestamp {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;timestamp too small&quot;</span>.into()));
@@ -1997,7 +2009,8 @@
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .map(|res| res.data)
     }
 }
@@ -2213,7 +2226,8 @@
     ) {
         <span class="kw">if </span>dbtx
             .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(output_id))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .is_some()
         {
             <span class="macro">debug!</span>(

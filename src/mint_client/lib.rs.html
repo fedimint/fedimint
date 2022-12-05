@@ -1348,6 +1348,14 @@
 <a href="#1348" id="1348">1348</a>
 <a href="#1349" id="1349">1349</a>
 <a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1608,7 +1616,7 @@
     <span class="doccomment">/// Fetches the client secret from the database or generates a new one if none is present
     </span><span class="kw">async fn </span>get_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret {
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction(ModuleRegistry::default());
-        <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>ClientSecretKey).expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>ClientSecretKey).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="kw">let </span>secret = <span class="kw">if let </span><span class="prelude-val">Some</span>(client_secret) = client_secret {
             client_secret
         } <span class="kw">else </span>{
@@ -1637,7 +1645,8 @@
 
         <span class="kw">let </span>(peg_in_key, peg_in_proof) = <span class="self">self
             </span>.wallet_client()
-            .create_pegin_input(txout_proof, btc_transaction)<span class="question-mark">?</span>;
+            .create_pegin_input(txout_proof, btc_transaction)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         tx.input(
             <span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[peg_in_key],
@@ -1712,7 +1721,8 @@
 
         <span class="kw">let </span>input_coins = <span class="self">self
             </span>.mint_client()
-            .select_coins(blind_nonces.total_amount())<span class="question-mark">?</span>;
+            .select_coins(blind_nonces.total_amount())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         tx.input_coins(input_coins)<span class="question-mark">?</span>;
         tx.output(Output::Mint(MintOutput(blind_nonces)));
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1774,7 +1784,7 @@
             .fee_consensus
             .peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(funding_amount)<span class="question-mark">?</span>;
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(funding_amount).<span class="kw">await</span><span class="question-mark">?</span>;
         tx.input_coins(coins)<span class="question-mark">?</span>;
         <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
 
@@ -1813,7 +1823,7 @@
         amount: Amount,
         rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?</span>;
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>final_coins = <span class="kw">if </span>coins.total_amount() == amount {
             coins
@@ -1834,7 +1844,7 @@
 
             <span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
-            <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?
+            <span class="self">self</span>.mint_client().select_coins(amount).<span class="kw">await</span><span class="question-mark">?
         </span>};
         <span class="macro">assert_eq!</span>(
             final_coins.total_amount(),
@@ -1869,10 +1879,11 @@
     <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any coin
     /// inputs back.
     </span><span class="kw">pub async fn </span>reissue_pending_coins&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
-        <span class="kw">let </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span>pending = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>PendingCoinsKeyPrefix)
-            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>));
+            .<span class="kw">await
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>));
 
         <span class="kw">let </span>stream = pending
             .map(|(key, coins)| <span class="kw">async move </span>{
@@ -1926,13 +1937,13 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
-        <span class="self">self</span>.mint_client().coins()
-    }
+    <span class="kw">pub async fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
+        <span class="self">self</span>.mint_client().coins().<span class="kw">await
+    </span>}
 
-    <span class="kw">pub fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {
-        <span class="self">self</span>.mint_client().list_active_issuances()
-    }
+    <span class="kw">pub async fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {
+        <span class="self">self</span>.mint_client().list_active_issuances().<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>fetch_epoch_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1957,7 +1968,8 @@
             .db
             .begin_transaction(ModuleRegistry::default())
             .get_value(<span class="kw-2">&amp;</span>LightningGatewayKey)
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
         {
             <span class="prelude-val">Ok</span>(gateway)
         } <span class="kw">else </span>{
@@ -2035,7 +2047,7 @@
             } <span class="comment">// FIXME: impl TryFrom
         </span>};
 
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?</span>;
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount).<span class="kw">await</span><span class="question-mark">?</span>;
         tx.input_coins(coins)<span class="question-mark">?</span>;
         tx.output(Output::LN(contract));
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2059,7 +2071,8 @@
             .db
             .begin_transaction(ModuleRegistry::default())
             .get_value(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .ok_or(ClientError::RefundUnknownOutgoingContract)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
@@ -2217,7 +2230,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="comment">// Lookup contract and &quot;confirmed invoice&quot;
         </span><span class="kw">let </span>contract = <span class="self">self</span>.ln_client().get_incoming_contract(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>ci = <span class="self">self</span>.ln_client().get_confirmed_invoice(contract_id)<span class="question-mark">?</span>;
+        <span class="kw">let </span>ci = <span class="self">self</span>.ln_client().get_confirmed_invoice(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Input claims this contract
         </span><span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
@@ -2358,12 +2371,13 @@
     }
 
     <span class="doccomment">/// Lists all previously saved transactions that have not been driven to completion so far
-    </span><span class="kw">pub fn </span>list_pending_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutgoingContractAccount&gt; {
+    </span><span class="kw">pub async fn </span>list_pending_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutgoingContractAccount&gt; {
         <span class="self">self</span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingContractAccountKeyPrefix)
-            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .<span class="kw">await
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .collect()
     }
 
@@ -2454,7 +2468,7 @@
 
         <span class="comment">// Inputs
         </span><span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(offer.amount)<span class="question-mark">?</span>;
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(offer.amount).<span class="kw">await</span><span class="question-mark">?</span>;
         builder.input_coins(coins)<span class="question-mark">?</span>;
 
         <span class="comment">// Outputs
@@ -2502,12 +2516,13 @@
 
     <span class="doccomment">/// Lists all claim transactions for outgoing contracts that we have submitted but were not part
     /// of the consensus yet.
-    </span><span class="kw">pub fn </span>list_pending_claimed_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ContractId&gt; {
+    </span><span class="kw">pub async fn </span>list_pending_claimed_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ContractId&gt; {
         <span class="self">self</span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKeyPrefix)
-            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0 </span>.<span class="number">0</span>)
+            .<span class="kw">await
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0 </span>.<span class="number">0</span>)
             .collect()
     }
 
@@ -2545,10 +2560,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>list_fetchable_coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutPoint&gt; {
+    <span class="kw">pub async fn </span>list_fetchable_coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutPoint&gt; {
         <span class="self">self</span>.mint_client()
             .list_active_issuances()
-            .into_iter()
+            .<span class="kw">await
+            </span>.into_iter()
             .map(|(outpoint, <span class="kw">_</span>)| outpoint)
             .collect()
     }

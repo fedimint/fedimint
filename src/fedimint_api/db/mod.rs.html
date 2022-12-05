@@ -701,6 +701,11 @@
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -806,11 +811,11 @@
 </span><span class="kw">pub trait </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;: <span class="lifetime">&#39;a </span>+ Send {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
-    <span class="kw">fn </span>raw_get_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
+    <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
-    <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt;;
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt;;
 
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
@@ -904,12 +909,12 @@
         }
     }
 
-    <span class="kw">pub fn </span>get_value&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
+    <span class="kw">pub async fn </span>get_value&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseKeyPrefixConst,
     {
         <span class="kw">let </span>key_bytes = key.to_bytes();
-        <span class="kw">let </span>value_bytes = <span class="kw">match </span><span class="self">self</span>.raw_get_bytes(<span class="kw-2">&amp;</span>key_bytes)<span class="question-mark">? </span>{
+        <span class="kw">let </span>value_bytes = <span class="kw">match </span><span class="self">self</span>.raw_get_bytes(<span class="kw-2">&amp;</span>key_bytes).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="prelude-val">Some</span>(value) =&gt; value,
             <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
         };
@@ -935,27 +940,29 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">1</span>)<span class="question-mark">?</span>))
     }
 
-    <span class="kw">pub fn </span>find_by_prefix&lt;KP&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    <span class="kw">pub async fn </span>find_by_prefix&lt;KP&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         key_prefix: <span class="kw-2">&amp;</span>KP,
     ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;(KP::Key, KP::Value)&gt;&gt; + <span class="lifetime">&#39;_
     </span><span class="kw">where
         </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
-        <span class="kw">let </span>decoders = <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">1</span>;
+        <span class="kw">let </span>decoders = <span class="self">self</span>.<span class="number">1</span>.clone();
         <span class="kw">let </span>prefix_bytes = key_prefix.to_bytes();
-        <span class="self">self</span>.raw_find_by_prefix(<span class="kw-2">&amp;</span>prefix_bytes).map(|res| {
-            res.and_then(|(key_bytes, value_bytes)| {
-                <span class="kw">let </span>key = KP::Key::from_bytes(<span class="kw-2">&amp;</span>key_bytes, decoders)<span class="question-mark">?</span>;
-                <span class="macro">trace!</span>(
-                    <span class="string">&quot;find by prefix: Decoding {} from bytes {:?}&quot;</span>,
-                    std::any::type_name::&lt;KP::Value&gt;(),
-                    value_bytes
-                );
-                <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, decoders)<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>((key, value))
+        <span class="self">self</span>.raw_find_by_prefix(<span class="kw-2">&amp;</span>prefix_bytes)
+            .<span class="kw">await
+            </span>.map(<span class="kw">move </span>|res| {
+                res.and_then(|(key_bytes, value_bytes)| {
+                    <span class="kw">let </span>key = KP::Key::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+                    <span class="macro">trace!</span>(
+                        <span class="string">&quot;find by prefix: Decoding {} from bytes {:?}&quot;</span>,
+                        std::any::type_name::&lt;KP::Value&gt;(),
+                        value_bytes
+                    );
+                    <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>((key, value))
+                })
             })
-        })
     }
 }
 
@@ -1117,7 +1124,7 @@
 
     <span class="kw">pub async fn </span>verify_remove_nonexisting(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
-        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">None</span>);
+        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
         <span class="kw">let </span>removed = dbtx.remove_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(removed.is_ok());
     }
@@ -1131,12 +1138,12 @@
             </span>.unwrap()
             .is_none());
 
-        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
+        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
 
         <span class="kw">let </span>removed = dbtx.remove_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(removed.is_ok());
         <span class="macro">assert_eq!</span>(removed.unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
-        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">None</span>);
+        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
     }
 
     <span class="kw">pub async fn </span>verify_read_own_writes(db: Database) {
@@ -1148,7 +1155,7 @@
             </span>.unwrap()
             .is_none());
 
-        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
+        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
     }
 
     <span class="kw">pub async fn </span>verify_prevent_dirty_reads(db: Database) {
@@ -1161,8 +1168,8 @@
             .is_none());
 
         <span class="comment">// dbtx2 should not be able to see uncommitted changes
-        </span><span class="kw">let </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
-        <span class="macro">assert_eq!</span>(dbtx2.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">None</span>);
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
+        <span class="macro">assert_eq!</span>(dbtx2.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
     }
 
     <span class="kw">pub async fn </span>verify_find_by_prefix(db: Database) {
@@ -1187,10 +1194,10 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="comment">// Verify finding by prefix returns the correct set of key pairs
-        </span><span class="kw">let </span>dbtx = db.begin_transaction(ModuleRegistry::default());
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix) {
+        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
             <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
                 TestKey(<span class="number">55</span>) =&gt; {
                     <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>)));
@@ -1210,7 +1217,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>AltDbPrefixTestPrefix) {
+        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>AltDbPrefixTestPrefix).<span class="kw">await </span>{
             <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
                 AltTestKey(<span class="number">55</span>) =&gt; {
                     <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>)));
@@ -1240,8 +1247,11 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="comment">// Verify dbtx2 can see committed transactions
-        </span><span class="kw">let </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
-        <span class="macro">assert_eq!</span>(dbtx2.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
+        <span class="macro">assert_eq!</span>(
+            dbtx2.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(),
+            <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>))
+        );
     }
 
     <span class="kw">pub async fn </span>verify_rollback_to_savepoint(db: Database) {
@@ -1260,27 +1270,27 @@
             </span>.is_ok());
 
         <span class="macro">assert_eq!</span>(
-            dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">20</span>)).unwrap(),
+            dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">20</span>)).<span class="kw">await</span>.unwrap(),
             <span class="prelude-val">Some</span>(TestVal(<span class="number">2000</span>))
         );
         <span class="macro">assert_eq!</span>(
-            dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">21</span>)).unwrap(),
+            dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">21</span>)).<span class="kw">await</span>.unwrap(),
             <span class="prelude-val">Some</span>(TestVal(<span class="number">2001</span>))
         );
 
         dbtx_rollback.rollback_tx_to_savepoint().<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(
-            dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">20</span>)).unwrap(),
+            dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">20</span>)).<span class="kw">await</span>.unwrap(),
             <span class="prelude-val">Some</span>(TestVal(<span class="number">2000</span>))
         );
 
-        <span class="macro">assert_eq!</span>(dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">21</span>)).unwrap(), <span class="prelude-val">None</span>);
+        <span class="macro">assert_eq!</span>(dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">21</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
     }
 
     <span class="kw">pub async fn </span>verify_prevent_nonrepeatable_reads(db: Database) {
-        <span class="kw">let </span>dbtx = db.begin_transaction(ModuleRegistry::default());
-        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).unwrap(), <span class="prelude-val">None</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
+        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default());
 
@@ -1289,17 +1299,17 @@
             .<span class="kw">await
             </span>.is_ok());
 
-        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).unwrap(), <span class="prelude-val">None</span>);
+        <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
 
         dbtx2.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="comment">// dbtx should still read None because it is operating over a snapshot
         // of the data when the transaction started
-        </span><span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).unwrap(), <span class="prelude-val">None</span>);
+        </span><span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">0</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix) {
+        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
             <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
                 TestKey(<span class="number">100</span>) =&gt; {
                     <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
@@ -1329,10 +1339,10 @@
 
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="kw">let </span>dbtx = db.begin_transaction(ModuleRegistry::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix) {
+        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
             <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
                 TestKey(<span class="number">100</span>) =&gt; {
                     <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
@@ -1360,7 +1370,7 @@
         dbtx2.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix) {
+        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
             <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
                 TestKey(<span class="number">100</span>) =&gt; {
                     <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));

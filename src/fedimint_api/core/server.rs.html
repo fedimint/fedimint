@@ -464,6 +464,9 @@
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
 <a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -587,7 +590,7 @@
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    </span><span class="kw">fn </span>validate_output(
+    </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span>Output,
@@ -624,7 +627,7 @@
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    </span><span class="kw">fn </span>output_status(
+    </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
@@ -634,7 +637,7 @@
     ///
     /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
     /// and consensus should halt.
-    </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit);
+    </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit);
 
     <span class="doccomment">/// Defines the prefix for API endpoints defined by the module.
     ///
@@ -831,7 +834,7 @@
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    </span><span class="kw">fn </span>validate_output(
+    </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span>Output,
@@ -844,7 +847,8 @@
                 .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Output&gt;()
                 .expect(<span class="string">&quot;incorrect output type passed to module plugin&quot;</span>),
         )
-    }
+        .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
@@ -890,21 +894,23 @@
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    </span><span class="kw">fn </span>output_status(
+    </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;OutputOutcome&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::output_status(<span class="self">self</span>, dbtx, out_point).map(Into::into)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::output_status(<span class="self">self</span>, dbtx, out_point)
+            .<span class="kw">await
+            </span>.map(Into::into)
     }
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
     ///
     /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
     /// and consensus should halt.
-    </span><span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::audit(<span class="self">self</span>, dbtx, audit)
-    }
+    </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::audit(<span class="self">self</span>, dbtx, audit).<span class="kw">await
+    </span>}
 
     <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::api_base_name(<span class="self">self</span>)

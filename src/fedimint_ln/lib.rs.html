@@ -962,6 +962,32 @@
 <a href="#962" id="962">962</a>
 <a href="#963" id="963">963</a>
 <a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1295,7 +1321,8 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(ProposeDecryptionShareKey(contract_id), share) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 LightningConsensusItem { contract_id, share }
             })
@@ -1336,7 +1363,8 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="kw">let </span>account: ContractAccount = <span class="self">self
             </span>.get_contract_account(dbtx, input.contract_id)
-            .ok_or(LightningModuleError::UnknownContract(input.contract_id))
+            .<span class="kw">await
+            </span>.ok_or(LightningModuleError::UnknownContract(input.contract_id))
             .into_module_error_other()<span class="question-mark">?</span>;
 
         <span class="kw">if </span>account.amount &lt; input.amount {
@@ -1414,7 +1442,8 @@
         <span class="kw">let </span>account_db_key = ContractKey(input.contract_id);
         <span class="kw">let </span><span class="kw-2">mut </span>contract_account = dbtx
             .get_value(<span class="kw-2">&amp;</span>account_db_key)
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .expect(<span class="string">&quot;Should fail validation if contract account doesn&#39;t exist&quot;</span>);
         contract_account.amount -= meta.amount.amount;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>account_db_key, <span class="kw-2">&amp;</span>contract_account)
@@ -1424,7 +1453,7 @@
         <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn </span>validate_output(
+    <span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
@@ -1435,7 +1464,8 @@
                 </span><span class="kw">if let </span>Contract::Incoming(incoming) = <span class="kw-2">&amp;</span>contract.contract {
                     <span class="kw">let </span>offer = dbtx
                         .get_value(<span class="kw-2">&amp;</span>OfferKey(incoming.hash))
-                        .expect(<span class="string">&quot;DB error&quot;</span>)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                         .ok_or(LightningModuleError::NoOffer(incoming.hash))
                         .into_module_error_other()<span class="question-mark">?</span>;
 
@@ -1471,7 +1501,8 @@
             } =&gt; {
                 <span class="kw">let </span>contract_account = dbtx
                     .get_value(<span class="kw-2">&amp;</span>ContractKey(<span class="kw-2">*</span>contract))
-                    .expect(<span class="string">&quot;DB error&quot;</span>)
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                     .ok_or(LightningModuleError::UnknownContract(<span class="kw-2">*</span>contract))
                     .into_module_error_other()<span class="question-mark">?</span>;
 
@@ -1503,14 +1534,15 @@
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output)<span class="question-mark">?</span>;
+        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">match </span>output {
             LightningOutput::Contract(contract) =&gt; {
                 <span class="kw">let </span>contract_db_key = ContractKey(contract.contract.contract_id());
                 <span class="kw">let </span>updated_contract_account = dbtx
                     .get_value(<span class="kw-2">&amp;</span>contract_db_key)
-                    .expect(<span class="string">&quot;DB error&quot;</span>)
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                     .map(|<span class="kw-2">mut </span>value: ContractAccount| {
                         value.amount += amount.amount;
                         value
@@ -1536,7 +1568,8 @@
                 <span class="kw">if let </span>Contract::Incoming(incoming) = <span class="kw-2">&amp;</span>contract.contract {
                     <span class="kw">let </span>offer = dbtx
                         .get_value(<span class="kw-2">&amp;</span>OfferKey(incoming.hash))
-                        .expect(<span class="string">&quot;DB error&quot;</span>)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                         .expect(<span class="string">&quot;offer exists if output is valid&quot;</span>);
 
                     <span class="kw">let </span>decryption_share = <span class="self">self
@@ -1571,7 +1604,8 @@
                 <span class="kw">let </span>updated_contract_account = {
                     <span class="kw">let </span><span class="kw-2">mut </span>contract_account = dbtx
                         .get_value(<span class="kw-2">&amp;</span>ContractKey(<span class="kw-2">*</span>contract))
-                        .expect(<span class="string">&quot;DB error&quot;</span>)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                         .expect(<span class="string">&quot;Contract exists if output is valid&quot;</span>);
 
                     <span class="kw">let </span>outgoing_contract = <span class="kw">match </span><span class="kw-2">&amp;mut </span>contract_account.contract {
@@ -1604,7 +1638,8 @@
         <span class="comment">// Decrypt preimages
         </span><span class="kw">let </span>preimage_decryption_shares = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>AgreedDecryptionShareKeyPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.<span class="number">0</span>, (key.<span class="number">1</span>, value))
             })
@@ -1616,7 +1651,7 @@
             <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;decrypt_preimage&quot;</span>, %contract_id);
             <span class="kw">let </span>_gaurd = span.enter();
 
-            <span class="kw">let </span>incoming_contract = <span class="kw">match </span><span class="self">self</span>.get_contract_account(dbtx, contract_id) {
+            <span class="kw">let </span>incoming_contract = <span class="kw">match </span><span class="self">self</span>.get_contract_account(dbtx, contract_id).<span class="kw">await </span>{
                 <span class="prelude-val">Some</span>(ContractAccount {
                     contract: FundedContract::Incoming(incoming),
                     ..
@@ -1660,7 +1695,8 @@
 
             <span class="kw">let </span>contract = <span class="self">self
                 </span>.get_contract_account(dbtx, contract_id)
-                .expect(<span class="string">&quot;decryption shares without contracts should be discarded earlier&quot;</span>); <span class="comment">// FIXME: verify
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;decryption shares without contracts should be discarded earlier&quot;</span>); <span class="comment">// FIXME: verify
 
             </span><span class="kw">let </span>(incoming_contract, out_point) = <span class="kw">match </span>contract.contract {
                 FundedContract::Incoming(incoming) =&gt; (incoming.contract, incoming.out_point),
@@ -1725,7 +1761,8 @@
             </span><span class="kw">let </span>contract_db_key = ContractKey(contract_id);
             <span class="kw">let </span><span class="kw-2">mut </span>contract_account = dbtx
                 .get_value(<span class="kw-2">&amp;</span>contract_db_key)
-                .expect(<span class="string">&quot;DB error&quot;</span>)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                 .expect(<span class="string">&quot;checked before that it exists&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>incoming = <span class="kw">match </span><span class="kw-2">&amp;mut </span>contract_account.contract {
                 FundedContract::Incoming(incoming) =&gt; incoming,
@@ -1741,7 +1778,8 @@
             </span><span class="kw">let </span>outcome_db_key = ContractUpdateKey(out_point);
             <span class="kw">let </span><span class="kw-2">mut </span>outcome = dbtx
                 .get_value(<span class="kw-2">&amp;</span>outcome_db_key)
-                .expect(<span class="string">&quot;DB error&quot;</span>)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                 .expect(<span class="string">&quot;outcome was created on funding&quot;</span>);
             <span class="kw">let </span>incoming_contract_outcome_preimage = <span class="kw">match </span><span class="kw-2">&amp;mut </span>outcome {
                 LightningOutputOutcome::Contract {
@@ -1759,19 +1797,22 @@
         bad_peers
     }
 
-    <span class="kw">fn </span>output_status(
+    <span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        audit.add_items(dbtx, <span class="kw-2">&amp;</span>ContractKeyPrefix, |<span class="kw">_</span>, v| {
-            -(v.amount.milli_sat <span class="kw">as </span>i64)
-        });
+    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit
+            .add_items(dbtx, <span class="kw-2">&amp;</span>ContractKeyPrefix, |<span class="kw">_</span>, v| {
+                -(v.amount.milli_sat <span class="kw">as </span>i64)
+            })
+            .<span class="kw">await</span>;
     }
 
     <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
@@ -1785,13 +1826,14 @@
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, contract_id: ContractId| -&gt; ContractAccount {
                     module
                         .get_contract_account(<span class="kw-2">&amp;mut </span>dbtx, contract_id)
-                        .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
+                        .<span class="kw">await
+                        </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/offers&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, _params: ()| -&gt; Vec&lt;IncomingContractOffer&gt; {
-                    <span class="prelude-val">Ok</span>(module.get_offers(<span class="kw-2">&amp;mut </span>dbtx))
+                    <span class="prelude-val">Ok</span>(module.get_offers(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
@@ -1799,7 +1841,8 @@
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
                     <span class="kw">let </span>offer = module
                         .get_offer(<span class="kw-2">&amp;mut </span>dbtx, payment_hash)
-                        .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
+                        .<span class="kw">await
+                        </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
 
                     <span class="macro">debug!</span>(%payment_hash, <span class="string">&quot;Sending offer info&quot;</span>);
                     <span class="prelude-val">Ok</span>(offer)
@@ -1808,7 +1851,7 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/list_gateways&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, dbtx, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
-                    <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>dbtx))
+                    <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
@@ -1840,31 +1883,40 @@
             .verify_decryption_share(<span class="kw-2">&amp;</span>share.<span class="number">0</span>, <span class="kw-2">&amp;</span>message.<span class="number">0</span>)
     }
 
-    <span class="kw">pub fn </span>get_offer(
+    <span class="kw">pub async fn </span>get_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
-        dbtx.get_value(<span class="kw-2">&amp;</span>OfferKey(payment_hash)).expect(<span class="string">&quot;DB error&quot;</span>)
+        dbtx.get_value(<span class="kw-2">&amp;</span>OfferKey(payment_hash))
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>get_offers(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction) -&gt; Vec&lt;IncomingContractOffer&gt; {
+    <span class="kw">pub async fn </span>get_offers(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; Vec&lt;IncomingContractOffer&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>OfferKeyPrefix)
-            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .<span class="kw">await
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .collect()
     }
 
-    <span class="kw">pub fn </span>get_contract_account(
+    <span class="kw">pub async fn </span>get_contract_account(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         contract_id: ContractId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
-        dbtx.get_value(<span class="kw-2">&amp;</span>ContractKey(contract_id)).expect(<span class="string">&quot;DB error&quot;</span>)
+        dbtx.get_value(<span class="kw-2">&amp;</span>ContractKey(contract_id))
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction) -&gt; Vec&lt;LightningGateway&gt; {
+    <span class="kw">pub async fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Vec&lt;LightningGateway&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
-            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .<span class="kw">await
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .collect()
     }
 

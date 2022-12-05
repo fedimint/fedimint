@@ -63,6 +63,7 @@
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
@@ -85,9 +86,9 @@
         }
     }
 
-    <span class="kw">pub fn </span>add_items&lt;KP, F&gt;(
+    <span class="kw">pub async fn </span>add_items&lt;KP, F&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         key_prefix: <span class="kw-2">&amp;</span>KP,
         to_milli_sat: F,
     ) <span class="kw">where
@@ -96,7 +97,8 @@
     {
         <span class="kw">let </span><span class="kw-2">mut </span>new_items = dbtx
             .find_by_prefix(key_prefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, key);
                 <span class="kw">let </span>milli_sat = to_milli_sat(key, value);

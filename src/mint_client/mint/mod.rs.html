@@ -875,6 +875,14 @@
 <a href="#875" id="875">875</a>
 <a href="#876" id="876">876</a>
 <a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1011,10 +1019,11 @@
         <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default())
     }
 
-    <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
+    <span class="kw">pub async fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.start_dbtx()
             .find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, spendable_coin) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.amount, spendable_coin)
             })
@@ -1022,26 +1031,28 @@
     }
 
     <span class="doccomment">/// Get available spendable notes with a db transaction already opened
-    </span><span class="kw">pub fn </span>get_available_notes(
+    </span><span class="kw">pub async fn </span>get_available_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; TieredMulti&lt;SpendableNote&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(key, spendable_coin) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.amount, spendable_coin)
             })
             .collect()
     }
 
-    <span class="kw">pub fn </span>get_last_note_index(
+    <span class="kw">pub async fn </span>get_last_note_index(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         amount: Amount,
     ) -&gt; NoteIndex {
         NoteIndex(
             dbtx.get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount))
-                .expect(<span class="string">&quot;DB error&quot;</span>)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                 .unwrap_or(<span class="number">0</span>),
         )
     }
@@ -1050,7 +1061,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>new_idx;
         <span class="kw">loop </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx();
-            new_idx = <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).next();
+            new_idx = <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>.next();
             dbtx.insert_entry(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.as_u64())
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1074,10 +1085,11 @@
         NoteIssuanceRequest::new(ctx, secret)
     }
 
-    <span class="kw">pub fn </span>select_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
+    <span class="kw">pub async fn </span>select_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>coins = <span class="self">self
             </span>.coins()
-            .select_coins(amount)
+            .<span class="kw">await
+            </span>.select_coins(amount)
             .ok_or(MintClientError::NotEnoughCoins)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(coins)
@@ -1149,7 +1161,8 @@
             .db
             .begin_transaction(ModuleRegistry::default())
             .get_value(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .ok_or(MintClientError::FinalizationError(
                 CoinFinalizationError::UnknownIssuance,
             ))<span class="question-mark">?</span>;
@@ -1180,12 +1193,13 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {
+    <span class="kw">pub async fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {
         <span class="self">self</span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
             .find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
-            .map(|res| {
+            .<span class="kw">await
+            </span>.map(|res| {
                 <span class="kw">let </span>(OutputFinalizationKey(outpoint), cfd) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (outpoint, cfd)
             })
@@ -1193,7 +1207,7 @@
     }
 
     <span class="kw">pub async fn </span>fetch_all_coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="prelude-ty">Result</span>&lt;OutPoint&gt;&gt; {
-        <span class="kw">let </span>active_issuances = <span class="self">self</span>.list_active_issuances();
+        <span class="kw">let </span>active_issuances = <span class="self">self</span>.list_active_issuances().<span class="kw">await</span>;
         <span class="kw">if </span>active_issuances.is_empty() {
             <span class="kw">return </span>Vec::new();
         }
@@ -1421,7 +1435,8 @@
                             txid: tx,
                             out_idx: <span class="number">0</span>,
                         })
-                        .unwrap()
+                        .<span class="kw">await
+                        </span>.unwrap()
                         .into()),
                 )],
             })
@@ -1583,7 +1598,7 @@
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sat(<span class="number">12</span>);
         issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, ISSUE_AMOUNT).<span class="kw">await</span>;
 
-        <span class="macro">assert_eq!</span>(client.coins().total_amount(), ISSUE_AMOUNT)
+        <span class="macro">assert_eq!</span>(client.coins().<span class="kw">await</span>.total_amount(), ISSUE_AMOUNT)
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
@@ -1610,7 +1625,7 @@
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
         <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
         <span class="kw">let </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
+        <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>(spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
         <span class="kw">let </span>client = <span class="kw-2">&amp;</span>client;
@@ -1642,7 +1657,7 @@
             .<span class="kw">await</span>;
 
         <span class="comment">// The right amount of money is left
-        </span><span class="macro">assert_eq!</span>(client.coins().total_amount(), SPEND_AMOUNT);
+        </span><span class="macro">assert_eq!</span>(client.coins().<span class="kw">await</span>.total_amount(), SPEND_AMOUNT);
 
         <span class="comment">// Double spends aren&#39;t possible
         </span><span class="macro">assert!</span>(fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).<span class="kw">await</span>.is_err());
@@ -1653,7 +1668,7 @@
             .db
             .begin_transaction(ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
-        <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
+        <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>(spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
         builder.input_coins(coins).unwrap();
@@ -1680,7 +1695,7 @@
         );
 
         <span class="comment">// No money is left
-        </span><span class="macro">assert_eq!</span>(client.coins().total_amount(), Amount::ZERO);
+        </span><span class="macro">assert_eq!</span>(client.coins().<span class="kw">await</span>.total_amount(), Amount::ZERO);
     }
 
     <span class="attr">#[allow(clippy::needless_collect)]
@@ -1746,7 +1761,8 @@
             .db
             .begin_transaction(ModuleRegistry::default())
             .get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount))
-            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .unwrap_or(<span class="number">0</span>);
         <span class="comment">// Ensure we didn&#39;t skip any keys
         </span><span class="macro">assert_eq!</span>(last_idx, result_count <span class="kw">as </span>u64);

@@ -438,6 +438,26 @@
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -538,27 +558,35 @@
         address
     }
 
-    <span class="kw">pub fn </span>create_pegin_input(
+    <span class="kw">pub async fn </span>create_pegin_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txout_proof: TxOutProof,
         btc_transaction: bitcoin::Transaction,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(KeyPair, PegInProof)&gt; {
-        <span class="kw">let </span>(output_idx, secret_tweak_key_bytes) = btc_transaction
-            .output
-            .iter()
-            .enumerate()
-            .find_map(|(idx, out)| {
+        <span class="kw">let </span>output_function = || <span class="kw">async </span>{
+            <span class="kw">for </span>(idx, out) <span class="kw">in </span>btc_transaction.output.iter().enumerate() {
                 <span class="macro">debug!</span>(output_script = <span class="question-mark">?</span>out.script_pubkey);
-                <span class="self">self</span>.context
+                <span class="kw">let </span>result = <span class="self">self
+                    </span>.context
                     .db
                     .begin_transaction(ModuleRegistry::default())
                     .get_value(<span class="kw-2">&amp;</span>PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
-                    .expect(<span class="string">&quot;DB error&quot;</span>)
-                    .map(|tweak_secret| (idx, tweak_secret))
-            })
-            .ok_or(WalletClientError::NoMatchingPegInFound)<span class="question-mark">?</span>;
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;DB error&quot;</span>)
+                    .map(|tweak_secret| (idx, tweak_secret));
+                <span class="kw">if </span>result.is_some() {
+                    <span class="kw">return </span>result;
+                }
+            }
+            <span class="prelude-val">None
+        </span>};
+
+        <span class="kw">let </span>(output_idx, secret_tweak_key_bytes) = output_function()
+            .<span class="kw">await
+            </span>.ok_or(WalletClientError::NoMatchingPegInFound)<span class="question-mark">?</span>;
+
         <span class="kw">let </span>secret_tweak_key =
             bitcoin::KeyPair::from_seckey_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span>secret_tweak_key_bytes)
                 .expect(<span class="string">&quot;sec key was generated and saved by us&quot;</span>);
@@ -862,9 +890,15 @@
         </span>fedimint_api::task::sleep(Duration::from_secs(<span class="number">12</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(btc_rpc.is_btc_sent_to(amount, addr).<span class="kw">await</span>);
 
-        <span class="kw">let </span>wallet_value = fed.lock().<span class="kw">await</span>.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(<span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()))
-        });
+        <span class="kw">let </span>wallet_value = fed
+            .lock()
+            .<span class="kw">await
+            </span>.fetch_from_all(|wallet, db| <span class="kw">async </span>{
+                wallet
+                    .get_wallet_value(<span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()))
+                    .<span class="kw">await
+            </span>})
+            .<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(wallet_value, bitcoin::Amount::from_sat(<span class="number">0</span>));
 
         <span class="comment">// test change recognition, wallet should hold some sats
@@ -872,9 +906,15 @@
         btc_rpc.set_block_height(<span class="number">301</span>).<span class="kw">await</span>;
         fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 
-        <span class="kw">let </span>wallet_value = fed.lock().<span class="kw">await</span>.fetch_from_all(|wallet, db| {
-            wallet.get_wallet_value(<span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()))
-        });
+        <span class="kw">let </span>wallet_value = fed
+            .lock()
+            .<span class="kw">await
+            </span>.fetch_from_all(|wallet, db| <span class="kw">async </span>{
+                wallet
+                    .get_wallet_value(<span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()))
+                    .<span class="kw">await
+            </span>})
+            .<span class="kw">await</span>;
         <span class="macro">assert!</span>(wallet_value &gt; bitcoin::Amount::from_sat(<span class="number">0</span>));
     }
 }
