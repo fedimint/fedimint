@@ -24,7 +24,7 @@ use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
-use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindingKey};
+use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 use thiserror::Error;
 use tracing::{trace, warn};
 
@@ -86,6 +86,26 @@ pub struct NoteIssuanceRequest {
     blinding_key: BlindingKey,
 }
 
+impl NoteIssuanceRequest {
+    pub fn finalize(
+        &self,
+        bsig: BlindedSignature,
+        mint_pub_key: AggregatePublicKey,
+    ) -> std::result::Result<SpendableNote, CoinFinalizationError> {
+        let sig = unblind_signature(self.blinding_key, bsig);
+        let note = Note(self.nonce(), sig);
+        if note.verify(mint_pub_key) {
+            let spendable_note = SpendableNote {
+                note,
+                spend_key: self.spend_key,
+            };
+
+            Ok(spendable_note)
+        } else {
+            Err(CoinFinalizationError::InvalidSignature)
+        }
+    }
+}
 /// Multiple [`Note`] issuance requests
 ///
 /// Keeps all the data to generate [`SpendableNote`]s once the
@@ -379,18 +399,15 @@ impl NoteIssuanceRequests {
             .zip(bsigs.0)
             .enumerate()
             .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
-                let sig = unblind_signature(coin_req.blinding_key, bsig);
-                let coin = Note(coin_req.nonce(), sig);
-                if coin.verify(*mint_pub_key.tier(&amt)?) {
-                    let coin = SpendableNote {
-                        note: coin,
-                        spend_key: coin_req.spend_key,
-                    };
-
-                    Ok((amt, coin))
-                } else {
-                    Err(CoinFinalizationError::InvalidSignature(idx))
-                }
+                Ok((
+                    amt,
+                    match coin_req.finalize(bsig, *mint_pub_key.tier(&amt)?) {
+                        Err(CoinFinalizationError::InvalidSignature) => {
+                            Err(CoinFinalizationError::InvalidSignatureAtIdx(idx))
+                        }
+                        other => other,
+                    }?,
+                ))
             })
             .collect()
     }
@@ -435,8 +452,10 @@ type Result<T> = std::result::Result<T, MintClientError>;
 pub enum CoinFinalizationError {
     #[error("The returned answer does not fit the request")]
     WrongMintAnswer,
+    #[error("The blind signature")]
+    InvalidSignature,
     #[error("The blind signature at index {0} is invalid")]
-    InvalidSignature(usize),
+    InvalidSignatureAtIdx(usize),
     #[error("Expected signatures for issuance request {0}, got signatures for request {1}")]
     InvalidIssuanceId(TransactionId, TransactionId),
     #[error("Invalid amount tier {0:?}")]
