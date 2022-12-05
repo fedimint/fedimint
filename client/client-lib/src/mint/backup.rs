@@ -120,13 +120,12 @@ impl MintClient {
         let epoch = self.context.api.fetch_last_epoch().await?;
 
         let mut dbtx = self.start_dbtx();
-        let notes = self.get_available_notes(&mut dbtx);
-        let last_idx = Tiered::from_iter(
-            self.config
-                .tbs_pks
-                .tiers()
-                .map(|&amount| (amount, self.get_last_note_index(&mut dbtx, amount))),
-        );
+        let notes = self.get_available_notes(&mut dbtx).await;
+        let mut note_idxs = Vec::new();
+        for &amount in self.config.tbs_pks.tiers() {
+            note_idxs.push((amount, self.get_last_note_index(&mut dbtx, amount).await));
+        }
+        let last_idx = Tiered::from_iter(note_idxs.into_iter());
 
         Ok(PlaintextEcashBackup {
             notes,

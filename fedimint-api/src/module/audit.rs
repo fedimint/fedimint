@@ -20,9 +20,9 @@ impl Audit {
         }
     }
 
-    pub fn add_items<KP, F>(
+    pub async fn add_items<KP, F>(
         &mut self,
-        dbtx: &mut DatabaseTransaction,
+        dbtx: &mut DatabaseTransaction<'_>,
         key_prefix: &KP,
         to_milli_sat: F,
     ) where
@@ -31,6 +31,7 @@ impl Audit {
     {
         let mut new_items = dbtx
             .find_by_prefix(key_prefix)
+            .await
             .map(|res| {
                 let (key, value) = res.expect("DB error");
                 let name = format!("{:?}", key);

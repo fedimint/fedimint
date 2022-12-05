@@ -234,6 +234,6 @@ impl GatewayActor {
     pub async fn get_balance(&self) -> Result<Amount> {
         self.fetch_all_coins().await;
 
-        Ok(self.client.coins().total_amount())
+        Ok(self.client.coins().await.total_amount())
     }
 }

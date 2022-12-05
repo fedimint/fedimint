@@ -121,7 +121,7 @@ pub trait IServerModule: Debug {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(
+    async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
         output: &Output,
@@ -158,7 +158,7 @@ pub trait IServerModule: Debug {
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(
+    async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
@@ -168,7 +168,7 @@ pub trait IServerModule: Debug {
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
+    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///
@@ -365,7 +365,7 @@ where
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(
+    async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
         output: &Output,
@@ -378,6 +378,7 @@ where
                 .downcast_ref::<<Self as ServerModulePlugin>::Output>()
                 .expect("incorrect output type passed to module plugin"),
         )
+        .await
     }
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
@@ -424,20 +425,22 @@ where
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(
+    async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<OutputOutcome> {
-        <Self as ServerModulePlugin>::output_status(self, dbtx, out_point).map(Into::into)
+        <Self as ServerModulePlugin>::output_status(self, dbtx, out_point)
+            .await
+            .map(Into::into)
     }
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
-        <Self as ServerModulePlugin>::audit(self, dbtx, audit)
+    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
+        <Self as ServerModulePlugin>::audit(self, dbtx, audit).await
     }
 
     fn api_base_name(&self) -> &'static str {

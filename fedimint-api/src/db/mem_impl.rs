@@ -68,7 +68,7 @@ impl IDatabase for MemDatabase {
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        let val = self.raw_get_bytes(key);
+        let val = self.raw_get_bytes(key).await;
         // Insert data from copy so we can read our own writes
         self.tx_data.insert(key.to_vec(), value.clone());
         self.operations
@@ -80,7 +80,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         val
     }
 
-    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.tx_data.get(key).cloned())
     }
 
@@ -95,7 +95,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Ok(ret)
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let mut data = self
             .tx_data
             .range::<Vec<u8>, _>((key_prefix.to_vec())..)
