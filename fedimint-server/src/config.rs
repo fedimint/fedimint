@@ -108,6 +108,7 @@ impl ServerConfig {
 
         ClientConfig {
             federation_name: self.federation_name.clone(),
+            epoch_pk: self.epoch_pk_set.public_key(),
             nodes,
             modules: self
                 .modules
@@ -215,7 +216,7 @@ impl ServerConfig {
             .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &module_cfg_gen_params)))
             .collect();
 
-        let server_config = netinfo
+        let server_config: BTreeMap<_, _> = netinfo
             .iter()
             .map(|(&id, netinf)| {
                 let epoch_keys = epochinfo.get(&id).unwrap();
@@ -249,6 +250,11 @@ impl ServerConfig {
         let client_config = ClientConfig {
             federation_name: peer0.federation_name.clone(),
             nodes: peer0.api.nodes("ws://", names),
+            epoch_pk: server_config
+                .get(&peers[0])
+                .expect("must have at least one peer")
+                .epoch_pk_set
+                .public_key(),
             modules: module_configs
                 .iter()
                 .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))

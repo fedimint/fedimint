@@ -42,6 +42,7 @@ const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 /// of the mint type.
 #[derive(Debug, Clone)]
 pub struct MintClient {
+    pub epoch_pk: threshold_crypto::PublicKey,
     pub config: MintClientConfig,
     pub context: Arc<ClientContext>,
     pub secret: DerivableSecret,
@@ -705,6 +706,7 @@ mod tests {
 
         let context = Arc::new(client_context);
         let client = MintClient {
+            epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
             secret: DerivableSecret::new(&[], &[]),
@@ -724,6 +726,7 @@ mod tests {
 
         let context = Arc::new(client_context);
         let client = MintClient {
+            epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
             secret: DerivableSecret::new(&[], &[]),
@@ -821,6 +824,7 @@ mod tests {
         let db = fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap();
 
         let client: MintClient = MintClient {
+            epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: MintClientConfig {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),

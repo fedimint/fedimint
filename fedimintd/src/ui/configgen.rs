@@ -128,7 +128,7 @@ fn trusted_dealer_gen(
         .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &module_cfg_gen_params)))
         .collect();
 
-    let server_config = netinfo
+    let server_config: BTreeMap<_, _> = netinfo
         .iter()
         .map(|(&id, netinf)| {
             let id_u16: u16 = id.into();
@@ -181,6 +181,11 @@ fn trusted_dealer_gen(
                 }
             })
             .collect(),
+        epoch_pk: server_config
+            .get(&peers[0])
+            .expect("must have at least one peer")
+            .epoch_pk_set
+            .public_key(),
         modules: module_configs
             .iter()
             .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))
