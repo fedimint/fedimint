@@ -1,9 +1,4 @@
-use std::{
-    fmt::Debug,
-    fs::File,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{fmt::Debug, fs::File, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use fedimint_api::{
@@ -147,15 +142,10 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
         let path: PathBuf = self.work_dir.join(format!("{}.json", federation_id.hash()));
 
-        if !Path::new(&path).is_file() {
-            debug!("Creating new gateway cfg file at {}", path.display());
-            let file = File::create(path).expect("Could not create gateway cfg file");
-            serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
-        } else {
-            debug!("Gateway cfg file already exists at {}", path.display());
-            let file = File::open(path).expect("Could not load gateway cfg file");
-            serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
-        }
+        let file = File::create(path).expect("Could not create gateway cfg file");
+        serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
+
+        // TODO: Safely save gateway configs without overwriting existing ones
 
         Ok(())
     }
