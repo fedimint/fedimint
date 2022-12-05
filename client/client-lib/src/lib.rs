@@ -193,6 +193,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         &self.context.api
     }
 
+    pub fn db(&self) -> &Database {
+        &self.context.db
+    }
+
     pub fn ln_client(&self) -> LnClient {
         LnClient {
             config: self
