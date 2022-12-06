@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use fedimint_api::config::ClientConfig;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
@@ -16,23 +15,22 @@ use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, ServerModulePlugin, Tiered, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{
-    BlindNonce, Mint, MintOutputOutcome, Nonce, Note, OutputOutcome,
+    BlindNonce, Mint, MintInput, MintOutput, MintOutputOutcome, Nonce, Note, OutputOutcome,
 };
+use fedimint_core::transaction::legacy::{Input, Output, Transaction};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 use thiserror::Error;
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 
 use crate::api::ApiError;
-use crate::mint::db::LastECashNoteIndexKey;
-use crate::transaction::TransactionBuilder;
+use crate::mint::db::{LastECashNoteIndexKey, PendingCoinsKey};
 use crate::utils::ClientContext;
-use crate::{ChildId, Client, DerivableSecret};
+use crate::{ChildId, DerivableSecret};
 
 pub mod backup;
 
@@ -155,6 +153,110 @@ impl MintClient {
         self.context.db.begin_transaction(ModuleRegistry::default())
     }
 
+    /// Adds the final amounts of `change` to the tx before submitting it
+    /// Allows for multiple `change` outputs
+    pub async fn finalize_change(&self, tx: &mut Transaction, change: Vec<Amount>) {
+        let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
+
+        for amount in change {
+            let (issuances, nonces) = self.create_output_coins(amount).await;
+            let out_idx = tx.outputs.len();
+            tx.outputs.push(Output::Mint(MintOutput(nonces)));
+            change_outputs.push((out_idx, issuances));
+        }
+        let txid = tx.tx_hash();
+
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
+
+        // remove the spent ecash from the DB
+        let mut input_ecash: Vec<(Amount, SpendableNote)> = vec![];
+        for input in &tx.inputs {
+            if let Input::Mint(MintInput(notes)) = input {
+                for (amount, note) in notes.clone() {
+                    let key = CoinKey {
+                        amount,
+                        nonce: note.0,
+                    };
+                    let spendable = dbtx
+                        .get_value(&key)
+                        .await
+                        .expect("DB Error")
+                        .expect("Missing note");
+                    input_ecash.push((amount, spendable));
+                    dbtx.remove_entry(&key).await.expect("DB Error");
+                }
+            }
+        }
+
+        // move ecash to pending state, awaiting a transaction
+        if !input_ecash.is_empty() {
+            let pending = TieredMulti::from_iter(input_ecash.into_iter());
+            dbtx.insert_entry(&PendingCoinsKey(txid), &pending)
+                .await
+                .expect("DB Error");
+        }
+
+        // write ecash outputs to db to await for tx success to be fetched later
+        for (out_idx, coins) in change_outputs.iter() {
+            dbtx.insert_new_entry(
+                &OutputFinalizationKey(OutPoint {
+                    txid,
+                    out_idx: *out_idx as u64,
+                }),
+                &coins.clone(),
+            )
+            .await
+            .expect("DB Error");
+        }
+
+        dbtx.commit_tx().await.expect("DB Error");
+    }
+
+    async fn create_output_coins(
+        &self,
+        amount: Amount,
+    ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
+        let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
+            Vec::new();
+        for (amt, ()) in TieredMulti::represent_amount(amount, &self.config.tbs_pks).into_iter() {
+            let (request, blind_nonce) = self.new_ecash_note(&self.context.secp, amt).await;
+            amount_requests.push(((amt, request), (amt, blind_nonce)));
+        }
+        let (coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
+            amount_requests.into_iter().unzip();
+
+        debug!(
+            %amount,
+            coins = %sig_req.0.item_count(),
+            tiers = ?sig_req.0.tiers().collect::<Vec<_>>(),
+            "Generated issuance request"
+        );
+
+        (coin_finalization_data, sig_req.0)
+    }
+
+    pub async fn select_input(&self, amount: Amount) -> Result<(Vec<KeyPair>, Input)> {
+        Self::ecash_input(self.select_coins(amount).await?)
+    }
+
+    pub fn ecash_input(ecash: TieredMulti<SpendableNote>) -> Result<(Vec<KeyPair>, Input)> {
+        let note_key_pairs = ecash
+            .into_iter()
+            .map(|(amt, note)| {
+                // We check for note validity in case we got it from an untrusted third party. We
+                // don't want to needlessly create invalid tx and bother the federation with them.
+                let spend_pub_key = note.spend_key.x_only_public_key().0;
+                if &spend_pub_key == note.note.spend_key() {
+                    Ok((note.spend_key, (amt, note.note)))
+                } else {
+                    Err(MintClientError::ReceivedUspendableCoin)
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let (key_pairs, input) = note_key_pairs.into_iter().unzip();
+        Ok((key_pairs, Input::Mint(MintInput(input))))
+    }
+
     pub async fn coins(&self) -> TieredMulti<SpendableNote> {
         self.start_dbtx()
             .find_by_prefix(&CoinKeyPrefix)
@@ -231,56 +333,16 @@ impl MintClient {
         Ok(coins)
     }
 
-    pub async fn submit_tx_with_change<'a, C, R>(
-        &self,
-        client: &Client<C>,
-        tx: TransactionBuilder,
-        rng: R,
-    ) -> Result<TransactionId>
-    where
-        C: AsRef<ClientConfig> + Clone,
-        R: RngCore + CryptoRng,
-    {
-        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
-        let change_required = tx.change_required(client);
-        let final_tx = tx
-            .build(
-                change_required,
-                &mut dbtx,
-                |note_amount| async move { self.new_ecash_note(&self.context.secp, note_amount).await },
-                &self.context.secp,
-                &self.config.tbs_pks,
-                rng,
-            )
-            .await;
-        let txid = final_tx.tx_hash();
-        let mint_tx_id = self.context.api.submit_transaction(final_tx).await?;
-        assert_eq!(
-            txid, mint_tx_id,
-            "Federation is faulty, returned wrong tx id."
-        );
-
-        dbtx.commit_tx().await.expect("DB Error");
-        Ok(txid)
-    }
-
-    pub async fn receive_coins<'a, F, Fut, G, GFut>(
+    pub async fn receive_coins<'a, F, Fut>(
         &self,
         amount: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
-        coin_gen: G,
         mut create_tx: F,
     ) where
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
-        G: FnMut(Amount) -> GFut,
-        GFut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
     {
-        let mut builder = TransactionBuilder::default();
-
-        let (finalization, coins) = builder
-            .create_output_coins(amount, coin_gen, &self.config.tbs_pks)
-            .await;
+        let (finalization, coins) = self.create_output_coins(amount).await;
         let out_point = create_tx(coins).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .await
@@ -537,6 +599,7 @@ mod tests {
     use fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
+    use fedimint_core::transaction::legacy::Input;
     use fedimint_testing::FakeFed;
     use futures::executor::block_on;
     use threshold_crypto::PublicKey;
@@ -695,24 +758,15 @@ mod tests {
 
         let mut dbtx = client_db.begin_transaction(ModuleRegistry::default());
         client
-            .receive_coins(
-                amt,
-                &mut dbtx,
-                |note_amount| async move {
-                    client
-                        .new_ecash_note(secp256k1_zkp::SECP256K1, note_amount)
-                        .await
-                },
-                |output| async {
-                    // Agree on output
-                    let mut fed = block_on(fed.lock());
-                    block_on(fed.consensus_round(&[], &[(out_point, MintOutput(output))]));
-                    // Generate signatures
-                    block_on(fed.consensus_round(&[], &[]));
+            .receive_coins(amt, &mut dbtx, |output| async {
+                // Agree on output
+                let mut fed = block_on(fed.lock());
+                block_on(fed.consensus_round(&[], &[(out_point, MintOutput(output))]));
+                // Generate signatures
+                block_on(fed.consensus_round(&[], &[]));
 
-                    out_point
-                },
-            )
+                out_point
+            })
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
@@ -754,85 +808,77 @@ mod tests {
         issue_tokens(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
 
         // Spending works
-        let mut dbtx = client
+        let dbtx = client
             .context
             .db
             .begin_transaction(ModuleRegistry::default());
         let mut builder = TransactionBuilder::default();
         let secp = &client.context.secp;
-        let tbs_pks = &client.config.tbs_pks;
+        let _tbs_pks = &client.config.tbs_pks;
         let rng = rand::rngs::OsRng;
         let coins = client.select_coins(SPEND_AMOUNT).await.unwrap();
-        let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
-        builder.input_coins(coins).unwrap();
+        let (spend_keys, ecash_input) = MintClient::ecash_input(coins.clone()).unwrap();
+
+        builder.input(&mut spend_keys.clone(), ecash_input.clone());
         let client = &client;
         builder
-            .build(
-                Amount::from_sat(0),
-                &mut dbtx,
-                |note_amount| async move { client.new_ecash_note(secp, note_amount).await },
-                secp,
-                tbs_pks,
-                rng,
-            )
+            .build_with_change(client.clone(), rng, vec![Amount::from_sat(0)], secp)
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
-        let meta = fed.lock().await.verify_input(&input).await.unwrap();
-        assert_eq!(meta.amount.amount, SPEND_AMOUNT);
-        assert_eq!(
-            meta.keys,
-            spend_keys
-                .into_iter()
-                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)
-                .collect::<Vec<_>>()
-        );
+        if let Input::Mint(input) = ecash_input {
+            let meta = fed.lock().await.verify_input(&input).await.unwrap();
+            assert_eq!(meta.amount.amount, SPEND_AMOUNT);
+            assert_eq!(
+                meta.keys,
+                spend_keys
+                    .into_iter()
+                    .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)
+                    .collect::<Vec<_>>()
+            );
 
-        fed.lock()
-            .await
-            .consensus_round(&[input.clone()], &[])
-            .await;
+            fed.lock()
+                .await
+                .consensus_round(&[input.clone()], &[])
+                .await;
 
-        // The right amount of money is left
-        assert_eq!(client.coins().await.total_amount(), SPEND_AMOUNT);
+            // The right amount of money is left
+            assert_eq!(client.coins().await.total_amount(), SPEND_AMOUNT);
 
-        // Double spends aren't possible
-        assert!(fed.lock().await.verify_input(&input).await.is_err());
+            // Double spends aren't possible
+            assert!(fed.lock().await.verify_input(&input).await.is_err());
+        }
 
         // We can exactly spend the remainder
-        let mut dbtx = client
+        let dbtx = client
             .context
             .db
             .begin_transaction(ModuleRegistry::default());
         let mut builder = TransactionBuilder::default();
         let coins = client.select_coins(SPEND_AMOUNT).await.unwrap();
         let rng = rand::rngs::OsRng;
-        let (spend_keys, input) = builder.create_input_from_coins(coins.clone()).unwrap();
-        builder.input_coins(coins).unwrap();
+        let (spend_keys, ecash_input) = MintClient::ecash_input(coins).unwrap();
+
+        builder.input(&mut spend_keys.clone(), ecash_input.clone());
         builder
-            .build(
-                Amount::from_sat(0),
-                &mut dbtx,
-                |note_amount| async move { client.new_ecash_note(secp, note_amount).await },
-                secp,
-                tbs_pks,
-                rng,
-            )
+            .build_with_change(client.clone(), rng, vec![Amount::from_sat(0)], secp)
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
-        let meta = fed.lock().await.verify_input(&input).await.unwrap();
-        assert_eq!(meta.amount.amount, SPEND_AMOUNT);
-        assert_eq!(
-            meta.keys,
-            spend_keys
-                .into_iter()
-                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)
-                .collect::<Vec<_>>()
-        );
+        if let Input::Mint(input) = ecash_input {
+            let meta = fed.lock().await.verify_input(&input).await.unwrap();
+            assert_eq!(meta.amount.amount, SPEND_AMOUNT);
+            assert_eq!(
+                meta.keys,
+                spend_keys
+                    .into_iter()
+                    .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)
+                    .collect::<Vec<_>>()
+            );
 
-        // No money is left
-        assert_eq!(client.coins().await.total_amount(), Amount::ZERO);
+            // No money is left
+            assert_eq!(client.coins().await.total_amount(), Amount::ZERO);
+        }
     }
 
     #[allow(clippy::needless_collect)]

@@ -12,9 +12,7 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
-use fedimint_mint::config::MintClientConfig;
 use fedimint_mint::{MintOutputConfirmation, OutputConfirmationSignatures};
-use fedimint_server::all_decoders;
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::legacy::Output;
@@ -23,6 +21,7 @@ use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
 use futures::future::{join_all, Either};
+use mint_client::mint::MintClient;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
 use threshold_crypto::{SecretKey, SecretKeyShare};
@@ -827,25 +826,10 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
-    let tbs_pks = &user
-        .config
-        .0
-        .get_module::<MintClientConfig>("mint")?
-        .tbs_pks;
-    let context = &user.client.mint_client().context;
-    let mut dbtx = context.db.begin_transaction(all_decoders());
-    let client = &user.client;
-    let tx = builder
-        .build(
-            sats(0),
-            &mut dbtx,
-            |amount| async move { client.mint_client().new_ecash_note(&secp(), amount).await },
-            &secp(),
-            tbs_pks,
-            rng(),
-        )
-        .await;
-    fed.submit_transaction(tx.into_type_erased()).await.unwrap();
+    let final_tx = builder.build(&user.client, rng()).await;
+    fed.submit_transaction(final_tx.into_type_erased())
+        .await
+        .unwrap();
     fed.run_consensus_epochs(1).await; // process offer
 
     // Gateway escrows ecash to trigger preimage decryption by the federation
@@ -1087,10 +1071,12 @@ async fn unbalanced_transactions_get_rejected() -> Result<()> {
     // cannot make change for this invoice (results in unbalanced tx)
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     let mut builder = TransactionBuilder::default();
-    builder
-        .input_coins(user.client.mint_client().coins().await)
-        .unwrap();
-    let tx = user.create_tx(builder).await;
+    let (mut keys, input) = MintClient::ecash_input(user.client.mint_client().coins().await)?;
+    builder.input(&mut keys, input);
+
+    let tx = builder
+        .build_with_change(user.client.mint_client(), rng(), vec![sats(0)], &secp())
+        .await;
     let response = fed.submit_transaction(tx.into_type_erased()).await;
 
     assert_matches!(

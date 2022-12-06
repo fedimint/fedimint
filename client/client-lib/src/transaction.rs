@@ -1,33 +1,23 @@
 use bitcoin::KeyPair;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::client::ClientModulePlugin;
-use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
+use fedimint_api::Amount;
 use fedimint_core::modules::ln::contracts::ContractOutcome;
 use fedimint_core::modules::ln::LightningOutputOutcome;
-use fedimint_core::modules::mint::{BlindNonce, MintInput, MintOutput};
 use fedimint_core::outcome::legacy::OutputOutcome;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::transaction::legacy::{Input, Output, Transaction};
 use rand::{CryptoRng, RngCore};
-use tbs::AggregatePublicKey;
-use tracing::debug;
+use secp256k1::Secp256k1;
 
-use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
-use crate::mint::{NoteIssuanceRequest, NoteIssuanceRequests};
-use crate::{
-    module_decode_stubs, Client, DecryptedPreimage, MintClientError, MintOutputOutcome,
-    SpendableNote,
-};
+use crate::{module_decode_stubs, Client, DecryptedPreimage, MintClient, MintOutputOutcome};
 
 pub trait Final {
     fn is_final(&self) -> bool;
 }
 
 pub struct TransactionBuilder {
-    input_notes: TieredMulti<SpendableNote>,
-    output_notes: Vec<(u64, NoteIssuanceRequests)>,
     keys: Vec<KeyPair>,
     tx: Transaction,
 }
@@ -70,8 +60,6 @@ impl Final for TransactionStatus {
 impl Default for TransactionBuilder {
     fn default() -> Self {
         TransactionBuilder {
-            input_notes: Default::default(),
-            output_notes: vec![],
             keys: vec![],
             tx: Transaction {
                 inputs: vec![],
@@ -83,37 +71,6 @@ impl Default for TransactionBuilder {
 }
 
 impl TransactionBuilder {
-    pub fn input_coins(
-        &mut self,
-        coins: TieredMulti<SpendableNote>,
-    ) -> Result<(), MintClientError> {
-        self.input_notes.extend(coins.clone());
-        let (mut coin_keys, coin_input) = self.create_input_from_coins(coins)?;
-        self.input(&mut coin_keys, Input::Mint(coin_input));
-        Ok(())
-    }
-
-    pub fn create_input_from_coins(
-        &mut self,
-        coins: TieredMulti<SpendableNote>,
-    ) -> Result<(Vec<KeyPair>, MintInput), MintClientError> {
-        let coin_key_pairs = coins
-            .into_iter()
-            .map(|(amt, coin)| {
-                // We check for coin validity in case we got it from an untrusted third party. We
-                // don't want to needlessly create invalid tx and bother the federation with them.
-                let spend_pub_key = coin.spend_key.x_only_public_key().0;
-                if &spend_pub_key == coin.note.spend_key() {
-                    Ok((coin.spend_key, (amt, coin.note)))
-                } else {
-                    Err(MintClientError::ReceivedUspendableCoin)
-                }
-            })
-            .collect::<Result<Vec<_>, MintClientError>>()?;
-        let (key_pairs, input) = coin_key_pairs.into_iter().unzip();
-        Ok((key_pairs, MintInput(input)))
-    }
-
     pub fn input(&mut self, key: &mut Vec<KeyPair>, input: Input) {
         self.keys.append(key);
         self.tx.inputs.push(input);
@@ -131,105 +88,39 @@ impl TransactionBuilder {
         self.input_amount(client) - self.output_amount(client) - self.fee_amount(client)
     }
 
-    pub async fn output_coins<F, Fut>(
-        &mut self,
-        amount: Amount,
-        coin_gen: F,
-        tbs_pks: &Tiered<AggregatePublicKey>,
-    ) where
-        F: FnMut(Amount) -> Fut,
-        Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
-    {
-        let (coin_finalization_data, coin_output) =
-            self.create_output_coins(amount, coin_gen, tbs_pks).await;
-
-        if !coin_output.is_empty() {
-            let out_idx = self.tx.outputs.len();
-            self.output(Output::Mint(MintOutput(coin_output)));
-            self.output_notes
-                .push((out_idx as u64, coin_finalization_data));
-        }
+    /// Builds and signs the final transaction with correct change
+    pub async fn build<C: AsRef<ClientConfig> + Clone, R: RngCore + CryptoRng>(
+        self,
+        client: &Client<C>,
+        rng: R,
+    ) -> Transaction {
+        let change =
+            self.input_amount(client) - self.output_amount(client) - self.fee_amount(client);
+        self.build_with_change(
+            client.mint_client(),
+            rng,
+            vec![change],
+            &client.context.secp,
+        )
+        .await
     }
 
-    pub async fn create_output_coins<F, Fut>(
-        &mut self,
-        amount: Amount,
-        mut coin_gen: F,
-        tbs_pks: &Tiered<AggregatePublicKey>,
-    ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>)
-    where
-        F: FnMut(Amount) -> Fut,
-        Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
-    {
-        let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
-            Vec::new();
-        for (amt, ()) in TieredMulti::represent_amount(amount, tbs_pks).into_iter() {
-            let (request, blind_nonce) = coin_gen(amt).await;
-            amount_requests.push(((amt, request), (amt, blind_nonce)));
-        }
-        let (coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
-            amount_requests.into_iter().unzip();
-
-        debug!(
-            %amount,
-            coins = %sig_req.0.item_count(),
-            tiers = ?sig_req.0.tiers().collect::<Vec<_>>(),
-            "Generated issuance request"
-        );
-
-        (coin_finalization_data, sig_req.0)
-    }
-
-    pub async fn build<'a, R: RngCore + CryptoRng, F, Fut>(
+    /// Builds and signs the final transaction with exact change amounts
+    /// WARNING - could result in an unbalanced tx that will be rejected by the federation
+    pub async fn build_with_change<R: RngCore + CryptoRng>(
         mut self,
-        change_required: Amount,
-        dbtx: &mut DatabaseTransaction<'a>,
-        coin_gen: F,
-        secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
-        tbs_pks: &Tiered<AggregatePublicKey>,
+        change_module: MintClient,
         mut rng: R,
-    ) -> Transaction
-    where
-        F: FnMut(Amount) -> Fut,
-        Fut: futures::Future<Output = (NoteIssuanceRequest, BlindNonce)>,
-    {
-        // add change
-        self.output_coins(change_required, coin_gen, tbs_pks).await;
+        change: Vec<Amount>,
+        secp: &Secp256k1<secp256k1_zkp::All>,
+    ) -> Transaction {
+        change_module.finalize_change(&mut self.tx, change).await;
 
         let txid = self.tx.tx_hash();
         if !self.keys.is_empty() {
             let signature =
                 fedimint_core::transaction::agg_sign(&self.keys, txid.as_hash(), secp, &mut rng);
             self.tx.signature = Some(signature);
-        }
-
-        // move input coins to pending state, awaiting a transaction
-        if !self.input_notes.item_count() != 0 {
-            for (amount, coin) in self.input_notes.iter_items() {
-                // maybe_delete because coins might have been received from another user directly
-                dbtx.remove_entry(&CoinKey {
-                    amount,
-                    nonce: coin.note.0.clone(),
-                })
-                .await
-                .expect("DB Error");
-            }
-            dbtx.insert_entry(&PendingCoinsKey(txid), &self.input_notes)
-                .await
-                .expect("DB Error");
-        }
-
-        // write coin output to db to await for tx success to be fetched later
-        for (out_idx, coins) in self.output_notes.iter() {
-            dbtx.insert_new_entry(
-                &OutputFinalizationKey(OutPoint {
-                    txid,
-                    out_idx: *out_idx,
-                }),
-                &coins.clone(),
-            )
-            .await
-            .expect("DB Error");
         }
 
         self.tx

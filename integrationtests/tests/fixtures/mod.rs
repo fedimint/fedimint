@@ -33,7 +33,6 @@ use fedimint_api::TieredMulti;
 use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
-use fedimint_mint::config::MintClientConfig;
 use fedimint_mint::{Mint, MintOutput};
 use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
@@ -43,7 +42,6 @@ use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
-use fedimint_server::transaction::legacy::Transaction;
 use fedimint_server::{all_decoders, consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
@@ -63,7 +61,6 @@ use ln_gateway::{
     rpc::GatewayRequest,
     LnGateway,
 };
-use mint_client::transaction::TransactionBuilder;
 use mint_client::{
     api::WsFederationApi, mint::SpendableNote, Client, FederationId, GatewayClient,
     GatewayClientConfig, UserClient, UserClientConfig,
@@ -478,35 +475,6 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
     pub async fn assert_coin_amounts(&self, amounts: Vec<Amount>) {
         self.client.fetch_all_coins().await;
         assert_eq!(self.coin_amounts().await, amounts);
-    }
-}
-
-impl UserTest<UserClientConfig> {
-    pub async fn create_tx(&self, builder: TransactionBuilder) -> Transaction {
-        let tbs_pks = self
-            .config
-            .0
-            .get_module::<MintClientConfig>("mint")
-            .unwrap()
-            .tbs_pks;
-        let context = self.client.mint_client().context;
-        let mut dbtx = context.db.begin_transaction(all_decoders());
-
-        builder
-            .build(
-                sats(0),
-                &mut dbtx,
-                |amount| async move {
-                    self.client
-                        .mint_client()
-                        .new_ecash_note(&secp(), amount)
-                        .await
-                },
-                &secp(),
-                &tbs_pks,
-                rng(),
-            )
-            .await
     }
 }
 
