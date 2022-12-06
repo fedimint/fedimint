@@ -215,6 +215,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .as_ref()
                 .get_module::<MintClientConfig>("mint")
                 .expect("needs mint module client config"),
+            epoch_pk: self.config.as_ref().epoch_pk,
             context: self.context.clone(),
             secret: self.root_secret.child_key(MINT_SECRET_CHILD_ID),
         }

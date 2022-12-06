@@ -42,6 +42,7 @@ pub struct Node {
 pub struct ClientConfig {
     pub federation_name: String,
     pub nodes: Vec<Node>,
+    pub epoch_pk: threshold_crypto::PublicKey,
     pub modules: BTreeMap<String, ClientModuleConfig>,
 }
 

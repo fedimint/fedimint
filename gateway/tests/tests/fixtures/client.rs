@@ -54,6 +54,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         // Using some of the info in provided web socket connect info
         let client_config = ClientConfig {
             federation_name: "".to_string(),
+            epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             nodes: [].into(),
             modules: [].into(),
         };
