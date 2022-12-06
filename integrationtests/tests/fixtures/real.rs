@@ -34,7 +34,7 @@ impl LightningTest for RealLightningTest {
     async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let random: u64 = rand::random();
         let invoice_req = requests::InvoiceRequest {
-            msatoshi: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.milli_sat)),
+            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.milli_sat)),
             description: "".to_string(),
             label: random.to_string(),
             expiry: expiry_time,

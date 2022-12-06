@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
     crane.url = "github:ipetkov/crane?rev=755acd231a7de182fdc772bee1b2a1f21d4ec9ed"; # https://github.com/ipetkov/crane/releases/tag/v0.7.0
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
@@ -27,63 +27,6 @@
         lib = pkgs.lib;
         stdenv = pkgs.stdenv;
 
-        rocksdb-7-pkg = { lib, stdenv, fetchFromGitHub, fetchpatch, cmake, ninja, bzip2, lz4, snappy, zlib, zstd, enableJemalloc ? false, jemalloc, enableLite ? false, enableShared ? !stdenv.hostPlatform.isStatic, ... }:
-          stdenv.mkDerivation rec {
-            pname = "rocksdb";
-            version = "7.4.4";
-
-            src = fetchFromGitHub {
-              owner = "facebook";
-              repo = pname;
-              rev = "v${version}";
-              sha256 = "sha256-34pAAqUhHQiH0YuRl6a0zdn8p6hSAIJnZXIErm3SYFE=";
-            };
-
-            nativeBuildInputs = [ cmake ninja ];
-
-            propagatedBuildInputs = [ bzip2 lz4 snappy zlib zstd ];
-
-            buildInputs = lib.optional enableJemalloc jemalloc;
-
-            NIX_CFLAGS_COMPILE = lib.optionalString stdenv.cc.isGNU "-Wno-error=deprecated-copy -Wno-error=pessimizing-move"
-              + lib.optionalString stdenv.cc.isClang "-Wno-error=unused-private-field";
-
-            cmakeFlags = [
-              "-DPORTABLE=1"
-              "-DWITH_JEMALLOC=${if enableJemalloc then "1" else "0"}"
-              "-DWITH_JNI=0"
-              "-DWITH_BENCHMARK_TOOLS=0"
-              "-DWITH_TESTS=1"
-              "-DWITH_TOOLS=0"
-              "-DWITH_BZ2=1"
-              "-DWITH_LZ4=1"
-              "-DWITH_SNAPPY=1"
-              "-DWITH_ZLIB=1"
-              "-DWITH_ZSTD=1"
-              "-DWITH_GFLAGS=0"
-              "-DUSE_RTTI=1"
-              "-DROCKSDB_INSTALL_ON_WINDOWS=YES" # harmless elsewhere
-              (lib.optional
-                (stdenv.hostPlatform.isx86 && stdenv.hostPlatform.isLinux)
-                "-DFORCE_SSE42=1")
-              (lib.optional enableLite "-DROCKSDB_LITE=1")
-              "-DFAIL_ON_WARNINGS=${if stdenv.hostPlatform.isMinGW then "NO" else "YES"}"
-            ] ++ lib.optional (!enableShared) "-DROCKSDB_BUILD_SHARED=0";
-
-            # otherwise "cc1: error: -Wformat-security ignored without -Wformat [-Werror=format-security]"
-            hardeningDisable = lib.optional stdenv.hostPlatform.isWindows "format";
-
-            meta = with lib; {
-              homepage = "https://rocksdb.org";
-              description = "A library that provides an embeddable, persistent key-value store for fast storage";
-              changelog = "https://github.com/facebook/rocksdb/raw/v${version}/HISTORY.md";
-              license = licenses.asl20;
-              platforms = platforms.all;
-              maintainers = with maintainers; [ adev magenbluten ];
-            };
-          };
-        rocksdb-7 = pkgs.callPackage rocksdb-7-pkg { };
-
         clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
           configureFlags = [ "--enable-developer" "--disable-valgrind" ];
         } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
@@ -95,13 +38,52 @@
         # Env vars we need for wasm32 cross compilation
         wasm32CrossEnvVars = ''
           export CC_wasm32_unknown_unknown="${pkgs.llvmPackages_14.clang-unwrapped}/bin/clang-14"
-          export CFLAGS_wasm32_unknown_unknown="-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.1/include/"
+          export CFLAGS_wasm32_unknown_unknown="-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.6/include/"
         '' + (if isArch64Darwin then
           ''
             export AR_wasm32_unknown_unknown="${pkgs.llvmPackages_14.llvm}/bin/llvm-ar"
           '' else
           ''
           '');
+
+        # The following hack makes fedimint compile on android:
+        #
+        # From https://github.com/rust-mobile/cargo-apk/commit/4956b87f56f2854e2b3452b83b65b00224757d41
+        # > Rust still searches for libgcc even though [85806] replaces internal use
+        # > with libunwind, especially now that the Android NDK (since r23-beta3)
+        # > doesn't ship with any of gcc anymore.  The apparent solution is to build
+        # > your application with nightly and compile std locally (`-Zbuild-std`),
+        # > but that is not desired for the majority of users.  [7339] suggests to
+        # > provide a local `libgcc.a` as linker script, which simply redirects
+        # > linking to `libunwind` instead - and that has proven to work fine so
+        # > far.
+        # >
+        # > Intead of shipping this file with the crate or writing it to an existing
+        # > link-search directory on the system, we write it to a new directory that
+        # > can be easily passed or removed to `rustc`, say in the event that a user
+        # > switches to an older NDK and builds without cleaning.  For this we need
+        # > to switch from `cargo build` to `cargo rustc`, but the existing
+        # > arguments and desired workflow remain identical.
+        # >
+        # > [85806]: rust-lang/rust#85806
+        # > [7339]: termux/termux-packages#7339 (comment)
+
+        fake-libgcc-gen = arch: pkgs.stdenv.mkDerivation rec {
+          pname = "fake-libgcc";
+          version = "0.1.0";
+
+          dontUnpack = true;
+
+          installPhase = ''
+            mkdir -p $out/lib
+            ln -s ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk/24.0.8215888/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.1/lib/linux/${arch}/libunwind.a $out/lib/libgcc.a
+          '';
+        };
+
+        fake-libgcc-x86_64 = fake-libgcc-gen "x86_64";
+        fake-libgcc-aarch64 = fake-libgcc-gen "aarch64";
+        fake-libgcc-arm = fake-libgcc-gen "arm";
+        fake-libgcc-i386 = fake-libgcc-gen "i386";
 
         # All the environment variables we need for all android cross compilation targets
         androidCrossEnvVars = ''
@@ -110,23 +92,23 @@
 
           export CC_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
           export CXX_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-          export LD_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/arm-linux-androideabi/bin/ld"
-          export LDFLAGS_armv7_linux_androideabi="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/arm-linux-androideabi/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/"
+          export LD_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
+          export LDFLAGS_armv7_linux_androideabi="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/arm-linux-androideabi/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/ -L ${fake-libgcc-arm}/lib"
 
           export CC_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
           export CXX_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-          export LD_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/bin/ld"
-          export LDFLAGS_aarch64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/aarch64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/"
+          export LD_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
+          export LDFLAGS_aarch64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/aarch64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/ -L ${fake-libgcc-aarch64}/lib"
 
           export CC_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
           export CXX_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-          export LD_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/bin/ld"
-          export LDFLAGS_x86_64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/x86_64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/"
+          export LD_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
+          export LDFLAGS_x86_64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/x86_64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/ -L ${fake-libgcc-x86_64}/lib"
 
           export CC_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
           export CXX_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-          export LD_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/bin/ld"
-          export LDFLAGS_i686_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/i686-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/"
+          export LD_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
+          export LDFLAGS_i686_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/i686-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/ -L ${fake-libgcc-i386}/lib"
         '';
 
         # NDK we use for android cross compilation
@@ -309,7 +291,7 @@
             pkg-config
             perl
             pkgs.llvmPackages.bintools
-            rocksdb-7
+            rocksdb
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
@@ -333,7 +315,7 @@
           };
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-          ROCKSDB_LIB_DIR = "${rocksdb-7}/lib/";
+          ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
           CI = "true";
           HOME = "/tmp";
         };
@@ -710,10 +692,11 @@
           # recursing into `cargoArtifacts` to do the same. This way a debug build depends on debug build of all dependencies.
           # See https://github.com/ipetkov/crane/discussions/140#discussioncomment-3857137 for more info.
           debug =
-            let overrideCargoProfileRecursively = deriv: profile: deriv.overrideAttrs (oldAttrs: {
-              CARGO_PROFILE = profile;
-              cargoArtifacts = if oldAttrs ? "cargoArtifacts" && oldAttrs.cargoArtifacts != null then overrideCargoProfileRecursively oldAttrs.cargoArtifacts profile else null;
-            });
+            let
+              overrideCargoProfileRecursively = deriv: profile: deriv.overrideAttrs (oldAttrs: {
+                CARGO_PROFILE = profile;
+                cargoArtifacts = if oldAttrs ? "cargoArtifacts" && oldAttrs.cargoArtifacts != null then overrideCargoProfileRecursively oldAttrs.cargoArtifacts profile else null;
+              });
             in
             (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") outputsWorkspace) //
             (builtins.mapAttrs
@@ -777,7 +760,8 @@
                   experimental-offers
                   fee-base=0
                   fee-per-satoshi=100
-                ''; in
+                '';
+              in
               pkgs.dockerTools.buildLayeredImage {
                 name = "ln-gateway-clightning";
                 contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils gateway-cli ];
@@ -815,55 +799,56 @@
 
         devShells =
 
-          let shellCommon = {
-            buildInputs = commonArgs.buildInputs;
-            nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
-              fenix.packages.${system}.rust-analyzer
-              fenixToolchainRustfmt
-              cargo-llvm-cov
-              cargo-udeps
+          let
+            shellCommon = {
+              buildInputs = commonArgs.buildInputs;
+              nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
+                fenix.packages.${system}.rust-analyzer
+                fenixToolchainRustfmt
+                cargo-llvm-cov
+                cargo-udeps
 
-              # This is required to prevent a mangled bash shell in nix develop
-              # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
-              (hiPrio pkgs.bashInteractive)
-              tmux
-              tmuxinator
+                # This is required to prevent a mangled bash shell in nix develop
+                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
+                (hiPrio pkgs.bashInteractive)
+                tmux
+                tmuxinator
 
-              # Nix
-              pkgs.nixpkgs-fmt
-              pkgs.shellcheck
-              pkgs.rnix-lsp
-              pkgs.nodePackages.bash-language-server
-            ] ++ cliTestsDeps;
-            RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
-            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-            ROCKSDB_LIB_DIR = "${rocksdb-7}/lib/";
+                # Nix
+                pkgs.nixpkgs-fmt
+                pkgs.shellcheck
+                pkgs.rnix-lsp
+                pkgs.nodePackages.bash-language-server
+              ] ++ cliTestsDeps;
+              RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
+              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+              ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
 
-            shellHook = ''
-              # auto-install git hooks
-              dot_git="$(git rev-parse --git-common-dir)"
-              if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
-              for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
-              ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
+              shellHook = ''
+                # auto-install git hooks
+                dot_git="$(git rev-parse --git-common-dir)"
+                if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
+                for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
+                ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
 
-              # workaround https://github.com/rust-lang/cargo/issues/11020
-              cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
-              if (( ''${#cargo_cmd_bins[@]} != 0 )); then
-                >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
-                >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
-              fi
-
-              # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
-              if [ -n "$TMUX" ]; then
-                # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
-                if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
-                  echo
-                  >&2 echo "⚠️  tmux's 'default-command' not set"
-                  >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
+                # workaround https://github.com/rust-lang/cargo/issues/11020
+                cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
+                if (( ''${#cargo_cmd_bins[@]} != 0 )); then
+                  >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
+                  >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
                 fi
-              fi
-            '';
-          };
+
+                # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
+                if [ -n "$TMUX" ]; then
+                  # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
+                  if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
+                    echo
+                    >&2 echo "⚠️  tmux's 'default-command' not set"
+                    >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
+                  fi
+                fi
+              '';
+            };
 
           in
           {
