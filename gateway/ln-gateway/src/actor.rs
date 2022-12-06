@@ -236,4 +236,12 @@ impl GatewayActor {
 
         Ok(self.client.coins().await.total_amount())
     }
+
+    pub fn get_info(&self) -> Result<FederationInfo> {
+        let cfg = self.client.config();
+        Ok(FederationInfo {
+            federation_id: FederationId(cfg.client_config.federation_name.clone()),
+            mint_pubkey: cfg.redeem_key.x_only_public_key().0,
+        })
+    }
 }
