@@ -11,7 +11,7 @@ use mint_client::{FederationId, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
-use crate::{ln::LnRpc, utils::retry, LnGatewayError, Result};
+use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
 
 pub struct GatewayActor {
     client: Arc<GatewayClient>,

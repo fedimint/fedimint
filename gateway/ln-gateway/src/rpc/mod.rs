@@ -95,7 +95,7 @@ pub struct FederationInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GatewayInfo {
     pub version_hash: String,
-    pub federations: Vec<FederationId>,
+    pub federations: Vec<FederationInfo>,
 }
 
 #[derive(Debug)]

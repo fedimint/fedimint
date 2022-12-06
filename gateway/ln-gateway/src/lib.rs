@@ -173,7 +173,7 @@ impl LnGateway {
             .lock()
             .await
             .iter()
-            .map(|(_, actor)| actor.id.clone())
+            .map(|(_, actor)| actor.get_info().expect("Failed to get actor info"))
             .collect();
 
         Ok(GatewayInfo {
