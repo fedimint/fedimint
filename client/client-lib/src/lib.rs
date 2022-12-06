@@ -304,10 +304,8 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         tx: TransactionBuilder,
         rng: R,
     ) -> Result<TransactionId> {
-        Ok(self
-            .mint_client()
-            .submit_tx_with_change(self, tx, rng)
-            .await?)
+        let final_tx = tx.build(self, rng).await;
+        Ok(self.context.api.submit_transaction(final_tx).await?)
     }
 
     /// Spent some [`SpendableNote`]s to receive a freshly minted ones
@@ -324,8 +322,20 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         notes: TieredMulti<SpendableNote>,
         mut rng: R,
     ) -> Result<OutPoint> {
+        // Ensure we have the notes in the DB (in case we received them from another user)
+        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
+        for (amount, note) in notes.clone() {
+            let key = CoinKey {
+                amount,
+                nonce: note.note.0.clone(),
+            };
+            dbtx.insert_entry(&key, &note).await.expect("DB error");
+        }
+        dbtx.commit_tx().await.expect("DB Error");
+
         let mut tx = TransactionBuilder::default();
-        tx.input_coins(notes)?;
+        let (mut keys, input) = MintClient::ecash_input(notes)?;
+        tx.input(&mut keys, input);
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
@@ -362,11 +372,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
 
-        let input_coins = self
+        let (mut keys, input) = self
             .mint_client()
-            .select_coins(blind_nonces.total_amount())
+            .select_input(blind_nonces.total_amount())
             .await?;
-        tx.input_coins(input_coins)?;
+        tx.input(&mut keys, input);
+
         tx.output(Output::Mint(MintOutput(blind_nonces)));
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
 
@@ -380,16 +391,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     {
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         self.mint_client()
-            .receive_coins(
-                amount,
-                &mut dbtx,
-                |note_amount| async move {
-                    self.mint_client()
-                        .new_ecash_note(&self.context.secp, note_amount)
-                        .await
-                },
-                create_tx,
-            )
+            .receive_coins(amount, &mut dbtx, create_tx)
             .await;
         dbtx.commit_tx().await.expect("DB Error");
     }
@@ -427,8 +429,8 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .fee_consensus
             .peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
-        let coins = self.mint_client().select_coins(funding_amount).await?;
-        tx.input_coins(coins)?;
+        let (mut keys, input) = self.mint_client().select_input(funding_amount).await?;
+        tx.input(&mut keys, input);
         let peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
 
         let fedimint_tx_id = self.submit_tx_with_change(tx, &mut rng).await?;
@@ -472,20 +474,15 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             coins
         } else {
             let mut tx = TransactionBuilder::default();
+            let change = vec![amount, coins.total_amount() - amount];
 
-            tx.input_coins(coins.clone())?;
-            tx.output_coins(
-                amount,
-                |note_amount| async move {
-                    self.mint_client()
-                        .new_ecash_note(&self.context.secp, note_amount)
-                        .await
-                },
-                &self.mint_client().config.tbs_pks,
-            )
-            .await;
+            let (mut keys, input) = MintClient::ecash_input(coins)?;
+            tx.input(&mut keys, input);
+            let tx = tx
+                .build_with_change(self.mint_client(), rng, change, &self.context.secp)
+                .await;
 
-            self.submit_tx_with_change(tx, rng).await?;
+            self.context.api.submit_transaction(tx).await?;
             self.fetch_all_coins().await;
             self.mint_client().select_coins(amount).await?
         };
@@ -690,8 +687,8 @@ impl Client<UserClientConfig> {
             } // FIXME: impl TryFrom
         };
 
-        let coins = self.mint_client().select_coins(amount).await?;
-        tx.input_coins(coins)?;
+        let (mut keys, input) = self.mint_client().select_input(amount).await?;
+        tx.input(&mut keys, input);
         tx.output(Output::LN(contract));
         let txid = self.submit_tx_with_change(tx, &mut rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
@@ -723,10 +720,8 @@ impl Client<UserClientConfig> {
             .ln_client()
             .create_refund_outgoing_contract_input(&contract_data);
         tx.input(&mut vec![*refund_key], Input::LN(refund_input));
-        let txid = self
-            .mint_client()
-            .submit_tx_with_change(self, tx, rng)
-            .await?;
+        let final_tx = tx.build(self, rng).await;
+        let txid = self.context.api.submit_transaction(final_tx).await?;
 
         let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
@@ -1111,8 +1106,8 @@ impl Client<GatewayClientConfig> {
 
         // Inputs
         let mut builder = TransactionBuilder::default();
-        let coins = self.mint_client().select_coins(offer.amount).await?;
-        builder.input_coins(coins)?;
+        let (mut keys, input) = self.mint_client().select_input(offer.amount).await?;
+        builder.input(&mut keys, input);
 
         // Outputs
         let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key).0;
