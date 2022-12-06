@@ -883,6 +883,10 @@
 <a href="#883" id="883">883</a>
 <a href="#884" id="884">884</a>
 <a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -927,6 +931,7 @@
 /// of the mint type.
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintClient {
+    <span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
     <span class="kw">pub </span>config: MintClientConfig,
     <span class="kw">pub </span>context: Arc&lt;ClientContext&gt;,
     <span class="kw">pub </span>secret: DerivableSecret,
@@ -1590,6 +1595,7 @@
 
         <span class="kw">let </span>context = Arc::new(client_context);
         <span class="kw">let </span>client = MintClient {
+            epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
             secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
@@ -1609,6 +1615,7 @@
 
         <span class="kw">let </span>context = Arc::new(client_context);
         <span class="kw">let </span>client = MintClient {
+            epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
             secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
@@ -1706,6 +1713,7 @@
         <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap();
 
         <span class="kw">let </span>client: MintClient = MintClient {
+            epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: MintClientConfig {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
@@ -1769,4 +1777,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (53e4b9dd7 2022-12-04)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e1d819583 2022-12-05)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

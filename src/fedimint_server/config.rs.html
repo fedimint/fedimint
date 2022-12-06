@@ -634,6 +634,12 @@
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
 <a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -744,6 +750,7 @@
 
         ClientConfig {
             federation_name: <span class="self">self</span>.federation_name.clone(),
+            epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
             nodes,
             modules: <span class="self">self
                 </span>.modules
@@ -851,7 +858,7 @@
             .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>module_cfg_gen_params)))
             .collect();
 
-        <span class="kw">let </span>server_config = netinfo
+        <span class="kw">let </span>server_config: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = netinfo
             .iter()
             .map(|(<span class="kw-2">&amp;</span>id, netinf)| {
                 <span class="kw">let </span>epoch_keys = epochinfo.get(<span class="kw-2">&amp;</span>id).unwrap();
@@ -885,6 +892,11 @@
         <span class="kw">let </span>client_config = ClientConfig {
             federation_name: peer0.federation_name.clone(),
             nodes: peer0.api.nodes(<span class="string">&quot;ws://&quot;</span>, names),
+            epoch_pk: server_config
+                .get(<span class="kw-2">&amp;</span>peers[<span class="number">0</span>])
+                .expect(<span class="string">&quot;must have at least one peer&quot;</span>)
+                .epoch_pk_set
+                .public_key(),
             modules: module_configs
                 .iter()
                 .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">1</span>.clone()))
@@ -1271,4 +1283,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (53e4b9dd7 2022-12-04)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e1d819583 2022-12-05)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

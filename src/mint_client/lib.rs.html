@@ -1356,6 +1356,7 @@
 <a href="#1356" id="1356">1356</a>
 <a href="#1357" id="1357">1357</a>
 <a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1573,6 +1574,7 @@
                 .as_ref()
                 .get_module::&lt;MintClientConfig&gt;(<span class="string">&quot;mint&quot;</span>)
                 .expect(<span class="string">&quot;needs mint module client config&quot;</span>),
+            epoch_pk: <span class="self">self</span>.config.as_ref().epoch_pk,
             context: <span class="self">self</span>.context.clone(),
             secret: <span class="self">self</span>.root_secret.child_key(MINT_SECRET_CHILD_ID),
         }
@@ -2715,4 +2717,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (53e4b9dd7 2022-12-04)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (e1d819583 2022-12-05)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
