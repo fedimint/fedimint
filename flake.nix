@@ -46,6 +46,28 @@
           ''
           '');
 
+        # The following hack makes fedimint compile on android:
+        #
+        # From https://github.com/rust-mobile/cargo-apk/commit/4956b87f56f2854e2b3452b83b65b00224757d41
+        # > Rust still searches for libgcc even though [85806] replaces internal use
+        # > with libunwind, especially now that the Android NDK (since r23-beta3)
+        # > doesn't ship with any of gcc anymore.  The apparent solution is to build
+        # > your application with nightly and compile std locally (`-Zbuild-std`),
+        # > but that is not desired for the majority of users.  [7339] suggests to
+        # > provide a local `libgcc.a` as linker script, which simply redirects
+        # > linking to `libunwind` instead - and that has proven to work fine so
+        # > far.
+        # >
+        # > Intead of shipping this file with the crate or writing it to an existing
+        # > link-search directory on the system, we write it to a new directory that
+        # > can be easily passed or removed to `rustc`, say in the event that a user
+        # > switches to an older NDK and builds without cleaning.  For this we need
+        # > to switch from `cargo build` to `cargo rustc`, but the existing
+        # > arguments and desired workflow remain identical.
+        # >
+        # > [85806]: rust-lang/rust#85806
+        # > [7339]: termux/termux-packages#7339 (comment)
+
         fake-libgcc-gen = arch: pkgs.stdenv.mkDerivation rec {
           pname = "fake-libgcc";
           version = "0.1.0";
