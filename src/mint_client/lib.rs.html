@@ -1352,11 +1352,6 @@
 <a href="#1352" id="1352">1352</a>
 <a href="#1353" id="1353">1353</a>
 <a href="#1354" id="1354">1354</a>
-<a href="#1355" id="1355">1355</a>
-<a href="#1356" id="1356">1356</a>
-<a href="#1357" id="1357">1357</a>
-<a href="#1358" id="1358">1358</a>
-<a href="#1359" id="1359">1359</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1663,10 +1658,8 @@
         tx: TransactionBuilder,
         rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.mint_client()
-            .submit_tx_with_change(<span class="self">self</span>, tx, rng)
-            .<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="kw">let </span>final_tx = tx.build(<span class="self">self</span>, rng).<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.context.api.submit_transaction(final_tx).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Spent some [`SpendableNote`]s to receive a freshly minted ones
@@ -1683,8 +1676,20 @@
         notes: TieredMulti&lt;SpendableNote&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="comment">// Ensure we have the notes in the DB (in case we received them from another user)
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>notes.clone() {
+            <span class="kw">let </span>key = CoinKey {
+                amount,
+                nonce: note.note.<span class="number">0</span>.clone(),
+            };
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
+        }
+        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
-        tx.input_coins(notes)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = MintClient::ecash_input(notes)<span class="question-mark">?</span>;
+        tx.input(<span class="kw-2">&amp;mut </span>keys, input);
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
@@ -1721,11 +1726,12 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let </span>input_coins = <span class="self">self
+        <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = <span class="self">self
             </span>.mint_client()
-            .select_coins(blind_nonces.total_amount())
+            .select_input(blind_nonces.total_amount())
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        tx.input_coins(input_coins)<span class="question-mark">?</span>;
+        tx.input(<span class="kw-2">&amp;mut </span>keys, input);
+
         tx.output(Output::Mint(MintOutput(blind_nonces)));
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1739,16 +1745,7 @@
     {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         <span class="self">self</span>.mint_client()
-            .receive_coins(
-                amount,
-                <span class="kw-2">&amp;mut </span>dbtx,
-                |note_amount| <span class="kw">async move </span>{
-                    <span class="self">self</span>.mint_client()
-                        .new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, note_amount)
-                        .<span class="kw">await
-                </span>},
-                create_tx,
-            )
+            .receive_coins(amount, <span class="kw-2">&amp;mut </span>dbtx, create_tx)
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
@@ -1786,8 +1783,8 @@
             .fee_consensus
             .peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(funding_amount).<span class="kw">await</span><span class="question-mark">?</span>;
-        tx.input_coins(coins)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = <span class="self">self</span>.mint_client().select_input(funding_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        tx.input(<span class="kw-2">&amp;mut </span>keys, input);
         <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
 
         <span class="kw">let </span>fedimint_tx_id = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1831,20 +1828,15 @@
             coins
         } <span class="kw">else </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
+            <span class="kw">let </span>change = <span class="macro">vec!</span>[amount, coins.total_amount() - amount];
 
-            tx.input_coins(coins.clone())<span class="question-mark">?</span>;
-            tx.output_coins(
-                amount,
-                |note_amount| <span class="kw">async move </span>{
-                    <span class="self">self</span>.mint_client()
-                        .new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, note_amount)
-                        .<span class="kw">await
-                </span>},
-                <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().config.tbs_pks,
-            )
-            .<span class="kw">await</span>;
+            <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = MintClient::ecash_input(coins)<span class="question-mark">?</span>;
+            tx.input(<span class="kw-2">&amp;mut </span>keys, input);
+            <span class="kw">let </span>tx = tx
+                .build_with_change(<span class="self">self</span>.mint_client(), rng, change, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)
+                .<span class="kw">await</span>;
 
-            <span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.context.api.submit_transaction(tx).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
             <span class="self">self</span>.mint_client().select_coins(amount).<span class="kw">await</span><span class="question-mark">?
         </span>};
@@ -2049,8 +2041,8 @@
             } <span class="comment">// FIXME: impl TryFrom
         </span>};
 
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount).<span class="kw">await</span><span class="question-mark">?</span>;
-        tx.input_coins(coins)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = <span class="self">self</span>.mint_client().select_input(amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        tx.input(<span class="kw-2">&amp;mut </span>keys, input);
         tx.output(Output::LN(contract));
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
@@ -2082,10 +2074,8 @@
             </span>.ln_client()
             .create_refund_outgoing_contract_input(<span class="kw-2">&amp;</span>contract_data);
         tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="kw-2">*</span>refund_key], Input::LN(refund_input));
-        <span class="kw">let </span>txid = <span class="self">self
-            </span>.mint_client()
-            .submit_tx_with_change(<span class="self">self</span>, tx, rng)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>final_tx = tx.build(<span class="self">self</span>, rng).<span class="kw">await</span>;
+        <span class="kw">let </span>txid = <span class="self">self</span>.context.api.submit_transaction(final_tx).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
@@ -2470,8 +2460,8 @@
 
         <span class="comment">// Inputs
         </span><span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(offer.amount).<span class="kw">await</span><span class="question-mark">?</span>;
-        builder.input_coins(coins)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = <span class="self">self</span>.mint_client().select_input(offer.amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        builder.input(<span class="kw-2">&amp;mut </span>keys, input);
 
         <span class="comment">// Outputs
         </span><span class="kw">let </span>our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key).<span class="number">0</span>;
