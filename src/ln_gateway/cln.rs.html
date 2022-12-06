@@ -278,8 +278,8 @@
 
         <span class="kw">match </span>pubkey_result {
             <span class="prelude-val">Ok</span>(Response::Getinfo(r)) =&gt; {
-                <span class="kw">let </span>node_pubkey_bytes = r.id;
-                <span class="prelude-val">Ok</span>(secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>node_pubkey_bytes.to_vec()).unwrap())
+                <span class="kw">let </span>node_pubkey = r.id;
+                <span class="prelude-val">Ok</span>(secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>node_pubkey.serialize()).unwrap())
             }
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Core lightning sent wrong message&quot;</span>),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Failed to fetch core-lightning node pubkey {:?}&quot;</span>, e),
@@ -300,14 +300,14 @@
             .<span class="kw">await
             </span>.call(cln_rpc::Request::Pay(model::PayRequest {
                 bolt11: invoice.to_string(),
-                msatoshi: <span class="prelude-val">None</span>,
+                amount_msat: <span class="prelude-val">None</span>,
                 label: <span class="prelude-val">None</span>,
                 riskfactor: <span class="prelude-val">None</span>,
                 maxfeepercent: <span class="prelude-val">Some</span>(max_fee_percent),
                 retry_for: <span class="prelude-val">None</span>,
                 maxdelay: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u16),
                 exemptfee: <span class="prelude-val">None</span>,
-                localofferid: <span class="prelude-val">None</span>,
+                localinvreqid: <span class="prelude-val">None</span>,
                 exclude: <span class="prelude-val">None</span>,
                 maxfee: <span class="prelude-val">None</span>,
                 description: <span class="prelude-val">None</span>,
@@ -352,7 +352,7 @@
 }
 
 <span class="kw">pub async fn </span>build_cln_rpc(sender: GatewayRpcSender) -&gt; <span class="prelude-ty">Result</span>&lt;ClnRpcRef, Error&gt; {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(plugin) = Builder::new(sender, stdin(), stdout())
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(plugin) = Builder::new(stdin(), stdout())
         .option(options::ConfigOption::new(
             <span class="string">&quot;fedimint-cfg&quot;</span>,
             <span class="comment">// FIXME: cln_plugin doesn&#39;t support parameters without defaults
@@ -371,7 +371,7 @@
             handle.<span class="kw">await</span><span class="question-mark">?
         </span>})
         .dynamic() <span class="comment">// Allow reloading the plugin
-        </span>.start()
+        </span>.start(sender)
         .<span class="kw">await</span><span class="question-mark">?
     </span>{
         <span class="kw">let </span>work_dir = <span class="kw">match </span>plugin.option(<span class="string">&quot;fedimint-cfg&quot;</span>) {
