@@ -343,7 +343,7 @@
         <span class="kw">let </span>notes = <span class="self">self</span>.get_available_notes(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>note_idxs = Vec::new();
         <span class="kw">for </span><span class="kw-2">&amp;</span>amount <span class="kw">in </span><span class="self">self</span>.config.tbs_pks.tiers() {
-            note_idxs.push((amount, <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>));
+            note_idxs.push((amount, <span class="self">self</span>.get_next_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>));
         }
         <span class="kw">let </span>last_idx = Tiered::from_iter(note_idxs.into_iter());
 

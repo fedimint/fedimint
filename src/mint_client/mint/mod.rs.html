@@ -982,7 +982,7 @@
 <span class="kw">use </span>tracing::{debug, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
-<span class="kw">use </span><span class="kw">crate</span>::mint::db::{LastECashNoteIndexKey, PendingCoinsKey};
+<span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, PendingCoinsKey};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use crate</span>::{ChildId, DerivableSecret};
 
@@ -1236,13 +1236,13 @@
             .collect()
     }
 
-    <span class="kw">pub async fn </span>get_last_note_index(
+    <span class="kw">pub async fn </span>get_next_note_index(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         amount: Amount,
     ) -&gt; NoteIndex {
         NoteIndex(
-            dbtx.get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount))
+            dbtx.get_value(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount))
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                 .unwrap_or(<span class="number">0</span>),
@@ -1253,8 +1253,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>new_idx;
         <span class="kw">loop </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx();
-            new_idx = <span class="self">self</span>.get_last_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>.next();
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.as_u64())
+            new_idx = <span class="self">self</span>.get_next_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>;
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.next().as_u64())
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>);
             <span class="kw">if </span>dbtx.commit_tx().<span class="kw">await</span>.is_ok() {
@@ -1559,7 +1559,7 @@
     <span class="kw">use </span>threshold_crypto::PublicKey;
 
     <span class="kw">use </span><span class="kw">crate</span>::api::{IFederationApi, WsFederationApi};
-    <span class="kw">use </span><span class="kw">crate</span>::mint::db::LastECashNoteIndexKey;
+    <span class="kw">use </span><span class="kw">crate</span>::mint::db::NextECashNoteIndexKey;
     <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
     <span class="kw">use crate</span>::{
         BlindNonce, ClientContext, DerivableSecret, LegacyTransaction, TransactionBuilder,
@@ -1898,7 +1898,7 @@
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .get_value(<span class="kw-2">&amp;</span>LastECashNoteIndexKey(amount))
+            .get_value(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount))
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .unwrap_or(<span class="number">0</span>);

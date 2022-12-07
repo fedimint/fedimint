@@ -1211,11 +1211,11 @@
                         <span class="string">&quot;Pending Coins&quot;
                     </span>);
                 }
-                ClientMintRange::DbKeyPrefix::LastECashNoteIndex =&gt; {
+                ClientMintRange::DbKeyPrefix::NextECashNoteIndex =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         <span class="self">self</span>,
-                        ClientMintRange::LastECashNoteIndexKeyPrefix,
-                        ClientMintRange::LastECashNoteIndexKey,
+                        ClientMintRange::NextECashNoteIndexKeyPrefix,
+                        ClientMintRange::NextECashNoteIndexKey,
                         u64,
                         mint_client,
                         <span class="string">&quot;Last e-cash note index&quot;

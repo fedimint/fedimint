@@ -111,7 +111,7 @@
     Coin = <span class="number">0x20</span>,
     OutputFinalizationData = <span class="number">0x21</span>,
     PendingCoins = <span class="number">0x27</span>,
-    LastECashNoteIndex = <span class="number">0x2a</span>,
+    NextECashNoteIndex = <span class="number">0x2a</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -178,19 +178,19 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>LastECashNoteIndexKeyPrefix;
+</span><span class="kw">pub struct </span>NextECashNoteIndexKeyPrefix;
 
-<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LastECashNoteIndexKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LastECashNoteIndex <span class="kw">as </span>u8;
-    <span class="kw">type </span>Key = LastECashNoteIndexKey;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>NextECashNoteIndexKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::NextECashNoteIndex <span class="kw">as </span>u8;
+    <span class="kw">type </span>Key = NextECashNoteIndexKey;
     <span class="kw">type </span>Value = u64;
 }
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>LastECashNoteIndexKey(<span class="kw">pub </span>Amount);
+</span><span class="kw">pub struct </span>NextECashNoteIndexKey(<span class="kw">pub </span>Amount);
 
-<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LastECashNoteIndexKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LastECashNoteIndex <span class="kw">as </span>u8;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>NextECashNoteIndexKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::NextECashNoteIndex <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = u64;
 }
