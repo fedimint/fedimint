@@ -30,7 +30,7 @@ fedimint-api = { path = "../../fedimint-api" }
 rand = "0.8"
 ring = "0.16.20"
 reqwest = { version = "0.11.12", features = [ "json", "rustls-tls" ], default-features = false }
-secp256k1 = "0.24.1"
+secp256k1 = "0.24.2"
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = "1.0.147"
 strum = "0.24"

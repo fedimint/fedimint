@@ -34,7 +34,7 @@ fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 mint-client = { path = "../../client/client-lib" }
 rand = "0.8"
 reqwest = { version = "0.11.13", features = [ "json" ], default-features = false }
-secp256k1 = "0.24.1"
+secp256k1 = "0.24.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.89"
 thiserror = "1.0.37"
