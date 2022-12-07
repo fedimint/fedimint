@@ -324,14 +324,14 @@ impl MintClient {
     }
 
     pub async fn select_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
-        let coins =
-            self.coins()
-                .await
-                .select_coins(amount)
-                .ok_or(MintClientError::InsufficientBalance(
-                    amount,
-                    TieredMulti::total_amount(&self.coins().await),
-                ))?;
+        let coins = self.coins().await;
+
+        coins
+            .select_coins(amount)
+            .ok_or(MintClientError::InsufficientBalance(
+                amount,
+                TieredMulti::total_amount(&coins),
+            ))?;
 
         Ok(coins)
     }
