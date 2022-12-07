@@ -19,7 +19,7 @@ hex = { version = "0.4.3", features = [ "serde"] }
 mint-client = { path = "../client/client-lib" }
 erased-serde = "0.3"
 docopt = "1.1.1"
-secp256k1 = { version = "0.24.1", features = [ "serde" ] }
+secp256k1 = { version = "0.24.2", features = [ "serde" ] }
 serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.89"
 strum = "0.24"

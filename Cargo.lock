@@ -307,7 +307,7 @@ checksum = "0694ea59225b0c5f3cb405ff3f670e4828358ed26aec49dc352f730f0cb1a8a3"
 dependencies = [
  "bech32",
  "bitcoin_hashes 0.11.0",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "serde",
 ]
 
@@ -909,7 +909,7 @@ dependencies = [
  "fedimint-wallet",
  "hex",
  "mint-client",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "serde",
  "serde_json",
  "strum",
@@ -943,7 +943,7 @@ dependencies = [
  "lightning",
  "lightning-invoice",
  "rand",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "serde",
  "serde_json",
  "strum",
@@ -1118,7 +1118,7 @@ dependencies = [
  "impl-tools",
  "miniscript",
  "rand",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "serde",
  "strum",
  "strum_macros",
@@ -2091,7 +2091,7 @@ dependencies = [
  "bitcoin_hashes 0.11.0",
  "lightning",
  "num-traits",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "serde",
 ]
 
@@ -2117,7 +2117,7 @@ dependencies = [
  "mint-client",
  "rand",
  "reqwest",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "serde",
  "serde_json",
  "thiserror",
@@ -2266,7 +2266,7 @@ dependencies = [
  "rand",
  "reqwest",
  "ring",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "secp256k1-zkp",
  "serde",
  "serde_json",
@@ -3014,9 +3014,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff55dc09d460954e9ef2fa8a7ced735a964be9981fd50e870b2b3b0705e14964"
+checksum = "d9512ffd81e3a3503ed401f79c33168b9148c75038956039166cd750eaa037c3"
 dependencies = [
  "bitcoin_hashes 0.11.0",
  "rand",
@@ -3048,7 +3048,7 @@ version = "0.7.0"
 source = "git+https://github.com/dpc/rust-secp256k1-zkp/?branch=sanket-pr#f29b1b8c442d4b8a42547ce36d3987aaedf94224"
 dependencies = [
  "rand",
- "secp256k1 0.24.1",
+ "secp256k1 0.24.2",
  "secp256k1-zkp-sys",
  "serde",
 ]
