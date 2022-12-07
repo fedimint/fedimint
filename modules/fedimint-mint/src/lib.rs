@@ -109,7 +109,7 @@ pub struct Note(pub Nonce, pub tbs::Signature);
 /// User-generated, random or otherwise unpredictably generated (deterministically derivated).
 ///
 /// Internally a MuSig pub key so that transactions can be signed when being spent.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Nonce(pub secp256k1_zkp::XOnlyPublicKey);
 
 /// [`Nonce`] but blinded by the user key
@@ -407,7 +407,7 @@ impl ServerModulePlugin for Mint {
             }
 
             if dbtx
-                .get_value(&NonceKey(coin.0.clone()))
+                .get_value(&NonceKey(coin.0))
                 .await
                 .expect("DB error")
                 .is_some()
@@ -440,7 +440,7 @@ impl ServerModulePlugin for Mint {
             .await?;
 
         for (amount, coin) in input.iter_items() {
-            let key = NonceKey(coin.0.clone());
+            let key = NonceKey(coin.0);
             dbtx.insert_new_entry(&key, &()).await.expect("DB Error");
             dbtx.insert_new_entry(&MintAuditItemKey::Redemption(key), &amount)
                 .await
