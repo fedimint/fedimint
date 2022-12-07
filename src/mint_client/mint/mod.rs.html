@@ -1794,7 +1794,7 @@
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
+            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sat(<span class="number">12</span>);
@@ -1814,7 +1814,7 @@
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
+            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
         issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
@@ -1911,7 +1911,7 @@
                 api: WsFederationApi::new(<span class="macro">vec!</span>[]).into(),
                 secp: Default::default(),
             }),
-            secret: DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
+            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
         <span class="kw">let </span>client_copy = client.clone();
         <span class="kw">let </span>amount = Amount::from_milli_sats(<span class="number">1</span>);
