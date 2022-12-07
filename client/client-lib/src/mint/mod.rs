@@ -28,7 +28,7 @@ use thiserror::Error;
 use tracing::{debug, trace, warn};
 
 use crate::api::ApiError;
-use crate::mint::db::{LastECashNoteIndexKey, PendingCoinsKey};
+use crate::mint::db::{NextECashNoteIndexKey, PendingCoinsKey};
 use crate::utils::ClientContext;
 use crate::{ChildId, DerivableSecret};
 
@@ -282,13 +282,13 @@ impl MintClient {
             .collect()
     }
 
-    pub async fn get_last_note_index(
+    pub async fn get_next_note_index(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         amount: Amount,
     ) -> NoteIndex {
         NoteIndex(
-            dbtx.get_value(&LastECashNoteIndexKey(amount))
+            dbtx.get_value(&NextECashNoteIndexKey(amount))
                 .await
                 .expect("DB error")
                 .unwrap_or(0),
@@ -299,8 +299,8 @@ impl MintClient {
         let mut new_idx;
         loop {
             let mut dbtx = self.start_dbtx();
-            new_idx = self.get_last_note_index(&mut dbtx, amount).await.next();
-            dbtx.insert_entry(&LastECashNoteIndexKey(amount), &new_idx.as_u64())
+            new_idx = self.get_next_note_index(&mut dbtx, amount).await;
+            dbtx.insert_entry(&NextECashNoteIndexKey(amount), &new_idx.next().as_u64())
                 .await
                 .expect("DB error");
             if dbtx.commit_tx().await.is_ok() {
@@ -605,7 +605,7 @@ mod tests {
     use threshold_crypto::PublicKey;
 
     use crate::api::{IFederationApi, WsFederationApi};
-    use crate::mint::db::LastECashNoteIndexKey;
+    use crate::mint::db::NextECashNoteIndexKey;
     use crate::mint::MintClient;
     use crate::{
         BlindNonce, ClientContext, DerivableSecret, LegacyTransaction, TransactionBuilder,
@@ -944,7 +944,7 @@ mod tests {
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .get_value(&LastECashNoteIndexKey(amount))
+            .get_value(&NextECashNoteIndexKey(amount))
             .await
             .expect("DB error")
             .unwrap_or(0);

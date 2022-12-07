@@ -535,11 +535,11 @@ impl<'a> DatabaseDump<'a> {
                         "Pending Coins"
                     );
                 }
-                ClientMintRange::DbKeyPrefix::LastECashNoteIndex => {
+                ClientMintRange::DbKeyPrefix::NextECashNoteIndex => {
                     push_db_pair_items!(
                         self,
-                        ClientMintRange::LastECashNoteIndexKeyPrefix,
-                        ClientMintRange::LastECashNoteIndexKey,
+                        ClientMintRange::NextECashNoteIndexKeyPrefix,
+                        ClientMintRange::NextECashNoteIndexKey,
                         u64,
                         mint_client,
                         "Last e-cash note index"
