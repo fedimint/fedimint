@@ -782,7 +782,7 @@ mod tests {
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new(&[], &[]),
+            secret: DerivableSecret::new_root(&[], &[]),
         };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sat(12);
@@ -802,7 +802,7 @@ mod tests {
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new(&[], &[]),
+            secret: DerivableSecret::new_root(&[], &[]),
         };
 
         issue_tokens(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
@@ -899,7 +899,7 @@ mod tests {
                 api: WsFederationApi::new(vec![]).into(),
                 secp: Default::default(),
             }),
-            secret: DerivableSecret::new(&[], &[]),
+            secret: DerivableSecret::new_root(&[], &[]),
         };
         let client_copy = client.clone();
         let amount = Amount::from_milli_sats(1);

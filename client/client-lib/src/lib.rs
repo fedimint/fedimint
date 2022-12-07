@@ -1228,7 +1228,7 @@ impl Distribution<ClientSecret> for Standard {
 impl ClientSecret {
     fn into_root_secret(self) -> DerivableSecret {
         const FEDIMINT_CLIENT_NONCE: &[u8] = b"Fedimint Client Salt";
-        DerivableSecret::new(&self.0, FEDIMINT_CLIENT_NONCE)
+        DerivableSecret::new_root(&self.0, FEDIMINT_CLIENT_NONCE)
     }
 }
 
