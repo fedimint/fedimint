@@ -42,7 +42,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
         epoch: 1,
     };
 
-    let secret = DerivableSecret::new(&[1; 32], &[1, 32]);
+    let secret = DerivableSecret::new_root(&[1; 32], &[1, 32]);
     let key = MintClient::get_derived_backup_encryption_key_static(&secret);
 
     let encrypted = orig.encrypt_to(&key)?;

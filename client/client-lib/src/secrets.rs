@@ -21,19 +21,34 @@ pub struct ChildId(pub u64);
 /// Secret key that allows deriving child secret keys
 #[derive(Clone)]
 pub struct DerivableSecret {
+    /// Derivation level, root = 0, every `child_key` increments it
+    level: usize,
     // TODO: wrap in some secret protecting wrappers maybe?
     kdf: Hkdf<Sha512>,
 }
 
 impl DerivableSecret {
-    pub fn new(root_key: &[u8], salt: &[u8]) -> Self {
+    pub fn new_root(root_key: &[u8], salt: &[u8]) -> Self {
         DerivableSecret {
+            level: 0,
             kdf: Hkdf::new(root_key, Some(salt)),
         }
     }
 
+    /// Get derivation level
+    ///
+    ///
+    /// This is useful for ensuring a correct derivation level is used,
+    /// in various places.
+    ///
+    /// Root keys start at `0`, and every derived key increments it.
+    pub fn level(&self) -> usize {
+        self.level
+    }
+
     pub fn child_key(&self, cid: ChildId) -> DerivableSecret {
         DerivableSecret {
+            level: self.level + 1,
             kdf: Hkdf::from_prk(self.kdf.derive_hmac(&tagged_derive(CHILD_TAG, cid))),
         }
     }
