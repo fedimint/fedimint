@@ -11,15 +11,14 @@ use mint_client::{FederationId, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
-use crate::{ln::LnRpc, utils::retry, LnGatewayError, Result};
+use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
 
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
-    pub id: FederationId,
 }
 
 impl GatewayActor {
-    pub async fn new(client: Arc<GatewayClient>, id: FederationId) -> Result<Self> {
+    pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
         // Retry regster gateway federation client with federation
         match retry(
             String::from("Register With Federation"),
@@ -39,7 +38,7 @@ impl GatewayActor {
             Err(e) => warn!("Failed to register with federation: {}", e),
         }
 
-        Ok(Self { client, id })
+        Ok(Self { client })
     }
 
     async fn fetch_all_coins(&self) {
@@ -235,5 +234,13 @@ impl GatewayActor {
         self.fetch_all_coins().await;
 
         Ok(self.client.coins().await.total_amount())
+    }
+
+    pub fn get_info(&self) -> Result<FederationInfo> {
+        let cfg = self.client.config();
+        Ok(FederationInfo {
+            federation_id: FederationId(cfg.client_config.federation_name.clone()),
+            mint_pubkey: cfg.redeem_key.x_only_public_key().0,
+        })
     }
 }

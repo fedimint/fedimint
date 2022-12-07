@@ -4,7 +4,7 @@ pub mod rpc_server;
 use std::io::Cursor;
 
 use anyhow::Error;
-use bitcoin::{Address, Transaction};
+use bitcoin::{Address, Transaction, XOnlyPublicKey};
 use fedimint_api::{Amount, TransactionId};
 use fedimint_server::{modules::ln::contracts::Preimage, modules::wallet::txoproof::TxOutProof};
 use futures::Future;
@@ -87,9 +87,15 @@ pub struct WithdrawPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct FederationInfo {
+    pub federation_id: FederationId,
+    pub mint_pubkey: XOnlyPublicKey,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GatewayInfo {
     pub version_hash: String,
-    pub federations: Vec<FederationId>,
+    pub federations: Vec<FederationInfo>,
 }
 
 #[derive(Debug)]
