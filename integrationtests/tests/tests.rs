@@ -1,5 +1,3 @@
-mod fixtures;
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,9 +15,13 @@ use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::legacy::Output;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
+use fedimint_testing::federation::FederationTest;
+use fedimint_testing::user::UserTest;
+use fedimint_testing::{
+    assert_ci, create_user_client, fixtures, msats, peers, rng, sats, secp, sha256, Fixtures,
+};
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
-use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
 use futures::future::{join_all, Either};
 use mint_client::mint::MintClient;
 use mint_client::transaction::TransactionBuilder;
@@ -27,8 +29,6 @@ use mint_client::ClientError;
 use threshold_crypto::{SecretKey, SecretKeyShare};
 use tokio::time::timeout;
 use tracing::debug;
-
-use crate::fixtures::{assert_ci, create_user_client, msats, peers, FederationTest, UserTest};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() -> anyhow::Result<()> {

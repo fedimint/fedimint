@@ -12,7 +12,7 @@ use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln_gateway::ln::{LightningError, LnRpc};
 use rand::rngs::OsRng;
 
-use crate::fixtures::LightningTest;
+use crate::ln::LightningTest;
 
 #[derive(Clone, Debug)]
 pub struct FakeLightningTest {
@@ -34,6 +34,12 @@ impl FakeLightningTest {
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
         }
+    }
+}
+
+impl Default for FakeLightningTest {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

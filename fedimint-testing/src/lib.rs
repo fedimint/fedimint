@@ -1,12 +1,20 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::env;
 use std::fmt::Debug;
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
-use fedimint_api::core::Decoder;
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1;
+use cln_rpc::ClnRpc;
+use fedimint_api::cancellable::Cancellable;
+use fedimint_api::config::{
+    ClientConfig, ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig,
+};
+use fedimint_api::core::{ConsensusItem as PerModuleConsensusItem, Decoder, PluginConsensusItem};
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::ModuleRegistry;
@@ -14,10 +22,306 @@ use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
     ApiError, FederationModuleConfigGen, InputMeta, ModuleError, TransactionItemAmount,
 };
+use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::server::IServerModule;
-use fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
+use fedimint_api::task::TaskGroup;
+use fedimint_api::{Amount, OutPoint, PeerId, ServerModulePlugin};
+use fedimint_server::config::{connect, ServerConfig, ServerConfigParams};
+use fedimint_server::epoch::ConsensusItem;
+use fedimint_server::multiplexed::PeerConnectionMultiplexer;
+use fedimint_server::net::connect::mock::MockNetwork;
+use fedimint_server::net::connect::{Connector, TlsTcpConnector};
+use fedimint_wallet::config::WalletConfig;
+use futures::future::join_all;
+use mint_client::api::WsFederationApi;
+use mint_client::{UserClient, UserClientConfig};
+use rand::rngs::OsRng;
+use rand::RngCore;
+use tokio::sync::Mutex;
+use tracing::info;
+use tracing_subscriber::EnvFilter;
+
+use crate::btc::fixtures::FakeBitcoinTest;
+use crate::btc::real::RealBitcoinTest;
+use crate::btc::BitcoinTest;
+use crate::federation::FederationTest;
+use crate::gateway::GatewayTest;
+use crate::ln::fake::FakeLightningTest;
+use crate::ln::real::RealLightningTest;
+use crate::ln::LightningTest;
+use crate::user::UserTest;
+use crate::utils::LnRpcAdapter;
 
 pub mod btc;
+pub mod federation;
+pub mod gateway;
+pub mod ln;
+pub mod user;
+pub mod utils;
+
+static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
+
+// Helper functions for easier test writing
+pub fn rng() -> OsRng {
+    OsRng
+}
+
+pub fn msats(amount: u64) -> Amount {
+    Amount::from_msat(amount)
+}
+
+pub fn sats(amount: u64) -> Amount {
+    Amount::from_sat(amount)
+}
+
+pub fn sha256(data: &[u8]) -> sha256::Hash {
+    bitcoin::hashes::sha256::Hash::hash(data)
+}
+
+pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
+    bitcoin::secp256k1::Secp256k1::new()
+}
+
+pub fn assert_ci<M: PluginConsensusItem>(ci: &ConsensusItem) -> &M {
+    if let ConsensusItem::Module(mci) = ci {
+        assert_module_ci(mci)
+    } else {
+        panic!("Not a module consensus item");
+    }
+}
+
+pub fn assert_module_ci<M: PluginConsensusItem>(mci: &PerModuleConsensusItem) -> &M {
+    mci.as_any().downcast_ref().unwrap()
+}
+
+#[non_exhaustive]
+pub struct Fixtures {
+    pub fed: FederationTest,
+    pub user: UserTest<UserClientConfig>,
+    pub bitcoin: Box<dyn BitcoinTest>,
+    pub gateway: GatewayTest,
+    pub lightning: Box<dyn LightningTest>,
+    pub task_group: TaskGroup,
+}
+
+/// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
+/// federation nodes starting at port 4000.
+pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
+    let mut task_group = TaskGroup::new();
+    let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
+
+    // in case we need to output logs using 'cargo test -- --nocapture'
+    if base_port == 4000 {
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
+            )
+            .init();
+    }
+    let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
+    let params = ServerConfigParams::gen_local(
+        &peers,
+        Amount::from_sat(1000),
+        base_port,
+        "test",
+        "127.0.0.1:18443",
+    );
+    let max_evil = hbbft::util::max_faulty(peers.len());
+
+    match env::var("FM_TEST_DISABLE_MOCKS") {
+        Ok(s) if s == "1" => {
+            info!("Testing with REAL Bitcoin and Lightning services");
+            let (server_config, client_config) =
+                distributed_config(&peers, params, max_evil, &mut task_group)
+                    .await
+                    .expect("distributed config should not be canceled");
+
+            let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
+            let wallet_config: WalletConfig = server_config
+                .iter()
+                .last()
+                .unwrap()
+                .1
+                .get_module_config("wallet")
+                .unwrap();
+            let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
+                &wallet_config.btc_rpc,
+                task_group.make_handle(),
+            )
+            .expect("Could not create bitcoinrpc");
+            let bitcoin = RealBitcoinTest::new(&wallet_config.btc_rpc);
+            let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
+            let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
+            let lightning =
+                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
+            let gateway_lightning_rpc = Mutex::new(
+                ClnRpc::new(socket_gateway.clone())
+                    .await
+                    .expect("connect to ln_socket"),
+            );
+            let lightning_rpc_adapter = LnRpcAdapter::new(Box::new(gateway_lightning_rpc));
+
+            let connect_gen =
+                |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
+            let fed_db = || rocks(dir.clone()).into();
+            let fed = FederationTest::new(
+                server_config,
+                &fed_db,
+                &|| bitcoin_rpc.clone(),
+                &connect_gen,
+                &mut task_group,
+            )
+            .await;
+
+            let user_db = rocks(dir.clone()).into();
+            let user_cfg = UserClientConfig(client_config.clone());
+            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
+            user.client.await_consensus_block_height(0).await?;
+
+            let gateway = GatewayTest::new(
+                lightning_rpc_adapter,
+                client_config.clone(),
+                lightning.gateway_node_pub_key,
+                base_port + (2 * num_peers) + 1,
+            )
+            .await;
+
+            Ok(Fixtures {
+                fed,
+                user,
+                bitcoin: Box::new(bitcoin),
+                gateway,
+                lightning: Box::new(lightning),
+                task_group,
+            })
+        }
+        _ => {
+            info!("Testing with FAKE Bitcoin and Lightning services");
+            let (server_config, client_config) =
+                ServerConfig::trusted_dealer_gen(&peers, &params, OsRng);
+
+            let bitcoin = FakeBitcoinTest::new();
+            let bitcoin_rpc = || bitcoin.clone().into();
+            let lightning = FakeLightningTest::new();
+            let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
+            let net = MockNetwork::new();
+            let net_ref = &net;
+            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
+
+            let fed_db = || MemDatabase::new().into();
+            let fed = FederationTest::new(
+                server_config,
+                &fed_db,
+                &bitcoin_rpc,
+                &connect_gen,
+                &mut task_group,
+            )
+            .await;
+
+            let user_db = MemDatabase::new().into();
+            let user_cfg = UserClientConfig(client_config.clone());
+            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
+            user.client.await_consensus_block_height(0).await?;
+
+            let gateway = GatewayTest::new(
+                ln_rpc_adapter,
+                client_config.clone(),
+                lightning.gateway_node_pub_key,
+                base_port + (2 * num_peers) + 1,
+            )
+            .await;
+
+            Ok(Fixtures {
+                fed,
+                user,
+                bitcoin: Box::new(bitcoin),
+                gateway,
+                lightning: Box::new(lightning),
+                task_group,
+            })
+        }
+    }
+}
+
+pub fn peers(peers: &[u16]) -> Vec<PeerId> {
+    peers
+        .iter()
+        .map(|i| PeerId::from(*i))
+        .collect::<Vec<PeerId>>()
+}
+
+/// Creates a new user client connected to the given peers
+pub async fn create_user_client(
+    config: UserClientConfig,
+    peers: Vec<PeerId>,
+    db: Database,
+) -> UserClient {
+    let api = WsFederationApi::new(
+        config
+            .0
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
+            .map(|(id, node)| (PeerId::from(id as u16), node.url.clone()))
+            .collect(),
+    )
+    .into();
+
+    UserClient::new_with_api(config, db, api, Default::default()).await
+}
+
+async fn distributed_config(
+    peers: &[PeerId],
+    params: HashMap<PeerId, ServerConfigParams>,
+    _max_evil: usize,
+    task_group: &mut TaskGroup,
+) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
+    let configs: Cancellable<Vec<(PeerId, ServerConfig)>> = join_all(peers.iter().map(|peer| {
+        let params = params.clone();
+        let peers = peers.to_vec();
+
+        let mut task_group = task_group.clone();
+
+        async move {
+            let our_params = params[peer].clone();
+            let server_conn = connect(
+                our_params.server_dkg.clone(),
+                our_params.tls.clone(),
+                &mut task_group,
+            )
+            .await;
+            let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
+
+            let rng = OsRng;
+            let cfg = ServerConfig::distributed_gen(
+                &connections,
+                peer,
+                &peers,
+                &our_params,
+                rng,
+                &mut task_group,
+            );
+            (*peer, cfg.await.expect("generation failed"))
+        }
+    }))
+    .await
+    .into_iter()
+    .map(|(peer_id, maybe_cancelled)| maybe_cancelled.map(|v| (peer_id, v)))
+    .collect();
+
+    let configs = configs?;
+
+    let (_, config) = configs.first().unwrap().clone();
+
+    Ok((configs.into_iter().collect(), config.to_client_config()))
+}
+
+fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
+    let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
+    fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
+}
 
 #[derive(Debug)]
 pub struct FakeFed<Module> {

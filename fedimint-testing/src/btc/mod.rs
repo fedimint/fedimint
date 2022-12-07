@@ -1,5 +1,6 @@
 pub mod bitcoind;
 pub mod fixtures;
+pub mod real;
 
 use bitcoin::{Address, Transaction};
 use fedimint_api::Amount;
