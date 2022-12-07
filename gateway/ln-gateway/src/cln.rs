@@ -24,7 +24,7 @@ where
     D: Deserializer<'de>,
 {
     let amount = String::deserialize(amount)?;
-    Ok(Amount::from_msat(
+    Ok(Amount::from_msats(
         amount[0..amount.len() - 4].parse::<u64>().unwrap(),
     ))
 }

@@ -338,9 +338,9 @@ impl MintClient {
     ) -> DerivableSecret {
         secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
-            .child_key(ChildId(amount.milli_sat))
+            .child_key(ChildId(amount.msats))
             .child_key(ChildId(note_idx.as_u64()))
-            .child_key(ChildId(amount.milli_sat))
+            .child_key(ChildId(amount.msats))
     }
 
     pub async fn new_ecash_note<C: Signing>(
@@ -753,7 +753,7 @@ mod tests {
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
                 &ModuleConfigGenParams {
-                    mint_amounts: vec![Amount::from_sat(1), Amount::from_sat(10)],
+                    mint_amounts: vec![Amount::from_sats(1), Amount::from_sats(10)],
                     ..ModuleConfigGenParams::fake_config_gen_params()
                 },
                 &MintConfigGenerator,
@@ -813,7 +813,7 @@ mod tests {
             secret: DerivableSecret::new_root(&[], &[]),
         };
 
-        const ISSUE_AMOUNT: Amount = Amount::from_sat(12);
+        const ISSUE_AMOUNT: Amount = Amount::from_sats(12);
         issue_tokens(&fed, &client, &context.db, ISSUE_AMOUNT).await;
 
         assert_eq!(client.coins().await.total_amount(), ISSUE_AMOUNT)
@@ -821,7 +821,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn create_input() {
-        const SPEND_AMOUNT: Amount = Amount::from_sat(21);
+        const SPEND_AMOUNT: Amount = Amount::from_sats(21);
 
         let (fed, client_config, client_context) = new_mint_and_client().await;
 
@@ -850,7 +850,7 @@ mod tests {
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
         let client = &client;
         builder
-            .build_with_change(client.clone(), rng, vec![Amount::from_sat(0)], secp)
+            .build_with_change(client.clone(), rng, vec![Amount::from_sats(0)], secp)
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
@@ -889,7 +889,7 @@ mod tests {
 
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
         builder
-            .build_with_change(client.clone(), rng, vec![Amount::from_sat(0)], secp)
+            .build_with_change(client.clone(), rng, vec![Amount::from_sats(0)], secp)
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
@@ -930,7 +930,7 @@ mod tests {
             secret: DerivableSecret::new_root(&[], &[]),
         };
         let client_copy = client.clone();
-        let amount = Amount::from_milli_sats(1);
+        let amount = Amount::from_msats(1);
 
         let issuance_thread = move || {
             (0..ITERATIONS)

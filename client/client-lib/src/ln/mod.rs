@@ -98,7 +98,7 @@ impl LnClient {
             // TODO: better define fee handling
             // Add 1% fee margin
             let contract_amount_msat = invoice_amount_msat + (invoice_amount_msat / 100);
-            Amount::from_msat(contract_amount_msat)
+            Amount::from_msats(contract_amount_msat)
         };
 
         let user_sk = bitcoin::KeyPair::new(&self.context.secp, &mut rng);
@@ -566,7 +566,7 @@ mod tests {
         // TODO: test that the client has its key
 
         let expected_amount_msat = invoice_amt_msat + (invoice_amt_msat / 100);
-        let expected_amount = Amount::from_msat(expected_amount_msat);
+        let expected_amount = Amount::from_msats(expected_amount_msat);
         assert_eq!(contract_acc.amount, expected_amount);
 
         // We need to compensate for the wallet's confirmation target

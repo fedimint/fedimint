@@ -49,7 +49,7 @@ async fn test_account() {
     });
 
     let account_output = LightningOutput::Contract(ContractOutput {
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         contract: contract.clone(),
     });
     let account_out_point = OutPoint {
@@ -68,7 +68,7 @@ async fn test_account() {
 
     let account_input = LightningInput {
         contract_id: contract.contract_id(),
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         witness: None,
     };
     let meta = fed.verify_input(&account_input).await.unwrap();
@@ -123,7 +123,7 @@ j5r6drg6k6zcqj0fcwg"
     });
 
     let outgoing_output = LightningOutput::Contract(ContractOutput {
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         contract: contract.clone(),
     });
     let outgoing_out_point = OutPoint {
@@ -149,7 +149,7 @@ j5r6drg6k6zcqj0fcwg"
     // Error: Missing preimage
     let account_input_no_witness = LightningInput {
         contract_id: contract.contract_id(),
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         witness: None,
     };
     let err = fed
@@ -164,7 +164,7 @@ j5r6drg6k6zcqj0fcwg"
     // Ok
     let account_input_witness = LightningInput {
         contract_id: contract.contract_id(),
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         witness: Some(preimage),
     };
     let meta = fed.verify_input(&account_input_witness).await.unwrap();
@@ -199,7 +199,7 @@ async fn test_incoming() {
     let hash = secp256k1::hashes::sha256::Hash::hash(&preimage.0);
 
     let offer = IncomingContractOffer {
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         hash,
         encrypted_preimage: EncryptedPreimage::new(
             preimage.clone(),
@@ -231,7 +231,7 @@ async fn test_incoming() {
         gateway_key: gw_pk,
     });
     let incoming_output = LightningOutput::Contract(ContractOutput {
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         contract: contract.clone(),
     });
     let incoming_out_point = OutPoint {
@@ -253,7 +253,7 @@ async fn test_incoming() {
 
     let incoming_input = LightningInput {
         contract_id: contract.contract_id(),
-        amount: Amount::from_sat(42),
+        amount: Amount::from_sats(42),
         witness: None,
     };
     let error = fed.verify_input(&incoming_input).await.unwrap_err();

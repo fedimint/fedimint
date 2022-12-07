@@ -80,7 +80,7 @@ impl ModuleConfigGenParams {
         ModuleConfigGenParams {
             mint_amounts: [1, 10, 100, 1000, 10000, 100000, 1000000]
                 .into_iter()
-                .map(Amount::from_milli_sats)
+                .map(Amount::from_msats)
                 .collect(),
             bitcoin_rpc: fedimint_api::config::BitcoindRpcCfg {
                 btc_rpc_address: "localhost".into(),

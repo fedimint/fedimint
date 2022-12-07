@@ -27,9 +27,9 @@ impl<T> TieredMulti<T> {
         let milli_sat = self
             .0
             .iter()
-            .map(|(tier, coins)| tier.milli_sat * (coins.len() as u64))
+            .map(|(tier, coins)| tier.msats * (coins.len() as u64))
             .sum();
-        Amount { milli_sat }
+        Amount { msats: milli_sat }
     }
 
     pub fn item_count(&self) -> usize {
@@ -283,35 +283,35 @@ mod test {
     #[test]
     fn select_coins_returns_exact_amount() {
         let starting = coins(vec![
-            (Amount::from_sat(1), 5),
-            (Amount::from_sat(5), 5),
-            (Amount::from_sat(20), 5),
+            (Amount::from_sats(1), 5),
+            (Amount::from_sats(5), 5),
+            (Amount::from_sats(20), 5),
         ]);
 
         assert_eq!(
-            starting.select_coins(Amount::from_sat(7)),
+            starting.select_coins(Amount::from_sats(7)),
             Some(coins(vec![
-                (Amount::from_sat(1), 2),
-                (Amount::from_sat(5), 1)
+                (Amount::from_sats(1), 2),
+                (Amount::from_sats(5), 1)
             ]))
         );
     }
 
     #[test]
     fn select_coins_uses_smaller_denominations() {
-        let starting = coins(vec![(Amount::from_sat(5), 5), (Amount::from_sat(20), 5)]);
+        let starting = coins(vec![(Amount::from_sats(5), 5), (Amount::from_sats(20), 5)]);
 
         assert_eq!(
-            starting.select_coins(Amount::from_sat(7)),
-            Some(coins(vec![(Amount::from_sat(5), 2)]))
+            starting.select_coins(Amount::from_sats(7)),
+            Some(coins(vec![(Amount::from_sats(5), 2)]))
         );
     }
 
     #[test]
     fn select_coins_returns_none_if_amount_is_too_large() {
-        let starting = coins(vec![(Amount::from_sat(10), 1)]);
+        let starting = coins(vec![(Amount::from_sats(10), 1)]);
 
-        assert_eq!(starting.select_coins(Amount::from_sat(100)), None);
+        assert_eq!(starting.select_coins(Amount::from_sats(100)), None);
     }
 
     fn coins(coins: Vec<(Amount, usize)>) -> TieredMulti<usize> {

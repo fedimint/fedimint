@@ -411,7 +411,7 @@ impl ServerConfigParams {
     pub fn gen_denominations(max: Amount) -> Vec<Amount> {
         let mut amounts = vec![];
 
-        let mut denomination = Amount::from_msat(1);
+        let mut denomination = Amount::from_msats(1);
         while denomination < max {
             amounts.push(denomination);
             denomination = denomination * 2;

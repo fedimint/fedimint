@@ -539,7 +539,7 @@ impl ServerModulePlugin for Wallet {
 
         Ok(InputMeta {
             amount: TransactionItemAmount {
-                amount: fedimint_api::Amount::from_sat(input.tx_output().value),
+                amount: fedimint_api::Amount::from_sats(input.tx_output().value),
                 fee: self.cfg.fee_consensus.peg_in_abs,
             },
             puk_keys: vec![*input.tweak_contract_key()],
