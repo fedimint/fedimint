@@ -952,6 +952,35 @@
 <a href="#952" id="952">952</a>
 <a href="#953" id="953">953</a>
 <a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1005,7 +1034,20 @@
 /// We allow converting it to u64 and incrementing it, but
 /// messing with it should be somewhat restricted to prevent
 /// silly errors.
-</span><span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable, Decodable)]
+</span><span class="attr">#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Encodable,
+    Decodable,
+    Default,
+    PartialOrd,
+    Ord,
+)]
 </span><span class="kw">pub struct </span>NoteIndex(u64);
 
 <span class="kw">impl </span>NoteIndex {
@@ -1023,6 +1065,10 @@
     </span><span class="attr">#[allow(unused)]
     </span><span class="kw">fn </span>from_u64(v: u64) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(v)
+    }
+
+    <span class="kw">pub fn </span>advance(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw-2">*</span><span class="self">self </span>= <span class="self">self</span>.next()
     }
 }
 
@@ -1262,10 +1308,22 @@
             }
         }
 
-        <span class="self">self</span>.secret
+        <span class="self">Self</span>::new_note_secret_static(<span class="kw-2">&amp;</span><span class="self">self</span>.secret, amount, new_idx)
+    }
+
+    <span class="doccomment">/// Derive the note `DerivableSecret` from the Mint&#39;s `secret` the `amount` tier and `note_idx`
+    ///
+    /// Static to help re-use in other places, that don&#39;t have a whole [`Self`] available
+    </span><span class="kw">pub fn </span>new_note_secret_static(
+        secret: <span class="kw-2">&amp;</span>DerivableSecret,
+        amount: Amount,
+        note_idx: NoteIndex,
+    ) -&gt; DerivableSecret {
+        secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) <span class="comment">// TODO: cache
             </span>.child_key(ChildId(amount.milli_sat))
-            .child_key(ChildId(new_idx.as_u64()))
+            .child_key(ChildId(note_idx.as_u64()))
+            .child_key(ChildId(amount.milli_sat))
     }
 
     <span class="kw">pub async fn </span>new_ecash_note&lt;C: Signing&gt;(
@@ -1333,7 +1391,7 @@
         <span class="kw">for </span>(amount, coin) <span class="kw">in </span>coins.into_iter() {
             <span class="kw">let </span>key = CoinKey {
                 amount,
-                nonce: coin.note.<span class="number">0</span>.clone(),
+                nonce: coin.note.<span class="number">0</span>,
             };
             <span class="kw">let </span>value = coin;
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -1736,7 +1794,7 @@
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
+            secret: DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sat(<span class="number">12</span>);
@@ -1756,7 +1814,7 @@
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
+            secret: DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
 
         issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
@@ -1853,7 +1911,7 @@
                 api: WsFederationApi::new(<span class="macro">vec!</span>[]).into(),
                 secp: Default::default(),
             }),
-            secret: DerivableSecret::new(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
+            secret: DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
         };
         <span class="kw">let </span>client_copy = client.clone();
         <span class="kw">let </span>amount = Amount::from_milli_sats(<span class="number">1</span>);

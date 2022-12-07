@@ -320,6 +320,7 @@
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::marker::PhantomData;
@@ -404,7 +405,8 @@
         <span class="self">self</span>.<span class="number">0</span>.iter()
     }
 
-    <span class="kw">pub fn </span>iter_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>T)&gt; + DoubleEndedIterator {
+    <span class="comment">// Note: order of the elements is important here: from lowest tiers to highest, then in order of elements in the Vec
+    </span><span class="kw">pub fn </span>iter_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>T)&gt; + DoubleEndedIterator {
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .flat_map(|(amt, coins)| coins.iter().map(<span class="kw">move </span>|c| (<span class="kw-2">*</span>amt, c)))

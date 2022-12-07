@@ -1681,7 +1681,7 @@
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>notes.clone() {
             <span class="kw">let </span>key = CoinKey {
                 amount,
-                nonce: note.note.<span class="number">0</span>.clone(),
+                nonce: note.note.<span class="number">0</span>,
             };
             dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
         }
@@ -1850,7 +1850,7 @@
         <span class="kw">for </span>(amount, coin) <span class="kw">in </span>final_coins.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>CoinKey {
                 amount,
-                nonce: coin.note.<span class="number">0</span>.clone(),
+                nonce: coin.note.<span class="number">0</span>,
             })
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -2582,7 +2582,7 @@
 <span class="kw">impl </span>ClientSecret {
     <span class="kw">fn </span>into_root_secret(<span class="self">self</span>) -&gt; DerivableSecret {
         <span class="kw">const </span>FEDIMINT_CLIENT_NONCE: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;Fedimint Client Salt&quot;</span>;
-        DerivableSecret::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, FEDIMINT_CLIENT_NONCE)
+        DerivableSecret::new_root(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, FEDIMINT_CLIENT_NONCE)
     }
 }
 

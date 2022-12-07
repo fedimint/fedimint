@@ -1388,7 +1388,7 @@
 /// User-generated, random or otherwise unpredictably generated (deterministically derivated).
 ///
 /// Internally a MuSig pub key so that transactions can be signed when being spent.
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Nonce(<span class="kw">pub </span>secp256k1_zkp::XOnlyPublicKey);
 
 <span class="doccomment">/// [`Nonce`] but blinded by the user key
@@ -1686,7 +1686,7 @@
             }
 
             <span class="kw">if </span>dbtx
-                .get_value(<span class="kw-2">&amp;</span>NonceKey(coin.<span class="number">0</span>.clone()))
+                .get_value(<span class="kw-2">&amp;</span>NonceKey(coin.<span class="number">0</span>))
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                 .is_some()
@@ -1719,7 +1719,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>(amount, coin) <span class="kw">in </span>input.iter_items() {
-            <span class="kw">let </span>key = NonceKey(coin.<span class="number">0</span>.clone());
+            <span class="kw">let </span>key = NonceKey(coin.<span class="number">0</span>);
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(key), <span class="kw-2">&amp;</span>amount)
                 .<span class="kw">await
