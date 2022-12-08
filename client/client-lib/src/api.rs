@@ -8,8 +8,7 @@ use bitcoin::{Address, Amount};
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::config::ClientConfig;
-use fedimint_api::core::client::ClientModule;
-use fedimint_api::encoding::ModuleRegistry;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::{EpochHistory, SerdeEpochHistory};
@@ -156,7 +155,7 @@ impl FederationApi {
 #[derive(Debug)]
 pub struct WsFederationApi<C = WsClient> {
     members: Vec<FederationMember<C>>,
-    module_registry: ModuleRegistry<fedimint_api::core::client::ClientModule>,
+    module_registry: ModuleDecoderRegistry,
 }
 
 #[derive(Debug)]
@@ -249,7 +248,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
 
     async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory> {
         struct ValidHistoryWrapper<'a> {
-            modules: &'a ModuleRegistry<ClientModule>,
+            modules: &'a ModuleDecoderRegistry,
             strategy: ValidHistory,
         }
 

@@ -1,5 +1,4 @@
 pub mod db;
-pub mod decode_stub;
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -9,7 +8,8 @@ use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPre
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, ServerModulePlugin, Tiered, TieredMulti, TransactionId};
@@ -169,7 +169,7 @@ impl MintClient {
     pub async fn start_dbtx(&self) -> DatabaseTransaction<'_> {
         self.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
     }
 
@@ -189,7 +189,7 @@ impl MintClient {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
 
         // remove the spent ecash from the DB
@@ -393,7 +393,7 @@ impl MintClient {
         let issuance = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&OutputFinalizationKey(outpoint))
             .await
@@ -431,7 +431,7 @@ impl MintClient {
     pub async fn list_active_issuances(&self) -> Vec<(OutPoint, NoteIssuanceRequests)> {
         self.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .await
@@ -454,7 +454,7 @@ impl MintClient {
                 let mut dbtx = self
                     .context
                     .db
-                    .begin_transaction(ModuleRegistry::default())
+                    .begin_transaction(ModuleDecoderRegistry::default())
                     .await;
                 loop {
                     match self.fetch_coins(&mut dbtx, out_point).await {
@@ -631,7 +631,7 @@ mod tests {
     use fedimint_api::config::ModuleConfigGenParams;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
-    use fedimint_api::encoding::ModuleRegistry;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -798,7 +798,9 @@ mod tests {
         let txid = TransactionId::from_inner([0x42; 32]);
         let out_point = OutPoint { txid, out_idx: 0 };
 
-        let mut dbtx = client_db.begin_transaction(ModuleRegistry::default()).await;
+        let mut dbtx = client_db
+            .begin_transaction(ModuleDecoderRegistry::default())
+            .await;
         client
             .receive_coins(amt, &mut dbtx, |output| async {
                 // Agree on output
@@ -853,7 +855,7 @@ mod tests {
         let dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let mut builder = TransactionBuilder::default();
         let secp = &client.context.secp;
@@ -896,7 +898,7 @@ mod tests {
         let dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let mut builder = TransactionBuilder::default();
         let coins = client.select_coins(SPEND_AMOUNT).await.unwrap();
@@ -987,7 +989,7 @@ mod tests {
         let last_idx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&NextECashNoteIndexKey(amount))
             .await

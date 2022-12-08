@@ -1,13 +1,12 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::hash::Hash;
 use std::io::Cursor;
 
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
-use fedimint_api::core::{Decoder, ModuleDecode};
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use miniscript::{Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
@@ -58,13 +57,10 @@ impl TxOutProof {
 }
 
 impl Decodable for TxOutProof {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let block_header = BlockHeader::consensus_decode(d, modules)?;
         let merkle_proof = PartialMerkleTree::consensus_decode(d, modules)?;
 
@@ -230,7 +226,7 @@ impl<'de> Deserialize<'de> for TxOutProof {
     where
         D: Deserializer<'de>,
     {
-        let empty_module_registry = BTreeMap::<_, Decoder>::new();
+        let empty_module_registry = ModuleDecoderRegistry::default();
         if deserializer.is_human_readable() {
             // TODO: Try Cow
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
@@ -295,13 +291,10 @@ impl PartialEq for TxOutProof {
 impl Eq for TxOutProof {}
 
 impl Decodable for PegInProof {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let slf = PegInProof {
             txout_proof: TxOutProof::consensus_decode(d, modules)?,
             transaction: Transaction::consensus_decode(d, modules)?,
@@ -328,10 +321,10 @@ pub enum PegInProofError {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, io::Cursor};
+    use std::io::Cursor;
 
-    use fedimint_api::core::Decoder;
     use fedimint_api::encoding::Decodable;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
 
     use super::TxOutProof;
 
@@ -350,7 +343,7 @@ mod tests {
         9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
         58a30f7ae5b909ffdd020073f04ff370000";
 
-        let empty_module_registry = BTreeMap::<_, Decoder>::new();
+        let empty_module_registry = ModuleDecoderRegistry::default();
         let txoutproof = TxOutProof::consensus_decode(
             &mut Cursor::new(hex::decode(txoutproof_hex).unwrap()),
             &empty_module_registry,

@@ -6,13 +6,12 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::core::Decoder;
 use fedimint_api::db::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     PrefixIter,
 };
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
-use fedimint_api::encoding::ModuleRegistry;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 pub use sled;
 use sled::transaction::TransactionError;
 
@@ -53,7 +52,7 @@ impl From<SledDb> for sled::Tree {
 // TODO: maybe make the concrete impl its own crate
 #[async_trait]
 impl IDatabase for SledDb {
-    async fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
+    async fn begin_transaction(&self, decoders: ModuleDecoderRegistry) -> DatabaseTransaction {
         let sled_tx = SledTransaction {
             operations: Vec::new(),
             db: self,

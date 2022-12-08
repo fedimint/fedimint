@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use config::ServerConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::core::ModuleDecode;
-use fedimint_api::encoding::{DecodeError, ModuleRegistry};
+use fedimint_api::encoding::DecodeError;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
@@ -341,7 +341,7 @@ impl FedimintServer {
                     return Err(Cancelled);
                 }
                 Ok(Ok((peer, EpochMessage::Rejoin(Some(history), epoch)))) => {
-                    let history = match history.try_into_inner(&self.consensus.modules) {
+                    let history = match history.try_into_inner(&self.consensus.modules.decoders()) {
                         Ok(history) => history,
                         Err(decode_err) => {
                             warn!("Peer {} sent malformed message: {}", peer, decode_err);
@@ -454,7 +454,8 @@ impl FedimintServer {
             .into_iter()
             .map(|outcome| {
                 // FIXME: deal with faulty messages
-                let (outcome, _ban_peers) = module_parse_outcome(outcome, &self.consensus.modules);
+                let (outcome, _ban_peers) =
+                    module_parse_outcome(outcome, &self.consensus.modules.decoders());
                 outcome
             })
             .collect())
@@ -515,7 +516,7 @@ impl FedimintServer {
                     .map(|outcome| {
                         // FIXME: deal with faulty messages
                         let (outcome, _ban_peers) =
-                            module_parse_outcome(outcome, &self.consensus.modules);
+                            module_parse_outcome(outcome, &self.consensus.modules.decoders());
                         outcome
                     })
                     .collect())
@@ -552,9 +553,9 @@ impl RngGenerator for OsRngGen {
     }
 }
 
-fn module_parse_outcome<M: ModuleDecode>(
+fn module_parse_outcome(
     outcome: SerdeConsensusOutcome,
-    module_registry: &ModuleRegistry<M>,
+    module_registry: &ModuleDecoderRegistry,
 ) -> (ConsensusOutcome, Vec<PeerId>) {
     let mut ban_peers = vec![];
     let contributions = outcome

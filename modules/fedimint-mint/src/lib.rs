@@ -319,7 +319,7 @@ impl ServerModulePlugin for Mint {
     type ConsensusItem = MintOutputConfirmation;
     type VerificationCache = VerificationCache;
 
-    fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
+    fn module_key(&self) -> ModuleKey {
         MODULE_KEY_MINT
     }
 

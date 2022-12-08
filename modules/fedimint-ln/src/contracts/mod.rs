@@ -7,8 +7,8 @@ use std::io::Error;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_api::core::ModuleDecode;
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::OutPoint;
 use serde::{Deserialize, Serialize};
 
@@ -111,13 +111,10 @@ impl Encodable for ContractId {
 }
 
 impl Decodable for ContractId {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Ok(ContractId::from_inner(Decodable::consensus_decode(
             d, modules,
         )?))
@@ -172,13 +169,10 @@ impl Encodable for EncryptedPreimage {
 }
 
 impl Decodable for EncryptedPreimage {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let bytes = Vec::<u8>::consensus_decode(d, modules)?;
         Ok(EncryptedPreimage(
             bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
@@ -195,13 +189,10 @@ impl Encodable for PreimageDecryptionShare {
 }
 
 impl Decodable for PreimageDecryptionShare {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let bytes = Vec::<u8>::consensus_decode(d, modules)?;
         Ok(PreimageDecryptionShare(
             bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,

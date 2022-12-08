@@ -17,7 +17,6 @@ use anyhow::Result;
 use fedimint_api::{
     backup::{BackupRequest, SignedBackupRequest},
     cancellable::{Cancellable, Cancelled},
-    core::Decoder,
     task::{TaskGroup, TaskHandle},
     NumPeers, PeerId,
 };
@@ -295,9 +294,9 @@ impl PlaintextEcashBackup {
 
     /// Decode from a plaintext (possibly aligned) message
     fn decode(msg: &[u8]) -> Result<Self> {
-        Ok(Decodable::consensus_decode::<Decoder, _>(
+        Ok(Decodable::consensus_decode(
             &mut &msg[..],
-            &BTreeMap::new(),
+            &ModuleDecoderRegistry::default(),
         )?)
     }
 

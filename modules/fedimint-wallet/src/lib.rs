@@ -22,12 +22,13 @@ use fedimint_api::config::{
     ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
+use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry, UnzipConsensus};
+use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::{
     api_endpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, TransactionItemAmount,
 };
@@ -384,7 +385,7 @@ impl ServerModulePlugin for Wallet {
     type ConsensusItem = WalletConsensusItem;
     type VerificationCache = WalletVerificationCache;
 
-    fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
+    fn module_key(&self) -> ModuleKey {
         MODULE_KEY_WALLET
     }
 
@@ -797,7 +798,7 @@ impl Wallet {
         db: Database,
         bitcoind: BitcoindRpc,
         task_group: &mut TaskGroup,
-        decoders: ModuleRegistry<Decoder>,
+        decoders: ModuleDecoderRegistry,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
         let broadcaster_db = db.clone();
@@ -1479,7 +1480,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 pub async fn run_broadcast_pending_tx(
     db: Database,
     rpc: BitcoindRpc,
-    modules: ModuleRegistry<Decoder>,
+    modules: ModuleDecoderRegistry,
     tg_handle: &TaskHandle,
 ) {
     while !tg_handle.is_shutting_down() {

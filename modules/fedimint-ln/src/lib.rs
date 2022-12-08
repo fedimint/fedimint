@@ -312,7 +312,7 @@ impl ServerModulePlugin for LightningModule {
     type ConsensusItem = LightningConsensusItem;
     type VerificationCache = LightningVerificationCache;
 
-    fn module_key(&self) -> fedimint_api::encoding::ModuleKey {
+    fn module_key(&self) -> ModuleKey {
         MODULE_KEY_LN
     }
 

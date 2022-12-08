@@ -2,11 +2,8 @@ use std::io::{Error, Read, Write};
 
 use secp256k1_zkp::ecdsa::Signature;
 
-use super::ModuleRegistry;
-use crate::{
-    core::ModuleDecode,
-    encoding::{Decodable, DecodeError, Encodable},
-};
+use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::module::registry::ModuleDecoderRegistry;
 
 impl Encodable for secp256k1_zkp::ecdsa::Signature {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
@@ -17,13 +14,10 @@ impl Encodable for secp256k1_zkp::ecdsa::Signature {
 }
 
 impl Decodable for secp256k1_zkp::ecdsa::Signature {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Signature::from_compact(&<[u8; 64]>::consensus_decode(d, modules)?)
             .map_err(DecodeError::from_err)
     }
@@ -38,13 +32,10 @@ impl Encodable for secp256k1_zkp::XOnlyPublicKey {
 }
 
 impl Decodable for secp256k1_zkp::XOnlyPublicKey {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         secp256k1_zkp::XOnlyPublicKey::from_slice(&<[u8; 32]>::consensus_decode(d, modules)?)
             .map_err(DecodeError::from_err)
     }
@@ -57,13 +48,10 @@ impl Encodable for secp256k1_zkp::PublicKey {
 }
 
 impl Decodable for secp256k1_zkp::PublicKey {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         secp256k1_zkp::PublicKey::from_slice(&<[u8; 33]>::consensus_decode(d, modules)?)
             .map_err(DecodeError::from_err)
     }
@@ -82,13 +70,10 @@ impl Encodable for secp256k1_zkp::schnorr::Signature {
 }
 
 impl Decodable for secp256k1_zkp::schnorr::Signature {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let bytes =
             <[u8; secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE]>::consensus_decode(d, modules)?;
         secp256k1_zkp::schnorr::Signature::from_slice(&bytes).map_err(DecodeError::from_err)
@@ -102,13 +87,10 @@ impl Encodable for bitcoin::KeyPair {
 }
 
 impl Decodable for bitcoin::KeyPair {
-    fn consensus_decode<M, D: Read>(
+    fn consensus_decode<D: Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let sec_bytes = <[u8; 32]>::consensus_decode(d, modules)?;
         Self::from_seckey_slice(secp256k1_zkp::global::SECP256K1, &sec_bytes) // FIXME: evaluate security risk of global ctx
             .map_err(DecodeError::from_err)

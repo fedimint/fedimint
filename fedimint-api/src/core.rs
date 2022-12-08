@@ -4,17 +4,19 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
+use std::any::Any;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::io::Read;
 use std::sync::Arc;
-use std::{any::Any, collections::BTreeMap};
 
 pub use bitcoin::KeyPair;
 use fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
 };
+
+use crate::ModuleDecoderRegistry;
 
 pub mod encode;
 
@@ -56,13 +58,10 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
         }
 
         impl Decodable for $name {
-            fn consensus_decode<M, R: std::io::Read>(
+            fn consensus_decode<R: std::io::Read>(
                 r: &mut R,
-                modules: &BTreeMap<ModuleKey, M>,
-            ) -> Result<Self, DecodeError>
-            where
-                M: $crate::core::ModuleDecode,
-            {
+                modules: &$crate::module::registry::ModuleDecoderRegistry,
+            ) -> Result<Self, DecodeError> {
                 $crate::core::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
                     m.$decode_fn(r)
                 })
@@ -477,13 +476,10 @@ where
     Input: Decodable,
     Output: Decodable,
 {
-    fn consensus_decode<M, R: std::io::Read>(
+    fn consensus_decode<R: std::io::Read>(
         r: &mut R,
-        modules: &BTreeMap<ModuleKey, M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Ok(Self {
             inputs: Decodable::consensus_decode(r, modules)?,
             outputs: Decodable::consensus_decode(r, modules)?,
