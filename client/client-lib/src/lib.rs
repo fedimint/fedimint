@@ -20,17 +20,21 @@ use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::config::ClientConfig;
-use fedimint_api::core::client::ClientModule;
+use fedimint_api::core::{Decoder, MODULE_KEY_LN, MODULE_KEY_MINT, MODULE_KEY_WALLET};
 use fedimint_api::db::Database;
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_api::{ServerModulePlugin, TieredMulti};
 use fedimint_core::epoch::EpochHistory;
+use fedimint_core::modules::ln::common::LightningModuleDecoder;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
+use fedimint_core::modules::mint::common::MintModuleDecoder;
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
+use fedimint_core::modules::wallet::common::WalletModuleDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
@@ -73,16 +77,13 @@ use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
-use crate::ln::decode_stub::LnDecoder;
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
-use crate::mint::decode_stub::MintDecoder;
 use crate::mint::MintClientError;
 use crate::secrets::{ChildId, DerivableSecret};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
-use crate::wallet::decode_stub::WalletDecoder;
 use crate::wallet::WalletClientError;
 use crate::{
     api::ApiError,
@@ -258,7 +259,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Fetches the client secret from the database or generates a new one if none is present
     async fn get_secret(db: &Database) -> DerivableSecret {
-        let mut tx = db.begin_transaction(ModuleRegistry::default()).await;
+        let mut tx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         let client_secret = tx.get_value(&ClientSecretKey).await.expect("DB error");
         let secret = if let Some(client_secret) = client_secret {
             client_secret
@@ -326,7 +327,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         for (amount, note) in notes.clone() {
             let key = CoinKey {
@@ -401,7 +402,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         self.mint_client()
             .receive_coins(amount, &mut dbtx, create_tx)
@@ -466,7 +467,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let address = self
             .wallet_client()
@@ -512,7 +513,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         for (amount, coin) in final_coins.iter_items() {
             dbtx.remove_entry(&CoinKey {
@@ -534,7 +535,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         self.mint_client().fetch_coins(&mut dbtx, outpoint).await?;
         dbtx.commit_tx().await.expect("DB Error");
@@ -547,7 +548,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let pending = dbtx
             .find_by_prefix(&PendingCoinsKeyPrefix)
@@ -569,7 +570,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let mut all_coins = TieredMulti::<SpendableNote>::default();
         for result in stream.collect::<Vec<_>>().await {
@@ -639,7 +640,7 @@ impl Client<UserClientConfig> {
         if let Some(gateway) = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&LightningGatewayKey)
             .await
@@ -680,7 +681,7 @@ impl Client<UserClientConfig> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         dbtx.insert_entry(&LightningGatewayKey, &gateway)
             .await
@@ -698,7 +699,7 @@ impl Client<UserClientConfig> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let mut tx = TransactionBuilder::default();
 
@@ -751,7 +752,7 @@ impl Client<UserClientConfig> {
         let contract_data = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&OutgoingPaymentKey(contract_id))
             .await
@@ -769,7 +770,7 @@ impl Client<UserClientConfig> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
             .await
@@ -1048,7 +1049,7 @@ impl Client<GatewayClientConfig> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         dbtx.insert_entry(
             &OutgoingContractAccountKey(contract.contract.contract_id()),
@@ -1063,7 +1064,7 @@ impl Client<GatewayClientConfig> {
     pub async fn list_pending_outgoing(&self) -> Vec<OutgoingContractAccount> {
         self.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .find_by_prefix(&OutgoingContractAccountKeyPrefix)
             .await
@@ -1076,7 +1077,7 @@ impl Client<GatewayClientConfig> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let contract_account = dbtx
             .remove_entry(&OutgoingContractAccountKey(contract_id))
@@ -1119,7 +1120,7 @@ impl Client<GatewayClientConfig> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let mut tx = TransactionBuilder::default();
 
@@ -1217,7 +1218,7 @@ impl Client<GatewayClientConfig> {
     pub async fn list_pending_claimed_outgoing(&self) -> Vec<ContractId> {
         self.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .find_by_prefix(&OutgoingPaymentClaimKeyPrefix)
             .await
@@ -1254,7 +1255,7 @@ impl Client<GatewayClientConfig> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         dbtx.remove_entry(&OutgoingPaymentClaimKey(contract_id))
             .await
@@ -1305,11 +1306,12 @@ impl Debug for ClientSecret {
 
 /// Builds a fake module registry which is only usable for decoding messages since the client isn't
 /// modularized yet but we need the decoding functionality.
-fn module_decode_stubs() -> ModuleRegistry<ClientModule> {
-    vec![LnDecoder.into(), MintDecoder.into(), WalletDecoder.into()]
-        .into_iter()
-        .map(|decoder: ClientModule| (decoder.module_key(), decoder))
-        .collect()
+fn module_decode_stubs() -> ModuleDecoderRegistry {
+    ModuleDecoderRegistry::new([
+        (MODULE_KEY_LN, Decoder::from_typed(LightningModuleDecoder)),
+        (MODULE_KEY_WALLET, Decoder::from_typed(WalletModuleDecoder)),
+        (MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder)),
+    ])
 }
 
 // FIXME: move this elsewhere. maybe into "core".

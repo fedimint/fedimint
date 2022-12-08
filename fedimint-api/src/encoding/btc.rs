@@ -2,10 +2,8 @@ use std::io::Error;
 
 use bitcoin::hashes::Hash as BitcoinHash;
 
-use crate::{
-    core::ModuleDecode,
-    encoding::{Decodable, DecodeError, Encodable, ModuleRegistry},
-};
+use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::module::registry::ModuleDecoderRegistry;
 
 macro_rules! impl_encode_decode_bridge {
     ($btc_type:ty) => {
@@ -19,13 +17,10 @@ macro_rules! impl_encode_decode_bridge {
         }
 
         impl crate::encoding::Decodable for $btc_type {
-            fn consensus_decode<M, D: std::io::Read>(
+            fn consensus_decode<D: std::io::Read>(
                 d: &mut D,
-                _modules: &ModuleRegistry<M>,
-            ) -> Result<Self, crate::encoding::DecodeError>
-            where
-                M: $crate::core::ModuleDecode,
-            {
+                _modules: &$crate::module::registry::ModuleDecoderRegistry,
+            ) -> Result<Self, crate::encoding::DecodeError> {
                 bitcoin::consensus::Decodable::consensus_decode(d)
                     .map_err(crate::encoding::DecodeError::from_err)
             }
@@ -49,13 +44,10 @@ impl Encodable for bitcoin::Amount {
 }
 
 impl Decodable for bitcoin::Amount {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Ok(bitcoin::Amount::from_sat(u64::consensus_decode(
             d, modules,
         )?))
@@ -72,13 +64,10 @@ impl Encodable for bitcoin::Address {
 }
 
 impl Decodable for bitcoin::Address {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         mut d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let network = bitcoin::Network::from_magic(u32::consensus_decode(&mut d, modules)?)
             .ok_or_else(|| DecodeError::from_str("Unknown network"))?;
         let script_pk = bitcoin::Script::consensus_decode(&mut d, modules)?;
@@ -95,13 +84,10 @@ impl Encodable for bitcoin::hashes::sha256::Hash {
 }
 
 impl Decodable for bitcoin::hashes::sha256::Hash {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Ok(bitcoin::hashes::sha256::Hash::from_inner(
             Decodable::consensus_decode(d, modules)?,
         ))
@@ -110,14 +96,13 @@ impl Decodable for bitcoin::hashes::sha256::Hash {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
     use std::str::FromStr;
-    use std::{collections::BTreeMap, io::Cursor};
 
     use bitcoin::hashes::Hash as BitcoinHash;
 
-    use crate::core::Decoder;
     use crate::encoding::{Decodable, Encodable};
-    use crate::ModuleRegistry;
+    use crate::ModuleDecoderRegistry;
 
     #[test_log::test]
     fn sha256_roundtrip() {
@@ -126,7 +111,7 @@ mod tests {
         hash.consensus_encode(&mut encoded).unwrap();
         let hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
             &mut Cursor::new(encoded),
-            &ModuleRegistry::<Decoder>::default(),
+            &ModuleDecoderRegistry::default(),
         )
         .unwrap();
         assert_eq!(hash, hash_decoded);
@@ -152,7 +137,7 @@ mod tests {
                 .expect("Encoding to vec can't fail");
             let mut cursor = Cursor::new(encoding);
             let parsed_address =
-                bitcoin::Address::consensus_decode(&mut cursor, &BTreeMap::<_, Decoder>::new())
+                bitcoin::Address::consensus_decode(&mut cursor, &ModuleDecoderRegistry::default())
                     .expect("Decoding address failed");
 
             assert_eq!(address, parsed_address);

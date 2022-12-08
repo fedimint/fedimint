@@ -17,7 +17,8 @@ pub use tiered_multi::*;
 
 pub use crate::core::server;
 use crate::core::ModuleDecode;
-use crate::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::module::registry::ModuleDecoderRegistry;
 
 pub mod backup;
 pub mod bitcoin_rpc;
@@ -309,13 +310,10 @@ impl Encodable for TransactionId {
 }
 
 impl Decodable for TransactionId {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        _modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(TransactionId::from_inner(bytes))

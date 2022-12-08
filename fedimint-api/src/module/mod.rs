@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod interconnect;
+pub mod registry;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
@@ -15,7 +16,6 @@ use crate::core::{
     PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
 };
 use crate::db::DatabaseTransaction;
-use crate::encoding::ModuleKey;
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
@@ -143,6 +143,8 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
+
+use crate::module::registry::ModuleKey;
 
 type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
 type HandlerFn<M> = Box<

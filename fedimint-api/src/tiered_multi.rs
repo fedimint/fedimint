@@ -6,8 +6,7 @@ use std::marker::PhantomData;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use serde::{Deserialize, Serialize};
 
-use crate::core::ModuleDecode;
-use crate::encoding::ModuleRegistry;
+use crate::module::registry::ModuleDecoderRegistry;
 use crate::tiered::InvalidAmountTierError;
 use crate::{Amount, Tiered};
 
@@ -236,13 +235,10 @@ impl<C> Decodable for TieredMulti<C>
 where
     C: Decodable,
 {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Ok(TieredMulti(BTreeMap::consensus_decode(d, modules)?))
     }
 }

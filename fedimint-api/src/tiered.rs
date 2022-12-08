@@ -5,10 +5,8 @@ use fedimint_api::Amount;
 use serde::{Deserialize, Serialize};
 use tbs::{PublicKeyShare, SecretKeyShare};
 
-use crate::{
-    core::ModuleDecode,
-    encoding::{Decodable, DecodeError, Encodable, ModuleRegistry},
-};
+use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::module::registry::ModuleDecoderRegistry;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct InvalidAmountTierError(pub Amount);
@@ -107,13 +105,10 @@ impl<C> Decodable for Tiered<C>
 where
     C: Decodable,
 {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Ok(Tiered(BTreeMap::consensus_decode(d, modules)?))
     }
 }

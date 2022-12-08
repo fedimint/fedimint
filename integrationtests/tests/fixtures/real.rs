@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::ops::Sub;
 use std::path::PathBuf;
@@ -12,8 +11,8 @@ use cln_rpc::model::requests;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{ClnRpc, Request, Response};
 use fedimint_api::config::BitcoindRpcCfg;
-use fedimint_api::core::Decoder;
 use fedimint_api::encoding::Decodable;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::Amount;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_wallet::txoproof::TxOutProof;
@@ -167,7 +166,7 @@ impl BitcoinTest for RealBitcoinTest {
                     .get_tx_out_proof(&[id], None)
                     .expect(Self::ERROR),
             ),
-            &BTreeMap::<_, Decoder>::new(),
+            &ModuleDecoderRegistry::default(),
         )
         .expect(Self::ERROR);
 

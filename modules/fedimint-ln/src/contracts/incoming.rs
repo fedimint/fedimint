@@ -3,8 +3,8 @@ use std::io::Error;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_api::core::ModuleDecode;
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::OutPoint;
 use serde::{Deserialize, Serialize};
 
@@ -96,13 +96,10 @@ impl Encodable for OfferId {
 }
 
 impl Decodable for OfferId {
-    fn consensus_decode<M, D: std::io::Read>(
+    fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError>
-    where
-        M: ModuleDecode,
-    {
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         Ok(OfferId::from_inner(Decodable::consensus_decode(
             d, modules,
         )?))

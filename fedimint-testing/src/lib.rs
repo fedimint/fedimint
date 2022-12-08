@@ -6,11 +6,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
-use fedimint_api::core::Decoder;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::ModuleRegistry;
 use fedimint_api::module::interconnect::ModuleInterconect;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::{
     ApiError, FederationModuleConfigGen, InputMeta, ModuleError, TransactionItemAmount,
 };
@@ -117,9 +116,12 @@ where
         assert_all_equal(results.into_iter())
     }
 
-    fn decoders(&self) -> ModuleRegistry<Decoder> {
+    fn decoders(&self) -> ModuleDecoderRegistry {
         let module = &self.members.first().unwrap().1;
-        std::iter::once((module.module_key(), IServerModule::decoder(module))).collect()
+        ModuleDecoderRegistry::new(std::iter::once((
+            module.module_key(),
+            IServerModule::decoder(module),
+        )))
     }
 
     // TODO: add expected result to inputs/outputs

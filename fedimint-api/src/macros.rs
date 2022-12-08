@@ -162,9 +162,9 @@ macro_rules! serde_module_encoding_wrapper {
         }
 
         impl $wrapper_name {
-            pub fn try_into_inner<M: fedimint_api::core::ModuleDecode>(
+            pub fn try_into_inner(
                 &self,
-                modules: &fedimint_api::encoding::ModuleRegistry<M>,
+                modules: &fedimint_api::module::registry::ModuleDecoderRegistry,
             ) -> Result<$wrapped, fedimint_api::encoding::DecodeError> {
                 let mut reader = std::io::Cursor::new(&self.0);
                 fedimint_api::encoding::Decodable::consensus_decode(&mut reader, modules)

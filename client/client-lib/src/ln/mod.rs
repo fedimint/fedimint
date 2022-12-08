@@ -1,6 +1,5 @@
 // TODO: once user and mint client are merged, make this private again
 pub mod db;
-pub mod decode_stub;
 pub mod incoming;
 pub mod outgoing;
 
@@ -11,7 +10,7 @@ use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::encoding::ModuleRegistry;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::{Amount, ServerModulePlugin};
@@ -199,7 +198,7 @@ impl LnClient {
         // TODO: unify block height type
         self.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .await
@@ -267,7 +266,7 @@ impl LnClient {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .await
@@ -279,7 +278,7 @@ impl LnClient {
         let confirmed_invoice = self
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&ConfirmedInvoiceKey(contract_id))
             .await
@@ -341,7 +340,7 @@ mod tests {
     use fedimint_api::config::ModuleConfigGenParams;
     use fedimint_api::core::OutputOutcome;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::encoding::ModuleRegistry;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -404,7 +403,7 @@ mod tests {
                 .await
                 .fetch_from_all(|m, db| async {
                     m.get_contract_account(
-                        &mut db.begin_transaction(ModuleRegistry::default()).await,
+                        &mut db.begin_transaction(ModuleDecoderRegistry::default()).await,
                         contract,
                     )
                     .await
@@ -541,7 +540,7 @@ mod tests {
         let mut dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await;
         let output = client
             .create_outgoing_output(&mut dbtx, invoice.clone(), &gateway, timelock, &mut rng)

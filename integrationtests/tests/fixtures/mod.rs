@@ -701,8 +701,7 @@ impl FederationTest {
                     svr.fedimint
                         .consensus
                         .modules
-                        .get(&MODULE_KEY_MINT)
-                        .unwrap()
+                        .module(MODULE_KEY_MINT)
                         .apply_output(&mut dbtx, &MintOutput(tokens.clone()).into(), out_point)
                         .await
                         .unwrap();
@@ -767,8 +766,7 @@ impl FederationTest {
         let wallet = server
             .consensus
             .modules
-            .get(&MODULE_KEY_WALLET)
-            .unwrap()
+            .module(MODULE_KEY_WALLET)
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
