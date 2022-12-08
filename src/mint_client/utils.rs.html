@@ -73,14 +73,12 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::str::FromStr;
+</pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
-<span class="kw">use </span>fedimint_api::core::Decoder;
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::{ParseAmountError, TieredMulti};
 <span class="kw">use </span>lightning_invoice::Currency;
 
@@ -91,7 +89,7 @@
     <span class="kw">let </span>bytes = base64::decode(s)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
         <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
-        <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new(),
+        <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
     )<span class="question-mark">?</span>)
 }
 
@@ -105,7 +103,7 @@
     <span class="kw">let </span>bytes = hex::decode(s)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(D::consensus_decode(
         <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
-        <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new(),
+        <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
     )<span class="question-mark">?</span>)
 }
 

@@ -608,10 +608,8 @@
 <a href="#608" id="608">608</a>
 <a href="#609" id="609">609</a>
 <a href="#610" id="610">610</a>
-<a href="#611" id="611">611</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
-<span class="kw">pub mod </span>decode_stub;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
 
@@ -622,7 +620,7 @@
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::timeout;
 <span class="kw">use </span>fedimint_api::{Amount, ServerModulePlugin};
@@ -810,7 +808,7 @@
         <span class="comment">// TODO: unify block height type
         </span><span class="self">self</span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentKeyPrefix)
             .<span class="kw">await
@@ -878,7 +876,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .<span class="kw">await
@@ -890,7 +888,7 @@
         <span class="kw">let </span>confirmed_invoice = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(contract_id))
             .<span class="kw">await
@@ -952,7 +950,7 @@
     <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
     <span class="kw">use </span>fedimint_api::core::OutputOutcome;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
+    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
     <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -1015,7 +1013,7 @@
                 .<span class="kw">await
                 </span>.fetch_from_all(|m, db| <span class="kw">async </span>{
                     m.get_contract_account(
-                        <span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>,
+                        <span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>,
                         contract,
                     )
                     .<span class="kw">await
@@ -1152,7 +1150,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span>output = client
             .create_outgoing_output(<span class="kw-2">&amp;mut </span>dbtx, invoice.clone(), <span class="kw-2">&amp;</span>gateway, timelock, <span class="kw-2">&amp;mut </span>rng)

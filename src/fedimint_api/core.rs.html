@@ -566,27 +566,25 @@
 <a href="#566" id="566">566</a>
 <a href="#567" id="567">567</a>
 <a href="#568" id="568">568</a>
-<a href="#569" id="569">569</a>
-<a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
-</span><span class="kw">use </span>std::fmt::{Debug, Display};
+</span><span class="kw">use </span>std::any::Any;
+<span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::{any::Any, collections::BTreeMap};
 
 <span class="kw">pub use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
 };
+
+<span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
 
 <span class="kw">pub mod </span>encode;
 
@@ -628,13 +626,10 @@
         }
 
         <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">fn </span>consensus_decode&lt;M, R: std::io::Read&gt;(
+            <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
                 r: <span class="kw-2">&amp;mut </span>R,
-                modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-            <span class="kw">where
-                </span>M: <span class="macro-nonterminal">$crate::core::ModuleDecode</span>,
-            {
+                modules: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
                 <span class="macro-nonterminal">$crate::core::encode::module_decode_key_prefixed_decodable</span>(r, modules, |r, m| {
                     m.<span class="macro-nonterminal">$decode_fn</span>(r)
                 })
@@ -1049,13 +1044,10 @@
     </span>Input: Decodable,
     Output: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode&lt;M, R: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
-        modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             inputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
             outputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,

@@ -55,7 +55,7 @@
         path: String,
         data: Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Value, ApiError&gt; {
-        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.fedimint.modules.values() {
+        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.fedimint.modules.modules() {
             <span class="kw">if </span>module.api_base_name() == module_name {
                 <span class="kw">let </span>endpoint = module
                     .api_endpoints()

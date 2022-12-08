@@ -345,6 +345,8 @@
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -353,11 +355,10 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
-<span class="kw">use </span>fedimint_api::core::Decoder;
 <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::{
     ApiError, FederationModuleConfigGen, InputMeta, ModuleError, TransactionItemAmount,
 };
@@ -464,9 +465,12 @@
         assert_all_equal(results.into_iter())
     }
 
-    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleRegistry&lt;Decoder&gt; {
+    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="kw">let </span>module = <span class="kw-2">&amp;</span><span class="self">self</span>.members.first().unwrap().<span class="number">1</span>;
-        std::iter::once((module.module_key(), IServerModule::decoder(module))).collect()
+        ModuleDecoderRegistry::new(std::iter::once((
+            module.module_key(),
+            IServerModule::decoder(module),
+        )))
     }
 
     <span class="comment">// TODO: add expected result to inputs/outputs

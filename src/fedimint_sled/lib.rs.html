@@ -268,7 +268,6 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
@@ -277,13 +276,12 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::core::Decoder;
 <span class="kw">use </span>fedimint_api::db::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     PrefixIter,
 };
 <span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">pub use </span>sled;
 <span class="kw">use </span>sled::transaction::TransactionError;
 
@@ -324,7 +322,7 @@
 <span class="comment">// TODO: maybe make the concrete impl its own crate
 </span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IDatabase <span class="kw">for </span>SledDb {
-    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
+    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleDecoderRegistry) -&gt; DatabaseTransaction {
         <span class="kw">let </span>sled_tx = SledTransaction {
             operations: Vec::new(),
             db: <span class="self">self</span>,

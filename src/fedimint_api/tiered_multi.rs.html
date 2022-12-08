@@ -388,10 +388,6 @@
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
 <a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -400,8 +396,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="kw">use </span><span class="kw">crate</span>::core::ModuleDecode;
-<span class="kw">use </span><span class="kw">crate</span>::encoding::ModuleRegistry;
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::tiered::InvalidAmountTierError;
 <span class="kw">use crate</span>::{Amount, Tiered};
 
@@ -630,13 +625,10 @@
 <span class="kw">where
     </span>C: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(TieredMulti(BTreeMap::consensus_decode(d, modules)<span class="question-mark">?</span>))
     }
 }

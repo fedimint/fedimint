@@ -816,7 +816,6 @@
 <a href="#816" id="816">816</a>
 <a href="#817" id="817">817</a>
 <a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -827,8 +826,7 @@
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
-<span class="kw">use </span>fedimint_api::core::client::ClientModule;
-<span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::{EpochHistory, SerdeEpochHistory};
@@ -975,7 +973,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
     members: Vec&lt;FederationMember&lt;C&gt;&gt;,
-    module_registry: ModuleRegistry&lt;fedimint_api::core::client::ClientModule&gt;,
+    module_registry: ModuleDecoderRegistry,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1068,7 +1066,7 @@
 
     <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64, epoch_pk: PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
         <span class="kw">struct </span>ValidHistoryWrapper&lt;<span class="lifetime">&#39;a</span>&gt; {
-            modules: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleRegistry&lt;ClientModule&gt;,
+            modules: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleDecoderRegistry,
             strategy: ValidHistory,
         }
 

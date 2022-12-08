@@ -696,19 +696,7 @@
 <a href="#696" id="696">696</a>
 <a href="#697" id="697">697</a>
 <a href="#698" id="698">698</a>
-<a href="#699" id="699">699</a>
-<a href="#700" id="700">700</a>
-<a href="#701" id="701">701</a>
-<a href="#702" id="702">702</a>
-<a href="#703" id="703">703</a>
-<a href="#704" id="704">704</a>
-<a href="#705" id="705">705</a>
-<a href="#706" id="706">706</a>
-<a href="#707" id="707">707</a>
-<a href="#708" id="708">708</a>
-<a href="#709" id="709">709</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::error::Error;
+</pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -717,13 +705,14 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, ModuleDecode, ModuleKey};
 <span class="kw">use </span><span class="kw">crate</span>::dyn_newtype_define;
-<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable, ModuleRegistry};
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
 <span class="kw">pub mod </span>mem_impl;
 
 <span class="kw">pub use </span>tests::<span class="kw-2">*</span>;
+
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>DatabaseInsertOperation {
@@ -753,10 +742,7 @@
 }
 
 <span class="kw">pub trait </span>DatabaseKey: Sized + DatabaseKeyPrefix {
-    <span class="kw">fn </span>from_bytes&lt;M: ModuleDecode&gt;(
-        data: <span class="kw-2">&amp;</span>[u8],
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
 }
 
 <span class="kw">pub trait </span>SerializableDatabaseValue: Debug {
@@ -764,16 +750,14 @@
 }
 
 <span class="kw">pub trait </span>DatabaseValue: Sized + SerializableDatabaseValue {
-    <span class="kw">fn </span>from_bytes&lt;M&gt;(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode;
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
 }
 
 <span class="kw">pub type </span>PrefixIter&lt;<span class="lifetime">&#39;a</span>&gt; = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IDatabase: Debug + Send + Sync {
-    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction;
+    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleDecoderRegistry) -&gt; DatabaseTransaction;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -836,7 +820,7 @@
 </span><span class="attr">#[doc = <span class="string">&quot; A handle to a type-erased database implementation&quot;</span>]
 </span><span class="kw">pub struct </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(
     Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>&gt;,
-    BTreeMap&lt;ModuleKey, Decoder&gt;,
+    ModuleDecoderRegistry,
 );
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; std::ops::Deref <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">type </span>Target = <span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>;
@@ -855,7 +839,7 @@
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub fn </span>new&lt;I: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>&gt;(
         dbtx: I,
-        decoders: ModuleRegistry&lt;Decoder&gt;,
+        decoders: ModuleDecoderRegistry,
     ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
         DatabaseTransaction(Box::new(dbtx), decoders)
     }
@@ -985,10 +969,7 @@
     </span><span class="comment">// Note: key can only be `T` that can be decoded without modules (even if module type is `()`)
     </span>T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="kw">crate</span>::encoding::Decodable + Sized,
 {
-    <span class="kw">fn </span>from_bytes&lt;M: ModuleDecode&gt;(
-        data: <span class="kw-2">&amp;</span>[u8],
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
         <span class="kw">if </span>data.is_empty() {
             <span class="comment">// TODO: build better coding errors, pretty useless right now
             </span><span class="kw">return </span><span class="prelude-val">Err</span>(DecodingError::wrong_length(<span class="number">1</span>, <span class="number">0</span>));
@@ -1022,10 +1003,7 @@
 <span class="kw">where
     </span>T: SerializableDatabaseValue + Decodable,
 {
-    <span class="kw">fn </span>from_bytes&lt;M&gt;(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
         T::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(data), modules)
             .map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
     }
@@ -1059,7 +1037,7 @@
     <span class="kw">use </span><span class="kw">super</span>::Database;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseKeyPrefixConst;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
-    <span class="kw">use </span><span class="kw">crate</span>::ModuleRegistry;
+    <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
     <span class="attr">#[repr(u8)]
     #[derive(Clone)]
@@ -1108,7 +1086,7 @@
     </span><span class="kw">struct </span>TestVal(u64);
 
     <span class="kw">pub async fn </span>verify_insert_elements(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
             .<span class="kw">await
@@ -1125,14 +1103,14 @@
     }
 
     <span class="kw">pub async fn </span>verify_remove_nonexisting(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
         <span class="kw">let </span>removed = dbtx.remove_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(removed.is_ok());
     }
 
     <span class="kw">pub async fn </span>verify_remove_existing(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
@@ -1149,7 +1127,7 @@
     }
 
     <span class="kw">pub async fn </span>verify_read_own_writes(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
@@ -1161,7 +1139,7 @@
     }
 
     <span class="kw">pub async fn </span>verify_prevent_dirty_reads(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
@@ -1170,12 +1148,12 @@
             .is_none());
 
         <span class="comment">// dbtx2 should not be able to see uncommitted changes
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(dbtx2.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
     }
 
     <span class="kw">pub async fn </span>verify_find_by_prefix(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>))
             .<span class="kw">await
@@ -1196,7 +1174,7 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="comment">// Verify finding by prefix returns the correct set of key pairs
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
         <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
@@ -1239,7 +1217,7 @@
     }
 
     <span class="kw">pub async fn </span>verify_commit(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>))
@@ -1249,7 +1227,7 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="comment">// Verify dbtx2 can see committed transactions
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(
             dbtx2.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>.unwrap(),
             <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>))
@@ -1257,7 +1235,7 @@
     }
 
     <span class="kw">pub async fn </span>verify_rollback_to_savepoint(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx_rollback = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx_rollback = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx_rollback
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">20</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2000</span>))
@@ -1291,10 +1269,10 @@
     }
 
     <span class="kw">pub async fn </span>verify_prevent_nonrepeatable_reads(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx2
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
@@ -1327,7 +1305,7 @@
     }
 
     <span class="kw">pub async fn </span>verify_phantom_entry(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
@@ -1341,7 +1319,7 @@
 
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
         <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
@@ -1362,7 +1340,7 @@
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx2
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">102</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">103</span>))
@@ -1392,15 +1370,15 @@
     }
 
     <span class="kw">pub async fn </span>expect_write_conflict(db: Database) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="macro">assert!</span>(dbtx
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
             .<span class="kw">await
             </span>.is_ok());
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx3 = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx3 = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(dbtx2
             .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>))

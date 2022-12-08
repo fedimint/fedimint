@@ -1011,8 +1011,9 @@
 <a href="#1011" id="1011">1011</a>
 <a href="#1012" id="1012">1012</a>
 <a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
-<span class="kw">pub mod </span>decode_stub;
 
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::sync::Arc;
@@ -1022,7 +1023,8 @@
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, ServerModulePlugin, Tiered, TieredMulti, TransactionId};
@@ -1188,7 +1190,7 @@
     <span class="kw">pub async fn </span>start_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
         <span class="self">self</span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
     </span>}
 
@@ -1198,7 +1200,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
 
         <span class="comment">// remove the spent ecash from the DB
@@ -1420,7 +1422,7 @@
         <span class="kw">let </span>issuance = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
             .<span class="kw">await
@@ -1458,7 +1460,7 @@
     <span class="kw">pub async fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {
         <span class="self">self</span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
             .<span class="kw">await
@@ -1481,7 +1483,7 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
                     </span>.context
                     .db
-                    .begin_transaction(ModuleRegistry::default())
+                    .begin_transaction(ModuleDecoderRegistry::default())
                     .<span class="kw">await</span>;
                 <span class="kw">loop </span>{
                     <span class="kw">match </span><span class="self">self</span>.fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
@@ -1658,7 +1660,7 @@
     <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
-    <span class="kw">use </span>fedimint_api::encoding::ModuleRegistry;
+    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -1825,7 +1827,9 @@
         <span class="kw">let </span>txid = TransactionId::from_inner([<span class="number">0x42</span>; <span class="number">32</span>]);
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db
+            .begin_transaction(ModuleDecoderRegistry::default())
+            .<span class="kw">await</span>;
         client
             .receive_coins(amt, <span class="kw-2">&amp;mut </span>dbtx, |output| <span class="kw">async </span>{
                 <span class="comment">// Agree on output
@@ -1880,7 +1884,7 @@
         </span><span class="kw">let </span>dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
@@ -1923,7 +1927,7 @@
         </span><span class="kw">let </span>dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
@@ -2014,7 +2018,7 @@
         <span class="kw">let </span>last_idx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount))
             .<span class="kw">await

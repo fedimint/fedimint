@@ -489,8 +489,8 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote! </span>{
                     <span class="kw">impl </span>::fedimint_api::encoding::Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::encoding::ModuleRegistry&lt;M&gt;) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
-                            <span class="kw">where </span>M : ::fedimint_api::core::ModuleDecode {
+                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
+                        {
                             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
                             #(<span class="kw">let </span>#field_names = ::fedimint_api::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(#ident(#(#field_names,)<span class="kw-2">*</span>))
@@ -505,8 +505,8 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote! </span>{
                     <span class="kw">impl </span>::fedimint_api::encoding::Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::encoding::ModuleRegistry&lt;M&gt;) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
-                            <span class="kw">where </span>M: ::fedimint_api::core::ModuleDecode {
+                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
+                        {
                             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
                             #(<span class="kw">let </span>#field_names = ::fedimint_api::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(#ident{
@@ -553,8 +553,8 @@
 
             <span class="macro">quote! </span>{
                 <span class="kw">impl </span>::fedimint_api::encoding::Decodable <span class="kw">for </span>#ident {
-                    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::encoding::ModuleRegistry&lt;M&gt;) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
-                        <span class="kw">where </span>M: ::fedimint_api::core::ModuleDecode {
+                    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
+                    {
                         <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_api::encoding::Decodable&gt;::consensus_decode(d, modules)<span class="question-mark">? </span><span class="kw">as </span>usize;
                         <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
                             #(#match_arms)*

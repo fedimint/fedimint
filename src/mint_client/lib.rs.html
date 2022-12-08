@@ -1417,6 +1417,8 @@
 <a href="#1417" id="1417">1417</a>
 <a href="#1418" id="1418">1418</a>
 <a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1439,17 +1441,21 @@
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
-<span class="kw">use </span>fedimint_api::core::client::ClientModule;
+<span class="kw">use </span>fedimint_api::core::{Decoder, MODULE_KEY_LN, MODULE_KEY_MINT, MODULE_KEY_WALLET};
 <span class="kw">use </span>fedimint_api::db::Database;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_api::{ServerModulePlugin, TieredMulti};
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+<span class="kw">use </span>fedimint_core::modules::ln::common::LightningModuleDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
+<span class="kw">use </span>fedimint_core::modules::mint::common::MintModuleDecoder;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
+<span class="kw">use </span>fedimint_core::modules::wallet::common::WalletModuleDecoder;
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
@@ -1492,16 +1498,13 @@
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
-<span class="kw">use </span><span class="kw">crate</span>::ln::decode_stub::LnDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::LnClientError;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, PendingCoinsKeyPrefix};
-<span class="kw">use </span><span class="kw">crate</span>::mint::decode_stub::MintDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::mint::MintClientError;
 <span class="kw">use </span><span class="kw">crate</span>::secrets::{ChildId, DerivableSecret};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, ClientContext};
-<span class="kw">use </span><span class="kw">crate</span>::wallet::decode_stub::WalletDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
 <span class="kw">use crate</span>::{
     api::ApiError,
@@ -1677,7 +1680,7 @@
 
     <span class="doccomment">/// Fetches the client secret from the database or generates a new one if none is present
     </span><span class="kw">async fn </span>get_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret {
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>;
         <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>ClientSecretKey).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="kw">let </span>secret = <span class="kw">if let </span><span class="prelude-val">Some</span>(client_secret) = client_secret {
             client_secret
@@ -1745,7 +1748,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>notes.clone() {
             <span class="kw">let </span>key = CoinKey {
@@ -1820,7 +1823,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="self">self</span>.mint_client()
             .receive_coins(amount, <span class="kw-2">&amp;mut </span>dbtx, create_tx)
@@ -1885,7 +1888,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span>address = <span class="self">self
             </span>.wallet_client()
@@ -1931,7 +1934,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">for </span>(amount, coin) <span class="kw">in </span>final_coins.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>CoinKey {
@@ -1953,7 +1956,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="self">self</span>.mint_client().fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, outpoint).<span class="kw">await</span><span class="question-mark">?</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -1966,7 +1969,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span>pending = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>PendingCoinsKeyPrefix)
@@ -1988,7 +1991,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>all_coins = TieredMulti::&lt;SpendableNote&gt;::default();
         <span class="kw">for </span>result <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
@@ -2058,7 +2061,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>LightningGatewayKey)
             .<span class="kw">await
@@ -2099,7 +2102,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway)
             .<span class="kw">await
@@ -2117,7 +2120,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
@@ -2170,7 +2173,7 @@
         <span class="kw">let </span>contract_data = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
             .<span class="kw">await
@@ -2188,7 +2191,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
             .<span class="kw">await
@@ -2467,7 +2470,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract.contract.contract_id()),
@@ -2482,7 +2485,7 @@
     </span><span class="kw">pub async fn </span>list_pending_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutgoingContractAccount&gt; {
         <span class="self">self</span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutgoingContractAccountKeyPrefix)
             .<span class="kw">await
@@ -2495,7 +2498,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span>contract_account = dbtx
             .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract_id))
@@ -2538,7 +2541,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
@@ -2636,7 +2639,7 @@
     </span><span class="kw">pub async fn </span>list_pending_claimed_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ContractId&gt; {
         <span class="self">self</span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKeyPrefix)
             .<span class="kw">await
@@ -2673,7 +2676,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .<span class="kw">await</span>;
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKey(contract_id))
             .<span class="kw">await
@@ -2724,11 +2727,12 @@
 
 <span class="doccomment">/// Builds a fake module registry which is only usable for decoding messages since the client isn&#39;t
 /// modularized yet but we need the decoding functionality.
-</span><span class="kw">fn </span>module_decode_stubs() -&gt; ModuleRegistry&lt;ClientModule&gt; {
-    <span class="macro">vec!</span>[LnDecoder.into(), MintDecoder.into(), WalletDecoder.into()]
-        .into_iter()
-        .map(|decoder: ClientModule| (decoder.module_key(), decoder))
-        .collect()
+</span><span class="kw">fn </span>module_decode_stubs() -&gt; ModuleDecoderRegistry {
+    ModuleDecoderRegistry::new([
+        (MODULE_KEY_LN, Decoder::from_typed(LightningModuleDecoder)),
+        (MODULE_KEY_WALLET, Decoder::from_typed(WalletModuleDecoder)),
+        (MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder)),
+    ])
 }
 
 <span class="comment">// FIXME: move this elsewhere. maybe into &quot;core&quot;.

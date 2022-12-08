@@ -18,39 +18,25 @@
 <a href="#18" id="18">18</a>
 <a href="#19" id="19">19</a>
 <a href="#20" id="20">20</a>
-<a href="#21" id="21">21</a>
-<a href="#22" id="22">22</a>
-<a href="#23" id="23">23</a>
-<a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a>
-<a href="#27" id="27">27</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, io};
+</pre><pre class="rust"><code><span class="kw">use </span>std::io;
 
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError};
 
-<span class="kw">use </span><span class="kw">super</span>::ModuleDecode;
-<span class="kw">use </span><span class="kw">crate</span>::encoding::ModuleKey;
+<span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::{ModuleDecoderRegistry, ModuleKey};
 
-<span class="kw">pub fn </span>module_decode_key_prefixed_decodable&lt;T, F, R, M&gt;(
+<span class="kw">pub fn </span>module_decode_key_prefixed_decodable&lt;T, F, R&gt;(
     <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span>R,
-    modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
+    modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     decode_fn: F,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;
 <span class="kw">where
     </span>R: io::Read,
-    F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>M) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
-    M: ModuleDecode,
+    F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>Decoder) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
 {
     <span class="kw">let </span>key = ModuleKey::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
 
-    <span class="kw">match </span>modules.get(<span class="kw-2">&amp;</span>key) {
-        <span class="prelude-val">Some</span>(module) =&gt; decode_fn(d, module),
-        <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(
-            <span class="string">&quot;Unsupported module with key: {}&quot;</span>,
-            key
-        ))),
-    }
+    decode_fn(d, modules.decoder(key))
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (01fbc5ae7 2022-12-07)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

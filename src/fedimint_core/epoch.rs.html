@@ -344,17 +344,13 @@
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
-<span class="kw">use </span>fedimint_api::core::{ConsensusItem <span class="kw">as </span>ModuleConsensusItem, ModuleDecode};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
+<span class="kw">use </span>fedimint_api::core::ConsensusItem <span class="kw">as </span>ModuleConsensusItem;
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -515,13 +511,10 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>EpochSignature {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
-        _modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">96</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(EpochSignature(Signature::from_bytes(bytes).unwrap()))
@@ -535,13 +528,10 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>EpochSignatureShare {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
-        _modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">96</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(EpochSignatureShare(

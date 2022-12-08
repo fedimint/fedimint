@@ -112,11 +112,6 @@
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -124,10 +119,8 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{PublicKeyShare, SecretKeyShare};
 
-<span class="kw">use crate</span>::{
-    core::ModuleDecode,
-    encoding::{Decodable, DecodeError, Encodable, ModuleRegistry},
-};
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub struct </span>InvalidAmountTierError(<span class="kw">pub </span>Amount);
@@ -226,13 +219,10 @@
 <span class="kw">where
     </span>C: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(Tiered(BTreeMap::consensus_decode(d, modules)<span class="question-mark">?</span>))
     }
 }

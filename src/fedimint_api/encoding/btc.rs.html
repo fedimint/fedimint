@@ -144,29 +144,12 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 
-<span class="kw">use crate</span>::{
-    core::ModuleDecode,
-    encoding::{Decodable, DecodeError, Encodable, ModuleRegistry},
-};
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="macro">macro_rules! </span>impl_encode_decode_bridge {
     (<span class="macro-nonterminal">$btc_type</span>:ty) =&gt; {
@@ -180,13 +163,10 @@
         }
 
         <span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span><span class="macro-nonterminal">$btc_type </span>{
-            <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
                 d: <span class="kw-2">&amp;mut </span>D,
-                _modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt;
-            <span class="kw">where
-                </span>M: <span class="macro-nonterminal">$crate::core::ModuleDecode</span>,
-            {
+                _modules: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
                 bitcoin::consensus::Decodable::consensus_decode(d)
                     .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
             }
@@ -210,13 +190,10 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::Amount {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(bitcoin::Amount::from_sat(u64::consensus_decode(
             d, modules,
         )<span class="question-mark">?</span>))
@@ -233,13 +210,10 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::Address {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>network = bitcoin::Network::from_magic(u32::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>)
             .ok_or_else(|| DecodeError::from_str(<span class="string">&quot;Unknown network&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>script_pk = bitcoin::Script::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
@@ -256,13 +230,10 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::hashes::sha256::Hash {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(bitcoin::hashes::sha256::Hash::from_inner(
             Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
         ))
@@ -271,14 +242,13 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::io::Cursor;
     <span class="kw">use </span>std::str::FromStr;
-    <span class="kw">use </span>std::{collections::BTreeMap, io::Cursor};
 
     <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 
-    <span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
-    <span class="kw">use </span><span class="kw">crate</span>::ModuleRegistry;
+    <span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>sha256_roundtrip() {
@@ -287,7 +257,7 @@
         hash.consensus_encode(<span class="kw-2">&amp;mut </span>encoded).unwrap();
         <span class="kw">let </span>hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
             <span class="kw-2">&amp;mut </span>Cursor::new(encoded),
-            <span class="kw-2">&amp;</span>ModuleRegistry::&lt;Decoder&gt;::default(),
+            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )
         .unwrap();
         <span class="macro">assert_eq!</span>(hash, hash_decoded);
@@ -313,7 +283,7 @@
                 .expect(<span class="string">&quot;Encoding to vec can&#39;t fail&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(encoding);
             <span class="kw">let </span>parsed_address =
-                bitcoin::Address::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new())
+                bitcoin::Address::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
                     .expect(<span class="string">&quot;Decoding address failed&quot;</span>);
 
             <span class="macro">assert_eq!</span>(address, parsed_address);

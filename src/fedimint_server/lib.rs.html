@@ -584,6 +584,7 @@
 <a href="#584" id="584">584</a>
 <a href="#585" id="585">585</a>
 <a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -593,8 +594,8 @@
 
 <span class="kw">use </span>config::ServerConfig;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::core::ModuleDecode;
-<span class="kw">use </span>fedimint_api::encoding::{DecodeError, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::encoding::DecodeError;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
@@ -927,7 +928,7 @@
                     <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled);
                 }
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>((peer, EpochMessage::Rejoin(<span class="prelude-val">Some</span>(history), epoch)))) =&gt; {
-                    <span class="kw">let </span>history = <span class="kw">match </span>history.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules) {
+                    <span class="kw">let </span>history = <span class="kw">match </span>history.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules.decoders()) {
                         <span class="prelude-val">Ok</span>(history) =&gt; history,
                         <span class="prelude-val">Err</span>(decode_err) =&gt; {
                             <span class="macro">warn!</span>(<span class="string">&quot;Peer {} sent malformed message: {}&quot;</span>, peer, decode_err);
@@ -1040,7 +1041,8 @@
             .into_iter()
             .map(|outcome| {
                 <span class="comment">// FIXME: deal with faulty messages
-                </span><span class="kw">let </span>(outcome, _ban_peers) = module_parse_outcome(outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules);
+                </span><span class="kw">let </span>(outcome, _ban_peers) =
+                    module_parse_outcome(outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules.decoders());
                 outcome
             })
             .collect())
@@ -1101,7 +1103,7 @@
                     .map(|outcome| {
                         <span class="comment">// FIXME: deal with faulty messages
                         </span><span class="kw">let </span>(outcome, _ban_peers) =
-                            module_parse_outcome(outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules);
+                            module_parse_outcome(outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules.decoders());
                         outcome
                     })
                     .collect())
@@ -1138,9 +1140,9 @@
     }
 }
 
-<span class="kw">fn </span>module_parse_outcome&lt;M: ModuleDecode&gt;(
+<span class="kw">fn </span>module_parse_outcome(
     outcome: SerdeConsensusOutcome,
-    module_registry: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    module_registry: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
 ) -&gt; (ConsensusOutcome, Vec&lt;PeerId&gt;) {
     <span class="kw">let </span><span class="kw-2">mut </span>ban_peers = <span class="macro">vec!</span>[];
     <span class="kw">let </span>contributions = outcome

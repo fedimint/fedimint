@@ -1584,6 +1584,7 @@
 <a href="#1584" id="1584">1584</a>
 <a href="#1585" id="1585">1585</a>
 <a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1608,12 +1609,13 @@
     ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
+<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry, UnzipConsensus};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::{
     api_endpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, TransactionItemAmount,
 };
@@ -1970,7 +1972,7 @@
     <span class="kw">type </span>ConsensusItem = WalletConsensusItem;
     <span class="kw">type </span>VerificationCache = WalletVerificationCache;
 
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_api::encoding::ModuleKey {
+    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
         MODULE_KEY_WALLET
     }
 
@@ -2383,7 +2385,7 @@
         db: Database,
         bitcoind: BitcoindRpc,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-        decoders: ModuleRegistry&lt;Decoder&gt;,
+        decoders: ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletError&gt; {
         <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind.clone();
         <span class="kw">let </span>broadcaster_db = db.clone();
@@ -3065,7 +3067,7 @@
 </span><span class="kw">pub async fn </span>run_broadcast_pending_tx(
     db: Database,
     rpc: BitcoindRpc,
-    modules: ModuleRegistry&lt;Decoder&gt;,
+    modules: ModuleDecoderRegistry,
     tg_handle: <span class="kw-2">&amp;</span>TaskHandle,
 ) {
     <span class="kw">while </span>!tg_handle.is_shutting_down() {

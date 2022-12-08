@@ -105,16 +105,13 @@
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin_hashes::hash_newtype;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>fedimint_api::core::ModuleDecode;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::OutPoint;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -206,13 +203,10 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>OfferId {
-    <span class="kw">fn </span>consensus_decode&lt;M, D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;
-    <span class="kw">where
-        </span>M: ModuleDecode,
-    {
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(OfferId::from_inner(Decodable::consensus_decode(
             d, modules,
         )<span class="question-mark">?</span>))

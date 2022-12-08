@@ -44,13 +44,13 @@
 <a href="#44" id="44">44</a>
 <a href="#45" id="45">45</a>
 <a href="#46" id="46">46</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::fmt::Debug;
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::io;
 
 <span class="kw">use </span>fedimint_api::core::{ConsensusItem, Decoder, Input, Output, OutputOutcome, PluginDecode};
 <span class="kw">use </span>fedimint_api::encoding::Decodable;
 <span class="kw">use </span>fedimint_api::encoding::DecodeError;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 
 <span class="kw">use crate</span>::{MintInput, MintOutput, MintOutputConfirmation, MintOutputOutcome};
 
@@ -65,20 +65,20 @@
     <span class="kw">fn </span>decode_input(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(Input::from(MintInput::consensus_decode(
             <span class="kw-2">&amp;mut </span>d,
-            <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new(),
+            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )<span class="question-mark">?</span>))
     }
     <span class="kw">fn </span>decode_output(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(Output::from(MintOutput::consensus_decode(
             <span class="kw-2">&amp;mut </span>d,
-            <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new(),
+            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )<span class="question-mark">?</span>))
     }
 
     <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(OutputOutcome::from(MintOutputOutcome::consensus_decode(
             <span class="kw-2">&amp;mut </span>d,
-            <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new(),
+            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )<span class="question-mark">?</span>))
     }
 
@@ -86,7 +86,7 @@
         <span class="kw-2">mut </span>r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::core::ConsensusItem, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(ConsensusItem::from(
-            MintOutputConfirmation::consensus_decode(<span class="kw-2">&amp;mut </span>r, <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, Decoder&gt;::new())<span class="question-mark">?</span>,
+            MintOutputConfirmation::consensus_decode(<span class="kw-2">&amp;mut </span>r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>,
         ))
     }
 }

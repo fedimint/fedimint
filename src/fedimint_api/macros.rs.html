@@ -336,9 +336,9 @@
         }
 
         <span class="kw">impl </span><span class="macro-nonterminal">$wrapper_name </span>{
-            <span class="kw">pub fn </span>try_into_inner&lt;M: fedimint_api::core::ModuleDecode&gt;(
+            <span class="kw">pub fn </span>try_into_inner(
                 <span class="kw-2">&amp;</span><span class="self">self</span>,
-                modules: <span class="kw-2">&amp;</span>fedimint_api::encoding::ModuleRegistry&lt;M&gt;,
+                modules: <span class="kw-2">&amp;</span>fedimint_api::module::registry::ModuleDecoderRegistry,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="macro-nonterminal">$wrapped</span>, fedimint_api::encoding::DecodeError&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
                 fedimint_api::encoding::Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>reader, modules)
