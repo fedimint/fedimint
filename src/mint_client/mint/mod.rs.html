@@ -1006,6 +1006,11 @@
 <a href="#1006" id="1006">1006</a>
 <a href="#1007" id="1007">1007</a>
 <a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1111,6 +1116,11 @@
 }
 
 <span class="kw">impl </span>NoteIssuanceRequest {
+    <span class="kw">pub fn </span>recover_blind_nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BlindNonce {
+        <span class="kw">let </span>message = Nonce(<span class="self">self</span>.spend_key.x_only_public_key().<span class="number">0</span>).to_message();
+        BlindNonce(tbs::blind_message(message, <span class="self">self</span>.blinding_key))
+    }
+
     <span class="kw">pub fn </span>finalize(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         bsig: BlindedSignature,
