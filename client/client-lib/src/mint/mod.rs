@@ -103,6 +103,11 @@ pub struct NoteIssuanceRequest {
 }
 
 impl NoteIssuanceRequest {
+    pub fn recover_blind_nonce(&self) -> BlindNonce {
+        let message = Nonce(self.spend_key.x_only_public_key().0).to_message();
+        BlindNonce(tbs::blind_message(message, self.blinding_key))
+    }
+
     pub fn finalize(
         &self,
         bsig: BlindedSignature,
