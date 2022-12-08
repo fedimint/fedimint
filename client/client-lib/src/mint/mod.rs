@@ -353,13 +353,12 @@ impl MintClient {
     }
 
     pub async fn select_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
-        let coins = self
-            .coins()
-            .await
-            .select_coins(amount)
-            .ok_or(MintClientError::NotEnoughCoins)?;
+        let coins = self.coins().await;
+        let selected_coins = coins.select_coins(amount).ok_or_else(|| {
+            MintClientError::InsufficientBalance(amount, TieredMulti::total_amount(&coins))
+        })?;
 
-        Ok(coins)
+        Ok(selected_coins)
     }
 
     pub async fn receive_coins<'a, F, Fut>(
@@ -561,8 +560,8 @@ pub enum MintClientError {
     ApiError(#[from] ApiError),
     #[error("Could not finalize issuance request: {0}")]
     FinalizationError(#[from] CoinFinalizationError),
-    #[error("The client's wallet has not enough coins or they are not in the right denomination")]
-    NotEnoughCoins,
+    #[error("Insufficient balance. Amount requested={0} Mint balance={1}")]
+    InsufficientBalance(Amount, Amount),
     #[error("The transaction outcome received from the mint did not contain a result for output {0} yet")]
     OutputNotReadyYet(OutPoint),
     #[error("The transaction outcome returned by the mint contains too few outputs (output {0})")]
