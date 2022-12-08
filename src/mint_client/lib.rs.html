@@ -1412,6 +1412,11 @@
 <a href="#1412" id="1412">1412</a>
 <a href="#1413" id="1413">1413</a>
 <a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1802,7 +1807,12 @@
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="kw">pub async fn </span>receive_coins&lt;F, Fut&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, create_tx: F)
+    <span class="doccomment">/// Receive e-cash directly from another user when online (vs. offline transfer)
+    ///
+    /// Generates coins that another user will pay for and let us know the OutPoint in `create_tx`
+    /// Payer can use the `pay_to_blind_nonces` function
+    /// Allows transfer of e-cash without risk of double-spend or not having exact change
+    </span><span class="kw">pub async fn </span>receive_coins&lt;F, Fut&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, create_tx: F)
     <span class="kw">where
         </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
         Fut: futures::Future&lt;Output = OutPoint&gt;,

@@ -997,6 +997,15 @@
 <a href="#997" id="997">997</a>
 <a href="#998" id="998">998</a>
 <a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1034,6 +1043,7 @@
 <span class="kw">pub mod </span>backup;
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
+<span class="kw">const </span>TARGET_DENOMINATION_SETS: u16 = <span class="number">1</span>;
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -1175,16 +1185,6 @@
     <span class="doccomment">/// Adds the final amounts of `change` to the tx before submitting it
     /// Allows for multiple `change` outputs
     </span><span class="kw">pub async fn </span>finalize_change(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;mut </span>Transaction, change: Vec&lt;Amount&gt;) {
-        <span class="kw">let </span><span class="kw-2">mut </span>change_outputs: Vec&lt;(usize, NoteIssuanceRequests)&gt; = <span class="macro">vec!</span>[];
-
-        <span class="kw">for </span>amount <span class="kw">in </span>change {
-            <span class="kw">let </span>(issuances, nonces) = <span class="self">self</span>.create_output_coins(amount).<span class="kw">await</span>;
-            <span class="kw">let </span>out_idx = tx.outputs.len();
-            tx.outputs.push(Output::Mint(MintOutput(nonces)));
-            change_outputs.push((out_idx, issuances));
-        }
-        <span class="kw">let </span>txid = tx.tx_hash();
-
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
             </span>.context
             .db
@@ -1211,6 +1211,15 @@
             }
         }
 
+        <span class="kw">let </span><span class="kw-2">mut </span>change_outputs: Vec&lt;(usize, NoteIssuanceRequests)&gt; = <span class="macro">vec!</span>[];
+        <span class="kw">for </span>amount <span class="kw">in </span>change {
+            <span class="kw">let </span>(issuances, nonces) = <span class="self">self</span>.create_ecash(amount).<span class="kw">await</span>;
+            <span class="kw">let </span>out_idx = tx.outputs.len();
+            tx.outputs.push(Output::Mint(MintOutput(nonces)));
+            change_outputs.push((out_idx, issuances));
+        }
+        <span class="kw">let </span>txid = tx.tx_hash();
+
         <span class="comment">// move ecash to pending state, awaiting a transaction
         </span><span class="kw">if </span>!input_ecash.is_empty() {
             <span class="kw">let </span>pending = TieredMulti::from_iter(input_ecash.into_iter());
@@ -1235,15 +1244,24 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
-    <span class="kw">async fn </span>create_output_coins(
+    <span class="doccomment">/// Generates unsigned ecash, along with the private keys that can spend it
+    </span><span class="kw">async fn </span>create_ecash(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
     ) -&gt; (NoteIssuanceRequests, TieredMulti&lt;BlindNonce&gt;) {
         <span class="kw">let </span><span class="kw-2">mut </span>amount_requests: Vec&lt;((Amount, NoteIssuanceRequest), (Amount, BlindNonce))&gt; =
             Vec::new();
-        <span class="kw">for </span>(amt, ()) <span class="kw">in </span>TieredMulti::represent_amount(amount, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks).into_iter() {
-            <span class="kw">let </span>(request, blind_nonce) = <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, amt).<span class="kw">await</span>;
-            amount_requests.push(((amt, request), (amt, blind_nonce)));
+        <span class="kw">let </span>denominations = TieredMulti::represent_amount(
+            amount,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.coins().<span class="kw">await</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
+            TARGET_DENOMINATION_SETS,
+        );
+        <span class="kw">for </span>(amt, num) <span class="kw">in </span>denominations.iter() {
+            <span class="kw">for _ in </span><span class="number">0</span>..<span class="kw-2">*</span>num {
+                <span class="kw">let </span>(request, blind_nonce) = <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, amt).<span class="kw">await</span>;
+                amount_requests.push(((amt, request), (amt, blind_nonce)));
+            }
         }
         <span class="kw">let </span>(coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
             amount_requests.into_iter().unzip();
@@ -1377,7 +1395,7 @@
         </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
         Fut: futures::Future&lt;Output = OutPoint&gt;,
     {
-        <span class="kw">let </span>(finalization, coins) = <span class="self">self</span>.create_output_coins(amount).<span class="kw">await</span>;
+        <span class="kw">let </span>(finalization, coins) = <span class="self">self</span>.create_ecash(amount).<span class="kw">await</span>;
         <span class="kw">let </span>out_point = create_tx(coins).<span class="kw">await</span>;
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
             .<span class="kw">await
