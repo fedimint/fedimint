@@ -19,16 +19,25 @@ function kill_server() {
   echo "Killed server $1..."
 }
 
+function generate_epochs() {
+  for ((I=0; I<$1; I++)); do
+    mine_blocks 10
+    await_block_sync
+  done
+}
+
 mine_blocks 110
 await_block_sync
 await_all_peers
 
 # test a peer missing out on epochs and needing to rejoin
 kill_server $server1
-mine_blocks 100
+generate_epochs 10
 await_block_sync
 
 ./scripts/start-fed.sh
+generate_epochs 10
+await_block_sync
 await_all_peers
 echo "Server 1 successfully rejoined!"
 

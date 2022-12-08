@@ -1,6 +1,6 @@
 extern crate self as fedimint_api;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 use std::num::ParseIntError;
 use std::str::FromStr;
@@ -144,6 +144,12 @@ impl NumPeers for &[PeerId] {
 }
 
 impl NumPeers for Vec<PeerId> {
+    fn total(&self) -> usize {
+        self.len()
+    }
+}
+
+impl NumPeers for BTreeSet<PeerId> {
     fn total(&self) -> usize {
         self.len()
     }

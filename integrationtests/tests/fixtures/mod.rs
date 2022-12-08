@@ -25,7 +25,7 @@ use fedimint_api::core::{
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::net::peers::IMuxPeerConnections;
-use fedimint_api::task::TaskGroup;
+use fedimint_api::task::{timeout, TaskGroup};
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
@@ -824,9 +824,13 @@ impl FederationTest {
     pub async fn rejoin_consensus(&self) -> Cancellable<()> {
         for server in &self.servers {
             let mut s = server.borrow_mut();
-            s.fedimint
-                .rejoin_consensus(Duration::from_secs(1), &mut rng())
-                .await?;
+            while timeout(Duration::from_millis(500), s.fedimint.connections.receive())
+                .await
+                .is_ok()
+            {
+                // clear message buffers, simulating a restarted connection
+            }
+            s.fedimint.start_consensus().await;
         }
         Ok(())
     }
@@ -846,8 +850,8 @@ impl FederationTest {
 
         s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await?;
 
-        for outcome in &s.last_consensus {
-            consensus.process_consensus_outcome(outcome.clone()).await;
+        for outcome in s.last_consensus.clone() {
+            s.fedimint.process_outcome(outcome).await.expect("failed");
         }
 
         Ok(())

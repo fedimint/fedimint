@@ -1,20 +1,18 @@
 extern crate fedimint_api;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
 
 use config::ServerConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::encoding::DecodeError;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_api::core::ModuleDecode;
+use fedimint_api::encoding::DecodeError;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
-use fedimint_core::epoch::{
-    ConsensusItem, EpochHistory, EpochVerifyError, SerdeConsensusItem, SerdeEpochHistory,
-};
+use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError, SerdeConsensusItem};
 pub use fedimint_core::*;
 use hbbft::honey_badger::{Batch, HoneyBadger, Message};
 use hbbft::{Epoched, NetworkInfo, Target};
@@ -28,7 +26,7 @@ use crate::consensus::{
     ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
     SerdeConsensusOutcome,
 };
-use crate::db::{EpochHistoryKey, LastEpochKey};
+use crate::db::LastEpochKey;
 use crate::fedimint_api::net::peers::IPeerConnections;
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::PeerSlice;
@@ -60,7 +58,6 @@ type PeerMessage = (PeerId, EpochMessage);
 pub enum EpochMessage {
     Continue(Message<PeerId>),
     RejoinRequest,
-    Rejoin(Option<SerdeEpochHistory>, u64),
 }
 
 pub struct FedimintServer {
@@ -70,6 +67,8 @@ pub struct FedimintServer {
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     pub api: Arc<dyn IFederationApi>,
     pub peers: BTreeSet<PeerId>,
+    pub epochs: HashMap<u64, HashSet<PeerId>>,
+    pub last_processed_epoch: Option<EpochHistory>,
 }
 
 impl FedimintServer {
@@ -140,6 +139,8 @@ impl FedimintServer {
             cfg: cfg.clone(),
             api,
             peers: cfg.peers.keys().cloned().collect(),
+            epochs: Default::default(),
+            last_processed_epoch: None,
         }
     }
 
@@ -148,15 +149,7 @@ impl FedimintServer {
         // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
         let mut rng = OsRng;
         let consensus = self.consensus.clone();
-
-        // Rejoin consensus and catch up to the most recent epoch
-        tracing::info!("Rejoining consensus");
-        if let Err(Cancelled) = self
-            .rejoin_consensus(Duration::from_secs(60), &mut rng)
-            .await
-        {
-            info!("Consensus task shut down while rejoining");
-        }
+        self.start_consensus().await;
 
         while !task_handle.is_shutting_down() {
             let outcomes = if let Ok(v) = self
@@ -172,94 +165,66 @@ impl FedimintServer {
 
             for outcome in outcomes {
                 info!("{}", consensus::debug::epoch_message(&outcome));
-                self.consensus.process_consensus_outcome(outcome).await;
+                self.process_outcome(outcome)
+                    .await
+                    .expect("failed to process epoch");
             }
         }
 
         info!("Consensus task shut down");
     }
 
-    /// Builds a `ConsensusOutcome` then use the API to validate and process missed epochs
-    ///
-    /// * `timeout` gives all peers an opportunity to respond with the next epoch, without being
-    /// blocked by any evil peers.  If a threshold `2f+1` respond with the same epoch choose that
-    /// one, otherwise take the max of the responses within a reasonable bounds.
-    pub async fn rejoin_consensus(
-        &mut self,
-        timeout: Duration,
-        rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) -> Cancellable<()> {
-        let (msg_buffer, next_epoch_num) = self.determine_rejoin_epoch(timeout).await?;
-
-        info!("Rejoining consensus: at epoch {}", next_epoch_num);
-        self.hbbft.skip_to_epoch(next_epoch_num);
-
-        let last_saved_response = self
+    /// Starts consensus by advancing to the last saved epoch and triggering a new epoch
+    pub async fn start_consensus(&mut self) {
+        let mut tx = self
             .consensus
             .db
             .begin_transaction(self.consensus.decoders())
-            .await
-            .get_value(&LastEpochKey)
-            .await
-            .expect("DB error");
-        let last_saved_epoch = last_saved_response.map(|e| e.0);
+            .await;
 
-        let mut outcomes: Vec<ConsensusOutcome> = vec![];
-        if next_epoch_num == 0 || last_saved_epoch == Some(next_epoch_num - 1) {
-            info!("Rejoining consensus: proposing epoch {}", next_epoch_num);
-            let proposal = self.consensus.get_consensus_proposal().await;
-            outcomes = self.propose_epoch(proposal, rng).await?;
+        if let Some(key) = tx.get_value(&LastEpochKey).await.expect("DB error") {
+            self.last_processed_epoch = tx.get_value(&key).await.expect("DB error");
         }
 
-        for msg in msg_buffer {
-            outcomes.append(&mut self.handle_message(msg).await?);
-        }
-        while outcomes.is_empty() {
-            let msg = self.connections.receive().await?;
-            outcomes = self.handle_message(msg).await?;
-        }
-        info!("Rejoining consensus: created outcome");
-
-        self.download_history(outcomes[0].clone())
+        info!(
+            "Starting consensus at epoch {}",
+            self.next_epoch_to_process()
+        );
+        self.hbbft.skip_to_epoch(self.next_epoch_to_process());
+        self.connections
+            .send(
+                &Target::all().peers(&self.peers),
+                EpochMessage::RejoinRequest,
+            )
             .await
-            .expect("Download error");
+            .expect("Failed to send rejoin requests");
+    }
 
-        Ok(())
+    /// Returns the next epoch that we need to process, based on our saved history
+    fn next_epoch_to_process(&self) -> u64 {
+        self.last_processed_epoch
+            .as_ref()
+            .map(|e| 1 + e.outcome.epoch)
+            .unwrap_or(0)
     }
 
     /// Requests, verifies and processes history from peers
-    async fn download_history(
+    pub async fn process_outcome(
         &mut self,
         last_outcome: ConsensusOutcome,
     ) -> Result<(), EpochVerifyError> {
         let mut epochs: Vec<EpochHistory> = vec![];
-        let saved_epoch_key = self
-            .consensus
-            .db
-            .begin_transaction(self.consensus.decoders())
-            .await
-            .get_value(&LastEpochKey)
-            .await
-            .unwrap();
 
-        let download_epoch_num = saved_epoch_key.map(|e| e.0 + 1).unwrap_or(0);
-        let mut prev_epoch = None;
-        if saved_epoch_key.is_some() {
-            prev_epoch = self
-                .consensus
-                .db
-                .begin_transaction(self.consensus.decoders())
-                .await
-                .get_value(&saved_epoch_key.unwrap())
-                .await
-                .unwrap()
-        }
-
-        for epoch_num in download_epoch_num..=last_outcome.epoch {
+        for epoch_num in self.next_epoch_to_process()..=last_outcome.epoch {
             let current_epoch = if epoch_num == last_outcome.epoch {
                 let contributions = last_outcome.contributions.clone();
-                EpochHistory::new(last_outcome.epoch, contributions, &prev_epoch)
+                EpochHistory::new(
+                    last_outcome.epoch,
+                    contributions,
+                    &self.last_processed_epoch,
+                )
             } else {
+                info!("Downloading missing epoch {}", epoch_num);
                 let epoch_pk = self.cfg.epoch_pk_set.public_key();
                 self.api
                     .fetch_epoch_history(epoch_num, epoch_pk)
@@ -267,118 +232,21 @@ impl FedimintServer {
                     .expect("fetches history")
             };
 
-            current_epoch.verify_hash(&prev_epoch)?;
+            current_epoch.verify_hash(&self.last_processed_epoch)?;
             epochs.push(current_epoch.clone());
 
             let pk = self.cfg.epoch_pk_set.public_key();
-            if current_epoch.verify_sig(&pk).is_ok() || epoch_num == last_outcome.epoch {
-                for epoch in &epochs {
-                    tracing::info!("Downloaded and processed epoch {}", epoch.outcome.epoch);
+            if epoch_num == last_outcome.epoch || current_epoch.verify_sig(&pk).is_ok() {
+                for epoch in epochs.drain(..) {
                     let outcome = ConsensusOutcomeConversion::from(epoch.outcome.clone()).0;
                     self.consensus.process_consensus_outcome(outcome).await;
+                    self.last_processed_epoch = Some(epoch);
                 }
                 epochs.clear();
             }
-
-            prev_epoch = Some(current_epoch);
         }
 
         Ok(())
-    }
-
-    /// Sends a rejoin request and returns the max(valid_epoch) received from a threshold of peers
-    /// Also returns any messages that need to be processed by hbbft
-    ///
-    /// Returns `None` if process is shutting down.
-    async fn determine_rejoin_epoch(
-        &mut self,
-        timeout: Duration,
-    ) -> Cancellable<(Vec<PeerMessage>, u64)> {
-        let mut msg_buffer: Vec<PeerMessage> = vec![];
-
-        let mut consensus_peers = BTreeMap::<PeerId, u64>::new();
-        let pks = self.cfg.epoch_pk_set.public_key();
-        // last signed epoch is at most 3 epochs before the next epoch + faulty nodes because
-        // faulty nodes can withhold sigs for an epoch before getting banned
-        let max_age: u64 = self.cfg.peers.max_evil() as u64 + 3;
-        let threshold = self.cfg.peers.threshold();
-
-        // include our expected next_epoch as well in case we can contribute to the next consensus
-        let last_saved = self
-            .consensus
-            .db
-            .begin_transaction(self.consensus.decoders())
-            .await
-            .get_value(&LastEpochKey)
-            .await;
-        let next_epoch = last_saved.expect("DB error").map(|e| e.0 + 1).unwrap_or(0);
-        consensus_peers.insert(self.cfg.identity, next_epoch);
-
-        loop {
-            self.connections
-                .send(
-                    &Target::AllExcept(consensus_peers.keys().cloned().collect())
-                        .peers(&self.peers),
-                    EpochMessage::RejoinRequest,
-                )
-                .await?;
-            // if a threshold of peers agree on an epoch, go with that
-            for epoch in consensus_peers.values() {
-                if consensus_peers.values().filter(|e| *e == epoch).count() >= threshold {
-                    return Ok((msg_buffer, *epoch));
-                }
-            }
-
-            // if all responded return the max of next_epoch
-            if consensus_peers.len() == self.cfg.peers.len() {
-                info!("All peers responded with no consensus epoch");
-                let epoch = *consensus_peers.values().max().expect("len > 0");
-                return Ok((msg_buffer, epoch));
-            }
-
-            match tokio::time::timeout(timeout, self.connections.receive()).await {
-                Ok(Err(Cancelled)) => {
-                    return Err(Cancelled);
-                }
-                Ok(Ok((peer, EpochMessage::Rejoin(Some(history), epoch)))) => {
-                    let history = match history.try_into_inner(&self.consensus.modules.decoders()) {
-                        Ok(history) => history,
-                        Err(decode_err) => {
-                            warn!("Peer {} sent malformed message: {}", peer, decode_err);
-                            continue;
-                        }
-                    };
-
-                    let is_recent = epoch <= history.outcome.epoch + max_age;
-                    if history.verify_sig(&pks).is_ok() && is_recent {
-                        consensus_peers.insert(peer, epoch);
-                    }
-                }
-                Ok(Ok((peer, EpochMessage::Rejoin(None, epoch)))) => {
-                    if epoch <= max_age {
-                        consensus_peers.insert(peer, epoch);
-                    }
-                }
-                Ok(Ok((peer, EpochMessage::RejoinRequest))) => {
-                    let msg = EpochMessage::Rejoin(
-                        self.last_signed_epoch(next_epoch)
-                            .await
-                            .map(|eh| (&eh).into()),
-                        next_epoch,
-                    );
-                    self.connections.send(&[peer], msg).await?;
-                }
-                Ok(Ok(msg)) => msg_buffer.push(msg),
-                // if peers had an opportunity to reply take max(next_epoch) from a peer threshold
-                Err(_) => {
-                    if consensus_peers.len() >= threshold {
-                        warn!("Timed-out waiting for all peers, going with max threshold");
-                        let epoch = *consensus_peers.values().max().expect("len > 0");
-                        return Ok((msg_buffer, epoch));
-                    }
-                }
-            };
-        }
     }
 
     /// The main consensus function:
@@ -397,8 +265,8 @@ impl FedimintServer {
               () = self.consensus.await_consensus_proposal() => (),
             }
             let proposal = proposal.await;
-            let epoch = self.hbbft.next_epoch() + 1;
-            self.hbbft.skip_to_epoch(epoch);
+            let epoch = self.hbbft.epoch();
+            self.hbbft.skip_to_epoch(epoch + 1);
             return Ok(vec![ConsensusOutcome {
                 epoch,
                 contributions: BTreeMap::from([(self.cfg.identity, proposal.items)]),
@@ -471,27 +339,17 @@ impl FedimintServer {
 
     fn start_next_epoch(&self, msg: &PeerMessage) -> bool {
         match msg {
-            (_, EpochMessage::Continue(peer_msg)) => self.hbbft.next_epoch() == peer_msg.epoch(),
+            (_, EpochMessage::Continue(peer_msg)) => self.hbbft.next_epoch() <= peer_msg.epoch(),
             (_, EpochMessage::RejoinRequest) => true,
-            _ => false,
         }
     }
 
     /// Runs a single HBBFT consensus step
     async fn handle_message(&mut self, msg: PeerMessage) -> Cancellable<Vec<ConsensusOutcome>> {
         match msg {
-            (_, EpochMessage::Rejoin(_, _)) => Ok(vec![]),
-            (peer, EpochMessage::RejoinRequest) => {
-                let last_signed = self.last_signed_epoch(self.hbbft.epoch()).await;
-
-                let msg = EpochMessage::Rejoin(
-                    last_signed.map(|eh| (&eh).into()),
-                    self.hbbft.next_epoch(),
-                );
-                self.connections.send(&[peer], msg).await?;
-                Ok(vec![])
-            }
             (peer, EpochMessage::Continue(peer_msg)) => {
+                self.advance_to_consensus_epoch(peer_msg.epoch(), peer);
+
                 let step = self
                     .hbbft
                     .handle_message(&peer, peer_msg)
@@ -521,25 +379,25 @@ impl FedimintServer {
                     })
                     .collect())
             }
+            (_, EpochMessage::RejoinRequest) => Ok(vec![]),
         }
     }
 
-    /// Searches back in saved epoch history for the last signed epoch
-    async fn last_signed_epoch(&self, mut epoch: u64) -> Option<EpochHistory> {
-        loop {
-            let query = self
-                .consensus
-                .db
-                .begin_transaction(self.consensus.decoders())
-                .await
-                .get_value(&EpochHistoryKey(epoch))
-                .await;
-            match query.expect("DB error") {
-                Some(result) if result.signature.is_some() => break Some(result),
-                _ if epoch == 0 => break None,
-                _ => {}
+    /// Advances our epoch if we received a threshold of messages from a future epoch so we can
+    /// sync up to our peers
+    fn advance_to_consensus_epoch(&mut self, epoch: u64, peer: PeerId) {
+        let peers = self.epochs.entry(epoch).or_default();
+        peers.insert(peer);
+
+        if peers.len() >= self.peers.threshold() {
+            for epoch in self.hbbft.epoch()..=epoch {
+                self.epochs.remove_entry(&epoch);
             }
-            epoch -= 1;
+
+            if self.hbbft.epoch() < epoch {
+                info!("Skipping to epoch {}", epoch);
+                self.hbbft.skip_to_epoch(epoch);
+            }
         }
     }
 }
