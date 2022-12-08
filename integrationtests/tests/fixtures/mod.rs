@@ -630,7 +630,7 @@ impl FederationTest {
         for server in &self.servers {
             block_on(async {
                 let svr = server.borrow_mut();
-                let mut dbtx = svr.database.begin_transaction(all_decoders());
+                let mut dbtx = svr.database.begin_transaction(all_decoders()).await;
 
                 dbtx.insert_new_entry(
                     &UTXOKey(input.outpoint()),
@@ -681,7 +681,7 @@ impl FederationTest {
             .receive_coins(amount, |tokens| async move {
                 for server in &self.servers {
                     let svr = server.borrow_mut();
-                    let mut dbtx = svr.database.begin_transaction(all_decoders());
+                    let mut dbtx = svr.database.begin_transaction(all_decoders()).await;
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![MintOutput(tokens.clone()).into()],
@@ -718,9 +718,11 @@ impl FederationTest {
     /// transactions will only get broadcast every 10 seconds.
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
+            let svr = server.borrow();
+            let dbtx = block_on(svr.database.begin_transaction(all_decoders()));
             block_on(fedimint_wallet::broadcast_pending_tx(
-                server.borrow().database.begin_transaction(all_decoders()),
-                &server.borrow().bitcoin_rpc,
+                dbtx,
+                &svr.bitcoin_rpc,
             ));
         }
     }
@@ -770,10 +772,8 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
-        let height = block_on(
-            wallet.consensus_height(&mut server.consensus.db.begin_transaction(all_decoders())),
-        )
-        .unwrap_or(0);
+        let mut dbtx = block_on(server.consensus.db.begin_transaction(all_decoders()));
+        let height = block_on(wallet.consensus_height(&mut dbtx)).unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
         for item in proposal.items {

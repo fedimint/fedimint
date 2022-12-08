@@ -200,6 +200,7 @@ impl LnClient {
         self.context
             .db
             .begin_transaction(ModuleRegistry::default())
+            .await
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .await
             .filter_map(|res| {
@@ -263,7 +264,11 @@ impl LnClient {
     }
 
     pub async fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
-        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = self
+            .context
+            .db
+            .begin_transaction(ModuleRegistry::default())
+            .await;
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .await
             .expect("Db error");
@@ -275,6 +280,7 @@ impl LnClient {
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
+            .await
             .get_value(&ConfirmedInvoiceKey(contract_id))
             .await
             .expect("Db error")
@@ -398,7 +404,7 @@ mod tests {
                 .await
                 .fetch_from_all(|m, db| async {
                     m.get_contract_account(
-                        &mut db.begin_transaction(ModuleRegistry::default()),
+                        &mut db.begin_transaction(ModuleRegistry::default()).await,
                         contract,
                     )
                     .await
@@ -535,7 +541,8 @@ mod tests {
         let mut dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default());
+            .begin_transaction(ModuleRegistry::default())
+            .await;
         let output = client
             .create_outgoing_output(&mut dbtx, invoice.clone(), &gateway, timelock, &mut rng)
             .await

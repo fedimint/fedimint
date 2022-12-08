@@ -51,8 +51,9 @@ impl From<SledDb> for sled::Tree {
 }
 
 // TODO: maybe make the concrete impl its own crate
+#[async_trait]
 impl IDatabase for SledDb {
-    fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
+    async fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction {
         let sled_tx = SledTransaction {
             operations: Vec::new(),
             db: self,
@@ -60,7 +61,7 @@ impl IDatabase for SledDb {
             num_savepoint_operations: 0,
         };
         let mut tx = DatabaseTransaction::new(sled_tx, decoders);
-        tx.set_tx_savepoint();
+        tx.set_tx_savepoint().await;
         tx
     }
 }
@@ -190,7 +191,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
         }
     }
 
-    fn set_tx_savepoint(&mut self) {
+    async fn set_tx_savepoint(&mut self) {
         self.num_savepoint_operations = self.num_pending_operations;
     }
 }

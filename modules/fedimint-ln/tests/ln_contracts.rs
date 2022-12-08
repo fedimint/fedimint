@@ -219,7 +219,8 @@ async fn test_incoming() {
         .await;
     let offers = fed
         .fetch_from_all(|m, db| async {
-            m.get_offers(&mut db.begin_transaction(ln_decoders())).await
+            m.get_offers(&mut db.begin_transaction(ln_decoders()).await)
+                .await
         })
         .await;
     assert_eq!(offers, vec![offer.clone()]);

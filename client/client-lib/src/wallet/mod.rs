@@ -110,6 +110,7 @@ impl WalletClient {
                     .context
                     .db
                     .begin_transaction(ModuleRegistry::default())
+                    .await
                     .get_value(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
@@ -435,7 +436,7 @@ mod tests {
             .await
             .fetch_from_all(|wallet, db| async {
                 wallet
-                    .get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
+                    .get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()).await)
                     .await
             })
             .await;
@@ -451,7 +452,7 @@ mod tests {
             .await
             .fetch_from_all(|wallet, db| async {
                 wallet
-                    .get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()))
+                    .get_wallet_value(&mut db.begin_transaction(ModuleRegistry::default()).await)
                     .await
             })
             .await;

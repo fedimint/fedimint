@@ -198,6 +198,7 @@ impl FedimintServer {
             .consensus
             .db
             .begin_transaction(self.consensus.decoders())
+            .await
             .get_value(&LastEpochKey)
             .await
             .expect("DB error");
@@ -236,6 +237,7 @@ impl FedimintServer {
             .consensus
             .db
             .begin_transaction(self.consensus.decoders())
+            .await
             .get_value(&LastEpochKey)
             .await
             .unwrap();
@@ -247,6 +249,7 @@ impl FedimintServer {
                 .consensus
                 .db
                 .begin_transaction(self.consensus.decoders())
+                .await
                 .get_value(&saved_epoch_key.unwrap())
                 .await
                 .unwrap()
@@ -305,6 +308,7 @@ impl FedimintServer {
             .consensus
             .db
             .begin_transaction(self.consensus.decoders())
+            .await
             .get_value(&LastEpochKey)
             .await;
         let next_epoch = last_saved.expect("DB error").map(|e| e.0 + 1).unwrap_or(0);
@@ -526,6 +530,7 @@ impl FedimintServer {
                 .consensus
                 .db
                 .begin_transaction(self.consensus.decoders())
+                .await
                 .get_value(&EpochHistoryKey(epoch))
                 .await;
             match query.expect("DB error") {

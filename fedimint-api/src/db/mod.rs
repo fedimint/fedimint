@@ -62,8 +62,9 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
 
 pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
 
+#[async_trait]
 pub trait IDatabase: Debug + Send + Sync {
-    fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction;
+    async fn begin_transaction(&self, decoders: ModuleRegistry<Decoder>) -> DatabaseTransaction;
 }
 
 dyn_newtype_define! {
@@ -119,7 +120,7 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
     ///
     /// Warning: Avoid using this in fedimint client code as not all database transaction
     /// implementations will support setting a savepoint during a transaction.
-    fn set_tx_savepoint(&mut self);
+    async fn set_tx_savepoint(&mut self);
 }
 
 // TODO: use macro again
@@ -398,7 +399,7 @@ mod tests {
     struct TestVal(u64);
 
     pub async fn verify_insert_elements(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
             .await
@@ -415,14 +416,14 @@ mod tests {
     }
 
     pub async fn verify_remove_nonexisting(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
         assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
         let removed = dbtx.remove_entry(&TestKey(1)).await;
         assert!(removed.is_ok());
     }
 
     pub async fn verify_remove_existing(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -439,7 +440,7 @@ mod tests {
     }
 
     pub async fn verify_read_own_writes(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -451,7 +452,7 @@ mod tests {
     }
 
     pub async fn verify_prevent_dirty_reads(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -460,12 +461,12 @@ mod tests {
             .is_none());
 
         // dbtx2 should not be able to see uncommitted changes
-        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default()).await;
         assert_eq!(dbtx2.get_value(&TestKey(1)).await.unwrap(), None);
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
         assert!(dbtx
             .insert_entry(&TestKey(55), &TestVal(9999))
             .await
@@ -486,7 +487,7 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         // Verify finding by prefix returns the correct set of key pairs
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
         let mut returned_keys = 0;
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
@@ -529,7 +530,7 @@ mod tests {
     }
 
     pub async fn verify_commit(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx
             .insert_entry(&TestKey(1), &TestVal(2))
@@ -539,7 +540,7 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         // Verify dbtx2 can see committed transactions
-        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default()).await;
         assert_eq!(
             dbtx2.get_value(&TestKey(1)).await.unwrap(),
             Some(TestVal(2))
@@ -547,14 +548,14 @@ mod tests {
     }
 
     pub async fn verify_rollback_to_savepoint(db: Database) {
-        let mut dbtx_rollback = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx_rollback = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx_rollback
             .insert_entry(&TestKey(20), &TestVal(2000))
             .await
             .is_ok());
 
-        dbtx_rollback.set_tx_savepoint();
+        dbtx_rollback.set_tx_savepoint().await;
 
         assert!(dbtx_rollback
             .insert_entry(&TestKey(21), &TestVal(2001))
@@ -581,10 +582,10 @@ mod tests {
     }
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
         assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
 
-        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx2
             .insert_entry(&TestKey(100), &TestVal(101))
@@ -617,7 +618,7 @@ mod tests {
     }
 
     pub async fn verify_phantom_entry(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx
             .insert_entry(&TestKey(100), &TestVal(101))
@@ -631,7 +632,7 @@ mod tests {
 
         dbtx.commit_tx().await.expect("DB Error");
 
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
         let mut returned_keys = 0;
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
@@ -652,7 +653,7 @@ mod tests {
 
         assert_eq!(returned_keys, expected_keys);
 
-        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx2
             .insert_entry(&TestKey(102), &TestVal(103))
@@ -682,15 +683,15 @@ mod tests {
     }
 
     pub async fn expect_write_conflict(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction(ModuleRegistry::default()).await;
         assert!(dbtx
             .insert_entry(&TestKey(100), &TestVal(101))
             .await
             .is_ok());
         dbtx.commit_tx().await.expect("DB Error");
 
-        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default());
-        let mut dbtx3 = db.begin_transaction(ModuleRegistry::default());
+        let mut dbtx2 = db.begin_transaction(ModuleRegistry::default()).await;
+        let mut dbtx3 = db.begin_transaction(ModuleRegistry::default()).await;
 
         assert!(dbtx2
             .insert_entry(&TestKey(100), &TestVal(102))

@@ -132,8 +132,8 @@ impl FedimintConsensus {
             .collect()
     }
 
-    pub fn database_transaction(&self) -> DatabaseTransaction<'_> {
-        self.db.begin_transaction(self.decoders())
+    pub async fn database_transaction(&self) -> DatabaseTransaction<'_> {
+        self.db.begin_transaction(self.decoders()).await
     }
 
     pub async fn submit_transaction(
@@ -157,7 +157,7 @@ impl FedimintConsensus {
         let mut pub_keys = Vec::new();
 
         // Create read-only DB tx so that the read state is consistent
-        let mut dbtx = self.db.begin_transaction(self.decoders());
+        let mut dbtx = self.db.begin_transaction(self.decoders()).await;
 
         for input in &transaction.inputs {
             let module = self
@@ -231,7 +231,7 @@ impl FedimintConsensus {
                 .into_iter()
                 .into_group_map_by(|(_peer, mci)| mci.module_key());
 
-            let mut dbtx = self.db.begin_transaction(self.decoders());
+            let mut dbtx = self.db.begin_transaction(self.decoders()).await;
             for (module_key, module_cis) in per_module_cis {
                 let module = self
                     .modules
@@ -245,7 +245,7 @@ impl FedimintConsensus {
 
         // Process transactions
         {
-            let mut dbtx = self.db.begin_transaction(self.decoders());
+            let mut dbtx = self.db.begin_transaction(self.decoders()).await;
 
             let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
             let mut processed_tx: HashSet<TransactionId> = HashSet::new();
@@ -264,7 +264,7 @@ impl FedimintConsensus {
                         .await
                         .expect("DB Error");
 
-                    dbtx.set_tx_savepoint();
+                    dbtx.set_tx_savepoint().await;
                     // TODO: use borrowed transaction
                     match self
                         .process_transaction(&mut dbtx, transaction.clone(), &caches)
@@ -298,7 +298,7 @@ impl FedimintConsensus {
 
         // End consensus epoch
         {
-            let mut dbtx = self.db.begin_transaction(self.decoders());
+            let mut dbtx = self.db.begin_transaction(self.decoders()).await;
             let mut drop_peers = Vec::<PeerId>::new();
 
             self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers)
@@ -330,6 +330,7 @@ impl FedimintConsensus {
     pub async fn get_last_epoch(&self) -> Option<u64> {
         self.db
             .begin_transaction(self.decoders())
+            .await
             .get_value(&LastEpochKey)
             .await
             .expect("db query must not fail")
@@ -339,6 +340,7 @@ impl FedimintConsensus {
     pub async fn epoch_history(&self, epoch: u64) -> Option<EpochHistory> {
         self.db
             .begin_transaction(self.decoders())
+            .await
             .get_value(&EpochHistoryKey(epoch))
             .await
             .unwrap()
@@ -355,6 +357,7 @@ impl FedimintConsensus {
         let maybe_prev_epoch = self
             .db
             .begin_transaction(self.decoders())
+            .await
             .get_value(&prev_epoch_key)
             .await
             .expect("DB error");
@@ -398,7 +401,7 @@ impl FedimintConsensus {
             .iter()
             .map(|(_, module)| {
                 Box::pin(async {
-                    let mut dbtx = self.database_transaction();
+                    let mut dbtx = self.database_transaction().await;
                     module.await_consensus_proposal(&mut dbtx).await
                 })
             })
@@ -408,7 +411,7 @@ impl FedimintConsensus {
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
-        let mut dbtx = self.database_transaction();
+        let mut dbtx = self.database_transaction().await;
 
         let drop_peers = dbtx
             .find_by_prefix(&DropPeerKeyPrefix)
@@ -504,7 +507,7 @@ impl FedimintConsensus {
         &self,
         txid: TransactionId,
     ) -> Option<crate::outcome::TransactionStatus> {
-        let mut dbtx = self.database_transaction();
+        let mut dbtx = self.database_transaction().await;
 
         let accepted: Option<AcceptedTransaction> = dbtx
             .get_value(&AcceptedTransactionKey(txid))
@@ -537,6 +540,7 @@ impl FedimintConsensus {
         let rejected: Option<String> = self
             .db
             .begin_transaction(self.decoders())
+            .await
             .get_value(&RejectedTransactionKey(txid))
             .await
             .expect("DB error");
@@ -573,7 +577,7 @@ impl FedimintConsensus {
     }
 
     pub async fn audit(&self) -> Audit {
-        let mut dbtx = self.database_transaction();
+        let mut dbtx = self.database_transaction().await;
         let mut audit = Audit::default();
         for module in self.modules.values() {
             module.audit(&mut dbtx, &mut audit).await
