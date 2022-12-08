@@ -186,7 +186,11 @@ impl MintClient {
         }
         let txid = tx.tx_hash();
 
-        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default()).await;
+        let mut dbtx = self
+            .context
+            .db
+            .begin_transaction(ModuleRegistry::default())
+            .await;
 
         // remove the spent ecash from the DB
         let mut input_ecash: Vec<(Amount, SpendableNote)> = vec![];

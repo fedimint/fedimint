@@ -323,7 +323,11 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         mut rng: R,
     ) -> Result<OutPoint> {
         // Ensure we have the notes in the DB (in case we received them from another user)
-        let mut dbtx = self.context.db.begin_transaction(ModuleRegistry::default()).await;
+        let mut dbtx = self
+            .context
+            .db
+            .begin_transaction(ModuleRegistry::default())
+            .await;
         for (amount, note) in notes.clone() {
             let key = CoinKey {
                 amount,
