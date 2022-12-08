@@ -64,7 +64,7 @@ async fn balance(
     Json(payload): Json<BalancePayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     let amount = rpc.send(payload).await?;
-    Ok(Json(json!({ "balance_msat": amount.milli_sat })))
+    Ok(Json(json!({ "balance_msat": amount.msats })))
 }
 
 /// Generate deposit address

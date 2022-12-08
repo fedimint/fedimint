@@ -591,8 +591,8 @@ impl ServerModulePlugin for Mint {
             }
         }
 
-        let mut redemptions = Amount::from_sat(0);
-        let mut issuances = Amount::from_sat(0);
+        let mut redemptions = Amount::from_sats(0);
+        let mut issuances = Amount::from_sats(0);
         let remove_audit_keys = dbtx
             .find_by_prefix(&MintAuditItemKeyPrefix)
             .await
@@ -656,10 +656,10 @@ impl ServerModulePlugin for Mint {
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
         audit
             .add_items(dbtx, &MintAuditItemKeyPrefix, |k, v| match k {
-                MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
-                MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
-                MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
-                MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
+                MintAuditItemKey::Issuance(_) => -(v.msats as i64),
+                MintAuditItemKey::IssuanceTotal => -(v.msats as i64),
+                MintAuditItemKey::Redemption(_) => v.msats as i64,
+                MintAuditItemKey::RedemptionTotal => v.msats as i64,
             })
             .await;
     }
@@ -1089,7 +1089,7 @@ mod test {
         let (mint_cfg, client_cfg) = MintConfigGenerator.trusted_dealer_gen(
             &peers,
             &ModuleConfigGenParams {
-                mint_amounts: vec![Amount::from_sat(1)],
+                mint_amounts: vec![Amount::from_sats(1)],
                 ..ModuleConfigGenParams::fake_config_gen_params()
             },
         );
@@ -1108,7 +1108,7 @@ mod test {
             .cast::<MintClientConfig>()
             .unwrap()
             .tbs_pks
-            .get(Amount::from_sat(1))
+            .get(Amount::from_sats(1))
             .unwrap();
 
         (agg_pk, mints)
@@ -1123,7 +1123,7 @@ mod test {
         let bmsg = blind_message(nonce, bkey);
         let blind_tokens = TieredMulti::new(
             vec![(
-                Amount::from_sat(1),
+                Amount::from_sats(1),
                 vec![BlindNonce(bmsg), BlindNonce(bmsg)],
             )]
             .into_iter()
@@ -1149,7 +1149,7 @@ mod test {
         assert!(errors.0.is_empty());
 
         let bsig = bsig_res.unwrap();
-        assert_eq!(bsig.0.total_amount(), Amount::from_sat(2));
+        assert_eq!(bsig.0.total_amount(), Amount::from_sats(2));
 
         bsig.0.iter_items().for_each(|(_, bs)| {
             let sig = unblind_signature(bkey, *bs);
@@ -1207,7 +1207,7 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psigs)| {
                     if peer == PeerId::from(1) {
-                        psigs.0.get_mut(Amount::from_sat(1)).unwrap().pop();
+                        psigs.0.get_mut(Amount::from_sats(1)).unwrap().pop();
                     }
                     (peer, psigs)
                 })
@@ -1225,8 +1225,8 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psig)| {
                     if peer == PeerId::from(2) {
-                        psig.0.get_mut(Amount::from_sat(1)).unwrap()[0].1 =
-                            psigs[0].1 .0.get(Amount::from_sat(1)).unwrap()[0].1;
+                        psig.0.get_mut(Amount::from_sats(1)).unwrap()[0].1 =
+                            psigs[0].1 .0.get(Amount::from_sats(1)).unwrap()[0].1;
                     }
                     (peer, psig)
                 })
@@ -1245,7 +1245,7 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psig)| {
                     if peer == PeerId::from(3) {
-                        psig.0.get_mut(Amount::from_sat(1)).unwrap()[0].0 = bmsg;
+                        psig.0.get_mut(Amount::from_sats(1)).unwrap()[0].0 = bmsg;
                     }
                     (peer, psig)
                 })

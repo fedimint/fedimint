@@ -21,7 +21,7 @@ pub fn configgen(
     btc_rpc: BitcoindRpcCfg,
 ) -> (Vec<(Guardian, ServerConfig)>, ClientConfig) {
     let amount_tiers = (1..12)
-        .map(|amount| Amount::from_sat(10 * amount))
+        .map(|amount| Amount::from_sats(10 * amount))
         .collect();
     let rng = OsRng;
     let num_peers = guardians.len() as u16;

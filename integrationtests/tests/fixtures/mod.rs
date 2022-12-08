@@ -26,10 +26,10 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
-use fedimint_api::Amount;
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
+use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
@@ -87,14 +87,6 @@ pub fn rng() -> OsRng {
     OsRng
 }
 
-pub fn msats(amount: u64) -> Amount {
-    Amount::from_msat(amount)
-}
-
-pub fn sats(amount: u64) -> Amount {
-    Amount::from_sat(amount)
-}
-
 pub fn sha256(data: &[u8]) -> sha256::Hash {
     bitcoin::hashes::sha256::Hash::hash(data)
 }
@@ -129,13 +121,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             .init();
     }
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
-    let params = ServerConfigParams::gen_local(
-        &peers,
-        Amount::from_sat(1000),
-        base_port,
-        "test",
-        "127.0.0.1:18443",
-    );
+    let params =
+        ServerConfigParams::gen_local(&peers, sats(1000), base_port, "test", "127.0.0.1:18443");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     match env::var("FM_TEST_DISABLE_MOCKS") {
@@ -606,8 +593,8 @@ impl FederationTest {
         bitcoin: &dyn BitcoinTest,
         amount: Amount,
     ) {
-        assert_eq!(amount.milli_sat % 1000, 0);
-        let sats = bitcoin::Amount::from_sat(amount.milli_sat / 1000);
+        assert_eq!(amount.msats % 1000, 0);
+        let sats = bitcoin::Amount::from_sat(amount.msats / 1000);
         self.mine_spendable_utxo(user, bitcoin, sats).await;
         self.mint_coins_for_user(user, amount).await;
     }

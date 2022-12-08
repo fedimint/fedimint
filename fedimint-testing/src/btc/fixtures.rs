@@ -132,7 +132,7 @@ impl BitcoinTest for FakeBitcoinTest {
             .find(|out| out.script_pubkey == address.payload.script_pubkey())
             .map(|tx| tx.value)
             .unwrap_or(0);
-        Amount::from_sat(sats)
+        Amount::from_sats(sats)
     }
 }
 

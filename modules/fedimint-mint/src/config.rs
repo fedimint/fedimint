@@ -59,7 +59,7 @@ impl TypedServerModuleConfig for MintConfig {
         if sks != pks {
             bail!("Mint private key doesn't match pubkey share");
         }
-        if !sks.keys().contains(&Amount::from_msat(1)) {
+        if !sks.keys().contains(&Amount::from_msats(1)) {
             bail!("No msat 1 denomination");
         }
 

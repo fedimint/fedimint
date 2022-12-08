@@ -74,13 +74,46 @@ pub struct PeerId(u16);
 )]
 #[serde(transparent)]
 pub struct Amount {
-    pub milli_sat: u64,
+    pub msats: u64,
 }
 
 impl Amount {
-    pub fn from_milli_sats(v: u64) -> Self {
-        Amount { milli_sat: v }
+    pub const ZERO: Self = Self { msats: 0 };
+
+    pub const fn from_msats(msat: u64) -> Amount {
+        Amount { msats: msat }
     }
+
+    pub const fn from_sats(sat: u64) -> Amount {
+        Amount { msats: sat * 1000 }
+    }
+
+    pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
+        if let Denomination::MilliSatoshi = denom {
+            return Self::from_str(s);
+        }
+        let btc_amt = bitcoin::util::amount::Amount::from_str_in(s, denom)?;
+        Ok(Self::from(btc_amt))
+    }
+
+    pub fn saturating_sub(self, other: Amount) -> Self {
+        Amount {
+            msats: self.msats.saturating_sub(other.msats),
+        }
+    }
+}
+
+/// Shorthand for [`Amount::from_msats`]
+///
+/// Useful only for tests, but it's so common that it makes sense to have
+/// it in the main `fedimint-api` crate.
+pub fn msats(msats: u64) -> Amount {
+    Amount::from_msats(msats)
+}
+
+/// Shorthand for [`Amount::from_sats`]
+pub fn sats(amount: u64) -> Amount {
+    Amount::from_sats(amount)
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -164,37 +197,9 @@ impl From<PeerId> for u16 {
     }
 }
 
-impl Amount {
-    pub const ZERO: Self = Self { milli_sat: 0 };
-
-    pub const fn from_msat(msat: u64) -> Amount {
-        Amount { milli_sat: msat }
-    }
-
-    pub const fn from_sat(sat: u64) -> Amount {
-        Amount {
-            milli_sat: sat * 1000,
-        }
-    }
-
-    pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
-        if let Denomination::MilliSatoshi = denom {
-            return Self::from_str(s);
-        }
-        let btc_amt = bitcoin::util::amount::Amount::from_str_in(s, denom)?;
-        Ok(Self::from(btc_amt))
-    }
-
-    pub fn saturating_sub(self, other: Amount) -> Self {
-        Amount {
-            milli_sat: self.milli_sat.saturating_sub(other.milli_sat),
-        }
-    }
-}
-
 impl std::fmt::Display for Amount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} msat", self.milli_sat)
+        write!(f, "{} msat", self.msats)
     }
 }
 
@@ -209,14 +214,14 @@ impl std::ops::Rem for Amount {
 
     fn rem(self, rhs: Self) -> Self::Output {
         Amount {
-            milli_sat: self.milli_sat % rhs.milli_sat,
+            msats: self.msats % rhs.msats,
         }
     }
 }
 
 impl std::ops::RemAssign for Amount {
     fn rem_assign(&mut self, rhs: Self) {
-        self.milli_sat %= rhs.milli_sat;
+        self.msats %= rhs.msats;
     }
 }
 
@@ -224,13 +229,13 @@ impl std::ops::Div for Amount {
     type Output = u64;
 
     fn div(self, rhs: Self) -> Self::Output {
-        self.milli_sat / rhs.milli_sat
+        self.msats / rhs.msats
     }
 }
 
 impl std::ops::SubAssign for Amount {
     fn sub_assign(&mut self, rhs: Self) {
-        self.milli_sat -= rhs.milli_sat
+        self.msats -= rhs.msats
     }
 }
 
@@ -239,7 +244,7 @@ impl std::ops::Mul<u64> for Amount {
 
     fn mul(self, rhs: u64) -> Self::Output {
         Amount {
-            milli_sat: self.milli_sat * rhs,
+            msats: self.msats * rhs,
         }
     }
 }
@@ -249,7 +254,7 @@ impl std::ops::Add for Amount {
 
     fn add(self, rhs: Self) -> Self::Output {
         Amount {
-            milli_sat: self.milli_sat + rhs.milli_sat,
+            msats: self.msats + rhs.msats,
         }
     }
 }
@@ -263,7 +268,7 @@ impl std::ops::AddAssign for Amount {
 impl std::iter::Sum for Amount {
     fn sum<I: Iterator<Item = Amount>>(iter: I) -> Self {
         Amount {
-            milli_sat: iter.map(|amt| amt.milli_sat).sum::<u64>(),
+            msats: iter.map(|amt| amt.msats).sum::<u64>(),
         }
     }
 }
@@ -273,7 +278,7 @@ impl std::ops::Sub for Amount {
 
     fn sub(self, rhs: Self) -> Self::Output {
         Amount {
-            milli_sat: self.milli_sat - rhs.milli_sat,
+            msats: self.msats - rhs.msats,
         }
     }
 }
@@ -282,9 +287,7 @@ impl FromStr for Amount {
     type Err = ParseAmountError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Amount {
-            milli_sat: s.parse()?,
-        })
+        Ok(Amount { msats: s.parse()? })
     }
 }
 
@@ -292,7 +295,7 @@ impl From<bitcoin::Amount> for Amount {
     fn from(amt: bitcoin::Amount) -> Self {
         assert!(amt.to_sat() <= 2_100_000_000_000_000);
         Amount {
-            milli_sat: amt.to_sat() * 1000,
+            msats: amt.to_sat() * 1000,
         }
     }
 }

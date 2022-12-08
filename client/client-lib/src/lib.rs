@@ -183,7 +183,7 @@ impl PaymentParameters {
     // FIXME: change to absolute fee to avoid rounding errors
     pub fn max_fee_percent(&self) -> f64 {
         let max_absolute_fee = self.max_send_amount - self.invoice_amount;
-        (max_absolute_fee.milli_sat as f64) / (self.invoice_amount.milli_sat as f64)
+        (max_absolute_fee.msats as f64) / (self.invoice_amount.msats as f64)
     }
 }
 
@@ -814,7 +814,7 @@ impl Client<UserClientConfig> {
                 .expect("must have wallet config available")
                 .network,
         ))
-        .amount_milli_satoshis(amount.milli_sat)
+        .amount_milli_satoshis(amount.msats)
         .description(description)
         .payment_hash(payment_hash)
         .payment_secret(payment_secret)
@@ -953,7 +953,7 @@ impl Client<GatewayClientConfig> {
         }
 
         let invoice: Invoice = account.contract.invoice.clone();
-        let invoice_amount = Amount::from_msat(
+        let invoice_amount = Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
                 .ok_or(ClientError::InvoiceMissingAmount)?,

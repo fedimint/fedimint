@@ -41,7 +41,7 @@ impl ClientModulePlugin for WalletClient {
         input: &<Self::Module as ServerModulePlugin>::Input,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
-            amount: Amount::from_sat(input.tx_output().value),
+            amount: Amount::from_sats(input.tx_output().value),
             fee: self.config.fee_consensus.peg_in_abs,
         }
     }
@@ -143,7 +143,7 @@ impl WalletClient {
             .verify(&self.context.secp, &self.config.peg_in_descriptor)
             .map_err(WalletClientError::PegInProofError)?;
 
-        let amount = Amount::from_sat(peg_in_proof.tx_output().value)
+        let amount = Amount::from_sats(peg_in_proof.tx_output().value)
             .saturating_sub(self.config.fee_consensus.peg_in_abs);
         if amount == Amount::ZERO {
             return Err(WalletClientError::PegInAmountTooSmall);

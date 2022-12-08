@@ -48,7 +48,7 @@ impl LightningTest for FakeLightningTest {
             .current_timestamp()
             .min_final_cltv_expiry(0)
             .payment_secret(PaymentSecret([0; 32]))
-            .amount_milli_satoshis(amount.milli_sat)
+            .amount_milli_satoshis(amount.msats)
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
@@ -57,7 +57,7 @@ impl LightningTest for FakeLightningTest {
     }
 
     async fn amount_sent(&self) -> Amount {
-        Amount::from_msat(*self.amount_sent.lock().unwrap())
+        Amount::from_msats(*self.amount_sent.lock().unwrap())
     }
 }
 

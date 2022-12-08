@@ -34,7 +34,7 @@ impl LightningTest for RealLightningTest {
     async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let random: u64 = rand::random();
         let invoice_req = requests::InvoiceRequest {
-            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.milli_sat)),
+            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
             description: "".to_string(),
             label: random.to_string(),
             expiry: expiry_time,
@@ -117,7 +117,7 @@ impl RealLightningTest {
             .filter(|channel| channel.short_channel_id.is_some() && channel.connected)
             .map(|channel| channel.our_amount_msat.msat())
             .sum();
-        Amount::from_msat(funds)
+        Amount::from_msats(funds)
     }
 }
 
