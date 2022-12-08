@@ -388,6 +388,11 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
+    /// Receive e-cash directly from another user when online (vs. offline transfer)
+    ///
+    /// Generates coins that another user will pay for and let us know the OutPoint in `create_tx`
+    /// Payer can use the `pay_to_blind_nonces` function
+    /// Allows transfer of e-cash without risk of double-spend or not having exact change
     pub async fn receive_coins<F, Fut>(&self, amount: Amount, create_tx: F)
     where
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,

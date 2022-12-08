@@ -35,6 +35,7 @@ use crate::{ChildId, DerivableSecret};
 pub mod backup;
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
+const TARGET_DENOMINATION_SETS: u16 = 1;
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -176,16 +177,6 @@ impl MintClient {
     /// Adds the final amounts of `change` to the tx before submitting it
     /// Allows for multiple `change` outputs
     pub async fn finalize_change(&self, tx: &mut Transaction, change: Vec<Amount>) {
-        let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
-
-        for amount in change {
-            let (issuances, nonces) = self.create_output_coins(amount).await;
-            let out_idx = tx.outputs.len();
-            tx.outputs.push(Output::Mint(MintOutput(nonces)));
-            change_outputs.push((out_idx, issuances));
-        }
-        let txid = tx.tx_hash();
-
         let mut dbtx = self
             .context
             .db
@@ -212,6 +203,15 @@ impl MintClient {
             }
         }
 
+        let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
+        for amount in change {
+            let (issuances, nonces) = self.create_ecash(amount).await;
+            let out_idx = tx.outputs.len();
+            tx.outputs.push(Output::Mint(MintOutput(nonces)));
+            change_outputs.push((out_idx, issuances));
+        }
+        let txid = tx.tx_hash();
+
         // move ecash to pending state, awaiting a transaction
         if !input_ecash.is_empty() {
             let pending = TieredMulti::from_iter(input_ecash.into_iter());
@@ -236,15 +236,24 @@ impl MintClient {
         dbtx.commit_tx().await.expect("DB Error");
     }
 
-    async fn create_output_coins(
+    /// Generates unsigned ecash, along with the private keys that can spend it
+    async fn create_ecash(
         &self,
         amount: Amount,
     ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
-        for (amt, ()) in TieredMulti::represent_amount(amount, &self.config.tbs_pks).into_iter() {
-            let (request, blind_nonce) = self.new_ecash_note(&self.context.secp, amt).await;
-            amount_requests.push(((amt, request), (amt, blind_nonce)));
+        let denominations = TieredMulti::represent_amount(
+            amount,
+            &self.coins().await,
+            &self.config.tbs_pks,
+            TARGET_DENOMINATION_SETS,
+        );
+        for (amt, num) in denominations.iter() {
+            for _ in 0..*num {
+                let (request, blind_nonce) = self.new_ecash_note(&self.context.secp, amt).await;
+                amount_requests.push(((amt, request), (amt, blind_nonce)));
+            }
         }
         let (coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
             amount_requests.into_iter().unzip();
@@ -378,7 +387,7 @@ impl MintClient {
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
     {
-        let (finalization, coins) = self.create_output_coins(amount).await;
+        let (finalization, coins) = self.create_ecash(amount).await;
         let out_point = create_tx(coins).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .await

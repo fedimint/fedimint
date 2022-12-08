@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
@@ -141,19 +142,46 @@ where
 }
 
 impl TieredMulti<()> {
-    // TODO: move somewhere else?
-    pub fn represent_amount<K>(mut amount: Amount, tiers: &Tiered<K>) -> TieredMulti<()> {
-        let coins = tiers
-            .tiers()
-            .rev()
-            .map(|&amount_tier| {
-                let res = amount / amount_tier;
-                amount %= amount_tier;
-                (amount_tier, vec![(); res as usize])
-            })
-            .collect();
+    /// Determines the denominations to use when representing an amount
+    ///
+    /// Algorithm tries to leave the user with a target number of `denomination_sets` starting
+    /// at the lowest denomination.  `self` gives the denominations that the user already has.
+    pub fn represent_amount<K, V>(
+        amount: Amount,
+        current_denominations: &TieredMulti<V>,
+        tiers: &Tiered<K>,
+        denomination_sets: u16,
+    ) -> Tiered<usize> {
+        let mut remaining_amount = amount;
+        let mut denominations: Tiered<usize> = Default::default();
 
-        TieredMulti(coins)
+        // try to hit the target `denomination_sets`
+        for tier in tiers.tiers() {
+            let notes = current_denominations
+                .get(*tier)
+                .map(|v| v.len())
+                .unwrap_or(0);
+            let missing_notes = (denomination_sets as u64).saturating_sub(notes as u64);
+            let possible_notes = remaining_amount / *tier;
+
+            let add_notes = min(possible_notes, missing_notes);
+            *denominations.get_mut_or_default(*tier) = add_notes as usize;
+            remaining_amount -= *tier * add_notes;
+        }
+
+        // if there is a remaining amount, add denominations with a greedy algorithm
+        for tier in tiers.tiers().rev() {
+            let res = remaining_amount / *tier;
+            remaining_amount %= *tier;
+            *denominations.get_mut_or_default(*tier) += res as usize;
+        }
+
+        let represented: u64 = denominations
+            .iter()
+            .map(|(k, v)| k.msats * (*v as u64))
+            .sum();
+        assert_eq!(represented, amount.msats);
+        denominations
     }
 }
 
@@ -278,7 +306,39 @@ where
 mod test {
     use fedimint_api::Amount;
 
-    use crate::TieredMulti;
+    use crate::{Tiered, TieredMulti};
+
+    #[test]
+    fn represent_amount_targets_denomination_sets() {
+        let starting = coins(vec![
+            (Amount::from_sats(1), 1),
+            (Amount::from_sats(2), 3),
+            (Amount::from_sats(3), 2),
+        ]);
+        let tiers = tiers(vec![1, 2, 3, 4]);
+
+        // target 3 tiers will fill out the 1 and 3 denominations
+        assert_eq!(
+            TieredMulti::represent_amount(Amount::from_sats(6), &starting, &tiers, 3),
+            denominations(vec![
+                (Amount::from_sats(1), 3),
+                (Amount::from_sats(2), 0),
+                (Amount::from_sats(3), 1),
+                (Amount::from_sats(4), 0)
+            ])
+        );
+
+        // target 2 tiers will fill out the 1 and 4 denominations
+        assert_eq!(
+            TieredMulti::represent_amount(Amount::from_sats(6), &starting, &tiers, 2),
+            denominations(vec![
+                (Amount::from_sats(1), 2),
+                (Amount::from_sats(2), 0),
+                (Amount::from_sats(3), 0),
+                (Amount::from_sats(4), 1)
+            ])
+        );
+    }
 
     #[test]
     fn select_coins_returns_exact_amount() {
@@ -319,5 +379,16 @@ mod test {
             .into_iter()
             .flat_map(|(amount, number)| vec![(amount, 0_usize); number])
             .collect()
+    }
+
+    fn tiers(tiers: Vec<u64>) -> Tiered<()> {
+        tiers
+            .into_iter()
+            .map(|tier| (Amount::from_sats(tier), ()))
+            .collect()
+    }
+
+    fn denominations(denominations: Vec<(Amount, usize)>) -> Tiered<usize> {
+        denominations.into_iter().collect()
     }
 }
