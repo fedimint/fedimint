@@ -257,6 +257,15 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         ..
     } = fixtures(2).await?;
 
+    let dummy_user = UserTest::new(Arc::new(
+        create_user_client(
+            user_send.config.clone(),
+            peers(&[0]),
+            MemDatabase::new().into(),
+        )
+        .await,
+    ));
+
     let user_receive = UserTest::new(Arc::new(
         create_user_client(
             user_send.config.clone(),
@@ -265,21 +274,15 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         )
         .await,
     ));
-    fed.mine_and_mint(&user_send, &*bitcoin, sats(1000)).await;
-    let coins = vec![
-        msats(64),
-        msats(512),
-        msats(16384),
-        msats(65536),
-        msats(131072),
-        msats(262144),
-        msats(524288),
-    ];
+    fed.mine_spendable_utxo(&dummy_user, &*bitcoin, Amount::from_sat(1000))
+        .await;
+    fed.mint_coins_for_user(&user_send, msats(8)).await;
+    let coins = vec![msats(1), msats(1), msats(2), msats(4)];
     assert_eq!(user_send.coin_amounts().await, coins);
 
     user_receive
         .client
-        .receive_coins(msats(327744), |coins| async {
+        .receive_coins(msats(5), |coins| async {
             user_send
                 .client
                 .pay_to_blind_nonces(coins, rng())
@@ -291,13 +294,11 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
     user_receive
-        .assert_coin_amounts(vec![msats(64), msats(65536), msats(262144)])
+        .assert_coin_amounts(vec![msats(1), msats(2), msats(2)])
         .await;
     user_send
-        .assert_coin_amounts(vec![msats(512), msats(16384), msats(131072), msats(524288)])
+        .assert_coin_amounts(vec![msats(1), msats(2)])
         .await;
-
-    assert_eq!(fed.max_balance_sheet(), 0);
 
     task_group.shutdown_join_all().await
 }
