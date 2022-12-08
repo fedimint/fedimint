@@ -602,6 +602,13 @@
 <a href="#602" id="602">602</a>
 <a href="#603" id="603">603</a>
 <a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
@@ -804,7 +811,8 @@
         </span><span class="self">self</span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentKeyPrefix)
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentKeyPrefix)
             .<span class="kw">await
             </span>.filter_map(|res| {
                 <span class="kw">let </span>(_key, outgoing_data) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -867,7 +875,11 @@
     }
 
     <span class="kw">pub async fn </span>save_confirmed_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>ConfirmedInvoice) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
+            </span>.context
+            .db
+            .begin_transaction(ModuleRegistry::default())
+            .<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Db error&quot;</span>);
@@ -879,7 +891,8 @@
             </span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .get_value(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(contract_id))
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(contract_id))
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Db error&quot;</span>)
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))<span class="question-mark">?</span>;
@@ -1002,7 +1015,7 @@
                 .<span class="kw">await
                 </span>.fetch_from_all(|m, db| <span class="kw">async </span>{
                     m.get_contract_account(
-                        <span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()),
+                        <span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>,
                         contract,
                     )
                     .<span class="kw">await
@@ -1139,7 +1152,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default());
+            .begin_transaction(ModuleRegistry::default())
+            .<span class="kw">await</span>;
         <span class="kw">let </span>output = client
             .create_outgoing_output(<span class="kw-2">&amp;mut </span>dbtx, invoice.clone(), <span class="kw-2">&amp;</span>gateway, timelock, <span class="kw-2">&amp;mut </span>rng)
             .<span class="kw">await

@@ -268,6 +268,7 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
@@ -321,8 +322,9 @@
 }
 
 <span class="comment">// TODO: maybe make the concrete impl its own crate
+</span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IDatabase <span class="kw">for </span>SledDb {
-    <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
+    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
         <span class="kw">let </span>sled_tx = SledTransaction {
             operations: Vec::new(),
             db: <span class="self">self</span>,
@@ -330,7 +332,7 @@
             num_savepoint_operations: <span class="number">0</span>,
         };
         <span class="kw">let </span><span class="kw-2">mut </span>tx = DatabaseTransaction::new(sled_tx, decoders);
-        tx.set_tx_savepoint();
+        tx.set_tx_savepoint().<span class="kw">await</span>;
         tx
     }
 }
@@ -460,7 +462,7 @@
         }
     }
 
-    <span class="kw">fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.num_savepoint_operations = <span class="self">self</span>.num_pending_operations;
     }
 }

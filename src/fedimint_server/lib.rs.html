@@ -579,6 +579,11 @@
 <a href="#579" id="579">579</a>
 <a href="#580" id="580">580</a>
 <a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -779,7 +784,8 @@
             </span>.consensus
             .db
             .begin_transaction(<span class="self">self</span>.consensus.decoders())
-            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>LastEpochKey)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="kw">let </span>last_saved_epoch = last_saved_response.map(|e| e.<span class="number">0</span>);
@@ -817,7 +823,8 @@
             </span>.consensus
             .db
             .begin_transaction(<span class="self">self</span>.consensus.decoders())
-            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>LastEpochKey)
             .<span class="kw">await
             </span>.unwrap();
 
@@ -828,7 +835,8 @@
                 </span>.consensus
                 .db
                 .begin_transaction(<span class="self">self</span>.consensus.decoders())
-                .get_value(<span class="kw-2">&amp;</span>saved_epoch_key.unwrap())
+                .<span class="kw">await
+                </span>.get_value(<span class="kw-2">&amp;</span>saved_epoch_key.unwrap())
                 .<span class="kw">await
                 </span>.unwrap()
         }
@@ -886,7 +894,8 @@
             </span>.consensus
             .db
             .begin_transaction(<span class="self">self</span>.consensus.decoders())
-            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>LastEpochKey)
             .<span class="kw">await</span>;
         <span class="kw">let </span>next_epoch = last_saved.expect(<span class="string">&quot;DB error&quot;</span>).map(|e| e.<span class="number">0 </span>+ <span class="number">1</span>).unwrap_or(<span class="number">0</span>);
         consensus_peers.insert(<span class="self">self</span>.cfg.identity, next_epoch);
@@ -1107,7 +1116,8 @@
                 </span>.consensus
                 .db
                 .begin_transaction(<span class="self">self</span>.consensus.decoders())
-                .get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
+                .<span class="kw">await
+                </span>.get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
                 .<span class="kw">await</span>;
             <span class="kw">match </span>query.expect(<span class="string">&quot;DB error&quot;</span>) {
                 <span class="prelude-val">Some</span>(result) <span class="kw">if </span>result.signature.is_some() =&gt; <span class="kw">break </span><span class="prelude-val">Some</span>(result),

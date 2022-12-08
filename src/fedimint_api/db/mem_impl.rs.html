@@ -208,6 +208,7 @@
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
@@ -255,8 +256,9 @@
     }
 }
 
-<span class="kw">impl </span>IDatabase <span class="kw">for </span>MemDatabase {
-    <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>IDatabase <span class="kw">for </span>MemDatabase {
+    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
         <span class="kw">let </span>db_copy = <span class="self">self</span>.data.lock().unwrap().clone();
         <span class="kw">let </span>memtx = MemTransaction {
             operations: Vec::new(),
@@ -268,7 +270,7 @@
         };
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = DatabaseTransaction::new(memtx, decoders);
-        tx.set_tx_savepoint();
+        tx.set_tx_savepoint().<span class="kw">await</span>;
         tx
     }
 }
@@ -346,7 +348,7 @@
         }
     }
 
-    <span class="kw">fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.savepoint = <span class="self">self</span>.tx_data.clone();
         <span class="self">self</span>.num_savepoint_operations = <span class="self">self</span>.num_pending_operations;
     }

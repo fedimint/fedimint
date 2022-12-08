@@ -629,6 +629,10 @@
 <a href="#629" id="629">629</a>
 <a href="#630" id="630">630</a>
 <a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -763,9 +767,9 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>database_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders())
-    }
+    <span class="kw">pub async fn </span>database_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -788,7 +792,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>pub_keys = Vec::new();
 
         <span class="comment">// Create read-only DB tx so that the read state is consistent
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
             <span class="kw">let </span>module = <span class="self">self
@@ -862,7 +866,7 @@
                 .into_iter()
                 .into_group_map_by(|(_peer, mci)| mci.module_key());
 
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
             <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
                 <span class="kw">let </span>module = <span class="self">self
                     </span>.modules
@@ -876,7 +880,7 @@
 
         <span class="comment">// Process transactions
         </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
 
             <span class="kw">let </span>caches = <span class="self">self</span>.build_verification_caches(transaction_cis.iter().map(|(<span class="kw">_</span>, tx)| tx));
             <span class="kw">let </span><span class="kw-2">mut </span>processed_tx: HashSet&lt;TransactionId&gt; = HashSet::new();
@@ -895,7 +899,7 @@
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-                    dbtx.set_tx_savepoint();
+                    dbtx.set_tx_savepoint().<span class="kw">await</span>;
                     <span class="comment">// TODO: use borrowed transaction
                     </span><span class="kw">match </span><span class="self">self
                         </span>.process_transaction(<span class="kw-2">&amp;mut </span>dbtx, transaction.clone(), <span class="kw-2">&amp;</span>caches)
@@ -929,7 +933,7 @@
 
         <span class="comment">// End consensus epoch
         </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders());
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
             <span class="self">self</span>.save_epoch_history(outcome, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>drop_peers)
@@ -961,7 +965,8 @@
     <span class="kw">pub async fn </span>get_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
         <span class="self">self</span>.db
             .begin_transaction(<span class="self">self</span>.decoders())
-            .get_value(<span class="kw-2">&amp;</span>LastEpochKey)
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>LastEpochKey)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;db query must not fail&quot;</span>)
             .map(|e| e.<span class="number">0</span>)
@@ -970,7 +975,8 @@
     <span class="kw">pub async fn </span>epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;EpochHistory&gt; {
         <span class="self">self</span>.db
             .begin_transaction(<span class="self">self</span>.decoders())
-            .get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
             .<span class="kw">await
             </span>.unwrap()
     }
@@ -986,7 +992,8 @@
         <span class="kw">let </span>maybe_prev_epoch = <span class="self">self
             </span>.db
             .begin_transaction(<span class="self">self</span>.decoders())
-            .get_value(<span class="kw-2">&amp;</span>prev_epoch_key)
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>prev_epoch_key)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>);
 
@@ -1029,7 +1036,7 @@
             .iter()
             .map(|(<span class="kw">_</span>, module)| {
                 Box::pin(<span class="kw">async </span>{
-                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
                     module.await_consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await
                 </span>})
             })
@@ -1039,7 +1046,7 @@
     }
 
     <span class="kw">pub async fn </span>get_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusProposal {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>drop_peers = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>DropPeerKeyPrefix)
@@ -1135,7 +1142,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::outcome::TransactionStatus&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; = dbtx
             .get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid))
@@ -1168,7 +1175,8 @@
         <span class="kw">let </span>rejected: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="self">self
             </span>.db
             .begin_transaction(<span class="self">self</span>.decoders())
-            .get_value(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid))
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid))
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>);
 
@@ -1204,7 +1212,7 @@
     }
 
     <span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
         <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.values() {
             module.audit(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>audit).<span class="kw">await

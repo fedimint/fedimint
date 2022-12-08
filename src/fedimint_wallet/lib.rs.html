@@ -3069,7 +3069,7 @@
     tg_handle: <span class="kw-2">&amp;</span>TaskHandle,
 ) {
     <span class="kw">while </span>!tg_handle.is_shutting_down() {
-        broadcast_pending_tx(db.begin_transaction(modules.clone()), <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
+        broadcast_pending_tx(db.begin_transaction(modules.clone()).<span class="kw">await</span>, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
         <span class="comment">// FIXME: remove after modularization finishes
         </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span>fedimint_api::task::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;

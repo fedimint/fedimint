@@ -856,7 +856,7 @@
         <span class="comment">// fetch consensus height first - so we dont miss anything when scanning
         </span><span class="kw">let </span>epoch = <span class="self">self</span>.context.api.fetch_last_epoch().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
         <span class="kw">let </span>notes = <span class="self">self</span>.get_available_notes(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>idxes = <span class="macro">vec!</span>[];

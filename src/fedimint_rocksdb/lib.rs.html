@@ -261,6 +261,7 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
@@ -312,8 +313,9 @@
     </span>}
 }
 
-<span class="kw">impl </span>IDatabase <span class="kw">for </span>RocksDb {
-    <span class="kw">fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>IDatabase <span class="kw">for </span>RocksDb {
+    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleRegistry&lt;Decoder&gt;) -&gt; DatabaseTransaction {
         <span class="kw">let </span><span class="kw-2">mut </span>optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(<span class="bool-val">true</span>);
         <span class="kw">let </span>rocksdb_tx = RocksDbTransaction(
@@ -321,7 +323,7 @@
                 </span>.transaction_opt(<span class="kw-2">&amp;</span>WriteOptions::default(), <span class="kw-2">&amp;</span>optimistic_options),
         );
         <span class="kw">let </span><span class="kw-2">mut </span>tx = DatabaseTransaction::new(rocksdb_tx, decoders);
-        tx.set_tx_savepoint();
+        tx.set_tx_savepoint().<span class="kw">await</span>;
         tx
     }
 }
@@ -378,7 +380,7 @@
         }
     }
 
-    <span class="kw">fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.<span class="number">0</span>.set_savepoint();
     }
 }
@@ -421,7 +423,7 @@
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot rollback a read only transaction&quot;</span>);
     }
 
-    <span class="kw">fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot set a savepoint in a read only transaction&quot;</span>);
     }
 }

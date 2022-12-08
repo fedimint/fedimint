@@ -980,6 +980,23 @@
 <a href="#980" id="980">980</a>
 <a href="#981" id="981">981</a>
 <a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>decode_stub;
 
@@ -1148,9 +1165,12 @@
 }
 
 <span class="kw">impl </span>MintClient {
-    <span class="kw">pub fn </span>start_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default())
-    }
+    <span class="kw">pub async fn </span>start_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="self">self</span>.context
+            .db
+            .begin_transaction(ModuleRegistry::default())
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Adds the final amounts of `change` to the tx before submitting it
     /// Allows for multiple `change` outputs
@@ -1165,7 +1185,11 @@
         }
         <span class="kw">let </span>txid = tx.tx_hash();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
+            </span>.context
+            .db
+            .begin_transaction(ModuleRegistry::default())
+            .<span class="kw">await</span>;
 
         <span class="comment">// remove the spent ecash from the DB
         </span><span class="kw">let </span><span class="kw-2">mut </span>input_ecash: Vec&lt;(Amount, SpendableNote)&gt; = <span class="macro">vec!</span>[];
@@ -1258,7 +1282,8 @@
 
     <span class="kw">pub async fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.start_dbtx()
-            .find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
             .<span class="kw">await
             </span>.map(|res| {
                 <span class="kw">let </span>(key, spendable_coin) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1297,7 +1322,7 @@
     <span class="kw">async fn </span>new_note_secret(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; DerivableSecret {
         <span class="kw">let </span><span class="kw-2">mut </span>new_idx;
         <span class="kw">loop </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx();
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
             new_idx = <span class="self">self</span>.get_next_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>;
             dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.next().as_u64())
                 .<span class="kw">await
@@ -1368,7 +1393,8 @@
             </span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .get_value(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .ok_or(MintClientError::FinalizationError(
@@ -1405,7 +1431,8 @@
         <span class="self">self</span>.context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
             .<span class="kw">await
             </span>.map(|res| {
                 <span class="kw">let </span>(OutputFinalizationKey(outpoint), cfd) = res.expect(<span class="string">&quot;DB error&quot;</span>);
@@ -1423,7 +1450,11 @@
         <span class="kw">let </span>stream = active_issuances
             .into_iter()
             .map(|(out_point, <span class="kw">_</span>)| <span class="kw">async move </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction(ModuleRegistry::default());
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
+                    </span>.context
+                    .db
+                    .begin_transaction(ModuleRegistry::default())
+                    .<span class="kw">await</span>;
                 <span class="kw">loop </span>{
                     <span class="kw">match </span><span class="self">self</span>.fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
@@ -1766,7 +1797,7 @@
         <span class="kw">let </span>txid = TransactionId::from_inner([<span class="number">0x42</span>; <span class="number">32</span>]);
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction(ModuleRegistry::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction(ModuleRegistry::default()).<span class="kw">await</span>;
         client
             .receive_coins(amt, <span class="kw-2">&amp;mut </span>dbtx, |output| <span class="kw">async </span>{
                 <span class="comment">// Agree on output
@@ -1821,7 +1852,8 @@
         </span><span class="kw">let </span>dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default());
+            .begin_transaction(ModuleRegistry::default())
+            .<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
         <span class="kw">let </span>_tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
@@ -1863,7 +1895,8 @@
         </span><span class="kw">let </span>dbtx = client
             .context
             .db
-            .begin_transaction(ModuleRegistry::default());
+            .begin_transaction(ModuleRegistry::default())
+            .<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>rng = rand::rngs::OsRng;
@@ -1954,7 +1987,8 @@
             .context
             .db
             .begin_transaction(ModuleRegistry::default())
-            .get_value(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount))
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount))
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .unwrap_or(<span class="number">0</span>);

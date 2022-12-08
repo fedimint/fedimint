@@ -335,7 +335,7 @@
             .register_async_method(path, <span class="kw">move </span>|params, state| <span class="kw">async move </span>{
                 <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
                 <span class="kw">let </span>fedimint = <span class="kw-2">&amp;</span>state.fedimint;
-                <span class="kw">let </span>dbtx = fedimint.database_transaction();
+                <span class="kw">let </span>dbtx = fedimint.database_transaction().<span class="kw">await</span>;
                 <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
@@ -381,7 +381,7 @@
                 <span class="comment">// Hack to avoid Sync/Send issues
                 </span><span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
                 <span class="kw">let </span>fedimint = <span class="kw-2">&amp;</span>state.fedimint;
-                <span class="kw">let </span>dbtx = fedimint.database_transaction();
+                <span class="kw">let </span>dbtx = fedimint.database_transaction().<span class="kw">await</span>;
                 <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
