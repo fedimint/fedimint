@@ -378,7 +378,7 @@ impl ServerModulePlugin for Mint {
             .filter_map(|(amount, coin)| {
                 let amount_key = self.pub_key.get(&amount)?;
                 if coin.verify(*amount_key) {
-                    Some((coin.clone(), amount))
+                    Some((*coin, amount))
                 } else {
                     None
                 }

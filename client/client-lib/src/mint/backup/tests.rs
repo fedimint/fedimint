@@ -90,7 +90,7 @@ impl MicroMintClient {
             )),
             tiered
                 .iter_items()
-                .map(|(amount, (bn, iss_req))| (amount, *bn, iss_req.clone()))
+                .map(|(amount, (bn, iss_req))| (amount, *bn, *iss_req))
                 .collect(),
         )
     }
@@ -131,11 +131,11 @@ impl MicroMintFed {
                 let peer_id = PeerId::from(peer_i as u16);
                 pub_key_shares
                     .entry(peer_id)
-                    .or_insert(Tiered::default())
+                    .or_default()
                     .insert(amount, pub_keys[peer_i as usize]);
                 sec_key_shares
                     .entry(peer_id)
-                    .or_insert(Tiered::default())
+                    .or_default()
                     .insert(amount, sec_keys[peer_i as usize]);
             }
         }
@@ -212,7 +212,7 @@ impl MicroMintFed {
         assert_eq!(confs_by_order.len(), note_iss_requests.len());
 
         note_iss_requests
-            .into_iter()
+            .iter()
             .zip(confs_by_order.into_iter())
             .map(|((amount, _bn, iss_req), sigs_by_peer)| {
                 let bsig = tbs::combine_valid_shares(
@@ -403,7 +403,7 @@ fn sanity_check_recovery_backup() {
     // Spend the notes, which should remove them from the tracker
     let tx_b = Transaction {
         inputs: vec![c1.generate_input(notes_c1_a).into()],
-        outputs: vec![output_c1_a.clone().into()],
+        outputs: vec![output_c1_a.into()],
         signature: None,
     };
 

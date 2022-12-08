@@ -667,7 +667,7 @@ impl EcashRecoveryTracker {
                 .expect("must be in the map already");
 
             for (item_i, (item_amt, item)) in output_data.iter_items().enumerate() {
-                let iss_request = if let Some(iss_request) = item.1.clone() {
+                let iss_request = if let Some(iss_request) = item.1 {
                     iss_request
                 } else {
                     // Items without issuance request are ones we don't consider ours
