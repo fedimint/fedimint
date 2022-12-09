@@ -34,8 +34,8 @@ impl CoreError {
 
 pub fn all_decoders() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::new([
-        (MODULE_KEY_LN, Decoder::from_typed(LightningModuleDecoder)),
-        (MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder)),
-        (MODULE_KEY_WALLET, Decoder::from_typed(WalletModuleDecoder)),
+        (MODULE_KEY_LN, Decoder::from_typed(&LightningModuleDecoder)),
+        (MODULE_KEY_MINT, Decoder::from_typed(&MintModuleDecoder)),
+        (MODULE_KEY_WALLET, Decoder::from_typed(&WalletModuleDecoder)),
     ])
 }

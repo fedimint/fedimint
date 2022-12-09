@@ -188,10 +188,6 @@ dyn_newtype_define!(
 );
 
 impl ModuleDecode for ServerModule {
-    fn clone_decoder(&self) -> Decoder {
-        self.decoder()
-    }
-
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
         (**self).decode_input(r)
     }

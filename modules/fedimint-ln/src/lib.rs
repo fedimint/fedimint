@@ -316,8 +316,8 @@ impl ServerModulePlugin for LightningModule {
         MODULE_KEY_LN
     }
 
-    fn decoder(&self) -> Self::Decoder {
-        LightningModuleDecoder
+    fn decoder(&self) -> &'static Self::Decoder {
+        &LightningModuleDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {

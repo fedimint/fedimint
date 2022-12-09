@@ -317,7 +317,7 @@ mod tests {
     }
 
     fn wallet_decoders() -> ModuleDecoderRegistry {
-        ModuleDecoderRegistry::new([(MODULE_KEY_WALLET, Decoder::from_typed(WalletModuleDecoder))])
+        ModuleDecoderRegistry::new([(MODULE_KEY_WALLET, Decoder::from_typed(&WalletModuleDecoder))])
     }
 
     async fn new_mint_and_client(

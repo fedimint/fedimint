@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::core::{ConsensusItem, Decoder, Input, Output, OutputOutcome};
+use crate::core::{ConsensusItem, Input, Output, OutputOutcome};
 use crate::core::{ModuleKey, PluginDecode};
 use crate::module::TransactionItemAmount;
 use crate::{dyn_newtype_define, DecodeError, ModuleDecode, ServerModulePlugin};
@@ -80,10 +80,6 @@ where
 }
 
 impl ModuleDecode for ClientModule {
-    fn clone_decoder(&self) -> Decoder {
-        unimplemented!()
-    }
-
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
         (**self).decode_input(r)
     }

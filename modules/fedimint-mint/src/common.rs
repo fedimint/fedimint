@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::io;
 
-use fedimint_api::core::{ConsensusItem, Decoder, Input, Output, OutputOutcome, PluginDecode};
+use fedimint_api::core::{ConsensusItem, Input, Output, OutputOutcome, PluginDecode};
 use fedimint_api::encoding::Decodable;
 use fedimint_api::encoding::DecodeError;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -12,10 +12,6 @@ use crate::{MintInput, MintOutput, MintOutputConfirmation, MintOutputOutcome};
 pub struct MintModuleDecoder;
 
 impl PluginDecode for MintModuleDecoder {
-    fn clone_decoder() -> Decoder {
-        Decoder::from_typed(MintModuleDecoder)
-    }
-
     fn decode_input(mut d: &mut dyn io::Read) -> Result<Input, DecodeError> {
         Ok(Input::from(MintInput::consensus_decode(
             &mut d,
