@@ -1,15 +1,13 @@
 use std::any::Any;
 use std::fmt::Debug;
-use std::io;
-use std::io::Read;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::core::{ConsensusItem, Input, Output, OutputOutcome};
+use crate::core::Decoder;
 use crate::core::{ModuleKey, PluginDecode};
 use crate::module::TransactionItemAmount;
-use crate::{dyn_newtype_define, DecodeError, ModuleDecode, ServerModulePlugin};
+use crate::{dyn_newtype_define, ServerModulePlugin};
 
 #[async_trait]
 pub trait ClientModulePlugin: Debug {
@@ -17,6 +15,8 @@ pub trait ClientModulePlugin: Debug {
     type Module: ServerModulePlugin;
 
     const MODULE_KEY: ModuleKey;
+
+    fn decoder(&self) -> &'static Self::Decoder;
 
     /// Returns the amount represented by the input and the fee its processing requires
     fn input_amount(
@@ -36,13 +36,8 @@ pub trait IClientModule: Debug {
 
     fn as_any(&self) -> &(dyn Any + 'static);
 
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
-
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
-
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
-
-    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+    /// Return the type-erased decoder of the module
+    fn decoder(&self) -> Decoder;
 }
 
 dyn_newtype_define!(
@@ -53,6 +48,7 @@ dyn_newtype_define!(
 impl<T> IClientModule for T
 where
     T: ClientModulePlugin + 'static,
+    <T as ClientModulePlugin>::Decoder: Sync + Send + 'static,
 {
     fn module_key(&self) -> ModuleKey {
         <T as ClientModulePlugin>::MODULE_KEY
@@ -62,37 +58,7 @@ where
         self
     }
 
-    fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
-        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_input(r)
-    }
-
-    fn decode_output(&self, r: &mut dyn Read) -> Result<Output, DecodeError> {
-        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_output(r)
-    }
-
-    fn decode_output_outcome(&self, r: &mut dyn Read) -> Result<OutputOutcome, DecodeError> {
-        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_output_outcome(r)
-    }
-
-    fn decode_consensus_item(&self, r: &mut dyn Read) -> Result<ConsensusItem, DecodeError> {
-        <<T as ClientModulePlugin>::Decoder as PluginDecode>::decode_consensus_item(r)
-    }
-}
-
-impl ModuleDecode for ClientModule {
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        (**self).decode_input(r)
-    }
-
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        (**self).decode_output(r)
-    }
-
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        (**self).decode_output_outcome(r)
-    }
-
-    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
-        (**self).decode_consensus_item(r)
+    fn decoder(&self) -> Decoder {
+        Decoder::from_typed(<T as ClientModulePlugin>::decoder(self))
     }
 }

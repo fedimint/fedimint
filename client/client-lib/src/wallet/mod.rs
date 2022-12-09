@@ -9,6 +9,7 @@ use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModulePlugin};
+use fedimint_core::modules::wallet::common::WalletModuleDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
@@ -34,6 +35,10 @@ impl ClientModulePlugin for WalletClient {
     type Decoder = <Wallet as ServerModulePlugin>::Decoder;
     type Module = Wallet;
     const MODULE_KEY: ModuleKey = MODULE_KEY_WALLET;
+
+    fn decoder(&self) -> &'static Self::Decoder {
+        &WalletModuleDecoder
+    }
 
     fn input_amount(
         &self,

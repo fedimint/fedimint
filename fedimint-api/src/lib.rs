@@ -16,7 +16,6 @@ pub use tiered::Tiered;
 pub use tiered_multi::*;
 
 pub use crate::core::server;
-use crate::core::ModuleDecode;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 

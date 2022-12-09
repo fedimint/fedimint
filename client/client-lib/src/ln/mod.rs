@@ -14,6 +14,7 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::{Amount, ServerModulePlugin};
+use fedimint_core::modules::ln::common::LightningModuleDecoder;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
@@ -48,6 +49,10 @@ impl ClientModulePlugin for LnClient {
     type Decoder = <LightningModule as ServerModulePlugin>::Decoder;
     type Module = LightningModule;
     const MODULE_KEY: ModuleKey = MODULE_KEY_LN;
+
+    fn decoder(&self) -> &'static Self::Decoder {
+        &LightningModuleDecoder
+    }
 
     fn input_amount(
         &self,
