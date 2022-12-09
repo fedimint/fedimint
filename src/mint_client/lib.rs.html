@@ -1415,10 +1415,6 @@
 <a href="#1415" id="1415">1415</a>
 <a href="#1416" id="1416">1416</a>
 <a href="#1417" id="1417">1417</a>
-<a href="#1418" id="1418">1418</a>
-<a href="#1419" id="1419">1419</a>
-<a href="#1420" id="1420">1420</a>
-<a href="#1421" id="1421">1421</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1611,10 +1607,6 @@
 
 <span class="comment">// TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
 </span><span class="kw">impl</span>&lt;T: AsRef&lt;ClientConfig&gt; + Clone&gt; Client&lt;T&gt; {
-    <span class="kw">pub fn </span>api_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>FederationApi {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.context.api
-    }
-
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
         <span class="kw-2">&amp;</span><span class="self">self</span>.context.db
     }
