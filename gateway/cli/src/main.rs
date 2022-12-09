@@ -92,8 +92,8 @@ async fn main() {
                 cfg_file,
                 &GatewayConfig {
                     bind_address: address,
-                    // TODO: Generate a strong random password
                     announce_address,
+                    // TODO: Generate a strong random password
                     password: source_password(cli.rpcpassword),
                     // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
                     default_federation: FederationId("Hals_trusty_mint".into()),
