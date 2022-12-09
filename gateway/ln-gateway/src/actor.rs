@@ -27,15 +27,15 @@ impl GatewayActor {
                 Ok(client
                     .register_with_federation(client.config().into())
                     .await
-                    .expect("Failed to register with federation"))
+                    .expect("Failed to connect with federation"))
             },
             Duration::from_secs(1),
             5,
         )
         .await
         {
-            Ok(_) => info!("Registered with federation"),
-            Err(e) => warn!("Failed to register with federation: {}", e),
+            Ok(_) => info!("Connected with federation"),
+            Err(e) => warn!("Failed to connect with federation: {}", e),
         }
 
         Ok(Self { client })

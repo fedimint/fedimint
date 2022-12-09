@@ -8,8 +8,8 @@ use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::instrument;
 
 use super::{
-    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRpcSender, InfoPayload,
-    RegisterFedPayload, WithdrawPayload,
+    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayRpcSender,
+    InfoPayload, WithdrawPayload,
 };
 use crate::LnGatewayError;
 
@@ -28,7 +28,7 @@ pub async fn run_webserver(
         .route("/address", post(address))
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
-        .route("/register", post(register))
+        .route("/connect", post(connect))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -109,11 +109,11 @@ async fn pay_invoice(
     Ok(())
 }
 
-/// Register a new federation
+/// Connect a new federation
 #[instrument(skip_all, err)]
-async fn register(
+async fn connect(
     Extension(rpc): Extension<GatewayRpcSender>,
-    Json(payload): Json<RegisterFedPayload>,
+    Json(payload): Json<ConnectFedPayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     rpc.send(payload).await?;
     Ok(())

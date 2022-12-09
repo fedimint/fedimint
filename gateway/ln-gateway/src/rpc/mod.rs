@@ -43,7 +43,7 @@ impl GatewayRpcSender {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RegisterFedPayload {
+pub struct ConnectFedPayload {
     pub connect: String,
 }
 
@@ -101,7 +101,7 @@ pub struct GatewayInfo {
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
-    RegisterFederation(GatewayRequestInner<RegisterFedPayload>),
+    ConnectFederation(GatewayRequestInner<ConnectFedPayload>),
     ReceivePayment(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
@@ -137,7 +137,7 @@ macro_rules! impl_gateway_request_trait {
 }
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
-impl_gateway_request_trait!(RegisterFedPayload, (), GatewayRequest::RegisterFederation);
+impl_gateway_request_trait!(ConnectFedPayload, (), GatewayRequest::ConnectFederation);
 impl_gateway_request_trait!(
     ReceivePaymentPayload,
     Preimage,

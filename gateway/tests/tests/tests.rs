@@ -10,8 +10,8 @@ use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, DepositPayload,
-        RegisterFedPayload, WithdrawPayload,
+        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
+        DepositPayload, WithdrawPayload,
     },
     utils::retry,
 };
@@ -51,14 +51,14 @@ async fn test_gateway_authentication() -> Result<()> {
     // Create an RPC client reference
     let client_ref = &RpcClient::new(gw_announce_address);
 
-    // Test gateway authentication on `register_federation` function
-    // *  `register_federation` with correct password succeeds
-    // *  `register_federation` with incorrect password fails
-    let payload = RegisterFedPayload {
+    // Test gateway authentication on `connect_federation` function
+    // *  `connect_federation` with correct password succeeds
+    // *  `connect_federation` with incorrect password fails
+    let payload = ConnectFedPayload {
         connect: serde_json::to_string(&WsFederationConnect { members: vec![] })?,
     };
     test_auth(&gw_password, move |pw| {
-        client_ref.register_federation(pw, payload.clone())
+        client_ref.connect_federation(pw, payload.clone())
     })
     .await?;
 

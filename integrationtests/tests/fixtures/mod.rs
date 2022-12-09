@@ -398,9 +398,9 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .register_federation(client.clone())
+            .connect_federation(client.clone())
             .await
-            .expect("Could not register federation");
+            .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios
 
         // Create a user test from gateway federation client
