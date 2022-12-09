@@ -32,12 +32,12 @@ await_all_peers
 
 # test a peer missing out on epochs and needing to rejoin
 kill_server $server1
-generate_epochs 10
-await_block_sync
+# FIXME increase this number once we can avoid processing epoch messages too far in the future
+generate_epochs 1
 
 ./scripts/start-fed.sh
-generate_epochs 10
-await_block_sync
+# FIXME increase this number once we can avoid processing epoch messages too far in the future
+generate_epochs 1
 await_all_peers
 echo "Server 1 successfully rejoined!"
 

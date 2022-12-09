@@ -1,14 +1,14 @@
 extern crate fedimint_api;
 
+use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
 
 use config::ServerConfig;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::core::ModuleDecode;
+use fedimint_api::cancellable::Cancellable;
 use fedimint_api::encoding::DecodeError;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
@@ -53,11 +53,14 @@ mod rng;
 
 type PeerMessage = (PeerId, EpochMessage);
 
+/// how many epochs ahead of consensus to rejoin
+const NUM_EPOCHS_REJOIN_AHEAD: u64 = 10;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum EpochMessage {
     Continue(Message<PeerId>),
-    RejoinRequest,
+    RejoinRequest(u64),
 }
 
 pub struct FedimintServer {
@@ -67,7 +70,8 @@ pub struct FedimintServer {
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     pub api: Arc<dyn IFederationApi>,
     pub peers: BTreeSet<PeerId>,
-    pub epochs: HashMap<u64, HashSet<PeerId>>,
+    pub rejoin_at_epoch: Option<HashMap<u64, HashSet<PeerId>>>,
+    pub run_empty_epochs: u64,
     pub last_processed_epoch: Option<EpochHistory>,
 }
 
@@ -139,7 +143,8 @@ impl FedimintServer {
             cfg: cfg.clone(),
             api,
             peers: cfg.peers.keys().cloned().collect(),
-            epochs: Default::default(),
+            rejoin_at_epoch: None,
+            run_empty_epochs: 0,
             last_processed_epoch: None,
         }
     }
@@ -174,30 +179,20 @@ impl FedimintServer {
         info!("Consensus task shut down");
     }
 
-    /// Starts consensus by advancing to the last saved epoch and triggering a new epoch
+    /// Starts consensus by skipping to the last saved epoch history  and triggering a new epoch
     pub async fn start_consensus(&mut self) {
-        let mut tx = self
-            .consensus
-            .db
-            .begin_transaction(self.consensus.decoders())
-            .await;
+        let db = self.consensus.db.clone();
+        let mut tx = db.begin_transaction(self.consensus.decoders()).await;
 
         if let Some(key) = tx.get_value(&LastEpochKey).await.expect("DB error") {
             self.last_processed_epoch = tx.get_value(&key).await.expect("DB error");
         }
 
-        info!(
-            "Starting consensus at epoch {}",
-            self.next_epoch_to_process()
-        );
-        self.hbbft.skip_to_epoch(self.next_epoch_to_process());
-        self.connections
-            .send(
-                &Target::all().peers(&self.peers),
-                EpochMessage::RejoinRequest,
-            )
-            .await
-            .expect("Failed to send rejoin requests");
+        let epoch = self.next_epoch_to_process();
+        info!("Starting consensus at epoch {}", epoch);
+        self.hbbft.skip_to_epoch(epoch);
+        self.rejoin_at_epoch = Some(HashMap::new());
+        self.request_rejoin(1).await;
     }
 
     /// Returns the next epoch that we need to process, based on our saved history
@@ -214,6 +209,7 @@ impl FedimintServer {
         last_outcome: ConsensusOutcome,
     ) -> Result<(), EpochVerifyError> {
         let mut epochs: Vec<EpochHistory> = vec![];
+        self.rejoin_at_epoch = None;
 
         for epoch_num in self.next_epoch_to_process()..=last_outcome.epoch {
             let current_epoch = if epoch_num == last_outcome.epoch {
@@ -242,7 +238,6 @@ impl FedimintServer {
                     self.consensus.process_consensus_outcome(outcome).await;
                     self.last_processed_epoch = Some(epoch);
                 }
-                epochs.clear();
             }
         }
 
@@ -275,7 +270,7 @@ impl FedimintServer {
 
         // process messages until new epoch or we have a proposal
         let mut outcomes: Vec<ConsensusOutcome> = loop {
-            match self.await_proposal_or_peer_message().await? {
+            match self.await_next_epoch().await? {
                 Some(msg) if self.start_next_epoch(&msg) => break self.handle_message(msg).await?,
                 Some(msg) => self.handle_message(msg).await?,
                 None => break vec![],
@@ -329,7 +324,12 @@ impl FedimintServer {
             .collect())
     }
 
-    async fn await_proposal_or_peer_message(&mut self) -> Cancellable<Option<PeerMessage>> {
+    async fn await_next_epoch(&mut self) -> Cancellable<Option<PeerMessage>> {
+        if self.run_empty_epochs > 0 {
+            self.run_empty_epochs = self.run_empty_epochs.saturating_sub(1);
+            return Ok(None);
+        }
+
         tokio::select! {
             () = self.consensus.transaction_notify.notified() => Ok(None),
             () = self.consensus.await_consensus_proposal() => Ok(None),
@@ -339,8 +339,8 @@ impl FedimintServer {
 
     fn start_next_epoch(&self, msg: &PeerMessage) -> bool {
         match msg {
-            (_, EpochMessage::Continue(peer_msg)) => self.hbbft.next_epoch() <= peer_msg.epoch(),
-            (_, EpochMessage::RejoinRequest) => true,
+            (_, EpochMessage::Continue(peer_msg)) => self.hbbft.epoch() <= peer_msg.epoch(),
+            (_, EpochMessage::RejoinRequest(_)) => false,
         }
     }
 
@@ -348,7 +348,7 @@ impl FedimintServer {
     async fn handle_message(&mut self, msg: PeerMessage) -> Cancellable<Vec<ConsensusOutcome>> {
         match msg {
             (peer, EpochMessage::Continue(peer_msg)) => {
-                self.advance_to_consensus_epoch(peer_msg.epoch(), peer);
+                self.rejoin_at_epoch(peer_msg.epoch(), peer).await;
 
                 let step = self
                     .hbbft
@@ -379,26 +379,39 @@ impl FedimintServer {
                     })
                     .collect())
             }
-            (_, EpochMessage::RejoinRequest) => Ok(vec![]),
+            (_, EpochMessage::RejoinRequest(epoch)) => {
+                info!("Requested to run {} epochs", epoch);
+                self.run_empty_epochs = min(NUM_EPOCHS_REJOIN_AHEAD, epoch);
+                Ok(vec![])
+            }
         }
     }
 
-    /// Advances our epoch if we received a threshold of messages from a future epoch so we can
-    /// sync up to our peers
-    fn advance_to_consensus_epoch(&mut self, epoch: u64, peer: PeerId) {
-        let peers = self.epochs.entry(epoch).or_default();
-        peers.insert(peer);
+    /// If we are rejoining and received a threshold of messages from the same epoch, then skip
+    /// to that epoch.  Give ourselves a buffer of `NUM_EPOCHS_REJOIN_AHEAD` so we can ensure
+    /// we receive enough HBBFT messages to produce an outcome.
+    async fn rejoin_at_epoch(&mut self, epoch: u64, peer: PeerId) {
+        if let Some(epochs) = self.rejoin_at_epoch.as_mut() {
+            let peers = epochs.entry(epoch).or_default();
+            peers.insert(peer);
 
-        if peers.len() >= self.peers.threshold() {
-            for epoch in self.hbbft.epoch()..=epoch {
-                self.epochs.remove_entry(&epoch);
-            }
-
-            if self.hbbft.epoch() < epoch {
-                info!("Skipping to epoch {}", epoch);
-                self.hbbft.skip_to_epoch(epoch);
+            if peers.len() >= self.peers.threshold() && self.hbbft.epoch() < epoch {
+                info!("Skipping to epoch {}", epoch + NUM_EPOCHS_REJOIN_AHEAD);
+                self.hbbft.skip_to_epoch(epoch + NUM_EPOCHS_REJOIN_AHEAD);
+                self.request_rejoin(NUM_EPOCHS_REJOIN_AHEAD).await;
             }
         }
+    }
+
+    /// Sends a rejoin request to all peers, indicating the number of epochs we want them to create
+    async fn request_rejoin(&mut self, epochs_to_run: u64) {
+        self.connections
+            .send(
+                &Target::all().peers(&self.peers),
+                EpochMessage::RejoinRequest(epochs_to_run),
+            )
+            .await
+            .expect("Failed to send rejoin requests");
     }
 }
 

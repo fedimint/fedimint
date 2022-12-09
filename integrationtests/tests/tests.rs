@@ -1142,14 +1142,25 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
     fed.run_consensus_epochs(1).await;
 
     // Keep peer 3 out of consensus
+    let online_peers = fed.subset_peers(&[0, 1, 2]);
+    let peer3 = fed.subset_peers(&[3]);
     bitcoin.mine_blocks(100);
-    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    online_peers.run_consensus_epochs(1).await;
     bitcoin.mine_blocks(100);
-    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    online_peers.run_consensus_epochs(1).await;
     let height = user.client.await_consensus_block_height(0).await?;
 
-    fed.subset_peers(&[3]).rejoin_consensus().await.unwrap();
-    fed.run_consensus_epochs(1).await;
+    // Run until peer 3 has rejoined
+    join_all(vec![
+        Either::Left(async {
+            online_peers.await_consensus_epochs(11).await.unwrap();
+        }),
+        Either::Right(async {
+            peer3.rejoin_consensus().await.unwrap();
+            peer3.await_consensus_epochs(1).await.unwrap();
+        }),
+    ])
+    .await;
 
     // Ensure peer 3 rejoined and caught up to consensus
     let client2 = create_user_client(
@@ -1177,6 +1188,8 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
     fed.run_consensus_epochs(1).await;
     fed.rejoin_consensus().await.unwrap();
     fed.await_consensus_epochs(1).await.unwrap();
+    bitcoin.mine_blocks(100);
+    fed.run_consensus_epochs(1).await;
 
     task_group.shutdown_join_all().await
 }
