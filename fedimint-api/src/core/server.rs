@@ -56,17 +56,10 @@ where
 pub trait IServerModule: Debug {
     fn module_key(&self) -> ModuleKey;
 
+    /// Returns the decoder belonging to the server module
     fn decoder(&self) -> Decoder;
 
     fn as_any(&self) -> &(dyn Any + 'static);
-
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
-
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
-
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
-
-    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>);
@@ -187,24 +180,6 @@ dyn_newtype_define!(
     pub ServerModule(Arc<IServerModule>)
 );
 
-impl ModuleDecode for ServerModule {
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        (**self).decode_input(r)
-    }
-
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        (**self).decode_output(r)
-    }
-
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        (**self).decode_output_outcome(r)
-    }
-
-    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
-        (**self).decode_consensus_item(r)
-    }
-}
-
 #[async_trait]
 impl<T> IServerModule for T
 where
@@ -221,22 +196,6 @@ where
 
     fn as_any(&self) -> &(dyn Any + 'static) {
         self
-    }
-
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_input(r)
-    }
-
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_output(r)
-    }
-
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_output_outcome(r)
-    }
-
-    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
-        <<Self as ServerModulePlugin>::Decoder as PluginDecode>::decode_consensus_item(r)
     }
 
     /// Blocks until a new `consensus_proposal` is available.
