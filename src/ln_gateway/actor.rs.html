@@ -265,7 +265,7 @@
 
 <span class="kw">impl </span>GatewayActor {
     <span class="kw">pub async fn </span>new(client: Arc&lt;GatewayClient&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="comment">// Retry regster gateway federation client with federation
+        <span class="comment">// Retry gateway registration
         </span><span class="kw">match </span>retry(
             String::from(<span class="string">&quot;Register With Federation&quot;</span>),
             <span class="attr">#[allow(clippy::unit_arg)]

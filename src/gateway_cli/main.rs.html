@@ -307,9 +307,9 @@
                 cfg_file,
                 <span class="kw-2">&amp;</span>GatewayConfig {
                     bind_address: address,
+                    announce_address,
                     <span class="comment">// TODO: Generate a strong random password
-                    </span>announce_address,
-                    password: source_password(cli.rpcpassword),
+                    </span>password: source_password(cli.rpcpassword),
                     <span class="comment">// TODO: Remove this field with hardcoded value once we have fixed Issue 664:
                     </span>default_federation: FederationId(<span class="string">&quot;Hals_trusty_mint&quot;</span>.into()),
                 },
