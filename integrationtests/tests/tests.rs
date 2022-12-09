@@ -25,7 +25,6 @@ use mint_client::mint::MintClient;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
 use threshold_crypto::{SecretKey, SecretKeyShare};
-use tokio::time::timeout;
 use tracing::debug;
 
 use crate::fixtures::{assert_ci, create_user_client, peers, FederationTest, UserTest};
@@ -1097,6 +1096,8 @@ async fn can_have_federations_with_one_peer() -> Result<()> {
         task_group,
         ..
     } = fixtures(1).await?;
+    bitcoin.mine_blocks(110);
+    fed.run_consensus_epochs(1).await;
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     user.assert_total_coins(sats(1000)).await;
 
@@ -1137,22 +1138,26 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         ..
     } = fixtures(4).await?;
 
-    // Keep peer 3 out of consensus
     bitcoin.mine_blocks(110);
-    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    fed.run_consensus_epochs(1).await;
+
+    // Keep peer 3 out of consensus
+    let online_peers = fed.subset_peers(&[0, 1, 2]);
+    let peer3 = fed.subset_peers(&[3]);
     bitcoin.mine_blocks(100);
-    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    online_peers.run_consensus_epochs(1).await;
+    bitcoin.mine_blocks(100);
+    online_peers.run_consensus_epochs(1).await;
     let height = user.client.await_consensus_block_height(0).await?;
 
+    // Run until peer 3 has rejoined
     join_all(vec![
         Either::Left(async {
-            fed.subset_peers(&[0, 1, 2])
-                .await_consensus_epochs(1)
-                .await
-                .unwrap();
+            online_peers.await_consensus_epochs(11).await.unwrap();
         }),
         Either::Right(async {
-            fed.subset_peers(&[3]).rejoin_consensus().await.unwrap();
+            peer3.rejoin_consensus().await.unwrap();
+            peer3.await_consensus_epochs(1).await.unwrap();
         }),
     ])
     .await;
@@ -1178,23 +1183,13 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
         task_group,
         ..
     } = fixtures(2).await?;
-    let peer0 = fed.subset_peers(&[0]);
-    let peer1 = fed.subset_peers(&[1]);
 
     bitcoin.mine_blocks(110);
     fed.run_consensus_epochs(1).await;
-
-    let rejoin = join_all(vec![
-        Either::Left(async {
-            peer0.rejoin_consensus().await.unwrap();
-        }),
-        Either::Right(async {
-            peer1.rejoin_consensus().await.unwrap();
-        }),
-    ]);
-
-    // confirm that the entire federation can rejoin at an epoch
-    timeout(Duration::from_secs(15), rejoin).await.unwrap();
+    fed.rejoin_consensus().await.unwrap();
+    fed.await_consensus_epochs(1).await.unwrap();
+    bitcoin.mine_blocks(100);
+    fed.run_consensus_epochs(1).await;
 
     task_group.shutdown_join_all().await
 }
