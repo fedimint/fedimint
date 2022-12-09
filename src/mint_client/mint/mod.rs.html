@@ -1013,6 +1013,10 @@
 <a href="#1013" id="1013">1013</a>
 <a href="#1014" id="1014">1014</a>
 <a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1045,7 +1049,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, PendingCoinsKey};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use crate</span>::{ChildId, DerivableSecret};
+<span class="kw">use crate</span>::{ChildId, DerivableSecret, MintModuleDecoder};
 
 <span class="kw">pub mod </span>backup;
 
@@ -1164,6 +1168,10 @@
     <span class="kw">type </span>Decoder = &lt;Mint <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
     <span class="kw">type </span>Module = Mint;
     <span class="kw">const </span>MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
+
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">Self</span>::Decoder {
+        <span class="kw-2">&amp;</span>MintModuleDecoder
+    }
 
     <span class="kw">fn </span>input_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
