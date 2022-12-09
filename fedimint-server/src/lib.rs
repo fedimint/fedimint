@@ -14,7 +14,7 @@ use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError, SerdeConsensusItem};
 pub use fedimint_core::*;
-use hbbft::honey_badger::{Batch, HoneyBadger, Message};
+use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
 use mint_client::api::{IFederationApi, WsFederationApi};
 use rand::rngs::OsRng;
@@ -62,6 +62,8 @@ pub enum EpochMessage {
     Continue(Message<PeerId>),
     RejoinRequest(u64),
 }
+
+type EpochStep = Step<Vec<SerdeConsensusItem>, PeerId>;
 
 pub struct FedimintServer {
     pub consensus: Arc<FedimintConsensus>,
@@ -281,7 +283,8 @@ impl FedimintServer {
         for peer in proposal.drop_peers.iter() {
             self.connections.ban_peer(*peer).await;
         }
-        outcomes.append(&mut self.propose_epoch(proposal, rng).await?);
+        let step = self.propose_epoch(proposal, rng).await?;
+        outcomes.append(&mut self.handle_step(step).await?);
 
         while outcomes.is_empty() {
             let msg = self.connections.receive().await?;
@@ -290,19 +293,9 @@ impl FedimintServer {
         Ok(outcomes)
     }
 
-    async fn propose_epoch(
-        &mut self,
-        proposal: ConsensusProposal,
-        rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) -> Cancellable<Vec<ConsensusOutcome>> {
-        let step = self
-            .hbbft
-            .propose(
-                &proposal.items.into_iter().map(|ci| (&ci).into()).collect(),
-                rng,
-            )
-            .expect("HBBFT propose failed");
-
+    /// Handles one step of the HBBFT algorithm, sending messages to peers and parsing any
+    /// outcomes contained in the step
+    async fn handle_step(&mut self, step: EpochStep) -> Cancellable<Vec<ConsensusOutcome>> {
         for msg in step.messages {
             self.connections
                 .send(
@@ -312,16 +305,35 @@ impl FedimintServer {
                 .await?;
         }
 
-        Ok(step
-            .output
-            .into_iter()
-            .map(|outcome| {
-                // FIXME: deal with faulty messages
-                let (outcome, _ban_peers) =
-                    module_parse_outcome(outcome, &self.consensus.modules.decoders());
-                outcome
-            })
-            .collect())
+        if !step.fault_log.is_empty() {
+            warn!(?step.fault_log);
+        }
+
+        let mut outcomes: Vec<ConsensusOutcome> = vec![];
+        for outcome in step.output {
+            let (outcome, ban_peers) =
+                module_parse_outcome(outcome, &self.consensus.modules.decoders());
+            for peer in ban_peers {
+                self.connections.ban_peer(peer).await;
+            }
+            outcomes.push(outcome);
+        }
+
+        Ok(outcomes)
+    }
+
+    async fn propose_epoch(
+        &mut self,
+        proposal: ConsensusProposal,
+        rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
+    ) -> Cancellable<EpochStep> {
+        Ok(self
+            .hbbft
+            .propose(
+                &proposal.items.into_iter().map(|ci| (&ci).into()).collect(),
+                rng,
+            )
+            .expect("HBBFT propose failed"))
     }
 
     async fn await_next_epoch(&mut self) -> Cancellable<Option<PeerMessage>> {
@@ -355,29 +367,7 @@ impl FedimintServer {
                     .handle_message(&peer, peer_msg)
                     .expect("HBBFT handle message failed");
 
-                if !step.fault_log.is_empty() {
-                    warn!(?step.fault_log);
-                }
-
-                for msg in step.messages {
-                    self.connections
-                        .send(
-                            &msg.target.peers(&self.peers),
-                            EpochMessage::Continue(msg.message),
-                        )
-                        .await?;
-                }
-
-                Ok(step
-                    .output
-                    .into_iter()
-                    .map(|outcome| {
-                        // FIXME: deal with faulty messages
-                        let (outcome, _ban_peers) =
-                            module_parse_outcome(outcome, &self.consensus.modules.decoders());
-                        outcome
-                    })
-                    .collect())
+                Ok(self.handle_step(step).await?)
             }
             (_, EpochMessage::RejoinRequest(epoch)) => {
                 info!("Requested to run {} epochs", epoch);
