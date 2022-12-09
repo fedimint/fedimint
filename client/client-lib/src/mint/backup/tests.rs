@@ -508,3 +508,163 @@ fn sanity_check_recovery_non_empty_backup() {
             .contains_key(&snote.1.note.0));
     }
 }
+
+/// Exercise restoring from backup where another client tries to race to re-use blind nonce (with different amount)
+///
+/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more comments
+#[test]
+fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
+    let peers_num = 3;
+    let threshold = 2;
+    let gap_limit = 10;
+    let amount_tiers = [msats(1), msats(2), msats(4)];
+
+    let fed = MicroMintFed::new(threshold, peers_num, &amount_tiers);
+
+    // Client 1
+    let mut c1 = MicroMintClient::from_short_seed(0);
+    // Client 2
+    let mut c2 = MicroMintClient::from_short_seed(1);
+
+    let backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![]);
+
+    let mut tracker = EcashRecoveryTracker::from_backup(
+        backup_c1,
+        c1.secret.clone(),
+        gap_limit,
+        fed.tbs_pks.clone(),
+        fed.pub_key_shares,
+    );
+
+    let (output_c1_b, _iss_reqs_c1_b) = c1.generate_output([1, 2, 4]);
+    let (mut output_c2_a, _iss_reqs_c2_a) = c2.generate_output([1, 2, 4]);
+
+    // Client2 uses blind nonce of client1, with a smaller value, trying to confuse them!!!
+    output_c2_a.0.get_mut(msats(1)).unwrap()[0] = output_c1_b.0.get(msats(4)).unwrap()[0];
+
+    let tx_a = Transaction {
+        inputs: vec![],
+        outputs: vec![output_c2_a.clone().into()],
+        signature: None,
+    };
+    let output_c1_a_out_point = OutPoint {
+        txid: tx_a.tx_hash(),
+        out_idx: 0,
+    };
+
+    let tx_b = Transaction {
+        inputs: vec![],
+        outputs: vec![output_c1_b.into()],
+        signature: None,
+    };
+    let output_c1_b_out_point = OutPoint {
+        txid: tx_b.tx_hash(),
+        out_idx: 0,
+    };
+
+    // The transaction with fake outputs gets included in consensus earlier, so tracker
+    // processes it first.
+    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_a));
+    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_b));
+
+    // Tracker ignored the tx with incorrect values, because the amount associated with
+    // this blind nonce was incorrect.
+    // It did start tracking the correct output.
+    assert_eq!(tracker.pending_outputs.len(), 1);
+    assert!(!tracker.pending_outputs.contains_key(&output_c1_a_out_point));
+    assert!(tracker.pending_outputs.contains_key(&output_c1_b_out_point));
+}
+
+/// Exercise restoring from backup where another client tries to race to re-use blind nonce (with valid amount)
+///
+/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more comments
+#[test]
+fn sanity_check_recovery_bn_reuse_with_valid_amount() {
+    let peers_num = 3;
+    let threshold = 2;
+    let gap_limit = 10;
+    let amount_tiers = [msats(1), msats(2), msats(4)];
+
+    let fed = MicroMintFed::new(threshold, peers_num, &amount_tiers);
+
+    // Client 1
+    let mut c1 = MicroMintClient::from_short_seed(0);
+    // Client 2
+    let mut c2 = MicroMintClient::from_short_seed(1);
+
+    let backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![]);
+
+    let mut tracker = EcashRecoveryTracker::from_backup(
+        backup_c1,
+        c1.secret.clone(),
+        gap_limit,
+        fed.tbs_pks.clone(),
+        fed.pub_key_shares.clone(),
+    );
+
+    let (output_c1_b, iss_reqs_c1_b) = c1.generate_output([1, 2, 4]);
+    let (mut output_c2_a, _iss_reqs_c2_a) = c2.generate_output([1, 2, 4]);
+
+    // Client2 uses blind nonce of client1, with a same value, trying to confuse them!!!
+    output_c2_a.0.get_mut(msats(1)).unwrap()[0] = output_c1_b.0.get(msats(1)).unwrap()[0];
+
+    let tx_a = Transaction {
+        inputs: vec![],
+        outputs: vec![output_c2_a.clone().into()],
+        signature: None,
+    };
+    let output_c2_a_out_point = OutPoint {
+        txid: tx_a.tx_hash(),
+        out_idx: 0,
+    };
+
+    let tx_b = Transaction {
+        inputs: vec![],
+        outputs: vec![output_c1_b.clone().into()],
+        signature: None,
+    };
+    let output_c1_b_out_point = OutPoint {
+        txid: tx_b.tx_hash(),
+        out_idx: 0,
+    };
+
+    // The transaction with fake outputs gets included in consensus earlier, so tracker
+    // processes it first.
+    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_a));
+    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_b));
+
+    // Tracker tracks both outputs now
+    assert_eq!(tracker.pending_outputs.len(), 2);
+    assert!(tracker.pending_outputs.contains_key(&output_c2_a_out_point));
+    assert!(tracker.pending_outputs.contains_key(&output_c1_b_out_point));
+
+    let confirmations_c2_a = fed.confirm_mint_output(output_c2_a_out_point, &output_c2_a);
+
+    for (peer_id, mint_output_confirmation) in &confirmations_c2_a {
+        tracker.handle_consensus_item(
+            *peer_id,
+            &ConsensusItem::Module(mint_output_confirmation.clone().into()),
+        );
+    }
+
+    // Tracker was happy to accept the note of the correct value produced by client2, however...
+    assert_eq!(tracker.spendable_note_by_nonce.len(), 1);
+
+    let confirmations_c1_b = fed.confirm_mint_output(output_c1_b_out_point, &output_c1_b);
+    for (peer_id, mint_output_confirmation) in &confirmations_c1_b {
+        tracker.handle_consensus_item(
+            *peer_id,
+            &ConsensusItem::Module(mint_output_confirmation.clone().into()),
+        );
+    }
+
+    let notes_c1_b = fed.combine_output_confirmations(&iss_reqs_c1_b, &confirmations_c1_b);
+
+    assert_eq!(tracker.spendable_note_by_nonce.len(), notes_c1_b.len());
+    // ... irrespective of that it still recovered other notes of client1.
+    for snote in notes_c1_b {
+        assert!(tracker
+            .spendable_note_by_nonce
+            .contains_key(&snote.1.note.0));
+    }
+}
