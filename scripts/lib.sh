@@ -68,13 +68,13 @@ function start_gateway() {
   $FM_GATEWAY_CLI generate-config '127.0.0.1:8080' 'http://127.0.0.1:8080' $FM_CFG_DIR # generate gateway config
   $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR &
   sleep 5 # wait for plugin to start
-  gw_register_fed
+  gw_connect_fed
 }
 
-function gw_register_fed() {
-  # register federation on the gateway
+function gw_connect_fed() {
+  # connect federation with the gateway
   FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -r '.connect_info')"
-  $FM_GATEWAY_CLI register-fed "$FM_CONNECT_STR"
+  $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
 }
 
 function get_finality_delay() {

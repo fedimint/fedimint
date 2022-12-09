@@ -58,7 +58,7 @@ Commands:
   address          Generate a new peg-in address, funds sent to it can later be claimed
   deposit          Deposit funds into a gateway federation
   withdraw         Claim funds from a gateway federation
-  register-fed     Register federation with the gateway
+  connect-fed      Connect federation with the gateway
   help             Print this message or the help of the given subcommand(s)
 
 Options:
