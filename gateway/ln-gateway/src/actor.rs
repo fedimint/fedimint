@@ -19,7 +19,7 @@ pub struct GatewayActor {
 
 impl GatewayActor {
     pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
-        // Retry regster gateway federation client with federation
+        // Retry gateway registration
         match retry(
             String::from("Register With Federation"),
             #[allow(clippy::unit_arg)]
