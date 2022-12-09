@@ -94,7 +94,7 @@ impl NoteIndex {
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
 /// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
-#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
     spend_key: KeyPair,
@@ -131,14 +131,14 @@ impl NoteIssuanceRequest {
 ///
 /// Keeps all the data to generate [`SpendableNote`]s once the
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-#[derive(Debug, Clone, Default, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequests {
     /// Finalization data for all coin outputs in this request
     coins: TieredMulti<NoteIssuanceRequest>,
 }
 
 /// A [`Note`] with associated secret key that allows to proof ownership (spend it)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
     pub note: Note,
     #[serde(deserialize_with = "deserialize_key_pair")]

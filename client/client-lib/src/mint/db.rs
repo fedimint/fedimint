@@ -2,7 +2,7 @@ use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::Nonce;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 use crate::mint::{NoteIssuanceRequests, SpendableNote};
@@ -61,7 +61,7 @@ impl DatabaseKeyPrefixConst for PendingCoinsKeyPrefix {
     type Value = TieredMulti<SpendableNote>;
 }
 
-#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct OutputFinalizationKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputFinalizationKey {
