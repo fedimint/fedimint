@@ -446,16 +446,6 @@
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -472,7 +462,7 @@
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError, SerdeConsensusItem};
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
-<span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message};
+<span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 <span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
 <span class="kw">use </span>mint_client::api::{IFederationApi, WsFederationApi};
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -520,6 +510,8 @@
     Continue(Message&lt;PeerId&gt;),
     RejoinRequest(u64),
 }
+
+<span class="kw">type </span>EpochStep = Step&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;;
 
 <span class="kw">pub struct </span>FedimintServer {
     <span class="kw">pub </span>consensus: Arc&lt;FedimintConsensus&gt;,
@@ -739,7 +731,8 @@
         <span class="kw">for </span>peer <span class="kw">in </span>proposal.drop_peers.iter() {
             <span class="self">self</span>.connections.ban_peer(<span class="kw-2">*</span>peer).<span class="kw">await</span>;
         }
-        outcomes.append(<span class="kw-2">&amp;mut </span><span class="self">self</span>.propose_epoch(proposal, rng).<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="kw">let </span>step = <span class="self">self</span>.propose_epoch(proposal, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+        outcomes.append(<span class="kw-2">&amp;mut </span><span class="self">self</span>.handle_step(step).<span class="kw">await</span><span class="question-mark">?</span>);
 
         <span class="kw">while </span>outcomes.is_empty() {
             <span class="kw">let </span>msg = <span class="self">self</span>.connections.receive().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -748,19 +741,9 @@
         <span class="prelude-val">Ok</span>(outcomes)
     }
 
-    <span class="kw">async fn </span>propose_epoch(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        proposal: ConsensusProposal,
-        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
-    ) -&gt; Cancellable&lt;Vec&lt;ConsensusOutcome&gt;&gt; {
-        <span class="kw">let </span>step = <span class="self">self
-            </span>.hbbft
-            .propose(
-                <span class="kw-2">&amp;</span>proposal.items.into_iter().map(|ci| (<span class="kw-2">&amp;</span>ci).into()).collect(),
-                rng,
-            )
-            .expect(<span class="string">&quot;HBBFT propose failed&quot;</span>);
-
+    <span class="doccomment">/// Handles one step of the HBBFT algorithm, sending messages to peers and parsing any
+    /// outcomes contained in the step
+    </span><span class="kw">async fn </span>handle_step(<span class="kw-2">&amp;mut </span><span class="self">self</span>, step: EpochStep) -&gt; Cancellable&lt;Vec&lt;ConsensusOutcome&gt;&gt; {
         <span class="kw">for </span>msg <span class="kw">in </span>step.messages {
             <span class="self">self</span>.connections
                 .send(
@@ -770,16 +753,35 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
-        <span class="prelude-val">Ok</span>(step
-            .output
-            .into_iter()
-            .map(|outcome| {
-                <span class="comment">// FIXME: deal with faulty messages
-                </span><span class="kw">let </span>(outcome, _ban_peers) =
-                    module_parse_outcome(outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules.decoders());
-                outcome
-            })
-            .collect())
+        <span class="kw">if </span>!step.fault_log.is_empty() {
+            <span class="macro">warn!</span>(<span class="question-mark">?</span>step.fault_log);
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>outcomes: Vec&lt;ConsensusOutcome&gt; = <span class="macro">vec!</span>[];
+        <span class="kw">for </span>outcome <span class="kw">in </span>step.output {
+            <span class="kw">let </span>(outcome, ban_peers) =
+                module_parse_outcome(outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules.decoders());
+            <span class="kw">for </span>peer <span class="kw">in </span>ban_peers {
+                <span class="self">self</span>.connections.ban_peer(peer).<span class="kw">await</span>;
+            }
+            outcomes.push(outcome);
+        }
+
+        <span class="prelude-val">Ok</span>(outcomes)
+    }
+
+    <span class="kw">async fn </span>propose_epoch(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        proposal: ConsensusProposal,
+        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
+    ) -&gt; Cancellable&lt;EpochStep&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.hbbft
+            .propose(
+                <span class="kw-2">&amp;</span>proposal.items.into_iter().map(|ci| (<span class="kw-2">&amp;</span>ci).into()).collect(),
+                rng,
+            )
+            .expect(<span class="string">&quot;HBBFT propose failed&quot;</span>))
     }
 
     <span class="kw">async fn </span>await_next_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;<span class="prelude-ty">Option</span>&lt;PeerMessage&gt;&gt; {
@@ -813,29 +815,7 @@
                     .handle_message(<span class="kw-2">&amp;</span>peer, peer_msg)
                     .expect(<span class="string">&quot;HBBFT handle message failed&quot;</span>);
 
-                <span class="kw">if </span>!step.fault_log.is_empty() {
-                    <span class="macro">warn!</span>(<span class="question-mark">?</span>step.fault_log);
-                }
-
-                <span class="kw">for </span>msg <span class="kw">in </span>step.messages {
-                    <span class="self">self</span>.connections
-                        .send(
-                            <span class="kw-2">&amp;</span>msg.target.peers(<span class="kw-2">&amp;</span><span class="self">self</span>.peers),
-                            EpochMessage::Continue(msg.message),
-                        )
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-                }
-
-                <span class="prelude-val">Ok</span>(step
-                    .output
-                    .into_iter()
-                    .map(|outcome| {
-                        <span class="comment">// FIXME: deal with faulty messages
-                        </span><span class="kw">let </span>(outcome, _ban_peers) =
-                            module_parse_outcome(outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules.decoders());
-                        outcome
-                    })
-                    .collect())
+                <span class="prelude-val">Ok</span>(<span class="self">self</span>.handle_step(step).<span class="kw">await</span><span class="question-mark">?</span>)
             }
             (<span class="kw">_</span>, EpochMessage::RejoinRequest(epoch)) =&gt; {
                 <span class="macro">info!</span>(<span class="string">&quot;Requested to run {} epochs&quot;</span>, epoch);
