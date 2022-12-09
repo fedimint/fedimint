@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
-    crane.url = "github:ipetkov/crane?rev=755acd231a7de182fdc772bee1b2a1f21d4ec9ed"; # https://github.com/ipetkov/crane/releases/tag/v0.7.0
+    crane.url = "github:ipetkov/crane?rev=5f353e7a4ff785d38ff0f0f2b80f29a65b6f14cb"; # https://github.com/ipetkov/crane/pull/183
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -313,6 +313,9 @@
               cp -r ${./.cargo} -T $out/.cargo
             '';
           };
+
+          # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
+          installCargoArtifactsMode = "use-zstd";
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
           ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
