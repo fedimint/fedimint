@@ -28,6 +28,7 @@ jobs:
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
@@ -46,6 +47,7 @@ jobs:
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
       - name: Build workspace
         run: nix build -L .#debug.workspaceBuild
@@ -92,6 +94,7 @@ jobs:
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
       - name: Build and run tests with Code Coverage
         run: nix build -L .#debug.workspaceCov
@@ -123,6 +126,7 @@ jobs:
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
       - name: Build mint-client for ${{ matrix.build }}
         run: nix build -L .#cross.${{ matrix.build }}.mint-client
@@ -140,6 +144,7 @@ jobs:
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
       - name: Build fedimintd container
         run: |
