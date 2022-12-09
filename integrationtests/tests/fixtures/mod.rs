@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::env;
+use std::future::Future;
 use std::iter::repeat;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -103,6 +104,33 @@ pub struct Fixtures {
     pub gateway: GatewayTest,
     pub lightning: Box<dyn LightningTest>,
     pub task_group: TaskGroup,
+}
+
+/// Helper for generating fixtures, passing them into test code, then shutting down the task thread
+/// when the test is complete.
+pub async fn test<B>(
+    num_peers: u16,
+    f: impl FnOnce(
+        FederationTest,
+        UserTest<UserClientConfig>,
+        Box<dyn BitcoinTest>,
+        GatewayTest,
+        Box<dyn LightningTest>,
+    ) -> B,
+) -> anyhow::Result<()>
+where
+    B: Future<Output = ()>,
+{
+    let fixtures = fixtures(num_peers).await?;
+    f(
+        fixtures.fed,
+        fixtures.user,
+        fixtures.bitcoin,
+        fixtures.gateway,
+        fixtures.lightning,
+    )
+    .await;
+    fixtures.task_group.shutdown_join_all().await
 }
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
@@ -420,6 +448,13 @@ impl GatewayTest {
 pub struct UserTest<C> {
     pub client: Arc<Client<C>>,
     pub config: C,
+}
+
+impl UserTest<UserClientConfig> {
+    pub async fn new_user_with_peers(&self, peers: Vec<PeerId>) -> UserTest<UserClientConfig> {
+        let user = create_user_client(self.config.clone(), peers, MemDatabase::new().into()).await;
+        UserTest::new(Arc::new(user))
+    }
 }
 
 impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
