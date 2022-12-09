@@ -1380,7 +1380,7 @@
 ///
 /// In this form it can only be validated, not spent since for that the corresponding secret
 /// spend key is required.
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Note(<span class="kw">pub </span>Nonce, <span class="kw">pub </span>tbs::Signature);
 
 <span class="doccomment">/// Unique ID of a mint note.
@@ -1398,7 +1398,7 @@
 ///
 /// By signing it, the mint commits to the underlying (unblinded) [`Nonce`] as valid
 /// (until eventually spent).
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BlindNonce(<span class="kw">pub </span>tbs::BlindedMessage);
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -1657,7 +1657,7 @@
             .filter_map(|(amount, coin)| {
                 <span class="kw">let </span>amount_key = <span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount)<span class="question-mark">?</span>;
                 <span class="kw">if </span>coin.verify(<span class="kw-2">*</span>amount_key) {
-                    <span class="prelude-val">Some</span>((coin.clone(), amount))
+                    <span class="prelude-val">Some</span>((<span class="kw-2">*</span>coin, amount))
                 } <span class="kw">else </span>{
                     <span class="prelude-val">None
                 </span>}

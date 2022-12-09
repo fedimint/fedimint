@@ -1109,7 +1109,7 @@
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
 /// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
-</span><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequest {
     <span class="doccomment">/// Spend key from which the coin nonce (corresponding public key) is derived
     </span>spend_key: KeyPair,
@@ -1146,14 +1146,14 @@
 ///
 /// Keeps all the data to generate [`SpendableNote`]s once the
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-</span><span class="attr">#[derive(Debug, Clone, Default, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequests {
     <span class="doccomment">/// Finalization data for all coin outputs in this request
     </span>coins: TieredMulti&lt;NoteIssuanceRequest&gt;,
 }
 
 <span class="doccomment">/// A [`Note`] with associated secret key that allows to proof ownership (spend it)
-</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableNote {
     <span class="kw">pub </span>note: Note,
     <span class="attr">#[serde(deserialize_with = <span class="string">&quot;deserialize_key_pair&quot;</span>)]

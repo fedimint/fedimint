@@ -100,7 +100,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::mint::Nonce;
-<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::{NoteIssuanceRequests, SpendableNote};
@@ -159,7 +159,7 @@
     <span class="kw">type </span>Value = TieredMulti&lt;SpendableNote&gt;;
 }
 
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+<span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>OutputFinalizationKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputFinalizationKey {

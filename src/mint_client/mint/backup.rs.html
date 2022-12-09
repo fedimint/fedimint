@@ -719,6 +719,33 @@
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
 <a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -857,6 +884,12 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
         <span class="kw">let </span>notes = <span class="self">self</span>.get_available_notes(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
 
+        <span class="kw">let </span>pending_notes: Vec&lt;<span class="kw">_</span>&gt; = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
+            .collect();
+
         <span class="kw">let </span><span class="kw-2">mut </span>idxes = <span class="macro">vec!</span>[];
         <span class="kw">for </span><span class="kw-2">&amp;</span>amount <span class="kw">in </span><span class="self">self</span>.config.tbs_pks.tiers() {
             idxes.push((amount, <span class="self">self</span>.get_next_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>));
@@ -865,6 +898,7 @@
 
         <span class="prelude-val">Ok</span>(PlaintextEcashBackup {
             notes,
+            pending_notes,
             next_note_idx,
             epoch,
         })
@@ -952,7 +986,7 @@
             })
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>nonce_tracker = EcashRecoveryNonceTracker::from_backup(
+        <span class="kw">let </span><span class="kw-2">mut </span>nonce_tracker = EcashRecoveryTracker::from_backup(
             backup,
             <span class="self">self</span>.secret.clone(),
             <span class="number">1000</span>,
@@ -973,7 +1007,7 @@
             <span class="kw">for </span>(peer_id, items) <span class="kw">in </span><span class="kw-2">&amp;</span>epoch_history.outcome.items {
                 <span class="comment">// TODO: epoch history to contain rejected items, we should skip them here
                 </span><span class="kw">for </span>item <span class="kw">in </span>items {
-                    nonce_tracker.handle_consensus_item(peer_id, item);
+                    nonce_tracker.handle_consensus_item(<span class="kw-2">*</span>peer_id, item);
                 }
             }
         }
@@ -989,6 +1023,7 @@
 </span><span class="attr">#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PlaintextEcashBackup {
     notes: TieredMulti&lt;SpendableNote&gt;,
+    pending_notes: Vec&lt;(OutputFinalizationKey, NoteIssuanceRequests)&gt;,
     epoch: u64,
     next_note_idx: Tiered&lt;NoteIndex&gt;,
 }
@@ -1013,7 +1048,7 @@
         <span class="prelude-val">Ok</span>(bytes)
     }
 
-    <span class="doccomment">/// Decode from a plaintext (possibly aligned) message
+    <span class="doccomment">/// Decode from a plaintexet (possibly aligned) message
     </span><span class="kw">fn </span>decode(msg: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
             <span class="kw-2">&amp;mut &amp;</span>msg[..],
@@ -1050,8 +1085,14 @@
     }
 }
 
-<span class="doccomment">/// The state machine used for fast-fowarding backup from point when it was taken to the present time.
-</span><span class="kw">struct </span>EcashRecoveryNonceTracker {
+<span class="doccomment">/// The state machine used for fast-fowarding backup from point when it was taken to the present time
+/// by following epoch history items from the time the snapshot was taken.
+///
+/// The caller is responsible for creating it, and then feeding it in order all valid
+/// consensus items from the epoch history between time taken (or even somewhat before it) and
+/// present time.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>EcashRecoveryTracker {
     <span class="doccomment">/// Nonces that we track that are currently spendable.
     </span>spendable_note_by_nonce: HashMap&lt;Nonce, (Amount, SpendableNote)&gt;,
 
@@ -1108,7 +1149,7 @@
     </span>gap_limit: usize,
 }
 
-<span class="kw">impl </span>EcashRecoveryNonceTracker {
+<span class="kw">impl </span>EcashRecoveryTracker {
     <span class="kw">pub fn </span>from_backup(
         backup: PlaintextEcashBackup,
         mint_secret: DerivableSecret,
@@ -1124,7 +1165,25 @@
                 .map(|(amount, note)| (note.note.<span class="number">0</span>, (amount, note)))
                 .collect(),
             <span class="comment">// TODO: needs to get these in a backup as well
-            </span>pending_outputs: HashMap::default(),
+            </span>pending_outputs: backup
+                .pending_notes
+                .into_iter()
+                .map(|(finalization_key, issuance_requests)| {
+                    (
+                        finalization_key.<span class="number">0</span>,
+                        (
+                            issuance_requests
+                                .coins
+                                .iter_items()
+                                .map(|(amount, iss_req)| {
+                                    (amount, (iss_req.recover_blind_nonce().<span class="number">0</span>, <span class="prelude-val">Some</span>(<span class="kw-2">*</span>iss_req)))
+                                })
+                                .collect(),
+                            HashMap::default(),
+                        ),
+                    )
+                })
+                .collect(),
             pending_nonces: HashMap::default(),
             next_pending_note_idx: backup.next_note_idx.clone(),
             last_mined_nonce_idx: backup.next_note_idx,
@@ -1203,9 +1262,7 @@
 
                         <span class="kw">if </span>pending_amount == amount_from_output {
                             found.push((amount_from_output, (nonce.<span class="number">0</span>, <span class="prelude-val">Some</span>(issuance_request))));
-                            <span class="comment">// replenish pending pool with the nonce of the same amount
-
-                            </span>(found, missing, wrong)
+                            (found, missing, wrong)
                         } <span class="kw">else </span>{
                             <span class="comment">// put it back, incorrect amount
                             </span><span class="self">self</span>.pending_nonces
@@ -1273,14 +1330,11 @@
     /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the pending pool
     /// to always maintain at least `gap_limit` of pending onces in each amount tier.
     </span><span class="kw">fn </span>observe_nonce_idx_being_used(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: Amount, note_idx: NoteIndex) {
-        <span class="kw-2">*</span><span class="self">self
-            </span>.last_mined_nonce_idx
-            .get_mut(amount)
-            .expect(<span class="string">&quot;must have all amounts&quot;</span>) = max(
-            <span class="kw-2">*</span><span class="self">self
-                </span>.last_mined_nonce_idx
+        <span class="kw-2">*</span><span class="self">self</span>.last_mined_nonce_idx.entry(amount).or_default() = max(
+            <span class="self">self</span>.last_mined_nonce_idx
                 .get(amount)
-                .expect(<span class="string">&quot;must have all amounts&quot;</span>),
+                .copied()
+                .unwrap_or_default(),
             note_idx,
         );
 
@@ -1361,7 +1415,7 @@
                 .expect(<span class="string">&quot;must be in the map already&quot;</span>);
 
             <span class="kw">for </span>(item_i, (item_amt, item)) <span class="kw">in </span>output_data.iter_items().enumerate() {
-                <span class="kw">let </span>iss_request = <span class="kw">if let </span><span class="prelude-val">Some</span>(iss_request) = item.<span class="number">1</span>.clone() {
+                <span class="kw">let </span>iss_request = <span class="kw">if let </span><span class="prelude-val">Some</span>(iss_request) = item.<span class="number">1 </span>{
                     iss_request
                 } <span class="kw">else </span>{
                     <span class="comment">// Items without issuance request are ones we don&#39;t consider ours
@@ -1392,7 +1446,7 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>handle_consensus_item(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: <span class="kw-2">&amp;</span>PeerId, item: <span class="kw-2">&amp;</span>ConsensusItem) {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>handle_consensus_item(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, item: <span class="kw-2">&amp;</span>ConsensusItem) {
         <span class="kw">match </span>item {
             ConsensusItem::EpochInfo(<span class="kw">_</span>) =&gt; {}
             ConsensusItem::Transaction(tx) =&gt; {
@@ -1431,7 +1485,7 @@
                         .downcast_ref::&lt;MintOutputConfirmation&gt;()
                         .expect(<span class="string">&quot;mint key just checked&quot;</span>);
 
-                    <span class="self">self</span>.handle_output_confirmation(<span class="kw-2">*</span>peer_id, mint_item);
+                    <span class="self">self</span>.handle_output_confirmation(peer_id, mint_item);
                 }
             }
         }

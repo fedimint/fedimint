@@ -1415,6 +1415,12 @@
 <a href="#1415" id="1415">1415</a>
 <a href="#1416" id="1416">1416</a>
 <a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1605,6 +1611,12 @@
     }
 }
 
+<span class="kw">impl</span>&lt;T&gt; Client&lt;T&gt; {
+    <span class="kw">pub fn </span>mint_secret_static(root_secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; DerivableSecret {
+        root_secret.child_key(MINT_SECRET_CHILD_ID)
+    }
+}
+
 <span class="comment">// TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
 </span><span class="kw">impl</span>&lt;T: AsRef&lt;ClientConfig&gt; + Clone&gt; Client&lt;T&gt; {
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
@@ -1631,7 +1643,7 @@
                 .expect(<span class="string">&quot;needs mint module client config&quot;</span>),
             epoch_pk: <span class="self">self</span>.config.as_ref().epoch_pk,
             context: <span class="self">self</span>.context.clone(),
-            secret: <span class="self">self</span>.root_secret.child_key(MINT_SECRET_CHILD_ID),
+            secret: <span class="self">Self</span>::mint_secret_static(<span class="kw-2">&amp;</span><span class="self">self</span>.root_secret),
         }
     }
 
