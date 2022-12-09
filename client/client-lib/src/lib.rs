@@ -1310,9 +1310,9 @@ impl Debug for ClientSecret {
 /// modularized yet but we need the decoding functionality.
 fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::new([
-        (MODULE_KEY_LN, Decoder::from_typed(LightningModuleDecoder)),
-        (MODULE_KEY_WALLET, Decoder::from_typed(WalletModuleDecoder)),
-        (MODULE_KEY_MINT, Decoder::from_typed(MintModuleDecoder)),
+        (MODULE_KEY_LN, Decoder::from_typed(&LightningModuleDecoder)),
+        (MODULE_KEY_WALLET, Decoder::from_typed(&WalletModuleDecoder)),
+        (MODULE_KEY_MINT, Decoder::from_typed(&MintModuleDecoder)),
     ])
 }
 

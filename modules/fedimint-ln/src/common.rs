@@ -1,6 +1,6 @@
 use std::io;
 
-use fedimint_api::core::{ConsensusItem, Decoder, Input, Output, OutputOutcome, PluginDecode};
+use fedimint_api::core::{ConsensusItem, Input, Output, OutputOutcome, PluginDecode};
 use fedimint_api::encoding::Decodable;
 use fedimint_api::encoding::DecodeError;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -11,10 +11,6 @@ use crate::{LightningConsensusItem, LightningInput, LightningOutput, LightningOu
 pub struct LightningModuleDecoder;
 
 impl PluginDecode for LightningModuleDecoder {
-    fn clone_decoder() -> Decoder {
-        Decoder::from_typed(LightningModuleDecoder)
-    }
-
     fn decode_input(mut d: &mut dyn io::Read) -> Result<Input, DecodeError> {
         Ok(Input::from(LightningInput::consensus_decode(
             &mut d,

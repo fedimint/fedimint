@@ -323,8 +323,8 @@ impl ServerModulePlugin for Mint {
         MODULE_KEY_MINT
     }
 
-    fn decoder(&self) -> Self::Decoder {
-        MintModuleDecoder
+    fn decoder(&self) -> &'static Self::Decoder {
+        &MintModuleDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {

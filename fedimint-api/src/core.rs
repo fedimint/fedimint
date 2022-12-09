@@ -8,7 +8,6 @@ use std::any::Any;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::io::Read;
-use std::sync::Arc;
 
 pub use bitcoin::KeyPair;
 use fedimint_api::{
@@ -214,8 +213,6 @@ macro_rules! newtype_impl_display_passthrough {
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleKey`]s
 pub trait PluginDecode: Debug {
-    fn clone_decoder() -> Decoder;
-
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
@@ -230,8 +227,6 @@ pub trait PluginDecode: Debug {
 }
 
 pub trait ModuleDecode: Debug {
-    fn clone_decoder(&self) -> Decoder;
-
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
@@ -246,14 +241,15 @@ pub trait ModuleDecode: Debug {
 }
 
 // TODO: use macro again
-#[doc = " Decoder for module associated types"]
-pub struct Decoder(Arc<dyn ModuleDecode + Send + Sync + 'static>);
+/// Decoder for module associated types
+#[derive(Clone)]
+pub struct Decoder(&'static (dyn ModuleDecode + Send + Sync));
 
 impl std::ops::Deref for Decoder {
     type Target = dyn ModuleDecode + Send + Sync + 'static;
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-        &*self.0
+        self.0
     }
 }
 
@@ -263,20 +259,10 @@ impl std::fmt::Debug for Decoder {
     }
 }
 
-impl Clone for Decoder {
-    fn clone(&self) -> Self {
-        self.clone_decoder()
-    }
-}
-
 impl<T> ModuleDecode for T
 where
     T: PluginDecode + 'static,
 {
-    fn clone_decoder(&self) -> Decoder {
-        <Self as PluginDecode>::clone_decoder()
-    }
-
     fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
         <Self as PluginDecode>::decode_input(r)
     }
@@ -295,10 +281,6 @@ where
 }
 
 impl ModuleDecode for Decoder {
-    fn clone_decoder(&self) -> Decoder {
-        self.0.clone_decoder()
-    }
-
     fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
         self.0.decode_input(r)
     }
@@ -317,8 +299,10 @@ impl ModuleDecode for Decoder {
 }
 
 impl Decoder {
-    pub fn from_typed(decoder: impl PluginDecode + Send + Sync + 'static) -> Decoder {
-        Decoder(Arc::new(decoder))
+    /// Creates a static, type-erased decoder. Only call this a limited amout of times since it uses
+    /// `Box::leak` internally.
+    pub fn from_typed(decoder: &'static (impl PluginDecode + Send + Sync + 'static)) -> Decoder {
+        Decoder(decoder)
     }
 }
 

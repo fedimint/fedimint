@@ -23,7 +23,7 @@ use secp256k1::KeyPair;
 fn ln_decoders() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::new([(
         MODULE_KEY_LN,
-        Decoder::from_typed(fedimint_ln::common::LightningModuleDecoder),
+        Decoder::from_typed(&fedimint_ln::common::LightningModuleDecoder),
     )])
 }
 

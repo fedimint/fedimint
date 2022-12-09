@@ -389,8 +389,8 @@ impl ServerModulePlugin for Wallet {
         MODULE_KEY_WALLET
     }
 
-    fn decoder(&self) -> Self::Decoder {
-        WalletModuleDecoder
+    fn decoder(&self) -> &'static Self::Decoder {
+        &WalletModuleDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
