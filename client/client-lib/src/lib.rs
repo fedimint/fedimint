@@ -129,7 +129,7 @@ impl FromStr for FederationId {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserClientConfig(pub ClientConfig);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct GatewayClientConfig {
     pub client_config: ClientConfig,
     #[serde(with = "serde_keypair")]

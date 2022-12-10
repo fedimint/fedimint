@@ -127,10 +127,9 @@ impl LnGateway {
 
     // Webserver handler for requests to register a federation
     async fn handle_connect_federation(&self, payload: ConnectFedPayload) -> Result<()> {
-        let connect: WsFederationConnect =
-            serde_json::from_str(&payload.connect).map_err(|_| {
-                LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string"))
-            })?;
+        let connect: WsFederationConnect = serde_json::from_str(&payload.connect).map_err(|e| {
+            LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
+        })?;
 
         let node_pub_key = self
             .ln_rpc
