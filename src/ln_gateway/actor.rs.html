@@ -273,15 +273,15 @@
                 <span class="prelude-val">Ok</span>(client
                     .register_with_federation(client.config().into())
                     .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Failed to register with federation&quot;</span>))
+                    </span>.expect(<span class="string">&quot;Failed to connect with federation&quot;</span>))
             },
             Duration::from_secs(<span class="number">1</span>),
             <span class="number">5</span>,
         )
         .<span class="kw">await
         </span>{
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">info!</span>(<span class="string">&quot;Registered with federation&quot;</span>),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">warn!</span>(<span class="string">&quot;Failed to register with federation: {}&quot;</span>, e),
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">info!</span>(<span class="string">&quot;Connected with federation&quot;</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">warn!</span>(<span class="string">&quot;Failed to connect with federation: {}&quot;</span>, e),
         }
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ client })

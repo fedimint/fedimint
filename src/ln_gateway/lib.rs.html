@@ -393,9 +393,9 @@
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
-        rpc_server::run_webserver, BalancePayload, DepositAddressPayload, DepositPayload,
-        GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
-        RegisterFedPayload, WithdrawPayload,
+        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
+        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
+        ReceivePaymentPayload, WithdrawPayload,
     },
 };
 
@@ -445,8 +445,8 @@
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;Could not build federation client&quot;</span>);
 
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.register_federation(Arc::new(client)).<span class="kw">await </span>{
-                    <span class="macro">error!</span>(<span class="string">&quot;Failed to register federation: {}&quot;</span>, e);
+                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.connect_federation(Arc::new(client)).<span class="kw">await </span>{
+                    <span class="macro">error!</span>(<span class="string">&quot;Failed to connect federation: {}&quot;</span>, e);
                 }
             }
         } <span class="kw">else </span>{
@@ -468,7 +468,7 @@
     /// # Returns
     ///
     /// A `GatewayActor` that can be used to execute gateway functions for the federation
-    </span><span class="kw">pub async fn </span>register_federation(
+    </span><span class="kw">pub async fn </span>connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client: Arc&lt;GatewayClient&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;GatewayActor&gt;&gt; {
@@ -486,7 +486,7 @@
     }
 
     <span class="comment">// Webserver handler for requests to register a federation
-    </span><span class="kw">async fn </span>handle_register_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: RegisterFedPayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">async fn </span>handle_connect_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ConnectFedPayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>connect: WsFederationConnect =
             serde_json::from_str(<span class="kw-2">&amp;</span>payload.connect).map_err(|<span class="kw">_</span>| {
                 LnGatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid federation member string&quot;</span>))
@@ -511,8 +511,8 @@
                 </span>.expect(<span class="string">&quot;Failed to build gateway client&quot;</span>),
         );
 
-        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.register_federation(client.clone()).<span class="kw">await </span>{
-            <span class="macro">error!</span>(<span class="string">&quot;Failed to register federation: {}&quot;</span>, e);
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.connect_federation(client.clone()).<span class="kw">await </span>{
+            <span class="macro">error!</span>(<span class="string">&quot;Failed to connect federation: {}&quot;</span>, e);
         }
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.client_builder.save_config(client.config()) {
@@ -647,9 +647,9 @@
                     GatewayRequest::Info(inner) =&gt; {
                         inner.handle(|payload| <span class="self">self</span>.handle_get_info(payload)).<span class="kw">await</span>;
                     }
-                    GatewayRequest::RegisterFederation(inner) =&gt; {
+                    GatewayRequest::ConnectFederation(inner) =&gt; {
                         inner
-                            .handle(|payload| <span class="self">self</span>.handle_register_federation(payload))
+                            .handle(|payload| <span class="self">self</span>.handle_connect_federation(payload))
                             .<span class="kw">await</span>;
                     }
                     GatewayRequest::ReceivePayment(inner) =&gt; {

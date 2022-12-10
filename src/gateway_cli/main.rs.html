@@ -221,8 +221,8 @@
 <span class="kw">use </span>ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, DepositPayload,
-        RegisterFedPayload, WithdrawPayload,
+        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
+        DepositPayload, WithdrawPayload,
     },
 };
 <span class="kw">use </span>mint_client::{utils::from_hex, FederationId};
@@ -279,7 +279,7 @@
         </span>address: Address,
     },
     <span class="doccomment">/// Register federation with the gateway
-    </span>RegisterFed {
+    </span>ConnectFed {
         <span class="doccomment">/// ConnectInfo code to connect to the federation
         </span>connect: String,
     },
@@ -387,14 +387,14 @@
 
             print_response(response).<span class="kw">await</span>;
         }
-        Commands::RegisterFed { connect } =&gt; {
+        Commands::ConnectFed { connect } =&gt; {
             <span class="kw">let </span>response = client
-                .register_federation(
+                .connect_federation(
                     source_password(cli.rpcpassword),
-                    RegisterFedPayload { connect },
+                    ConnectFedPayload { connect },
                 )
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Failed to register federation&quot;</span>);
+                </span>.expect(<span class="string">&quot;Failed to connect federation&quot;</span>);
 
             print_response(response).<span class="kw">await</span>;
         }

@@ -128,8 +128,8 @@
 <span class="kw">use </span>tracing::instrument;
 
 <span class="kw">use super</span>::{
-    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRpcSender, InfoPayload,
-    RegisterFedPayload, WithdrawPayload,
+    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayRpcSender,
+    InfoPayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::LnGatewayError;
 
@@ -148,7 +148,7 @@
         .route(<span class="string">&quot;/address&quot;</span>, post(address))
         .route(<span class="string">&quot;/deposit&quot;</span>, post(deposit))
         .route(<span class="string">&quot;/withdraw&quot;</span>, post(withdraw))
-        .route(<span class="string">&quot;/register&quot;</span>, post(register))
+        .route(<span class="string">&quot;/connect&quot;</span>, post(connect))
         .layer(RequireAuthorizationLayer::bearer(<span class="kw-2">&amp;</span>authkey));
 
     <span class="kw">let </span>app = Router::new()
@@ -229,11 +229,11 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// Register a new federation
+<span class="doccomment">/// Connect a new federation
 </span><span class="attr">#[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>register(
+</span><span class="kw">async fn </span>connect(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
-    Json(payload): Json&lt;RegisterFedPayload&gt;,
+    Json(payload): Json&lt;ConnectFedPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, LnGatewayError&gt; {
     rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())

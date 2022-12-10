@@ -98,7 +98,7 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use super</span>::{
-    BalancePayload, DepositAddressPayload, DepositPayload, RegisterFedPayload, WithdrawPayload,
+    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
 
 <span class="kw">pub struct </span>RpcClient {
@@ -157,12 +157,12 @@
         <span class="self">self</span>.call(url, password, payload).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>register_federation(
+    <span class="kw">pub async fn </span>connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         password: String,
-        payload: RegisterFedPayload,
+        payload: ConnectFedPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Response, Error&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/register&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/connect&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
         <span class="self">self</span>.call(url, password, payload).<span class="kw">await
     </span>}
 
