@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ModuleConfigGenParams};
+use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ConfigGenParams};
 use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
@@ -109,7 +109,7 @@ fn trusted_dealer_gen(
         })
         .collect::<BTreeMap<_, _>>();
 
-    let module_cfg_gen_params = ModuleConfigGenParams {
+    let module_cfg_gen_params = ConfigGenParams {
         mint_amounts: params.amount_tiers.clone(),
         bitcoin_rpc: params.btc_rpc.clone(),
         other: BTreeMap::new(),

@@ -646,7 +646,7 @@ mod tests {
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
     use fedimint_api::backup::SignedBackupRequest;
-    use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::config::ConfigGenParams;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -784,9 +784,9 @@ mod tests {
             FakeFed::<Mint>::new(
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
-                &ModuleConfigGenParams {
+                &ConfigGenParams {
                     mint_amounts: vec![Amount::from_sats(1), Amount::from_sats(10)],
-                    ..ModuleConfigGenParams::fake_config_gen_params()
+                    ..ConfigGenParams::fake_config_gen_params()
                 },
                 &MintConfigGenerator,
             )

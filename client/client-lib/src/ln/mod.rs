@@ -342,7 +342,7 @@ mod tests {
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
     use fedimint_api::backup::SignedBackupRequest;
-    use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::config::ConfigGenParams;
     use fedimint_api::core::OutputOutcome;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -487,7 +487,7 @@ mod tests {
             FakeFed::<LightningModule>::new(
                 4,
                 |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-                &ModuleConfigGenParams::fake_config_gen_params(),
+                &ConfigGenParams::fake_config_gen_params(),
                 &LightningModuleConfigGen,
             )
             .await

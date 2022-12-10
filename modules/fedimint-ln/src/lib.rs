@@ -24,7 +24,7 @@ use config::{FeeConsensus, LightningModuleClientConfig};
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
@@ -229,7 +229,7 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        _params: &ModuleConfigGenParams,
+        _params: &ConfigGenParams,
     ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
         let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);
         let pks = sks.public_keys();
@@ -268,7 +268,7 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
-        _params: &ModuleConfigGenParams,
+        _params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);

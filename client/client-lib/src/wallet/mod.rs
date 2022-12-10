@@ -199,7 +199,7 @@ mod tests {
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
     use fedimint_api::backup::SignedBackupRequest;
-    use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::config::ConfigGenParams;
     use fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -353,7 +353,7 @@ mod tests {
                         .await?)
                     }
                 },
-                &ModuleConfigGenParams::fake_config_gen_params(),
+                &ConfigGenParams::fake_config_gen_params(),
                 &WalletConfigGenerator,
             )
             .await

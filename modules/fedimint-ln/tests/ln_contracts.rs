@@ -1,6 +1,6 @@
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_api::config::ModuleConfigGenParams;
+use fedimint_api::config::ConfigGenParams;
 use fedimint_api::core::{Decoder, MODULE_KEY_LN};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{Amount, OutPoint};
@@ -34,7 +34,7 @@ async fn test_account() {
     let mut fed = FakeFed::<LightningModule>::new(
         4,
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-        &ModuleConfigGenParams::fake_config_gen_params(),
+        &ConfigGenParams::fake_config_gen_params(),
         &LightningModuleConfigGen,
     )
     .await
@@ -84,7 +84,7 @@ async fn test_outgoing() {
     let mut fed = FakeFed::<LightningModule>::new(
         4,
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-        &ModuleConfigGenParams::fake_config_gen_params(),
+        &ConfigGenParams::fake_config_gen_params(),
         &LightningModuleConfigGen,
     )
     .await
@@ -183,7 +183,7 @@ async fn test_incoming() {
     let mut fed = FakeFed::<LightningModule>::new(
         4,
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-        &ModuleConfigGenParams::fake_config_gen_params(),
+        &ConfigGenParams::fake_config_gen_params(),
         &LightningModuleConfigGen,
     )
     .await

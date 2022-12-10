@@ -64,7 +64,7 @@ impl ClientConfig {
 ///
 /// Candidate for re-designing when the modularization effort is
 /// complete.
-pub struct ModuleConfigGenParams {
+pub struct ConfigGenParams {
     pub mint_amounts: Vec<Amount>,
     pub bitcoin_rpc: BitcoindRpcCfg,
 
@@ -72,12 +72,12 @@ pub struct ModuleConfigGenParams {
     pub other: BTreeMap<String, serde_json::Value>,
 }
 
-impl ModuleConfigGenParams {
+impl ConfigGenParams {
     /// Default & fake config gen params for things like tests
     ///
     /// TODO: Possibly this does not belong here.
-    pub fn fake_config_gen_params() -> ModuleConfigGenParams {
-        ModuleConfigGenParams {
+    pub fn fake_config_gen_params() -> ConfigGenParams {
+        ConfigGenParams {
             mint_amounts: [1, 10, 100, 1000, 10000, 100000, 1000000]
                 .into_iter()
                 .map(Amount::from_msats)

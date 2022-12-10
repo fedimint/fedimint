@@ -9,7 +9,7 @@ use db::{EcashBackupKey, EcashBackupValue};
 use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
+    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
@@ -134,7 +134,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
     ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
         let tbs_keys = params
             .mint_amounts
@@ -203,7 +203,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let mut dkg = DkgRunner::multi(
@@ -1073,7 +1073,7 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+    use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
     use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
@@ -1088,9 +1088,9 @@ mod test {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
         let (mint_cfg, client_cfg) = MintConfigGenerator.trusted_dealer_gen(
             &peers,
-            &ModuleConfigGenParams {
+            &ConfigGenParams {
                 mint_amounts: vec![Amount::from_sats(1)],
-                ..ModuleConfigGenParams::fake_config_gen_params()
+                ..ConfigGenParams::fake_config_gen_params()
             },
         );
 

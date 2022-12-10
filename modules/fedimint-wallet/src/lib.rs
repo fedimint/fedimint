@@ -19,8 +19,7 @@ use bitcoin::{PackedLockTime, Sequence};
 use config::WalletClientConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
@@ -220,7 +219,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
     ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
         const FINALITY_DELAY: u32 = 10;
 
@@ -279,7 +278,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let secp = secp256k1::Secp256k1::new();

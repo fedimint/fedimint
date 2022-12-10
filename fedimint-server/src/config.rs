@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap};
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
-    ServerModuleConfig, TypedServerModuleConfig,
+    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -192,7 +192,7 @@ impl ServerConfig {
 
         let peer0 = &params[&PeerId::from(0)];
 
-        let module_cfg_gen_params = ModuleConfigGenParams {
+        let module_cfg_gen_params = ConfigGenParams {
             mint_amounts: ServerConfigParams::gen_denominations(peer0.max_denomination),
             // TODO: FIXME: meh
             bitcoin_rpc: BitcoindRpcCfg {
@@ -293,7 +293,7 @@ impl ServerConfig {
         let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
 
-        let module_cfg_gen_params = ModuleConfigGenParams {
+        let module_cfg_gen_params = ConfigGenParams {
             mint_amounts: ServerConfigParams::gen_denominations(params.max_denomination),
             bitcoin_rpc: BitcoindRpcCfg {
                 btc_rpc_address: params.bitcoind_rpc.clone(),
