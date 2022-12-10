@@ -105,7 +105,6 @@ impl MintClient {
 
     /// Static version of [`Self::get_derived_backup_encryption_key`] for testing without creating whole `MintClient`
     fn get_derived_backup_encryption_key_static(secret: &DerivableSecret) -> aead::LessSafeKey {
-        // TODO: Do we need that one derivation level? This key is already derived for the mint itself, and internally another kdf will be done with key type tag.
         aead::LessSafeKey::new(
             secret
                 .child_key(ChildId(BACKUP_CHILD_ID))
@@ -416,7 +415,6 @@ impl EcashRecoveryTracker {
                 .into_iter()
                 .map(|(amount, note)| (note.note.0, (amount, note)))
                 .collect(),
-            // TODO: needs to get these in a backup as well
             pending_outputs: backup
                 .pending_notes
                 .into_iter()
