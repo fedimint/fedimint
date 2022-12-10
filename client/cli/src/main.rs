@@ -103,6 +103,8 @@ enum CliOutput {
     SwitchGateway {
         new_gateway: Value,
     },
+
+    Backup,
 }
 
 impl fmt::Display for CliOutput {
@@ -274,6 +276,23 @@ enum Command {
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
+
+    /// Upload the (encrypted) snapshot of mint notes to federation
+    Backup,
+
+    /// Restore the previously created backup of mint notes (with `backup` command)
+    Restore {
+        /// The amount of nonces to look ahead when scanning epoch history (per amount tier)
+        ///
+        /// Larger values might make the restore initialization slower and memory usage
+        /// slightly higher, but help restore all mint notes in some rare situations.
+        #[clap(long = "gap-limit", default_value = "100")]
+        gap_limit: usize,
+    },
+
+    /// Wipe the notes data from the DB. Useful for testing backup & restore
+    #[clap(hide = true)]
+    WipeNotes,
 }
 
 trait ErrorHandler<T, E> {
@@ -653,5 +672,33 @@ async fn handle_command(
                 )),
             }
         }
+        Command::Backup => match client.mint_client().back_up_ecash_to_federation().await {
+            Ok(_) => Ok(CliOutput::Backup),
+            Err(e) => Err(CliError::from(
+                CliErrorKind::GeneralFederationError,
+                "failed",
+                Some(e.into()),
+            )),
+        },
+        Command::Restore { gap_limit } => match client
+            .mint_client()
+            .restore_ecash_from_federation(gap_limit)
+            .await
+        {
+            Ok(_) => Ok(CliOutput::Backup),
+            Err(e) => Err(CliError::from(
+                CliErrorKind::GeneralFederationError,
+                "failed",
+                Some(e.into()),
+            )),
+        },
+        Command::WipeNotes => match client.mint_client().wipe_notes().await {
+            Ok(_) => Ok(CliOutput::Backup),
+            Err(e) => Err(CliError::from(
+                CliErrorKind::GeneralFederationError,
+                "failed",
+                Some(e.into()),
+            )),
+        },
     }
 }

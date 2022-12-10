@@ -91,6 +91,15 @@ fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
 
 impl std::fmt::Debug for DerivableSecret {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DerivableSecret")
+        write!(f, "DerivableSecret")?;
+        write!(
+            f,
+            "#{}",
+            // Note: bothers me that `hex` can't avoid allocating here :shrug:
+            hex::encode(
+                self.kdf
+                    .derive::<8>(b"just a debug fingerprint derivation salt")
+            )
+        )
     }
 }

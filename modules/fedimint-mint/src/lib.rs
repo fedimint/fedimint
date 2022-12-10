@@ -41,7 +41,7 @@ use tbs::{
 };
 use thiserror::Error;
 use threshold_crypto::group::Curve;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::common::MintModuleDecoder;
 use crate::config::MintConfig;
@@ -178,6 +178,13 @@ impl FederationModuleConfigGen for MintConfigGenerator {
                 .map(|(amount, (pk, _, _))| (amount, pk))
                 .collect(),
             fee_consensus: FeeConsensus::default(),
+            peer_tbs_pks: mint_cfg
+                .iter()
+                .next()
+                .expect("must have at least one element")
+                .1
+                .peer_tbs_pks
+                .clone(),
         };
 
         (
@@ -681,10 +688,9 @@ impl ServerModulePlugin for Mint {
             },
             api_endpoint! {
                 "/recover",
-                async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Vec<u8> {
-                    module
-                        .handle_recover_request(&mut dbtx, id).await
-                        .ok_or_else(|| ApiError::not_found(String::from("Backup not found")))
+                async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Option<String> {
+                    Ok(module
+                        .handle_recover_request(&mut dbtx, id).await.map(hex::encode))
                 }
             },
         ]
@@ -701,16 +707,19 @@ impl Mint {
             .verify_valid(SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
 
+        debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request");
         if let Some(prev) = dbtx
             .get_value(&EcashBackupKey(request.id))
             .await
             .expect("DB error")
         {
             if request.timestamp <= prev.timestamp {
+                debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request with old timestamp - ignoring");
                 return Err(ApiError::bad_request("timestamp too small".into()));
             }
         }
 
+        info!(id = %request.id, len = request.payload.len(), "Storing new user e-cash backup");
         dbtx.insert_entry(
             &EcashBackupKey(request.id),
             &EcashBackupValue {

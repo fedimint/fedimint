@@ -1,6 +1,7 @@
 pub mod db;
 
 use std::borrow::Cow;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -90,6 +91,11 @@ impl NoteIndex {
     }
 }
 
+impl fmt::Display for NoteIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 /// Single [`Note`] issuance request to the mint.
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
@@ -362,6 +368,8 @@ impl MintClient {
         amount: Amount,
         note_idx: NoteIndex,
     ) -> DerivableSecret {
+        assert_eq!(secret.level(), 1);
+        debug!(?secret, %amount, %note_idx, "Deriving new mint note");
         secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
             .child_key(ChildId(amount.msats))
@@ -639,7 +647,7 @@ fn deserialize_key_pair<'de, D: serde::Deserializer<'de>>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -770,7 +778,7 @@ mod tests {
         async fn download_ecash_backup(
             &self,
             _id: &secp256k1::XOnlyPublicKey,
-        ) -> crate::api::Result<Vec<u8>> {
+        ) -> crate::api::Result<Option<Vec<u8>>> {
             unimplemented!()
         }
     }
@@ -957,6 +965,7 @@ mod tests {
             config: MintClientConfig {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
+                peer_tbs_pks: BTreeMap::default(),
             },
             context: Arc::new(ClientContext {
                 db: db.into(),
@@ -993,7 +1002,7 @@ mod tests {
                 let output = t.join().unwrap();
                 // Most threads will have produces far less than ITERATIONS items notes due to
                 // database transactions failing
-                dbg!(output.len());
+                output.len();
                 output
             })
             .collect::<Vec<_>>();

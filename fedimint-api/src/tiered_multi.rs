@@ -88,6 +88,12 @@ impl<T> TieredMulti<T> {
             .iter()
             .flat_map(|(amt, coins)| coins.iter().map(move |c| (*amt, c)))
     }
+    // Note: order of the elements is important here: from lowest tiers to highest, then in order of elements in the Vec
+    pub fn into_iter_items(self) -> impl Iterator<Item = (Amount, T)> + DoubleEndedIterator {
+        self.0
+            .into_iter()
+            .flat_map(|(amt, coins)| coins.into_iter().map(move |c| (amt, c)))
+    }
 
     pub fn check_tiers<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
         match self.0.keys().find(|&amt| keys.get(*amt).is_none()) {

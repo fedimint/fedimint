@@ -968,6 +968,7 @@ dependencies = [
  "counter",
  "fedimint-api",
  "futures",
+ "hex",
  "impl-tools",
  "itertools",
  "rand",

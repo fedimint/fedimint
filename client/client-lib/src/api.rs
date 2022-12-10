@@ -88,7 +88,10 @@ pub trait IFederationApi: Debug + Send + Sync {
     async fn upload_ecash_backup(&self, request: &SignedBackupRequest) -> Result<()>;
 
     /// Download ecash (encrypted) backup from mint to safekeep
-    async fn download_ecash_backup(&self, id: &secp256k1::XOnlyPublicKey) -> Result<Vec<u8>>;
+    async fn download_ecash_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> Result<Option<Vec<u8>>>;
 }
 
 dyn_newtype_define! {
@@ -375,8 +378,11 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
         .await
     }
 
-    async fn download_ecash_backup(&self, id: &secp256k1::XOnlyPublicKey) -> Result<Vec<u8>> {
-        let hex_str: String = self
+    async fn download_ecash_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> Result<Option<Vec<u8>>> {
+        let hex_str_opt: Option<String> = self
             .request(
                 "/mint/recover",
                 id,
@@ -385,7 +391,13 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
             )
             .await?;
 
-        Ok(hex::decode(&hex_str).map_err(|e| ApiError::InvalidResponse(e.to_string()))?)
+        if let Some(hex_str) = hex_str_opt {
+            Ok(Some(
+                hex::decode(&hex_str).map_err(|e| ApiError::InvalidResponse(e.to_string()))?,
+            ))
+        } else {
+            Ok(None)
+        }
     }
 }
 
