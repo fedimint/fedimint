@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ModuleConfigGenParams, Node};
+use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ModuleConfigGenParams};
 use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
@@ -163,34 +163,7 @@ fn trusted_dealer_gen(
         })
         .collect();
 
-    let client_config = ClientConfig {
-        federation_name: params.federation_name.clone(),
-        nodes: peers
-            .iter()
-            .map(|&peer| {
-                let index = u16::from(peer);
-                let s = format!(
-                    "ws://{}:{}",
-                    hostnames[index as usize].clone(),
-                    api_base_port
-                );
-                let url = Url::parse(&s).expect("Could not parse URL");
-                Node {
-                    url,
-                    name: params.guardians[index as usize].name.clone(),
-                }
-            })
-            .collect(),
-        epoch_pk: server_config
-            .get(&peers[0])
-            .expect("must have at least one peer")
-            .epoch_pk_set
-            .public_key(),
-        modules: module_configs
-            .iter()
-            .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))
-            .collect(),
-    };
+    let client_config = server_config.values().next().unwrap().to_client_config();
 
     (server_config, client_config)
 }
