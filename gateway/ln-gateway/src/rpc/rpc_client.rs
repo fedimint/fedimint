@@ -5,7 +5,7 @@ use serde::Serialize;
 use url::Url;
 
 use super::{
-    BalancePayload, DepositAddressPayload, DepositPayload, RegisterFedPayload, WithdrawPayload,
+    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
 
 pub struct RpcClient {
@@ -64,12 +64,12 @@ impl RpcClient {
         self.call(url, password, payload).await
     }
 
-    pub async fn register_federation(
+    pub async fn connect_federation(
         &self,
         password: String,
-        payload: RegisterFedPayload,
+        payload: ConnectFedPayload,
     ) -> Result<Response, Error> {
-        let url = self.base_url.join("/register").expect("invalid base url");
+        let url = self.base_url.join("/connect").expect("invalid base url");
         self.call(url, password, payload).await
     }
 

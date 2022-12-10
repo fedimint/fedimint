@@ -33,9 +33,9 @@ use crate::{
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
-        rpc_server::run_webserver, BalancePayload, DepositAddressPayload, DepositPayload,
-        GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
-        RegisterFedPayload, WithdrawPayload,
+        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
+        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
+        ReceivePaymentPayload, WithdrawPayload,
     },
 };
 
@@ -85,8 +85,8 @@ impl LnGateway {
                     .await
                     .expect("Could not build federation client");
 
-                if let Err(e) = self.register_federation(Arc::new(client)).await {
-                    error!("Failed to register federation: {}", e);
+                if let Err(e) = self.connect_federation(Arc::new(client)).await {
+                    error!("Failed to connect federation: {}", e);
                 }
             }
         } else {
@@ -108,7 +108,7 @@ impl LnGateway {
     /// # Returns
     ///
     /// A `GatewayActor` that can be used to execute gateway functions for the federation
-    pub async fn register_federation(
+    pub async fn connect_federation(
         &self,
         client: Arc<GatewayClient>,
     ) -> Result<Arc<GatewayActor>> {
@@ -126,7 +126,7 @@ impl LnGateway {
     }
 
     // Webserver handler for requests to register a federation
-    async fn handle_register_federation(&self, payload: RegisterFedPayload) -> Result<()> {
+    async fn handle_connect_federation(&self, payload: ConnectFedPayload) -> Result<()> {
         let connect: WsFederationConnect =
             serde_json::from_str(&payload.connect).map_err(|_| {
                 LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string"))
@@ -151,8 +151,8 @@ impl LnGateway {
                 .expect("Failed to build gateway client"),
         );
 
-        if let Err(e) = self.register_federation(client.clone()).await {
-            error!("Failed to register federation: {}", e);
+        if let Err(e) = self.connect_federation(client.clone()).await {
+            error!("Failed to connect federation: {}", e);
         }
 
         if let Err(e) = self.client_builder.save_config(client.config()) {
@@ -287,9 +287,9 @@ impl LnGateway {
                     GatewayRequest::Info(inner) => {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
                     }
-                    GatewayRequest::RegisterFederation(inner) => {
+                    GatewayRequest::ConnectFederation(inner) => {
                         inner
-                            .handle(|payload| self.handle_register_federation(payload))
+                            .handle(|payload| self.handle_connect_federation(payload))
                             .await;
                     }
                     GatewayRequest::ReceivePayment(inner) => {

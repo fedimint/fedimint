@@ -6,8 +6,8 @@ use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        rpc_client::RpcClient, BalancePayload, DepositAddressPayload, DepositPayload,
-        RegisterFedPayload, WithdrawPayload,
+        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
+        DepositPayload, WithdrawPayload,
     },
 };
 use mint_client::{utils::from_hex, FederationId};
@@ -64,7 +64,7 @@ pub enum Commands {
         address: Address,
     },
     /// Register federation with the gateway
-    RegisterFed {
+    ConnectFed {
         /// ConnectInfo code to connect to the federation
         connect: String,
     },
@@ -172,14 +172,14 @@ async fn main() {
 
             print_response(response).await;
         }
-        Commands::RegisterFed { connect } => {
+        Commands::ConnectFed { connect } => {
             let response = client
-                .register_federation(
+                .connect_federation(
                     source_password(cli.rpcpassword),
-                    RegisterFedPayload { connect },
+                    ConnectFedPayload { connect },
                 )
                 .await
-                .expect("Failed to register federation");
+                .expect("Failed to connect federation");
 
             print_response(response).await;
         }

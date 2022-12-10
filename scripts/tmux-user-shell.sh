@@ -23,7 +23,7 @@ echo Funding user e-cash wallet ...
 scripts/pegin.sh 10000.0 > /dev/null 2>&1
 
 echo Connecting federation to gateway
-gw_register_fed
+gw_connect_fed
 
 echo Funding gateway e-cash wallet ...
 scripts/pegin.sh 20000.0 1 > /dev/null 2>&1
