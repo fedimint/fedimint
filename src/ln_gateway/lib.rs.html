@@ -357,7 +357,6 @@
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -487,10 +486,9 @@
 
     <span class="comment">// Webserver handler for requests to register a federation
     </span><span class="kw">async fn </span>handle_connect_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ConnectFedPayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>connect: WsFederationConnect =
-            serde_json::from_str(<span class="kw-2">&amp;</span>payload.connect).map_err(|<span class="kw">_</span>| {
-                LnGatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid federation member string&quot;</span>))
-            })<span class="question-mark">?</span>;
+        <span class="kw">let </span>connect: WsFederationConnect = serde_json::from_str(<span class="kw-2">&amp;</span>payload.connect).map_err(|e| {
+            LnGatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid federation member string {}&quot;</span>, e))
+        })<span class="question-mark">?</span>;
 
         <span class="kw">let </span>node_pub_key = <span class="self">self
             </span>.ln_rpc

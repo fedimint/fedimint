@@ -191,6 +191,12 @@
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
 <a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     fs::File,
@@ -336,19 +342,25 @@
     }
 
     <span class="kw">fn </span>save_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>federation_id = FederationId(config.client_config.federation_name.clone());
+        <span class="kw">let </span>hash = FederationId(config.client_config.federation_name.clone()).hash();
+        <span class="kw">let </span>path: PathBuf = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{}.json&quot;</span>, hash.clone()));
 
-        <span class="kw">let </span>path: PathBuf = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{}.json&quot;</span>, federation_id.hash()));
+        <span class="kw">if </span>Path::new(<span class="kw-2">&amp;</span>path).is_file() {
+            <span class="kw">if </span>config
+                == load_from_file::&lt;GatewayClientConfig&gt;(<span class="kw-2">&amp;</span>path)
+                    .expect(<span class="string">&quot;Could not load existing gateway client config&quot;</span>)
+            {
+                <span class="macro">debug!</span>(<span class="string">&quot;Existing gateway client config has not changed&quot;</span>);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
 
-        <span class="kw">if </span>!Path::new(<span class="kw-2">&amp;</span>path).is_file() {
-            <span class="macro">debug!</span>(<span class="string">&quot;Creating new gateway cfg file at {}&quot;</span>, path.display());
-            <span class="kw">let </span>file = File::create(path).expect(<span class="string">&quot;Could not create gateway cfg file&quot;</span>);
-            serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>config).expect(<span class="string">&quot;Could not write gateway cfg&quot;</span>);
-        } <span class="kw">else </span>{
-            <span class="macro">debug!</span>(<span class="string">&quot;Gateway cfg file already exists at {}&quot;</span>, path.display());
-            <span class="kw">let </span>file = File::open(path).expect(<span class="string">&quot;Could not load gateway cfg file&quot;</span>);
-            serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>config).expect(<span class="string">&quot;Could not write gateway cfg&quot;</span>);
-        }
+            <span class="macro">panic!</span>(<span class="string">&quot;Attempted to overwrite existing gateway client config&quot;</span>)
+            <span class="comment">// TODO: Issue 1057: Safe persistence and migration of gateway federation config
+        </span>}
+
+        <span class="macro">debug!</span>(<span class="string">&quot;Saving gateway cfg in {}&quot;</span>, path.display());
+        <span class="kw">let </span>file = File::create(path).expect(<span class="string">&quot;Could not create gateway cfg file&quot;</span>);
+        serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>config).expect(<span class="string">&quot;Could not write gateway cfg&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())
     }

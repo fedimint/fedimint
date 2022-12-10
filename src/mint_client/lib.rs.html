@@ -1552,7 +1552,7 @@
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>UserClientConfig(<span class="kw">pub </span>ClientConfig);
 
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>GatewayClientConfig {
     <span class="kw">pub </span>client_config: ClientConfig,
     <span class="attr">#[serde(with = <span class="string">&quot;serde_keypair&quot;</span>)]
