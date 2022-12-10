@@ -143,19 +143,25 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
     }
 
     fn save_config(&self, config: GatewayClientConfig) -> Result<()> {
-        let federation_id = FederationId(config.client_config.federation_name.clone());
+        let hash = FederationId(config.client_config.federation_name.clone()).hash();
+        let path: PathBuf = self.work_dir.join(format!("{}.json", hash.clone()));
 
-        let path: PathBuf = self.work_dir.join(format!("{}.json", federation_id.hash()));
+        if Path::new(&path).is_file() {
+            if config
+                == load_from_file::<GatewayClientConfig>(&path)
+                    .expect("Could not load existing gateway client config")
+            {
+                debug!("Existing gateway client config has not changed");
+                return Ok(());
+            }
 
-        if !Path::new(&path).is_file() {
-            debug!("Creating new gateway cfg file at {}", path.display());
-            let file = File::create(path).expect("Could not create gateway cfg file");
-            serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
-        } else {
-            debug!("Gateway cfg file already exists at {}", path.display());
-            let file = File::open(path).expect("Could not load gateway cfg file");
-            serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
+            panic!("Attempted to overwrite existing gateway client config")
+            // TODO: Issue 1057: Safe persistence and migration of gateway federation config
         }
+
+        debug!("Saving gateway cfg in {}", path.display());
+        let file = File::create(path).expect("Could not create gateway cfg file");
+        serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
 
         Ok(())
     }
