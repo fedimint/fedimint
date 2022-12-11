@@ -656,7 +656,9 @@ mod tests {
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     use fedimint_core::modules::mint::config::MintClientConfig;
-    use fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
+    use fedimint_core::modules::mint::{
+        Mint, MintConfigGenParams, MintConfigGenerator, MintOutput,
+    };
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::transaction::legacy::Input;
@@ -784,10 +786,9 @@ mod tests {
             FakeFed::<Mint>::new(
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
-                &ConfigGenParams {
+                &ConfigGenParams::new().attach(MintConfigGenParams {
                     mint_amounts: vec![Amount::from_sats(1), Amount::from_sats(10)],
-                    ..ConfigGenParams::fake_config_gen_params()
-                },
+                }),
                 &MintConfigGenerator,
             )
             .await

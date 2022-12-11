@@ -487,7 +487,7 @@ mod tests {
             FakeFed::<LightningModule>::new(
                 4,
                 |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-                &ConfigGenParams::fake_config_gen_params(),
+                &ConfigGenParams::new(),
                 &LightningModuleConfigGen,
             )
             .await

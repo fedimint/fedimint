@@ -4,10 +4,10 @@ use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ConfigGenParams};
 use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
-use fedimint_core::modules::mint::MintConfigGenerator;
+use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
 use fedimint_server::config::{gen_cert_and_key, Peer as ServerPeer, ServerConfig};
 use fedimint_server::net::peers::ConnectionConfig;
-use fedimint_wallet::WalletConfigGenerator;
+use fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use threshold_crypto::serde_impl::SerdeSecret;
@@ -109,11 +109,15 @@ fn trusted_dealer_gen(
         })
         .collect::<BTreeMap<_, _>>();
 
-    let module_cfg_gen_params = ConfigGenParams {
-        mint_amounts: params.amount_tiers.clone(),
-        bitcoin_rpc: params.btc_rpc.clone(),
-        other: BTreeMap::new(),
-    };
+    let module_cfg_gen_params = ConfigGenParams::new()
+        .attach(WalletConfigGenParams {
+            network: bitcoin::network::constants::Network::Regtest,
+            bitcoin_rpc: params.btc_rpc.clone(),
+            finality_delay: 10,
+        })
+        .attach(MintConfigGenParams {
+            mint_amounts: params.amount_tiers.clone(),
+        });
     let module_config_gens: Vec<(&'static str, Box<_>)> = vec![
         (
             "wallet",

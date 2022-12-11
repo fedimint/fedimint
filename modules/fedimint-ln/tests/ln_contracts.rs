@@ -34,7 +34,7 @@ async fn test_account() {
     let mut fed = FakeFed::<LightningModule>::new(
         4,
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-        &ConfigGenParams::fake_config_gen_params(),
+        &ConfigGenParams::new(),
         &LightningModuleConfigGen,
     )
     .await
@@ -84,7 +84,7 @@ async fn test_outgoing() {
     let mut fed = FakeFed::<LightningModule>::new(
         4,
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-        &ConfigGenParams::fake_config_gen_params(),
+        &ConfigGenParams::new(),
         &LightningModuleConfigGen,
     )
     .await
@@ -183,7 +183,7 @@ async fn test_incoming() {
     let mut fed = FakeFed::<LightningModule>::new(
         4,
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
-        &ConfigGenParams::fake_config_gen_params(),
+        &ConfigGenParams::new(),
         &LightningModuleConfigGen,
     )
     .await

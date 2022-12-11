@@ -199,7 +199,7 @@ mod tests {
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
     use fedimint_api::backup::SignedBackupRequest;
-    use fedimint_api::config::ConfigGenParams;
+    use fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
     use fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -212,7 +212,8 @@ mod tests {
     use fedimint_core::modules::wallet::common::WalletModuleDecoder;
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletConfigGenerator, WalletOutput, WalletOutputOutcome,
+        PegOut, PegOutFees, Wallet, WalletConfigGenParams, WalletConfigGenerator, WalletOutput,
+        WalletOutputOutcome,
     };
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
@@ -353,7 +354,15 @@ mod tests {
                         .await?)
                     }
                 },
-                &ConfigGenParams::fake_config_gen_params(),
+                &ConfigGenParams::new().attach(WalletConfigGenParams {
+                    network: bitcoin::network::constants::Network::Regtest,
+                    bitcoin_rpc: BitcoindRpcCfg {
+                        btc_rpc_address: "localhst".to_string(),
+                        btc_rpc_user: "bitcoin".to_string(),
+                        btc_rpc_pass: "bitcoin".to_string(),
+                    },
+                    finality_delay: 10,
+                }),
                 &WalletConfigGenerator,
             )
             .await

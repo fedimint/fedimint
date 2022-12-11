@@ -4,7 +4,7 @@ use std::hash::Hasher;
 use std::ops::Sub;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -19,7 +19,8 @@ use bitcoin::{PackedLockTime, Sequence};
 use config::WalletClientConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig, TypedServerModuleConfig,
+    BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
+    ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
@@ -221,7 +222,9 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         peers: &[PeerId],
         params: &ConfigGenParams,
     ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
-        const FINALITY_DELAY: u32 = 10;
+        let params = params
+            .get::<WalletConfigGenParams>()
+            .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
 
@@ -241,19 +244,15 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
                     *sk,
                     peers.threshold(),
                     params.bitcoin_rpc.clone(),
-                    bitcoin::network::constants::Network::Regtest,
-                    FINALITY_DELAY,
+                    params.network,
+                    params.finality_delay,
                 );
                 (*id, cfg)
             })
             .collect();
 
         let descriptor = wallet_cfg[&PeerId::from(0)].peg_in_descriptor.clone();
-        let client_cfg = WalletClientConfig::new(
-            descriptor,
-            bitcoin::network::constants::Network::Regtest,
-            FINALITY_DELAY,
-        );
+        let client_cfg = WalletClientConfig::new(descriptor, params.network, params.finality_delay);
 
         (
             wallet_cfg
@@ -281,6 +280,10 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+        let params = params
+            .get::<WalletConfigGenParams>()
+            .expect("Invalid wallet params");
+
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
@@ -308,31 +311,13 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
             }
         }
 
-        let network: bitcoin::network::constants::Network = params
-            .other
-            .get("network")
-            .ok_or_else(|| anyhow!("`network` parameter wasn't supplied"))?
-            .as_str()
-            .ok_or_else(|| anyhow!("`network` param has to be a string"))?
-            .parse()
-            .map_err(|e| anyhow!("Invalid network: {}", e))?;
-
-        let finality_delay: u32 = params
-            .other
-            .get("finality_delay")
-            .ok_or_else(|| anyhow!("`finality_delay` parameter wasn't supplied"))?
-            .as_i64()
-            .ok_or_else(|| anyhow!("`finality_delay` param has to be a number"))?
-            .try_into()
-            .map_err(|e| anyhow!("`finality_delay` out of range: {}", e))?;
-
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
             peers.threshold(),
             params.bitcoin_rpc.clone(),
-            network,
-            finality_delay,
+            params.network,
+            params.finality_delay,
         );
 
         Ok(Ok(wallet_cfg.to_erased()))
@@ -345,6 +330,17 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<WalletConfig>()?.validate_config(identity)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletConfigGenParams {
+    pub network: bitcoin::network::constants::Network,
+    pub bitcoin_rpc: BitcoindRpcCfg,
+    pub finality_delay: u32,
+}
+
+impl ModuleConfigGenParams for WalletConfigGenParams {
+    const MODULE_NAME: &'static str = "wallet";
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]
