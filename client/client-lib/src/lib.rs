@@ -93,7 +93,8 @@ use crate::{
 };
 
 const TIMELOCK: u64 = 100;
-const MINT_SECRET_CHILD_ID: ChildId = ChildId(0);
+/// Mint module's secret key derivation child id
+pub const MINT_SECRET_CHILD_ID: ChildId = ChildId(0);
 
 type Result<T> = std::result::Result<T, ClientError>;
 pub type GatewayClient = Client<GatewayClientConfig>;
