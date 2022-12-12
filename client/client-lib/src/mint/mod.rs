@@ -679,6 +679,7 @@ mod tests {
     use crate::mint::MintClient;
     use crate::{
         BlindNonce, ClientContext, DerivableSecret, LegacyTransaction, TransactionBuilder,
+        MINT_SECRET_CHILD_ID,
     };
 
     type Fed = FakeFed<Mint>;
@@ -853,7 +854,7 @@ mod tests {
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new_root(&[], &[]),
+            secret: DerivableSecret::new_root(&[], &[]).child_key(MINT_SECRET_CHILD_ID),
         };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sats(12);
@@ -873,7 +874,7 @@ mod tests {
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             config: client_config,
             context: context.clone(),
-            secret: DerivableSecret::new_root(&[], &[]),
+            secret: DerivableSecret::new_root(&[], &[]).child_key(MINT_SECRET_CHILD_ID),
         };
 
         issue_tokens(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
@@ -973,7 +974,7 @@ mod tests {
                 api: WsFederationApi::new(vec![]).into(),
                 secp: Default::default(),
             }),
-            secret: DerivableSecret::new_root(&[], &[]),
+            secret: DerivableSecret::new_root(&[], &[]).child_key(MINT_SECRET_CHILD_ID),
         };
         let client_copy = client.clone();
         let amount = Amount::from_msats(1);
