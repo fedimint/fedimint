@@ -241,14 +241,13 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
 
                 (
                     peer,
-                    serde_json::to_value(&LightningModuleConfig {
+                    LightningModuleConfig {
                         threshold_pub_keys: pks.clone(),
                         threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
                         threshold: peers.threshold(),
                         fee_consensus: FeeConsensus::default(),
-                    })
-                    .expect("serialization can't fail here")
-                    .into(),
+                    }
+                    .to_erased(),
                 )
             })
             .collect();

@@ -27,6 +27,22 @@ pub struct MintClientConfig {
 impl TypedClientModuleConfig for MintClientConfig {}
 
 impl TypedServerModuleConfig for MintConfig {
+    type Local = MintConfig;
+    type Private = ();
+    type Consensus = ();
+
+    fn from_parts(
+        local: Self::Local,
+        _private: Self::Private,
+        _consensus: Self::Consensus,
+    ) -> Self {
+        local
+    }
+
+    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
+        (self, (), ())
+    }
+
     fn to_client_config(&self) -> ClientModuleConfig {
         let pub_key: HashMap<Amount, AggregatePublicKey> = TieredMultiZip::new(
             self.peer_tbs_pks

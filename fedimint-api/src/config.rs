@@ -119,23 +119,53 @@ impl ClientModuleConfig {
 ///
 /// See [`ClientModuleConfig`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ServerModuleConfig(pub serde_json::Value);
-
-impl From<serde_json::Value> for ServerModuleConfig {
-    fn from(v: serde_json::Value) -> Self {
-        Self(v)
-    }
+pub struct ServerModuleConfig {
+    pub local: serde_json::Value,
+    pub private: serde_json::Value,
+    pub consensus: serde_json::Value,
 }
 
 impl ServerModuleConfig {
+    pub fn from(
+        local: serde_json::Value,
+        private: serde_json::Value,
+        consensus: serde_json::Value,
+    ) -> Self {
+        Self {
+            local,
+            private,
+            consensus,
+        }
+    }
+
     pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
-        Ok(serde_json::from_value(self.0.clone())?)
+        let local = serde_json::from_value(self.local.clone())?;
+        let private = serde_json::from_value(self.private.clone())?;
+        let consensus = serde_json::from_value(self.consensus.clone())?;
+
+        Ok(TypedServerModuleConfig::from_parts(
+            local, private, consensus,
+        ))
     }
 }
 
 pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
-    fn to_erased(&self) -> ServerModuleConfig {
-        ServerModuleConfig(serde_json::to_value(self).expect("serialization can't fail"))
+    type Local: DeserializeOwned + Serialize;
+    type Private: DeserializeOwned + Serialize;
+    type Consensus: DeserializeOwned + Serialize;
+
+    fn from_parts(local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self;
+
+    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus);
+
+    fn to_erased(self) -> ServerModuleConfig {
+        let (local, private, consensus) = self.to_parts();
+
+        ServerModuleConfig {
+            local: serde_json::to_value(local).expect("serialization can't fail"),
+            private: serde_json::to_value(private).expect("serialization can't fail"),
+            consensus: serde_json::to_value(consensus).expect("serialization can't fail"),
+        }
     }
 
     fn to_client_config(&self) -> ClientModuleConfig;

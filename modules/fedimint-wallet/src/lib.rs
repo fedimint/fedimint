@@ -257,14 +257,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         (
             wallet_cfg
                 .into_iter()
-                .map(|(k, v)| {
-                    (
-                        k,
-                        serde_json::to_value(v)
-                            .expect("serialization can't fail")
-                            .into(),
-                    )
-                })
+                .map(|(k, v)| (k, v.to_erased()))
                 .collect(),
             serde_json::to_value(client_cfg)
                 .expect("serialization can't fail")

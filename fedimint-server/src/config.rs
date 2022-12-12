@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap};
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
-    TypedServerModuleConfig,
+    BitcoindRpcCfg, ClientConfig, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node,
+    ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -56,17 +56,11 @@ pub struct ServerConfig {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
 
-    pub modules: BTreeMap<String, ServerModuleConfig>,
+    // TODO split these into separate structs so they can be serialized independently
+    pub modules_local: BTreeMap<String, serde_json::Value>,
+    pub modules_private: BTreeMap<String, serde_json::Value>,
+    pub modules_consensus: BTreeMap<String, serde_json::Value>,
     pub max_connections: u32,
-}
-
-impl ServerConfig {
-    pub fn get_module_config<T: TypedServerModuleConfig>(&self, name: &str) -> anyhow::Result<T> {
-        self.modules
-            .get(name)
-            .ok_or_else(|| format_err!("Module {name} not found"))?
-            .to_typed()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +88,71 @@ pub struct ServerConfigParams {
 }
 
 impl ServerConfig {
+    /// Creates a new config from the results of a trusted or distributed key setup
+    pub fn from(
+        params: ServerConfigParams,
+        identity: PeerId,
+        hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
+        hbbft_pk_set: hbbft::crypto::PublicKeySet,
+        epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
+        epoch_pk_set: hbbft::crypto::PublicKeySet,
+        modules: BTreeMap<String, ServerModuleConfig>,
+    ) -> Self {
+        let peers = params.peers();
+        let mut cfg = Self {
+            federation_name: params.federation_name,
+            identity,
+            hbbft_bind_addr: params.hbbft.bind_addr,
+            api_bind_addr: params.api.bind_addr,
+            tls_cert: params.tls.our_certificate,
+            tls_key: params.tls.our_private_key,
+            peers,
+            hbbft_sks,
+            hbbft_pk_set,
+            epoch_sks,
+            epoch_pk_set,
+            modules_local: Default::default(),
+            modules_private: Default::default(),
+            modules_consensus: Default::default(),
+            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
+        };
+        cfg.add_modules(modules);
+        cfg
+    }
+
+    pub fn add_modules(&mut self, modules: BTreeMap<String, ServerModuleConfig>) {
+        for (name, config) in modules.into_iter() {
+            let ServerModuleConfig {
+                local,
+                private,
+                consensus,
+            } = config;
+
+            self.modules_local.insert(name.clone(), local);
+            self.modules_private.insert(name.clone(), private);
+            self.modules_consensus.insert(name, consensus);
+        }
+    }
+
+    /// Constructs a module config by name
+    pub fn get_module_config<T: TypedServerModuleConfig>(&self, name: &str) -> anyhow::Result<T> {
+        let local = Self::get_or_error(&self.modules_local, name)?;
+        let private = Self::get_or_error(&self.modules_private, name)?;
+        let consensus = Self::get_or_error(&self.modules_consensus, name)?;
+        let module = ServerModuleConfig::from(local, private, consensus);
+
+        module.to_typed()
+    }
+
+    fn get_or_error(
+        json: &BTreeMap<String, serde_json::Value>,
+        name: &str,
+    ) -> anyhow::Result<serde_json::Value> {
+        json.get(name)
+            .ok_or_else(|| format_err!("Module {name} not found"))
+            .cloned()
+    }
+
     pub fn to_client_config(&self) -> ClientConfig {
         let nodes = self
             .peers
@@ -104,35 +163,30 @@ impl ServerConfig {
             })
             .collect();
 
+        let modules = vec![
+            self.get_client_config::<MintConfig>("mint"),
+            self.get_client_config::<WalletConfig>("wallet"),
+            self.get_client_config::<LightningModuleConfig>("ln"),
+        ];
+
         ClientConfig {
             federation_name: self.federation_name.clone(),
             epoch_pk: self.epoch_pk_set.public_key(),
             nodes,
-            modules: self
-                .modules
-                .iter()
-                .map(|(name, cfg)| {
-                    (
-                        name.clone(),
-                        match name.as_str() {
-                            "wallet" => cfg
-                                .to_typed::<WalletConfig>()
-                                .expect("valid config should not fail")
-                                .to_client_config(),
-                            "mint" => cfg
-                                .to_typed::<MintConfig>()
-                                .expect("valid config should not fail")
-                                .to_client_config(),
-                            "ln" => cfg
-                                .to_typed::<LightningModuleConfig>()
-                                .expect("valid config should not fail")
-                                .to_client_config(),
-                            other => panic!("module name that was not expected: {other}"),
-                        },
-                    )
-                })
-                .collect(),
+            modules: modules.into_iter().collect(),
         }
+    }
+
+    fn get_client_config<T: TypedServerModuleConfig>(
+        &self,
+        name: &str,
+    ) -> (String, ClientModuleConfig) {
+        let cfg = self
+            .get_module_config::<T>(name)
+            .expect("valid client config should not fail")
+            .to_client_config();
+
+        (name.to_string(), cfg)
     }
 
     pub fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
@@ -153,27 +207,12 @@ impl ServerConfig {
             bail!("Peer ids are not indexed from 0");
         }
 
-        let res: anyhow::Result<Vec<()>> = self
-            .modules
-            .iter()
-            .map(|(name, cfg)| match name.as_str() {
-                "wallet" => cfg
-                    .to_typed::<WalletConfig>()
-                    .expect("valid config should not fail")
-                    .validate_config(identity),
-                "mint" => cfg
-                    .to_typed::<MintConfig>()
-                    .expect("valid config should not fail")
-                    .validate_config(identity),
-                "ln" => cfg
-                    .to_typed::<LightningModuleConfig>()
-                    .expect("valid config should not fail")
-                    .validate_config(identity),
-                other => panic!("module name that was not expected: {other}"),
-            })
-            .collect();
-
-        res?;
+        self.get_module_config::<WalletConfig>("wallet")?
+            .validate_config(identity)?;
+        self.get_module_config::<MintConfig>("mint")?
+            .validate_config(identity)?;
+        self.get_module_config::<LightningModuleConfig>("ln")?
+            .validate_config(identity)?;
 
         Ok(())
     }
@@ -203,29 +242,22 @@ impl ServerConfig {
             .iter()
             .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &peer0.modules)))
             .collect();
-
         let server_config: BTreeMap<_, _> = netinfo
             .iter()
             .map(|(&id, netinf)| {
                 let epoch_keys = epochinfo.get(&id).unwrap();
-                let config = ServerConfig {
-                    federation_name: params[&id].federation_name.clone(),
-                    identity: id,
-                    hbbft_bind_addr: params[&id].hbbft.bind_addr.clone(),
-                    api_bind_addr: params[&id].api.bind_addr.clone(),
-                    tls_cert: params[&id].tls.our_certificate.clone(),
-                    tls_key: params[&id].tls.our_private_key.clone(),
-                    peers: params[&id].peers(),
-                    hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
-                    hbbft_pk_set: netinf.public_key_set().clone(),
-                    epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
-                    epoch_pk_set: epoch_keys.public_key_set().clone(),
-                    modules: module_configs
+                let config = ServerConfig::from(
+                    params[&id].clone(),
+                    id,
+                    SerdeSecret(netinf.secret_key_share().unwrap().clone()),
+                    netinf.public_key_set().clone(),
+                    SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
+                    epoch_keys.public_key_set().clone(),
+                    module_configs
                         .iter()
                         .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
                         .collect(),
-                    max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-                };
+                );
                 (id, config)
             })
             .collect();
@@ -290,11 +322,11 @@ impl ServerConfig {
             ("ln", Box::new(LightningModuleConfigGen)),
         ];
 
-        let mut module_cfgs: Vec<(&'static str, _)> = vec![];
+        let mut module_cfgs: BTreeMap<String, ServerModuleConfig> = Default::default();
 
         for (name, gen) in module_config_gens {
-            module_cfgs.push((
-                name,
+            module_cfgs.insert(
+                name.to_string(),
                 if let Ok(cfgs) = gen
                     .distributed_gen(connections, our_id, peers, &params.modules, task_group)
                     .await?
@@ -303,27 +335,18 @@ impl ServerConfig {
                 } else {
                     return Ok(Err(Cancelled));
                 },
-            ));
+            );
         }
 
-        let server = ServerConfig {
-            federation_name: params.federation_name.clone(),
-            identity: *our_id,
-            hbbft_bind_addr: params.hbbft.bind_addr.clone(),
-            api_bind_addr: params.api.bind_addr.clone(),
-            tls_cert: params.tls.our_certificate.clone(),
-            tls_key: params.tls.our_private_key.clone(),
-            peers: params.peers(),
-            hbbft_sks: SerdeSecret(hbbft_sks),
-            hbbft_pk_set: hbbft_pks,
-            epoch_sks: SerdeSecret(epoch_sks),
-            epoch_pk_set: epoch_pks,
-            modules: module_cfgs
-                .iter()
-                .map(|(name, cfgs)| (name.to_string(), cfgs.clone()))
-                .collect(),
-            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-        };
+        let server = ServerConfig::from(
+            params.clone(),
+            *our_id,
+            SerdeSecret(hbbft_sks),
+            hbbft_pks,
+            SerdeSecret(epoch_sks),
+            epoch_pks,
+            module_cfgs,
+        );
 
         info!("Distributed key generation has completed successfully!");
 
