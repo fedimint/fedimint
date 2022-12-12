@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::anyhow;
+use futures::future::BoxFuture;
 use futures::lock::Mutex;
 pub use imp::*;
 use thiserror::Error;
@@ -26,22 +27,26 @@ pub struct Elapsed;
 struct TaskGroupInner {
     /// Was the shutdown requested, either externally or due to any task failure?
     is_shutting_down: AtomicBool,
-    on_shutdown: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
+    #[allow(clippy::type_complexity)]
+    on_shutdown: Mutex<Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send + 'static>>>,
     join: Mutex<Vec<(String, JoinHandle<()>)>>,
 }
 
 impl TaskGroupInner {
     pub async fn shutdown(&self) {
+        // Note: set the flag before starting to call shutdown handlers
+        // to avoid confusion.
+        self.is_shutting_down.store(true, SeqCst);
+
         loop {
             let f_opt = self.on_shutdown.lock().await.pop();
 
             if let Some(f) = f_opt {
-                f();
+                f().await;
             } else {
                 break;
             }
         }
-        self.is_shutting_down.store(true, SeqCst);
     }
 }
 /// A group of task working together
@@ -68,6 +73,34 @@ impl TaskGroup {
         TaskHandle {
             inner: self.inner.clone(),
         }
+    }
+
+    /// Create a sub-group
+    ///
+    /// Task subgroup works like an independent [`TaskGroup`], but the parent
+    /// `TaskGroup` will propagate the shut down signal to a sub-group.
+    ///
+    /// In contrast to using the parent group directly, a subgroup allows
+    /// calling [`Self::join_all`] and detecting any panics on just a
+    /// subset of tasks.
+    ///
+    /// The code create a subgroup is responsible for calling [`Self::join_all`].
+    /// If it won't, the parent subgroup **will not** detect any panics in the
+    /// tasks spawned by the subgroup.
+    pub async fn make_subgroup(&self) -> TaskGroup {
+        let new_tg = Self::new();
+        self.make_handle()
+            .on_shutdown({
+                let new_tg = self.clone();
+                Box::new(move || {
+                    Box::pin(async move {
+                        new_tg.shutdown().await;
+                    })
+                })
+            })
+            .await;
+
+        new_tg
     }
 
     pub async fn shutdown(&self) {
@@ -237,8 +270,12 @@ impl TaskHandle {
         self.inner.is_shutting_down.load(SeqCst)
     }
 
-    pub async fn on_shutdown(&self, f: impl FnOnce() + Send + 'static) {
-        self.inner.on_shutdown.lock().await.push(Box::new(f))
+    pub async fn on_shutdown(
+        &self,
+        // f: FnOnce() -> BoxFuture<'static, ()> + Send + 'static
+        f: Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send + 'static>,
+    ) {
+        self.inner.on_shutdown.lock().await.push(f)
     }
 
     /// Make a [`oneshot::Receiver`] that will fire on shutdown
@@ -248,9 +285,11 @@ impl TaskHandle {
     #[cfg(not(target_family = "wasm"))]
     pub async fn make_shutdown_rx(&self) -> oneshot::Receiver<()> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        self.on_shutdown(|| {
-            let _ = shutdown_tx.send(());
-        })
+        self.on_shutdown(Box::new(|| {
+            Box::pin(async {
+                let _ = shutdown_tx.send(());
+            })
+        }))
         .await;
 
         shutdown_rx

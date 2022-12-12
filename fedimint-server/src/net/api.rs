@@ -70,10 +70,12 @@ pub async fn run_server(
     let stop_handle = server_handle.clone();
 
     task_handle
-        .on_shutdown(move || {
-            // ignore errors: we don't care if already stopped
-            let _ = stop_handle.stop();
-        })
+        .on_shutdown(Box::new(move || {
+            Box::pin(async move {
+                // ignore errors: we don't care if already stopped
+                let _ = stop_handle.stop();
+            })
+        }))
         .await;
 
     server_handle.stopped().await

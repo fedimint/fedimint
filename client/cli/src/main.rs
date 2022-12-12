@@ -8,6 +8,7 @@ use std::process::exit;
 use bitcoin::{secp256k1, Address, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_api::config::ClientConfig;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::config::load_from_file;
 use fedimint_core::modules::ln::contracts::ContractId;
@@ -415,6 +416,7 @@ async fn handle_command(
     client: Client<UserClientConfig>,
     mut rng: rand::rngs::OsRng,
 ) -> CliResult {
+    let mut task_group = TaskGroup::new();
     match cli.command {
         Command::Api { method, arg } => {
             let arg: Value = serde_json::from_str(&arg).unwrap();
@@ -682,7 +684,7 @@ async fn handle_command(
         },
         Command::Restore { gap_limit } => match client
             .mint_client()
-            .restore_ecash_from_federation(gap_limit)
+            .restore_ecash_from_federation(gap_limit, &mut task_group)
             .await
         {
             Ok(_) => Ok(CliOutput::Backup),
