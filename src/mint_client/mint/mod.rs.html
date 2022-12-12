@@ -1028,6 +1028,7 @@
 <a href="#1028" id="1028">1028</a>
 <a href="#1029" id="1029">1029</a>
 <a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1694,6 +1695,7 @@
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
+    <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     <span class="kw">use </span>fedimint_core::modules::mint::{
         Mint, MintConfigGenParams, MintConfigGenerator, MintOutput,
     };
@@ -1811,7 +1813,7 @@
         <span class="kw">async fn </span>download_ecash_backup(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             _id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt; {
             <span class="macro">unimplemented!</span>()
         }
     }

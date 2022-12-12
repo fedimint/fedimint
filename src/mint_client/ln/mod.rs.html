@@ -613,6 +613,7 @@
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -968,6 +969,7 @@
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
     <span class="kw">use </span>fedimint_core::modules::ln::{LightningGateway, LightningOutput};
+    <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_testing::FakeFed;
@@ -1088,7 +1090,7 @@
         <span class="kw">async fn </span>download_ecash_backup(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             _id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt; {
             <span class="macro">unimplemented!</span>()
         }
     }

@@ -474,6 +474,7 @@
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -685,6 +686,7 @@
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+    <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     <span class="kw">use </span>fedimint_core::modules::wallet::common::WalletModuleDecoder;
     <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
     <span class="kw">use </span>fedimint_core::modules::wallet::{
@@ -793,7 +795,7 @@
         <span class="kw">async fn </span>download_ecash_backup(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             _id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt; {
             <span class="macro">unimplemented!</span>()
         }
     }

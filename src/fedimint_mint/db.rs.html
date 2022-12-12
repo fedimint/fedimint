@@ -163,12 +163,13 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, PeerId};
-<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use crate</span>::{Nonce, OutputConfirmationSignatures, OutputOutcome};
@@ -313,11 +314,12 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>EcashBackupKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::EcashBackup <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = EcashBackupKey;
-    <span class="kw">type </span>Value = EcashBackupValue;
+    <span class="kw">type </span>Value = ECashUserBackupSnapshot;
 }
 
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>EcashBackupValue {
+<span class="doccomment">/// User&#39;s backup, received at certain time, containing encrypted payload
+</span><span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ECashUserBackupSnapshot {
     <span class="kw">pub </span>timestamp: SystemTime,
     <span class="attr">#[serde(with = <span class="string">&quot;hex::serde&quot;</span>)]
     </span><span class="kw">pub </span>data: Vec&lt;u8&gt;,
@@ -326,7 +328,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>EcashBackupKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::EcashBackup <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
-    <span class="kw">type </span>Value = EcashBackupValue;
+    <span class="kw">type </span>Value = ECashUserBackupSnapshot;
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (bdb07a8ec 2022-12-11)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>

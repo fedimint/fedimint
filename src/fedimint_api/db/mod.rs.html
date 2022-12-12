@@ -714,6 +714,9 @@
 <a href="#714" id="714">714</a>
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -820,6 +823,20 @@
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt;;
+
+    <span class="doccomment">/// Default implementation is a combination of [`Self::raw_find_by_prefix`] + loop over [`Self::raw_remove_entry`]
+    </span><span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>keys = <span class="macro">vec!</span>[];
+        <span class="kw">for </span>kv <span class="kw">in </span><span class="self">self</span>.raw_find_by_prefix(key_prefix).<span class="kw">await </span>{
+            <span class="kw">let </span>(k, <span class="kw">_</span>) = kv<span class="question-mark">?</span>;
+            keys.push(k);
+        }
+
+        <span class="kw">for </span>keys <span class="kw">in </span><span class="kw-2">&amp;</span>keys {
+            <span class="self">self</span>.raw_remove_entry(keys).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
 
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
@@ -969,23 +986,12 @@
             })
     }
 
-    <span class="comment">// TODO: this function doesn&#39;t seem very optimal
-    </span><span class="kw">pub async fn </span>remove_by_prefix&lt;KP&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>KP) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
+    <span class="kw">pub async fn </span>remove_by_prefix&lt;KP&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>KP) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
     <span class="kw">where
         </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
-        <span class="kw">let </span>prefix_bytes = key_prefix.to_bytes();
-        <span class="kw">let </span><span class="kw-2">mut </span>keys = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>kv <span class="kw">in </span><span class="self">self</span>.raw_find_by_prefix(<span class="kw-2">&amp;</span>prefix_bytes).<span class="kw">await </span>{
-            <span class="kw">let </span>(k, <span class="kw">_</span>) = kv<span class="question-mark">?</span>;
-            keys.push(k);
-        }
-
-        <span class="kw">for </span>keys <span class="kw">in </span><span class="kw-2">&amp;</span>keys {
-            <span class="self">self</span>.raw_remove_entry(keys).<span class="kw">await</span><span class="question-mark">?</span>;
-        }
-        <span class="prelude-val">Ok</span>(())
-    }
+        <span class="self">self</span>.raw_remove_by_prefix(<span class="kw-2">&amp;</span>key_prefix.to_bytes()).<span class="kw">await
+    </span>}
 }
 
 <span class="kw">impl</span>&lt;T&gt; DatabaseKeyPrefix <span class="kw">for </span>T

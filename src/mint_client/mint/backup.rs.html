@@ -887,6 +887,13 @@
 <a href="#887" id="887">887</a>
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -982,7 +989,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>restore_ecash_from_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, gap_limit: usize) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;()&gt;&gt; {
+    <span class="kw">pub async fn </span>restore_ecash_from_federation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        gap_limit: usize,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;()&gt;&gt; {
         <span class="kw">let </span>backup = <span class="kw">if let </span><span class="prelude-val">Some</span>(backup) = <span class="self">self</span>.download_ecash_backup_from_federation().<span class="kw">await</span><span class="question-mark">? </span>{
             backup
         } <span class="kw">else </span>{
@@ -990,7 +1001,7 @@
             PlaintextEcashBackup::new_empty()
         };
 
-        <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>task_group = task_group.make_subgroup().<span class="kw">await</span>;
 
         <span class="comment">// TODO: If the client attempts any operations between while the recovery is working,
         // the recovery code will most probably miss them, which might lead to incorrect state.
@@ -1002,6 +1013,8 @@
             <span class="prelude-val">Ok</span>(o) =&gt; o,
             <span class="prelude-val">Err</span>(Cancelled) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled)),
         };
+
+        task_group.join_all().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(<span class="string">&quot;Writting out the recovered state to the database&quot;</span>);
 
@@ -1060,7 +1073,8 @@
             .<span class="kw">await</span><span class="question-mark">?
         </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
-                EcashBackup(encrypted).decrypt_with(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_encryption_key())<span class="question-mark">?</span>,
+                EcashBackup(encrypted.data)
+                    .decrypt_with(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_encryption_key())<span class="question-mark">?</span>,
             ))
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
@@ -1450,7 +1464,7 @@
 
     <span class="doccomment">/// Fill each tier pool to the gap limit
     </span><span class="kw">fn </span>fill_initial_pending_nonces(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: Amount) {
-        <span class="macro">info!</span>(%amount, count=<span class="self">self</span>.gap_limit, <span class="string">&quot;Generating initial set of nones for amount tier&quot;</span>);
+        <span class="macro">info!</span>(%amount, count=<span class="self">self</span>.gap_limit, <span class="string">&quot;Generating initial set of nonces for amount tier&quot;</span>);
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="self">self</span>.gap_limit {
             <span class="self">self</span>.add_next_pending_nonce_in_pending_pool(amount);
         }

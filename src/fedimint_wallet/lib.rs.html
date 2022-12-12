@@ -1573,11 +1573,15 @@
 <a href="#1573" id="1573">1573</a>
 <a href="#1574" id="1574">1574</a>
 <a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
 <span class="kw">use </span>std::ops::Sub;
-<span class="kw">use </span>std::time::Duration;
+<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+</span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_trait::async_trait;
@@ -1609,7 +1613,9 @@
 };
 <span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup, TaskHandle};
+<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+</span><span class="kw">use </span>fedimint_api::task::sleep;
+<span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::{
     plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModulePlugin,
 };

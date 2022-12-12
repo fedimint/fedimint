@@ -702,6 +702,8 @@
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
 <a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -712,6 +714,7 @@
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
@@ -1119,6 +1122,7 @@
     client: Client&lt;UserClientConfig&gt;,
     <span class="kw-2">mut </span>rng: rand::rngs::OsRng,
 ) -&gt; CliResult {
+    <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
     <span class="kw">match </span>cli.command {
         Command::Api { method, arg } =&gt; {
             <span class="kw">let </span>arg: Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
@@ -1386,7 +1390,7 @@
         },
         Command::Restore { gap_limit } =&gt; <span class="kw">match </span>client
             .mint_client()
-            .restore_ecash_from_federation(gap_limit)
+            .restore_ecash_from_federation(gap_limit, <span class="kw-2">&amp;mut </span>task_group)
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(CliOutput::Backup),

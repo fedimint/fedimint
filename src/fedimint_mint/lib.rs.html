@@ -1295,9 +1295,6 @@
 <a href="#1295" id="1295">1295</a>
 <a href="#1296" id="1296">1296</a>
 <a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1305,7 +1302,7 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>config::{FeeConsensus, MintClientConfig};
-<span class="kw">use </span>db::{EcashBackupKey, EcashBackupValue};
+<span class="kw">use </span>db::{ECashUserBackupSnapshot, EcashBackupKey};
 <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
@@ -1998,9 +1995,9 @@
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/recover&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
                     <span class="prelude-val">Ok</span>(module
-                        .handle_recover_request(<span class="kw-2">&amp;mut </span>dbtx, id).<span class="kw">await</span>.map(hex::encode))
+                        .handle_recover_request(<span class="kw-2">&amp;mut </span>dbtx, id).<span class="kw">await</span>)
                 }
             },
         ]
@@ -2032,7 +2029,7 @@
         <span class="macro">info!</span>(id = %request.id, len = request.payload.len(), <span class="string">&quot;Storing new user e-cash backup&quot;</span>);
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>EcashBackupKey(request.id),
-            <span class="kw-2">&amp;</span>EcashBackupValue {
+            <span class="kw-2">&amp;</span>ECashUserBackupSnapshot {
                 timestamp: request.timestamp,
                 data: request.payload.to_vec(),
             },
@@ -2047,11 +2044,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         id: secp256k1_zkp::XOnlyPublicKey,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt; {
-        dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id))
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
-            .map(|res| res.data)
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
+        dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id)).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>)
     }
 }
 
