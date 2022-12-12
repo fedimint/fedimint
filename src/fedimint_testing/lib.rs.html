@@ -354,7 +354,7 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+<span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
 <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -391,7 +391,7 @@
     <span class="kw">pub async fn </span>new&lt;ConfGen, F, FF&gt;(
         members: usize,
         constructor: F,
-        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenParams,
         conf_gen: <span class="kw-2">&amp;</span>ConfGen,
     ) -&gt; anyhow::Result&lt;FakeFed&lt;Module&gt;&gt;
     <span class="kw">where

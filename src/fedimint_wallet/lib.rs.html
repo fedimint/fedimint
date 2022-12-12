@@ -1580,18 +1580,13 @@
 <a href="#1580" id="1580">1580</a>
 <a href="#1581" id="1581">1581</a>
 <a href="#1582" id="1582">1582</a>
-<a href="#1583" id="1583">1583</a>
-<a href="#1584" id="1584">1584</a>
-<a href="#1585" id="1585">1585</a>
-<a href="#1586" id="1586">1586</a>
-<a href="#1587" id="1587">1587</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
 <span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -1606,8 +1601,8 @@
 <span class="kw">use </span>config::WalletClientConfig;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
+    ServerModuleConfig, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
@@ -1807,9 +1802,11 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenParams,
     ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
-        <span class="kw">const </span>FINALITY_DELAY: u32 = <span class="number">10</span>;
+        <span class="kw">let </span>params = params
+            .get::&lt;WalletConfigGenParams&gt;()
+            .expect(<span class="string">&quot;Invalid wallet params&quot;</span>);
 
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
 
@@ -1829,19 +1826,15 @@
                     <span class="kw-2">*</span>sk,
                     peers.threshold(),
                     params.bitcoin_rpc.clone(),
-                    bitcoin::network::constants::Network::Regtest,
-                    FINALITY_DELAY,
+                    params.network,
+                    params.finality_delay,
                 );
                 (<span class="kw-2">*</span>id, cfg)
             })
             .collect();
 
         <span class="kw">let </span>descriptor = wallet_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].peg_in_descriptor.clone();
-        <span class="kw">let </span>client_cfg = WalletClientConfig::new(
-            descriptor,
-            bitcoin::network::constants::Network::Regtest,
-            FINALITY_DELAY,
-        );
+        <span class="kw">let </span>client_cfg = WalletClientConfig::new(descriptor, params.network, params.finality_delay);
 
         (
             wallet_cfg
@@ -1866,9 +1859,13 @@
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
+        <span class="kw">let </span>params = params
+            .get::&lt;WalletConfigGenParams&gt;()
+            .expect(<span class="string">&quot;Invalid wallet params&quot;</span>);
+
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
@@ -1896,31 +1893,13 @@
             }
         }
 
-        <span class="kw">let </span>network: bitcoin::network::constants::Network = params
-            .other
-            .get(<span class="string">&quot;network&quot;</span>)
-            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` parameter wasn&#39;t supplied&quot;</span>))<span class="question-mark">?
-            </span>.as_str()
-            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`network` param has to be a string&quot;</span>))<span class="question-mark">?
-            </span>.parse()
-            .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Invalid network: {}&quot;</span>, e))<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>finality_delay: u32 = params
-            .other
-            .get(<span class="string">&quot;finality_delay&quot;</span>)
-            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`finality_delay` parameter wasn&#39;t supplied&quot;</span>))<span class="question-mark">?
-            </span>.as_i64()
-            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;`finality_delay` param has to be a number&quot;</span>))<span class="question-mark">?
-            </span>.try_into()
-            .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;`finality_delay` out of range: {}&quot;</span>, e))<span class="question-mark">?</span>;
-
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
             peers.threshold(),
             params.bitcoin_rpc.clone(),
-            network,
-            finality_delay,
+            params.network,
+            params.finality_delay,
         );
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(wallet_cfg.to_erased()))
@@ -1933,6 +1912,17 @@
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config.to_typed::&lt;WalletConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
     }
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletConfigGenParams {
+    <span class="kw">pub </span>network: bitcoin::network::constants::Network,
+    <span class="kw">pub </span>bitcoin_rpc: BitcoindRpcCfg,
+    <span class="kw">pub </span>finality_delay: u32,
+}
+
+<span class="kw">impl </span>ModuleConfigGenParams <span class="kw">for </span>WalletConfigGenParams {
+    <span class="kw">const </span>MODULE_NAME: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;wallet&quot;</span>;
 }
 
 <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]

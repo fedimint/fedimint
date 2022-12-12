@@ -957,7 +957,7 @@
     <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
-    <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
+    <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
     <span class="kw">use </span>fedimint_api::core::OutputOutcome;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -1102,7 +1102,7 @@
             FakeFed::&lt;LightningModule&gt;::new(
                 <span class="number">4</span>,
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>)) },
-                <span class="kw-2">&amp;</span>ModuleConfigGenParams::fake_config_gen_params(),
+                <span class="kw-2">&amp;</span>ConfigGenParams::new(),
                 <span class="kw-2">&amp;</span>LightningModuleConfigGen,
             )
             .<span class="kw">await

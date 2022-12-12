@@ -465,6 +465,15 @@
 <a href="#465" id="465">465</a>
 <a href="#466" id="466">466</a>
 <a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -666,7 +675,7 @@
     <span class="kw">use </span>bitcoin::{Address, Txid};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
-    <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
+    <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
     <span class="kw">use </span>fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -679,7 +688,8 @@
     <span class="kw">use </span>fedimint_core::modules::wallet::common::WalletModuleDecoder;
     <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
     <span class="kw">use </span>fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletConfigGenerator, WalletOutput, WalletOutputOutcome,
+        PegOut, PegOutFees, Wallet, WalletConfigGenParams, WalletConfigGenerator, WalletOutput,
+        WalletOutputOutcome,
     };
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
@@ -820,7 +830,15 @@
                         .<span class="kw">await</span><span class="question-mark">?</span>)
                     }
                 },
-                <span class="kw-2">&amp;</span>ModuleConfigGenParams::fake_config_gen_params(),
+                <span class="kw-2">&amp;</span>ConfigGenParams::new().attach(WalletConfigGenParams {
+                    network: bitcoin::network::constants::Network::Regtest,
+                    bitcoin_rpc: BitcoindRpcCfg {
+                        btc_rpc_address: <span class="string">&quot;localhst&quot;</span>.to_string(),
+                        btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
+                        btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
+                    },
+                    finality_delay: <span class="number">10</span>,
+                }),
                 <span class="kw-2">&amp;</span>WalletConfigGenerator,
             )
             .<span class="kw">await

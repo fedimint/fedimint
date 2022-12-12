@@ -1286,6 +1286,25 @@
 <a href="#1286" id="1286">1286</a>
 <a href="#1287" id="1287">1287</a>
 <a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1297,8 +1316,8 @@
 <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
+    ServerModuleConfig, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
@@ -1422,8 +1441,12 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenParams,
     ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
+        <span class="kw">let </span>params = params
+            .get::&lt;MintConfigGenParams&gt;()
+            .expect(<span class="string">&quot;Invalid mint params&quot;</span>);
+
         <span class="kw">let </span>tbs_keys = params
             .mint_amounts
             .iter()
@@ -1498,9 +1521,13 @@
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
+        <span class="kw">let </span>params = params
+            .get::&lt;MintConfigGenParams&gt;()
+            .expect(<span class="string">&quot;Invalid mint params&quot;</span>);
+
         <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::multi(
             params.mint_amounts.to_vec(),
             peers.threshold(),
@@ -1551,6 +1578,15 @@
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config.to_typed::&lt;MintConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
     }
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>MintConfigGenParams {
+    <span class="kw">pub </span>mint_amounts: Vec&lt;Amount&gt;,
+}
+
+<span class="kw">impl </span>ModuleConfigGenParams <span class="kw">for </span>MintConfigGenParams {
+    <span class="kw">const </span>MODULE_NAME: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;mint&quot;</span>;
 }
 
 <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
@@ -2370,13 +2406,16 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
-    <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+    <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
     <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
-    <span class="kw">use crate</span>::{BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, PeerErrorType};
+    <span class="kw">use crate</span>::{
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenParams, MintConfigGenerator,
+        PeerErrorType,
+    };
 
     <span class="kw">const </span>THRESHOLD: usize = <span class="number">1</span>;
     <span class="kw">const </span>MINTS: usize = <span class="number">5</span>;
@@ -2385,10 +2424,9 @@
         <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>(mint_cfg, client_cfg) = MintConfigGenerator.trusted_dealer_gen(
             <span class="kw-2">&amp;</span>peers,
-            <span class="kw-2">&amp;</span>ModuleConfigGenParams {
+            <span class="kw-2">&amp;</span>ConfigGenParams::new().attach(MintConfigGenParams {
                 mint_amounts: <span class="macro">vec!</span>[Amount::from_sats(<span class="number">1</span>)],
-                ..ModuleConfigGenParams::fake_config_gen_params()
-            },
+            }),
         );
 
         (mint_cfg.into_iter().map(|(<span class="kw">_</span>, c)| c).collect(), client_cfg)

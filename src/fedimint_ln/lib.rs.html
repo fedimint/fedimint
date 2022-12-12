@@ -1012,7 +1012,7 @@
 <span class="kw">use </span>db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
@@ -1217,7 +1217,7 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        _params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
     ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
         <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>pks = sks.public_keys();
@@ -1256,7 +1256,7 @@
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        _params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new((), peers.threshold(), our_id, peers);

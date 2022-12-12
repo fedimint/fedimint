@@ -711,6 +711,9 @@
 <a href="#711" id="711">711</a>
 <a href="#712" id="712">712</a>
 <a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
@@ -739,7 +742,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::core::ModuleKey;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
-<span class="kw">use </span><span class="kw">crate</span>::Amount;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -777,32 +779,36 @@
 ///
 /// Candidate for re-designing when the modularization effort is
 /// complete.
-</span><span class="kw">pub struct </span>ModuleConfigGenParams {
-    <span class="kw">pub </span>mint_amounts: Vec&lt;Amount&gt;,
-    <span class="kw">pub </span>bitcoin_rpc: BitcoindRpcCfg,
+</span><span class="attr">#[derive(Debug, Clone, Default)]
+</span><span class="kw">pub struct </span>ConfigGenParams(BTreeMap&lt;String, serde_json::Value&gt;);
 
-    <span class="doccomment">/// extra options for extra settings and modules
-    </span><span class="kw">pub </span>other: BTreeMap&lt;String, serde_json::Value&gt;,
+<span class="kw">impl </span>ConfigGenParams {
+    <span class="kw">pub fn </span>new() -&gt; ConfigGenParams {
+        ConfigGenParams::default()
+    }
+
+    <span class="doccomment">/// Add params for a module
+    </span><span class="kw">pub fn </span>attach&lt;P: ModuleConfigGenParams&gt;(<span class="kw-2">mut </span><span class="self">self</span>, module_params: P) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.<span class="number">0</span>.insert(
+            P::MODULE_NAME.to_string(),
+            serde_json::to_value(<span class="kw-2">&amp;</span>module_params).expect(<span class="string">&quot;Encoding to value doesn&#39;t fail&quot;</span>),
+        );
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Retrieve a typed config generation parameters for a module
+    </span><span class="kw">pub fn </span>get&lt;P: ModuleConfigGenParams&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;P&gt; {
+        <span class="kw">let </span>value = <span class="self">self
+            </span>.<span class="number">0
+            </span>.get(P::MODULE_NAME)
+            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;No params found for module {}&quot;</span>, P::MODULE_NAME))<span class="question-mark">?</span>;
+        serde_json::from_value(value.clone())
+            .map_err(|e| anyhow::Error::new(e).context(<span class="string">&quot;Invalid module params&quot;</span>))
+    }
 }
 
-<span class="kw">impl </span>ModuleConfigGenParams {
-    <span class="doccomment">/// Default &amp; fake config gen params for things like tests
-    ///
-    /// TODO: Possibly this does not belong here.
-    </span><span class="kw">pub fn </span>fake_config_gen_params() -&gt; ModuleConfigGenParams {
-        ModuleConfigGenParams {
-            mint_amounts: [<span class="number">1</span>, <span class="number">10</span>, <span class="number">100</span>, <span class="number">1000</span>, <span class="number">10000</span>, <span class="number">100000</span>, <span class="number">1000000</span>]
-                .into_iter()
-                .map(Amount::from_msats)
-                .collect(),
-            bitcoin_rpc: fedimint_api::config::BitcoindRpcCfg {
-                btc_rpc_address: <span class="string">&quot;localhost&quot;</span>.into(),
-                btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
-                btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
-            },
-            other: Default::default(),
-        }
-    }
+<span class="kw">pub trait </span>ModuleConfigGenParams: serde::Serialize + serde::de::DeserializeOwned {
+    <span class="kw">const </span>MODULE_NAME: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
 }
 
 <span class="doccomment">/// Config for the client-side of a particular Federation module

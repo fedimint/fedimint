@@ -1026,6 +1026,7 @@
 <a href="#1026" id="1026">1026</a>
 <a href="#1027" id="1027">1027</a>
 <a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1682,7 +1683,7 @@
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
-    <span class="kw">use </span>fedimint_api::config::ModuleConfigGenParams;
+    <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -1692,7 +1693,9 @@
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
     <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-    <span class="kw">use </span>fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
+    <span class="kw">use </span>fedimint_core::modules::mint::{
+        Mint, MintConfigGenParams, MintConfigGenerator, MintOutput,
+    };
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::legacy::Input;
@@ -1820,10 +1823,9 @@
             FakeFed::&lt;Mint&gt;::new(
                 <span class="number">4</span>,
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Mint::new(cfg.to_typed().unwrap())) },
-                <span class="kw-2">&amp;</span>ModuleConfigGenParams {
+                <span class="kw-2">&amp;</span>ConfigGenParams::new().attach(MintConfigGenParams {
                     mint_amounts: <span class="macro">vec!</span>[Amount::from_sats(<span class="number">1</span>), Amount::from_sats(<span class="number">10</span>)],
-                    ..ModuleConfigGenParams::fake_config_gen_params()
-                },
+                }),
                 <span class="kw-2">&amp;</span>MintConfigGenerator,
             )
             .<span class="kw">await
