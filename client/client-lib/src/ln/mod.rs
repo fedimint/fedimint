@@ -353,6 +353,7 @@ mod tests {
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
     use fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
     use fedimint_core::modules::ln::{LightningGateway, LightningOutput};
+    use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::FakeFed;
@@ -473,7 +474,7 @@ mod tests {
         async fn download_ecash_backup(
             &self,
             _id: &secp256k1::XOnlyPublicKey,
-        ) -> crate::api::Result<Option<Vec<u8>>> {
+        ) -> crate::api::Result<Option<ECashUserBackupSnapshot>> {
             unimplemented!()
         }
     }

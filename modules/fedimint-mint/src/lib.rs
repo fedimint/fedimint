@@ -5,7 +5,7 @@ use std::ops::Sub;
 
 use async_trait::async_trait;
 use config::{FeeConsensus, MintClientConfig};
-use db::{EcashBackupKey, EcashBackupValue};
+use db::{ECashUserBackupSnapshot, EcashBackupKey};
 use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
@@ -698,9 +698,9 @@ impl ServerModulePlugin for Mint {
             },
             api_endpoint! {
                 "/recover",
-                async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Option<String> {
+                async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
-                        .handle_recover_request(&mut dbtx, id).await.map(hex::encode))
+                        .handle_recover_request(&mut dbtx, id).await)
                 }
             },
         ]
@@ -732,7 +732,7 @@ impl Mint {
         info!(id = %request.id, len = request.payload.len(), "Storing new user e-cash backup");
         dbtx.insert_entry(
             &EcashBackupKey(request.id),
-            &EcashBackupValue {
+            &ECashUserBackupSnapshot {
                 timestamp: request.timestamp,
                 data: request.payload.to_vec(),
             },
@@ -747,11 +747,8 @@ impl Mint {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         id: secp256k1_zkp::XOnlyPublicKey,
-    ) -> Option<Vec<u8>> {
-        dbtx.get_value(&EcashBackupKey(id))
-            .await
-            .expect("DB error")
-            .map(|res| res.data)
+    ) -> Option<ECashUserBackupSnapshot> {
+        dbtx.get_value(&EcashBackupKey(id)).await.expect("DB error")
     }
 }
 

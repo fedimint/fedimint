@@ -15,6 +15,7 @@ use fedimint_core::epoch::{EpochHistory, SerdeEpochHistory};
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
 use fedimint_core::modules::wallet::PegOutFees;
 use fedimint_core::outcome::legacy::{OutputOutcome, TryIntoOutcome};
 use fedimint_core::outcome::TransactionStatus;
@@ -91,7 +92,7 @@ pub trait IFederationApi: Debug + Send + Sync {
     async fn download_ecash_backup(
         &self,
         id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Option<Vec<u8>>>;
+    ) -> Result<Option<ECashUserBackupSnapshot>>;
 }
 
 dyn_newtype_define! {
@@ -381,23 +382,15 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
     async fn download_ecash_backup(
         &self,
         id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Option<Vec<u8>>> {
-        let hex_str_opt: Option<String> = self
+    ) -> Result<Option<ECashUserBackupSnapshot>> {
+        Ok(self
             .request(
                 "/mint/recover",
                 id,
                 // TODO: do we need a different strategy for this?
                 TrustAllPeers,
             )
-            .await?;
-
-        if let Some(hex_str) = hex_str_opt {
-            Ok(Some(
-                hex::decode(&hex_str).map_err(|e| ApiError::InvalidResponse(e.to_string()))?,
-            ))
-        } else {
-            Ok(None)
-        }
+            .await?)
     }
 }
 

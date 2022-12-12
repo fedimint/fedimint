@@ -177,7 +177,8 @@ impl MintClient {
             .await?
         {
             Ok(Some(
-                EcashBackup(encrypted).decrypt_with(&self.get_derived_backup_encryption_key())?,
+                EcashBackup(encrypted.data)
+                    .decrypt_with(&self.get_derived_backup_encryption_key())?,
             ))
         } else {
             Ok(None)
