@@ -57,6 +57,22 @@ impl Default for FeeConsensus {
 }
 
 impl TypedServerModuleConfig for WalletConfig {
+    type Local = WalletConfig;
+    type Private = ();
+    type Consensus = ();
+
+    fn from_parts(
+        local: Self::Local,
+        _private: Self::Private,
+        _consensus: Self::Consensus,
+    ) -> Self {
+        local
+    }
+
+    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
+        (self, (), ())
+    }
+
     fn to_client_config(&self) -> ClientModuleConfig {
         serde_json::to_value(&WalletClientConfig {
             peg_in_descriptor: self.peg_in_descriptor.clone(),

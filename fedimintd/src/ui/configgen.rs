@@ -139,7 +139,8 @@ fn trusted_dealer_gen(
             let epoch_keys = epochinfo
                 .get(&id)
                 .expect("Could not get keys from epoch info");
-            let config = ServerConfig {
+
+            let mut config = ServerConfig {
                 federation_name: params.federation_name.clone(),
                 identity: id,
                 hbbft_bind_addr: format!("0.0.0.0:{}", hbbft_base_port + id_u16),
@@ -157,12 +158,19 @@ fn trusted_dealer_gen(
                 epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
                 epoch_pk_set: epoch_keys.public_key_set().clone(),
 
-                modules: module_configs
+                modules_local: Default::default(),
+                modules_private: Default::default(),
+                modules_consensus: Default::default(),
+                max_connections: 1000,
+            };
+
+            config.add_modules(
+                module_configs
                     .iter()
                     .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
                     .collect(),
-                max_connections: 1000,
-            };
+            );
+
             (id, config)
         })
         .collect();

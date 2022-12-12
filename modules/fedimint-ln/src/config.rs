@@ -22,6 +22,22 @@ pub struct LightningModuleClientConfig {
 }
 
 impl TypedServerModuleConfig for LightningModuleConfig {
+    type Local = LightningModuleConfig;
+    type Private = ();
+    type Consensus = ();
+
+    fn from_parts(
+        local: Self::Local,
+        _private: Self::Private,
+        _consensus: Self::Consensus,
+    ) -> Self {
+        local
+    }
+
+    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
+        (self, (), ())
+    }
+
     fn to_client_config(&self) -> ClientModuleConfig {
         serde_json::to_value(&LightningModuleClientConfig {
             threshold_pub_key: self.threshold_pub_keys.public_key(),
