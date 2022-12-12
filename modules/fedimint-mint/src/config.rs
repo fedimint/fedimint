@@ -17,10 +17,11 @@ pub struct MintConfig {
     pub threshold: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MintClientConfig {
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
+    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
 }
 
 impl TypedClientModuleConfig for MintClientConfig {}
@@ -43,6 +44,7 @@ impl TypedServerModuleConfig for MintConfig {
         serde_json::to_value(&MintClientConfig {
             tbs_pks: Tiered::from_iter(pub_key.into_iter()),
             fee_consensus: self.fee_consensus.clone(),
+            peer_tbs_pks: self.peer_tbs_pks.clone(),
         })
         .expect("Serialization can't fail")
         .into()

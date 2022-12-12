@@ -49,6 +49,7 @@ secp256k1 = { opt-level = 2 }
 secp256k1-zkp = { opt-level = 2 }
 secp256k1-sys = { opt-level = 2 }
 secp256k1-zkp-sys = { opt-level = 2 }
+bitcoin_hashes = { opt-level = 2 }
 ff = { opt-level = 2 }
 group = { opt-level = 2 }
 pairing = { opt-level = 2 }

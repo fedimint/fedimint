@@ -255,7 +255,7 @@ impl<'a> DatabaseDump<'a> {
                         MintRange::ReceivedPartialSignatureKey,
                         fedimint_mint::OutputConfirmationSignatures,
                         mint,
-                        "User Ecash Backup"
+                        "Received Signature Shares"
                     );
                 }
                 MintRange::DbKeyPrefix::EcashBackup => {
@@ -265,7 +265,7 @@ impl<'a> DatabaseDump<'a> {
                         MintRange::EcashBackupKey,
                         fedimint_mint::db::EcashBackupValue,
                         mint,
-                        "Received Signature Shares"
+                        "User Ecash Backup"
                     );
                 }
             }

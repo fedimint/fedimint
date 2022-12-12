@@ -278,6 +278,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             );
             secret
         };
+        tx.commit_tx().await.expect("db failure");
         secret.into_root_secret()
     }
 

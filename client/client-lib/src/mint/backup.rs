@@ -26,9 +26,9 @@ use fedimint_core::{
 };
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 use tokio::sync::mpsc;
-use tracing::error;
+use tracing::{error, info};
 
-use super::*;
+use super::{db::NextECashNoteIndexKeyPrefix, *};
 use crate::api;
 
 const BACKUP_CHILD_ID: u64 = 0;
@@ -93,14 +93,89 @@ impl MintClient {
         Ok(())
     }
 
-    pub async fn download_ecash_backup_from_federation(&self) -> Result<PlaintextEcashBackup> {
-        let encrypted = self
+    pub async fn restore_ecash_from_federation(&self, gap_limit: usize) -> Result<Cancellable<()>> {
+        let backup = if let Some(backup) = self.download_ecash_backup_from_federation().await? {
+            backup
+        } else {
+            warn!("Could not find any valid existing backup. Will attempt to restore from scratch. This might take a long time.");
+            PlaintextEcashBackup::new_empty()
+        };
+
+        let mut task_group = TaskGroup::new();
+
+        // TODO: If the client attempts any operations between while the recovery is working,
+        // the recovery code will most probably miss them, which might lead to incorrect state.
+        // We should probably lock everything in some way during recovery for corectness.
+        let snapshot = match self
+            .restore_current_state_from_backup(&mut task_group, backup, gap_limit)
+            .await?
+        {
+            Ok(o) => o,
+            Err(Cancelled) => return Ok(Err(Cancelled)),
+        };
+
+        info!("Writting out the recovered state to the database");
+
+        let mut dbtx = self.start_dbtx().await;
+
+        Self::wipe_notes_static(&mut dbtx).await?;
+
+        for (amount, note) in snapshot.spendable_notes {
+            let key = CoinKey {
+                amount,
+                nonce: note.note.0,
+            };
+            dbtx.insert_entry(&key, &note).await.expect("DB error");
+        }
+
+        for (txid, issuance_requests) in snapshot.unconfirmed_notes {
+            dbtx.insert_entry(&OutputFinalizationKey(txid), &issuance_requests)
+                .await
+                .expect("DB Error");
+        }
+
+        for (amount, note_idx) in snapshot.next_note_idx.iter() {
+            dbtx.insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
+                .await
+                .expect("DB Error");
+        }
+        dbtx.commit_tx().await?;
+
+        Ok(Ok(()))
+    }
+
+    pub async fn wipe_notes(&self) -> Result<()> {
+        let mut dbtx = self.start_dbtx().await;
+        Self::wipe_notes_static(&mut dbtx).await?;
+        dbtx.commit_tx().await?;
+        Ok(())
+    }
+
+    /// Delete all the note-related data from the database
+    ///
+    /// Useful for cleaning previous data before restoring data recovered from backup.
+    async fn wipe_notes_static(dbtx: &mut DatabaseTransaction<'_>) -> Result<()> {
+        dbtx.remove_by_prefix(&CoinKeyPrefix).await?;
+        dbtx.remove_by_prefix(&OutputFinalizationKeyPrefix).await?;
+        dbtx.remove_by_prefix(&NextECashNoteIndexKeyPrefix).await?;
+        Ok(())
+    }
+
+    pub async fn download_ecash_backup_from_federation(
+        &self,
+    ) -> Result<Option<PlaintextEcashBackup>> {
+        if let Some(encrypted) = self
             .context
             .api
             .download_ecash_backup(&self.get_derived_backup_signing_key().x_only_public_key().0)
-            .await?;
-
-        EcashBackup(encrypted).decrypt_with(&self.get_derived_backup_encryption_key())
+            .await?
+        {
+            Ok(Some(
+                EcashBackup(encrypted).decrypt_with(&self.get_derived_backup_encryption_key())?,
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Static version of [`Self::get_derived_backup_encryption_key`] for testing without creating whole `MintClient`
@@ -186,6 +261,8 @@ impl MintClient {
                 break;
             }
 
+            info!(epoch, "Fetching epoch");
+
             match self
                 .context
                 .api
@@ -201,6 +278,7 @@ impl MintClient {
                     }
                 }
                 Err(e) => {
+                    // TODO: retry?
                     if sender.send(Err(e)).await.is_err() {
                         break;
                     }
@@ -209,19 +287,24 @@ impl MintClient {
         }
     }
 
-    pub async fn recovery_loop(
+    pub async fn restore_current_state_from_backup(
         &self,
         task_group: &mut TaskGroup,
         backup: PlaintextEcashBackup,
-        pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
-    ) -> Cancellable<Result<()>> {
-        let end_epoch = match self.context.api.fetch_consensus_block_height().await {
+        gap_limit: usize,
+    ) -> Result<Cancellable<EcashRecoveryFinalState>> {
+        let end_epoch = match self.context.api.fetch_last_epoch().await {
             Ok(v) => v,
             Err(e) => {
-                return Ok(Err(e.into()));
+                return Err(e.into());
             }
         };
         let epoch_range = backup.epoch..=end_epoch;
+
+        info!(
+            start_epoch = backup.epoch,
+            end_epoch, "Recovering from snapshot"
+        );
 
         // Since fetching epochs will be slow, we start a dedicated task to do it
         let (tx, mut rx) = mpsc::channel(10);
@@ -237,33 +320,35 @@ impl MintClient {
             })
             .await;
 
-        let mut nonce_tracker = EcashRecoveryTracker::from_backup(
+        let mut tracker = EcashRecoveryTracker::from_backup(
             backup,
             self.secret.clone(),
-            1000,
+            gap_limit,
             self.config.tbs_pks.clone(),
-            pub_key_shares,
+            self.config.peer_tbs_pks.clone(),
         );
 
         for epoch in epoch_range {
             // if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
+            info!(epoch, "Awaiting epoch");
             let epoch_history = match rx.recv().await {
                 Some(Ok(o)) => o,
-                Some(Err(e)) => return Ok(Err(e.into())),
-                None => return Err(Cancelled),
+                Some(Err(e)) => return Err(e.into()),
+                None => return Ok(Err(Cancelled)),
             };
             assert_eq!(epoch_history.outcome.epoch, epoch);
 
+            info!(epoch, "Processing epoch");
             for (peer_id, items) in &epoch_history.outcome.items {
                 // TODO: epoch history to contain rejected items, we should skip them here
                 for item in items {
-                    nonce_tracker.handle_consensus_item(*peer_id, item);
+                    tracker.handle_consensus_item(*peer_id, item);
                 }
             }
         }
 
-        Ok(Ok(()))
+        Ok(Ok(tracker.finalize()))
     }
 }
 
@@ -280,6 +365,16 @@ pub struct PlaintextEcashBackup {
 }
 
 impl PlaintextEcashBackup {
+    /// An empty backup with, like a one created by a newly created client.
+    fn new_empty() -> Self {
+        Self {
+            notes: TieredMulti::default(),
+            pending_notes: vec![],
+            epoch: 0,
+            next_note_idx: Tiered::default(),
+        }
+    }
+
     /// Align an ecoded message size up for better privacy
     fn get_alignment_size(len: usize) -> usize {
         // TODO: should we align to power of 2 instead?
@@ -334,6 +429,18 @@ impl EcashBackup {
 
         request.sign(keypair)
     }
+}
+
+#[derive(Debug)]
+pub struct EcashRecoveryFinalState {
+    /// Nonces that we track that are currently spendable.
+    spendable_notes: Vec<(Amount, SpendableNote)>,
+
+    /// Unsigned notes
+    unconfirmed_notes: Vec<(OutPoint, NoteIssuanceRequests)>,
+
+    /// Note index to derive next note in a given amount tier
+    next_note_idx: Tiered<NoteIndex>,
 }
 
 /// The state machine used for fast-fowarding backup from point when it was taken to the present time
@@ -408,6 +515,7 @@ impl EcashRecoveryTracker {
         tbs_pks: Tiered<AggregatePublicKey>,
         pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     ) -> Self {
+        assert_eq!(mint_secret.level(), 1);
         let amount_tiers: Vec<_> = tbs_pks.tiers().copied().collect();
         let mut s = Self {
             spendable_note_by_nonce: backup
@@ -453,6 +561,7 @@ impl EcashRecoveryTracker {
 
     /// Fill each tier pool to the gap limit
     fn fill_initial_pending_nonces(&mut self, amount: Amount) {
+        info!(%amount, count=self.gap_limit, "Generating initial set of nones for amount tier");
         for _ in 0..self.gap_limit {
             self.add_next_pending_nonce_in_pending_pool(amount);
         }
@@ -714,18 +823,20 @@ impl EcashRecoveryTracker {
                 }
 
                 for (out_idx, output) in tx.outputs.iter().enumerate() {
-                    let output = output
-                        .as_any()
-                        .downcast_ref::<MintOutput>()
-                        .expect("mint key just checked");
+                    if output.module_key() == MODULE_KEY_MINT {
+                        let output = output
+                            .as_any()
+                            .downcast_ref::<MintOutput>()
+                            .expect("mint key just checked");
 
-                    self.handle_output(
-                        OutPoint {
-                            txid,
-                            out_idx: out_idx as u64,
-                        },
-                        output,
-                    );
+                        self.handle_output(
+                            OutPoint {
+                                txid,
+                                out_idx: out_idx as u64,
+                            },
+                            output,
+                        );
+                    }
                 }
             }
             ConsensusItem::Module(module_item) => {
@@ -738,6 +849,38 @@ impl EcashRecoveryTracker {
                     self.handle_output_confirmation(peer_id, mint_item);
                 }
             }
+        }
+    }
+
+    fn finalize(self) -> EcashRecoveryFinalState {
+        EcashRecoveryFinalState {
+            spendable_notes: self
+                .spendable_note_by_nonce
+                .into_iter()
+                .map(|(_nonce, (amount, snote))| (amount, snote))
+                .collect(),
+            unconfirmed_notes: self
+                .pending_outputs
+                .into_iter()
+                .map(|(out_point, data)| {
+                    (
+                        out_point,
+                        NoteIssuanceRequests {
+                            coins: TieredMulti::from_iter(data.0.into_iter_items().filter_map(
+                                |(amount, (_bn, opt_note_iss_req))| {
+                                    opt_note_iss_req.map(|iss_req| (amount, iss_req))
+                                },
+                            )),
+                        },
+                    )
+                })
+                .collect(),
+            // next note idx is the last one detected as used + 1
+            next_note_idx: Tiered::from_iter(
+                self.last_mined_nonce_idx
+                    .iter()
+                    .map(|(amount, value)| (amount, value.next())),
+            ),
         }
     }
 }

@@ -252,6 +252,24 @@ impl<'a> DatabaseTransaction<'a> {
                 })
             })
     }
+
+    // TODO: this function doesn't seem very optimal
+    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
+    where
+        KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
+    {
+        let prefix_bytes = key_prefix.to_bytes();
+        let mut keys = vec![];
+        for kv in self.raw_find_by_prefix(&prefix_bytes).await {
+            let (k, _) = kv?;
+            keys.push(k);
+        }
+
+        for keys in &keys {
+            self.raw_remove_entry(keys).await?;
+        }
+        Ok(())
+    }
 }
 
 impl<T> DatabaseKeyPrefix for T
