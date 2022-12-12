@@ -95,7 +95,7 @@ pub mod __reexports {
 ///
 /// let _: ApiEndpoint<State> = api_endpoint! {
 ///     "/foobar",
-///     async |state: &State, params: ()| -> i32 {
+///     async |state: &State, _dbtx, params: ()| -> i32 {
 ///         Ok(0)
 ///     }
 /// };
