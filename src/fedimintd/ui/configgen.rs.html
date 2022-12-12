@@ -167,20 +167,16 @@
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
-<span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ConfigGenParams};
+<span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ModuleConfigGenParams};
 <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">use </span>fedimint_core::modules::ln::LightningModuleConfigGen;
-<span class="kw">use </span>fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
+<span class="kw">use </span>fedimint_core::modules::mint::MintConfigGenerator;
 <span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, Peer <span class="kw">as </span>ServerPeer, ServerConfig};
 <span class="kw">use </span>fedimint_server::net::peers::ConnectionConfig;
-<span class="kw">use </span>fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
+<span class="kw">use </span>fedimint_wallet::WalletConfigGenerator;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
@@ -282,15 +278,11 @@
         })
         .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-    <span class="kw">let </span>module_cfg_gen_params = ConfigGenParams::new()
-        .attach(WalletConfigGenParams {
-            network: bitcoin::network::constants::Network::Regtest,
-            bitcoin_rpc: params.btc_rpc.clone(),
-            finality_delay: <span class="number">10</span>,
-        })
-        .attach(MintConfigGenParams {
-            mint_amounts: params.amount_tiers.clone(),
-        });
+    <span class="kw">let </span>module_cfg_gen_params = ModuleConfigGenParams {
+        mint_amounts: params.amount_tiers.clone(),
+        bitcoin_rpc: params.btc_rpc.clone(),
+        other: BTreeMap::new(),
+    };
     <span class="kw">let </span>module_config_gens: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, Box&lt;<span class="kw">_</span>&gt;)&gt; = <span class="macro">vec!</span>[
         (
             <span class="string">&quot;wallet&quot;</span>,

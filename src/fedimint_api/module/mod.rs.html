@@ -365,7 +365,7 @@
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
-<span class="kw">use </span><span class="kw">crate</span>::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
+<span class="kw">use </span><span class="kw">crate</span>::config::{ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig};
 <span class="kw">use </span><span class="kw">crate</span>::core::{
     PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
 };
@@ -557,7 +557,7 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
     ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig);
 
     <span class="kw">async fn </span>distributed_gen(
@@ -565,7 +565,7 @@
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ModuleConfigGenParams,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt;;
 
