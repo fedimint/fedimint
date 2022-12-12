@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/backup.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>backup.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6827029ac823cab7.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-ebce58d0a40c3431.css"><link rel="stylesheet" disabled href="../../../static.files/dark-f23faae4a2daf9a6.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-8af5e100b21cd173.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-c55e1eb52e1886b4.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/backup.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>backup.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-9def1262ebc682c9.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-ebce58d0a40c3431.css"><link rel="stylesheet" disabled href="../../../static.files/dark-f23faae4a2daf9a6.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-94f39d4346842c1e.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-c55e1eb52e1886b4.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -744,6 +744,149 @@
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
 <a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -772,9 +915,9 @@
 };
 <span class="kw">use </span>tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 <span class="kw">use </span>tokio::sync::mpsc;
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::{error, info};
 
-<span class="kw">use super</span>::<span class="kw-2">*</span>;
+<span class="kw">use super</span>::{db::NextECashNoteIndexKeyPrefix, <span class="kw-2">*</span>};
 <span class="kw">use </span><span class="kw">crate</span>::api;
 
 <span class="kw">const </span>BACKUP_CHILD_ID: u64 = <span class="number">0</span>;
@@ -839,14 +982,89 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>download_ecash_backup_from_federation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PlaintextEcashBackup&gt; {
-        <span class="kw">let </span>encrypted = <span class="self">self
+    <span class="kw">pub async fn </span>restore_ecash_from_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, gap_limit: usize) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;()&gt;&gt; {
+        <span class="kw">let </span>backup = <span class="kw">if let </span><span class="prelude-val">Some</span>(backup) = <span class="self">self</span>.download_ecash_backup_from_federation().<span class="kw">await</span><span class="question-mark">? </span>{
+            backup
+        } <span class="kw">else </span>{
+            <span class="macro">warn!</span>(<span class="string">&quot;Could not find any valid existing backup. Will attempt to restore from scratch. This might take a long time.&quot;</span>);
+            PlaintextEcashBackup::new_empty()
+        };
+
+        <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
+
+        <span class="comment">// TODO: If the client attempts any operations between while the recovery is working,
+        // the recovery code will most probably miss them, which might lead to incorrect state.
+        // We should probably lock everything in some way during recovery for corectness.
+        </span><span class="kw">let </span>snapshot = <span class="kw">match </span><span class="self">self
+            </span>.restore_current_state_from_backup(<span class="kw-2">&amp;mut </span>task_group, backup, gap_limit)
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
+            <span class="prelude-val">Ok</span>(o) =&gt; o,
+            <span class="prelude-val">Err</span>(Cancelled) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled)),
+        };
+
+        <span class="macro">info!</span>(<span class="string">&quot;Writting out the recovered state to the database&quot;</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
+
+        <span class="self">Self</span>::wipe_notes_static(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>snapshot.spendable_notes {
+            <span class="kw">let </span>key = CoinKey {
+                amount,
+                nonce: note.note.<span class="number">0</span>,
+            };
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
+        }
+
+        <span class="kw">for </span>(txid, issuance_requests) <span class="kw">in </span>snapshot.unconfirmed_notes {
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(txid), <span class="kw-2">&amp;</span>issuance_requests)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        }
+
+        <span class="kw">for </span>(amount, note_idx) <span class="kw">in </span>snapshot.next_note_idx.iter() {
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>note_idx.as_u64())
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        }
+        dbtx.commit_tx().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()))
+    }
+
+    <span class="kw">pub async fn </span>wipe_notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
+        <span class="self">Self</span>::wipe_notes_static(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.commit_tx().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Delete all the note-related data from the database
+    ///
+    /// Useful for cleaning previous data before restoring data recovered from backup.
+    </span><span class="kw">async fn </span>wipe_notes_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>NextECashNoteIndexKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>download_ecash_backup_from_federation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PlaintextEcashBackup&gt;&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(encrypted) = <span class="self">self
             </span>.context
             .api
             .download_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_signing_key().x_only_public_key().<span class="number">0</span>)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        EcashBackup(encrypted).decrypt_with(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_encryption_key())
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
+                EcashBackup(encrypted).decrypt_with(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_encryption_key())<span class="question-mark">?</span>,
+            ))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+        }
     }
 
     <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for testing without creating whole `MintClient`
@@ -932,6 +1150,8 @@
                 <span class="kw">break</span>;
             }
 
+            <span class="macro">info!</span>(epoch, <span class="string">&quot;Fetching epoch&quot;</span>);
+
             <span class="kw">match </span><span class="self">self
                 </span>.context
                 .api
@@ -947,7 +1167,8 @@
                     }
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="kw">if </span>sender.send(<span class="prelude-val">Err</span>(e)).<span class="kw">await</span>.is_err() {
+                    <span class="comment">// TODO: retry?
+                    </span><span class="kw">if </span>sender.send(<span class="prelude-val">Err</span>(e)).<span class="kw">await</span>.is_err() {
                         <span class="kw">break</span>;
                     }
                 }
@@ -955,19 +1176,24 @@
         }
     }
 
-    <span class="kw">pub async fn </span>recovery_loop(
+    <span class="kw">pub async fn </span>restore_current_state_from_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         backup: PlaintextEcashBackup,
-        pub_key_shares: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
-    ) -&gt; Cancellable&lt;<span class="prelude-ty">Result</span>&lt;()&gt;&gt; {
-        <span class="kw">let </span>end_epoch = <span class="kw">match </span><span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await </span>{
+        gap_limit: usize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Cancellable&lt;EcashRecoveryFinalState&gt;&gt; {
+        <span class="kw">let </span>end_epoch = <span class="kw">match </span><span class="self">self</span>.context.api.fetch_last_epoch().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(v) =&gt; v,
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e.into()));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
             }
         };
         <span class="kw">let </span>epoch_range = backup.epoch..=end_epoch;
+
+        <span class="macro">info!</span>(
+            start_epoch = backup.epoch,
+            end_epoch, <span class="string">&quot;Recovering from snapshot&quot;
+        </span>);
 
         <span class="comment">// Since fetching epochs will be slow, we start a dedicated task to do it
         </span><span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::channel(<span class="number">10</span>);
@@ -983,33 +1209,35 @@
             })
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>nonce_tracker = EcashRecoveryTracker::from_backup(
+        <span class="kw">let </span><span class="kw-2">mut </span>tracker = EcashRecoveryTracker::from_backup(
             backup,
             <span class="self">self</span>.secret.clone(),
-            <span class="number">1000</span>,
+            gap_limit,
             <span class="self">self</span>.config.tbs_pks.clone(),
-            pub_key_shares,
+            <span class="self">self</span>.config.peer_tbs_pks.clone(),
         );
 
         <span class="kw">for </span>epoch <span class="kw">in </span>epoch_range {
             <span class="comment">// if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
-            </span><span class="kw">let </span>epoch_history = <span class="kw">match </span>rx.recv().<span class="kw">await </span>{
+            </span><span class="macro">info!</span>(epoch, <span class="string">&quot;Awaiting epoch&quot;</span>);
+            <span class="kw">let </span>epoch_history = <span class="kw">match </span>rx.recv().<span class="kw">await </span>{
                 <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(o)) =&gt; o,
-                <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e)) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e.into())),
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled),
+                <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e)) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.into()),
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled)),
             };
             <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
 
+            <span class="macro">info!</span>(epoch, <span class="string">&quot;Processing epoch&quot;</span>);
             <span class="kw">for </span>(peer_id, items) <span class="kw">in </span><span class="kw-2">&amp;</span>epoch_history.outcome.items {
                 <span class="comment">// TODO: epoch history to contain rejected items, we should skip them here
                 </span><span class="kw">for </span>item <span class="kw">in </span>items {
-                    nonce_tracker.handle_consensus_item(<span class="kw-2">*</span>peer_id, item);
+                    tracker.handle_consensus_item(<span class="kw-2">*</span>peer_id, item);
                 }
             }
         }
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(tracker.finalize()))
     }
 }
 
@@ -1026,6 +1254,16 @@
 }
 
 <span class="kw">impl </span>PlaintextEcashBackup {
+    <span class="doccomment">/// An empty backup with, like a one created by a newly created client.
+    </span><span class="kw">fn </span>new_empty() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            notes: TieredMulti::default(),
+            pending_notes: <span class="macro">vec!</span>[],
+            epoch: <span class="number">0</span>,
+            next_note_idx: Tiered::default(),
+        }
+    }
+
     <span class="doccomment">/// Align an ecoded message size up for better privacy
     </span><span class="kw">fn </span>get_alignment_size(len: usize) -&gt; usize {
         <span class="comment">// TODO: should we align to power of 2 instead?
@@ -1080,6 +1318,18 @@
 
         request.sign(keypair)
     }
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>EcashRecoveryFinalState {
+    <span class="doccomment">/// Nonces that we track that are currently spendable.
+    </span>spendable_notes: Vec&lt;(Amount, SpendableNote)&gt;,
+
+    <span class="doccomment">/// Unsigned notes
+    </span>unconfirmed_notes: Vec&lt;(OutPoint, NoteIssuanceRequests)&gt;,
+
+    <span class="doccomment">/// Note index to derive next note in a given amount tier
+    </span>next_note_idx: Tiered&lt;NoteIndex&gt;,
 }
 
 <span class="doccomment">/// The state machine used for fast-fowarding backup from point when it was taken to the present time
@@ -1154,6 +1404,7 @@
         tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
         pub_key_shares: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
     ) -&gt; <span class="self">Self </span>{
+        <span class="macro">assert_eq!</span>(mint_secret.level(), <span class="number">1</span>);
         <span class="kw">let </span>amount_tiers: Vec&lt;<span class="kw">_</span>&gt; = tbs_pks.tiers().copied().collect();
         <span class="kw">let </span><span class="kw-2">mut </span>s = <span class="self">Self </span>{
             spendable_note_by_nonce: backup
@@ -1199,6 +1450,7 @@
 
     <span class="doccomment">/// Fill each tier pool to the gap limit
     </span><span class="kw">fn </span>fill_initial_pending_nonces(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: Amount) {
+        <span class="macro">info!</span>(%amount, count=<span class="self">self</span>.gap_limit, <span class="string">&quot;Generating initial set of nones for amount tier&quot;</span>);
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="self">self</span>.gap_limit {
             <span class="self">self</span>.add_next_pending_nonce_in_pending_pool(amount);
         }
@@ -1460,18 +1712,20 @@
                 }
 
                 <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>tx.outputs.iter().enumerate() {
-                    <span class="kw">let </span>output = output
-                        .as_any()
-                        .downcast_ref::&lt;MintOutput&gt;()
-                        .expect(<span class="string">&quot;mint key just checked&quot;</span>);
+                    <span class="kw">if </span>output.module_key() == MODULE_KEY_MINT {
+                        <span class="kw">let </span>output = output
+                            .as_any()
+                            .downcast_ref::&lt;MintOutput&gt;()
+                            .expect(<span class="string">&quot;mint key just checked&quot;</span>);
 
-                    <span class="self">self</span>.handle_output(
-                        OutPoint {
-                            txid,
-                            out_idx: out_idx <span class="kw">as </span>u64,
-                        },
-                        output,
-                    );
+                        <span class="self">self</span>.handle_output(
+                            OutPoint {
+                                txid,
+                                out_idx: out_idx <span class="kw">as </span>u64,
+                            },
+                            output,
+                        );
+                    }
                 }
             }
             ConsensusItem::Module(module_item) =&gt; {
@@ -1486,9 +1740,41 @@
             }
         }
     }
+
+    <span class="kw">fn </span>finalize(<span class="self">self</span>) -&gt; EcashRecoveryFinalState {
+        EcashRecoveryFinalState {
+            spendable_notes: <span class="self">self
+                </span>.spendable_note_by_nonce
+                .into_iter()
+                .map(|(_nonce, (amount, snote))| (amount, snote))
+                .collect(),
+            unconfirmed_notes: <span class="self">self
+                </span>.pending_outputs
+                .into_iter()
+                .map(|(out_point, data)| {
+                    (
+                        out_point,
+                        NoteIssuanceRequests {
+                            coins: TieredMulti::from_iter(data.<span class="number">0</span>.into_iter_items().filter_map(
+                                |(amount, (_bn, opt_note_iss_req))| {
+                                    opt_note_iss_req.map(|iss_req| (amount, iss_req))
+                                },
+                            )),
+                        },
+                    )
+                })
+                .collect(),
+            <span class="comment">// next note idx is the last one detected as used + 1
+            </span>next_note_idx: Tiered::from_iter(
+                <span class="self">self</span>.last_mined_nonce_idx
+                    .iter()
+                    .map(|(amount, value)| (amount, value.next())),
+            ),
+        }
+    }
 }
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests;
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (dfe3fe710 2022-12-09)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (bdb07a8ec 2022-12-11)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
