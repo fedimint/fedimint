@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap};
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, Node,
-    ServerModuleConfig, TypedServerModuleConfig,
+    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -15,9 +15,9 @@ pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::LightningModuleConfig;
 use fedimint_core::modules::ln::LightningModuleConfigGen;
 use fedimint_core::modules::mint::config::MintConfig;
-use fedimint_core::modules::mint::MintConfigGenerator;
+use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
 use fedimint_wallet::config::WalletConfig;
-use fedimint_wallet::WalletConfigGenerator;
+use fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
@@ -87,12 +87,10 @@ pub struct ServerConfigParams {
     pub hbbft: NetworkConfig,
     pub api: NetworkConfig,
     pub server_dkg: NetworkConfig,
-    pub max_denomination: Amount,
     pub federation_name: String,
-    pub bitcoind_rpc: String,
 
     /// extra options for extra settings and modules
-    pub other: BTreeMap<String, serde_json::Value>,
+    pub modules: ConfigGenParams,
 }
 
 impl ServerConfig {
@@ -192,16 +190,6 @@ impl ServerConfig {
 
         let peer0 = &params[&PeerId::from(0)];
 
-        let module_cfg_gen_params = ModuleConfigGenParams {
-            mint_amounts: ServerConfigParams::gen_denominations(peer0.max_denomination),
-            // TODO: FIXME: meh
-            bitcoin_rpc: BitcoindRpcCfg {
-                btc_rpc_address: peer0.bitcoind_rpc.clone(),
-                btc_rpc_user: "bitcoin".into(),
-                btc_rpc_pass: "bitcoin".into(),
-            },
-            other: peer0.other.clone(),
-        };
         let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
             (
                 "wallet",
@@ -213,7 +201,7 @@ impl ServerConfig {
 
         let module_configs: Vec<_> = module_config_gens
             .iter()
-            .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &module_cfg_gen_params)))
+            .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &peer0.modules)))
             .collect();
 
         let server_config: BTreeMap<_, _> = netinfo
@@ -293,15 +281,6 @@ impl ServerConfig {
         let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
 
-        let module_cfg_gen_params = ModuleConfigGenParams {
-            mint_amounts: ServerConfigParams::gen_denominations(params.max_denomination),
-            bitcoin_rpc: BitcoindRpcCfg {
-                btc_rpc_address: params.bitcoind_rpc.clone(),
-                btc_rpc_user: "bitcoin".into(),
-                btc_rpc_pass: "bitcoin".into(),
-            },
-            other: params.other.clone(),
-        };
         let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
             (
                 "wallet",
@@ -317,13 +296,7 @@ impl ServerConfig {
             module_cfgs.push((
                 name,
                 if let Ok(cfgs) = gen
-                    .distributed_gen(
-                        connections,
-                        our_id,
-                        peers,
-                        &module_cfg_gen_params,
-                        task_group,
-                    )
+                    .distributed_gen(connections, our_id, peers, &params.modules, task_group)
                     .await?
                 {
                     cfgs
@@ -473,15 +446,20 @@ impl ServerConfigParams {
             hbbft: Self::gen_network(&bind_address, &our_id, 0, peers),
             api: Self::gen_network(&bind_address, &our_id, 1, peers),
             server_dkg: Self::gen_network(&bind_address, &our_id, 2, peers),
-            max_denomination,
             federation_name,
-            bitcoind_rpc,
-            other: vec![
-                ("network".into(), network.to_string().into()),
-                ("finality_delay".into(), finality_delay.into()),
-            ]
-            .into_iter()
-            .collect(),
+            modules: ConfigGenParams::new()
+                .attach(WalletConfigGenParams {
+                    network,
+                    bitcoin_rpc: BitcoindRpcCfg {
+                        btc_rpc_address: bitcoind_rpc,
+                        btc_rpc_user: "bitcoin".to_string(),
+                        btc_rpc_pass: "bitcoin".to_string(),
+                    },
+                    finality_delay,
+                })
+                .attach(MintConfigGenParams {
+                    mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
+                }),
         }
     }
 

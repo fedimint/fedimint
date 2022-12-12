@@ -654,7 +654,7 @@ mod tests {
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
     use fedimint_api::backup::SignedBackupRequest;
-    use fedimint_api::config::ModuleConfigGenParams;
+    use fedimint_api::config::ConfigGenParams;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -664,7 +664,9 @@ mod tests {
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     use fedimint_core::modules::mint::config::MintClientConfig;
-    use fedimint_core::modules::mint::{Mint, MintConfigGenerator, MintOutput};
+    use fedimint_core::modules::mint::{
+        Mint, MintConfigGenParams, MintConfigGenerator, MintOutput,
+    };
     use fedimint_core::modules::wallet::PegOutFees;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::transaction::legacy::Input;
@@ -792,10 +794,9 @@ mod tests {
             FakeFed::<Mint>::new(
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
-                &ModuleConfigGenParams {
+                &ConfigGenParams::new().attach(MintConfigGenParams {
                     mint_amounts: vec![Amount::from_sats(1), Amount::from_sats(10)],
-                    ..ModuleConfigGenParams::fake_config_gen_params()
-                },
+                }),
                 &MintConfigGenerator,
             )
             .await

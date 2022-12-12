@@ -9,8 +9,8 @@ use db::{EcashBackupKey, EcashBackupValue};
 use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    scalar, ClientModuleConfig, DkgPeerMsg, DkgRunner, ModuleConfigGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
+    ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
@@ -134,8 +134,12 @@ impl FederationModuleConfigGen for MintConfigGenerator {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
     ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+        let params = params
+            .get::<MintConfigGenParams>()
+            .expect("Invalid mint params");
+
         let tbs_keys = params
             .mint_amounts
             .iter()
@@ -210,9 +214,13 @@ impl FederationModuleConfigGen for MintConfigGenerator {
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+        let params = params
+            .get::<MintConfigGenParams>()
+            .expect("Invalid mint params");
+
         let mut dkg = DkgRunner::multi(
             params.mint_amounts.to_vec(),
             peers.threshold(),
@@ -263,6 +271,15 @@ impl FederationModuleConfigGen for MintConfigGenerator {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<MintConfig>()?.validate_config(identity)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MintConfigGenParams {
+    pub mint_amounts: Vec<Amount>,
+}
+
+impl ModuleConfigGenParams for MintConfigGenParams {
+    const MODULE_NAME: &'static str = "mint";
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]
@@ -1082,13 +1099,16 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+    use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
     use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{BlindNonce, CombineError, Mint, MintConfig, MintConfigGenerator, PeerErrorType};
+    use crate::{
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenParams, MintConfigGenerator,
+        PeerErrorType,
+    };
 
     const THRESHOLD: usize = 1;
     const MINTS: usize = 5;
@@ -1097,10 +1117,9 @@ mod test {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
         let (mint_cfg, client_cfg) = MintConfigGenerator.trusted_dealer_gen(
             &peers,
-            &ModuleConfigGenParams {
+            &ConfigGenParams::new().attach(MintConfigGenParams {
                 mint_amounts: vec![Amount::from_sats(1)],
-                ..ModuleConfigGenParams::fake_config_gen_params()
-            },
+            }),
         );
 
         (mint_cfg.into_iter().map(|(_, c)| c).collect(), client_cfg)

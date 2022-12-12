@@ -26,7 +26,6 @@ use url::Url;
 use crate::cancellable::Cancellable;
 use crate::core::ModuleKey;
 use crate::net::peers::MuxPeerConnections;
-use crate::Amount;
 use crate::PeerId;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -64,32 +63,36 @@ impl ClientConfig {
 ///
 /// Candidate for re-designing when the modularization effort is
 /// complete.
-pub struct ModuleConfigGenParams {
-    pub mint_amounts: Vec<Amount>,
-    pub bitcoin_rpc: BitcoindRpcCfg,
+#[derive(Debug, Clone, Default)]
+pub struct ConfigGenParams(BTreeMap<String, serde_json::Value>);
 
-    /// extra options for extra settings and modules
-    pub other: BTreeMap<String, serde_json::Value>,
+impl ConfigGenParams {
+    pub fn new() -> ConfigGenParams {
+        ConfigGenParams::default()
+    }
+
+    /// Add params for a module
+    pub fn attach<P: ModuleConfigGenParams>(mut self, module_params: P) -> Self {
+        self.0.insert(
+            P::MODULE_NAME.to_string(),
+            serde_json::to_value(&module_params).expect("Encoding to value doesn't fail"),
+        );
+        self
+    }
+
+    /// Retrieve a typed config generation parameters for a module
+    pub fn get<P: ModuleConfigGenParams>(&self) -> anyhow::Result<P> {
+        let value = self
+            .0
+            .get(P::MODULE_NAME)
+            .ok_or_else(|| anyhow::anyhow!("No params found for module {}", P::MODULE_NAME))?;
+        serde_json::from_value(value.clone())
+            .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
+    }
 }
 
-impl ModuleConfigGenParams {
-    /// Default & fake config gen params for things like tests
-    ///
-    /// TODO: Possibly this does not belong here.
-    pub fn fake_config_gen_params() -> ModuleConfigGenParams {
-        ModuleConfigGenParams {
-            mint_amounts: [1, 10, 100, 1000, 10000, 100000, 1000000]
-                .into_iter()
-                .map(Amount::from_msats)
-                .collect(),
-            bitcoin_rpc: fedimint_api::config::BitcoindRpcCfg {
-                btc_rpc_address: "localhost".into(),
-                btc_rpc_user: "bitcoin".into(),
-                btc_rpc_pass: "bitcoin".into(),
-            },
-            other: Default::default(),
-        }
-    }
+pub trait ModuleConfigGenParams: serde::Serialize + serde::de::DeserializeOwned {
+    const MODULE_NAME: &'static str;
 }
 
 /// Config for the client-side of a particular Federation module

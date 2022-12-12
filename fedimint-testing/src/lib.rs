@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::config::{ClientModuleConfig, ModuleConfigGenParams, ServerModuleConfig};
+use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -42,7 +42,7 @@ where
     pub async fn new<ConfGen, F, FF>(
         members: usize,
         constructor: F,
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
         conf_gen: &ConfGen,
     ) -> anyhow::Result<FakeFed<Module>>
     where

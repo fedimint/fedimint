@@ -11,7 +11,7 @@ use secp256k1_zkp::XOnlyPublicKey;
 use thiserror::Error;
 
 use crate::cancellable::Cancellable;
-use crate::config::{ClientModuleConfig, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig};
+use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
     PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
 };
@@ -203,7 +203,7 @@ pub trait FederationModuleConfigGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
     ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig);
 
     async fn distributed_gen(
@@ -211,7 +211,7 @@ pub trait FederationModuleConfigGen {
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
-        params: &ModuleConfigGenParams,
+        params: &ConfigGenParams,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>>;
 
