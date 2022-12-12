@@ -282,6 +282,7 @@
 
 
         commonArgs = {
+          pname = "fedimint-workspace";
           src = filterWorkspaceFiles ./.;
 
           buildInputs = with pkgs; [
@@ -334,35 +335,27 @@
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
           src = filterWorkspaceDepsBuildFiles ./.;
-          pname = "workspace-deps";
           buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE && cargo check --profile $CARGO_PROFILE --all-targets && cargo build --profile $CARGO_PROFILE --all-targets";
           doCheck = false;
         });
 
         workspaceBuild = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-build";
           cargoArtifacts = workspaceDeps;
           doCheck = false;
         });
 
-        workspaceTest = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-test";
-          cargoBuildCommand = "true";
+        workspaceTest = craneLib.cargoTest (commonArgs // {
           cargoArtifacts = workspaceDeps;
-          doCheck = true;
         });
 
         workspaceClippy = craneLib.cargoClippy (commonArgs // {
-          pname = "workspace-clippy";
           cargoArtifacts = workspaceDeps;
 
           cargoClippyExtraArgs = "--all-targets --no-deps -- --deny warnings";
           doInstallCargoArtifacts = false;
-          doCheck = false;
         });
 
         workspaceDoc = craneLib.cargoDoc (commonArgs // {
-          pname = "workspace-doc";
           cargoArtifacts = workspaceDeps;
           preConfigure = ''
             export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
@@ -376,13 +369,13 @@
         });
 
         workspaceAudit = craneLib.cargoAudit (commonArgs // {
-          pname = "workspace-clippy";
+          pname = commonArgs.pname + "-audit";
           inherit advisory-db;
         });
 
         # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
         workspaceDepsCov = craneLib.buildDepsOnly (commonArgs // {
-          pname = "workspace-deps-llvm-cov";
+          pname = commonArgs.pname + "-lcov";
           src = filterWorkspaceDepsBuildFiles ./.;
           cargoBuildCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE";
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
@@ -390,12 +383,17 @@
         });
 
         workspaceCov = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-llvm-cov";
+          pname = commonArgs.pname + "-lcov";
           cargoArtifacts = workspaceDepsCov;
           # TODO: as things are right now, the integration tests can't run in parallel
           cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --profile $CARGO_PROFILE --workspace --lcov --output-path $out/lcov.info";
-          doCheck = false;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+          doCheck = false;
+        });
+
+        workspaceTestCov = craneLib.cargoTest (commonArgs // {
+          pname = commonArgs.pname + "-lcov";
+          cargoArtifacts = workspaceCov;
         });
 
         cliTestReconnect = craneLib.cargoBuild (commonCliTestArgs // {
@@ -668,6 +666,7 @@
             workspaceTest
             workspaceDoc
             workspaceCov
+            workspaceTestCov
             workspaceAudit;
 
         };
