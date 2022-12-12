@@ -190,7 +190,7 @@ pub enum WalletClientError {
 mod tests {
     use std::str::FromStr;
     use std::sync::Arc;
-    use std::time::{Duration, SystemTime};
+    use std::time::Duration;
 
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};

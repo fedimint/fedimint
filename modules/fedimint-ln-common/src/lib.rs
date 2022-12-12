@@ -201,12 +201,12 @@ impl std::fmt::Display for LightningConsensusItem {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RoundConsensusItem {
-    pub clock_time: SystemTime,
+    pub clock_time: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RoundConsensus {
-    pub clock_time: SystemTime,
+    pub clock_time: u64,
 }
 
 #[derive(Debug)]

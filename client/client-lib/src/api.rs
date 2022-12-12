@@ -27,7 +27,7 @@ pub trait LnFederationApi {
         &self,
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer>;
-    async fn fetch_consensus_clock_time(&self) -> FederationResult<SystemTime>;
+    async fn fetch_consensus_clock_time(&self) -> FederationResult<u64>;
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>>;
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()>;
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
@@ -59,7 +59,7 @@ where
         .await
     }
 
-    async fn fetch_consensus_clock_time(&self) -> FederationResult<SystemTime> {
+    async fn fetch_consensus_clock_time(&self) -> FederationResult<u64> {
         self.request_with_strategy(
             EventuallyConsistent::new(self.all_members().one_honest()),
             format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/clock_time"),

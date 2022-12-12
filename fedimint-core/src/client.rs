@@ -35,7 +35,7 @@ use bitcoin::{Address, Amount};
 use futures::stream::FuturesUnordered;
 
 use futures::StreamExt;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use thiserror::Error;
 
 use crate::module::ApiError;
@@ -69,7 +69,7 @@ pub trait FederationApi: Send + Sync {
     async fn fetch_consensus_block_height(&self) -> Result<u64>;
 
     /// Fetch the current consensus clock time
-    async fn fetch_consensus_clock_time(&self) -> Result<SystemTime>;
+    async fn fetch_consensus_clock_time(&self) -> Result<u64>;
 
     /// Fetch the expected peg-out fees given a peg-out tx
     async fn fetch_peg_out_fees(

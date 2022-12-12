@@ -287,7 +287,10 @@ impl ServerModule for Lightning {
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> ConsensusProposal<LightningConsensusItem> {
         let round_ci = LightningConsensusItem::RoundConsensus(RoundConsensusItem {
-            clock_time: SystemTime::now(),
+            clock_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Error getting clock time")
+                .as_secs(),
         });
 
         ConsensusProposal::new_auto_trigger(
@@ -801,8 +804,8 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 "/clock_time",
-                async |module: &Lightning, dbtx, _params: ()| -> SystemTime {
-                   Ok(module.consensus_clock_time(dbtx).await.unwrap_or(UNIX_EPOCH))
+                async |module: &Lightning, context, _params: ()| -> u64 {
+                   Ok(module.consensus_clock_time(&mut context.dbtx()).await.unwrap_or(0))
                 }
             },
             api_endpoint! {
@@ -905,7 +908,7 @@ impl Lightning {
             .await;
     }
 
-    async fn process_clock_time_proposals(&self, mut proposals: Vec<SystemTime>) -> SystemTime {
+    async fn process_clock_time_proposals(&self, mut proposals: Vec<u64>) -> u64 {
         assert!(!proposals.is_empty());
 
         proposals.sort();
@@ -934,7 +937,7 @@ impl Lightning {
     pub async fn consensus_clock_time(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-    ) -> Option<SystemTime> {
+    ) -> Option<u64> {
         self.current_round_consensus(dbtx)
             .await
             .map(|rc| rc.clock_time)
