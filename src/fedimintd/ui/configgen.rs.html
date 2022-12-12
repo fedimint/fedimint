@@ -171,6 +171,14 @@
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ConfigGenParams};
@@ -312,7 +320,8 @@
             <span class="kw">let </span>epoch_keys = epochinfo
                 .get(<span class="kw-2">&amp;</span>id)
                 .expect(<span class="string">&quot;Could not get keys from epoch info&quot;</span>);
-            <span class="kw">let </span>config = ServerConfig {
+
+            <span class="kw">let </span><span class="kw-2">mut </span>config = ServerConfig {
                 federation_name: params.federation_name.clone(),
                 identity: id,
                 hbbft_bind_addr: <span class="macro">format!</span>(<span class="string">&quot;0.0.0.0:{}&quot;</span>, hbbft_base_port + id_u16),
@@ -330,12 +339,19 @@
                 epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
                 epoch_pk_set: epoch_keys.public_key_set().clone(),
 
-                modules: module_configs
+                modules_local: Default::default(),
+                modules_private: Default::default(),
+                modules_consensus: Default::default(),
+                max_connections: <span class="number">1000</span>,
+            };
+
+            config.add_modules(
+                module_configs
                     .iter()
                     .map(|(name, cfgs)| (name.to_string(), cfgs.<span class="number">0</span>[<span class="kw-2">&amp;</span>id].clone()))
                     .collect(),
-                max_connections: <span class="number">1000</span>,
-            };
+            );
+
             (id, config)
         })
         .collect();

@@ -1573,13 +1573,6 @@
 <a href="#1573" id="1573">1573</a>
 <a href="#1574" id="1574">1574</a>
 <a href="#1575" id="1575">1575</a>
-<a href="#1576" id="1576">1576</a>
-<a href="#1577" id="1577">1577</a>
-<a href="#1578" id="1578">1578</a>
-<a href="#1579" id="1579">1579</a>
-<a href="#1580" id="1580">1580</a>
-<a href="#1581" id="1581">1581</a>
-<a href="#1582" id="1582">1582</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1839,14 +1832,7 @@
         (
             wallet_cfg
                 .into_iter()
-                .map(|(k, v)| {
-                    (
-                        k,
-                        serde_json::to_value(v)
-                            .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
-                            .into(),
-                    )
-                })
+                .map(|(k, v)| (k, v.to_erased()))
                 .collect(),
             serde_json::to_value(client_cfg)
                 .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)

@@ -985,7 +985,6 @@
 <a href="#985" id="985">985</a>
 <a href="#986" id="986">986</a>
 <a href="#987" id="987">987</a>
-<a href="#988" id="988">988</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1229,14 +1228,13 @@
 
                 (
                     peer,
-                    serde_json::to_value(<span class="kw-2">&amp;</span>LightningModuleConfig {
+                    LightningModuleConfig {
                         threshold_pub_keys: pks.clone(),
                         threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
                         threshold: peers.threshold(),
                         fee_consensus: FeeConsensus::default(),
-                    })
-                    .expect(<span class="string">&quot;serialization can&#39;t fail here&quot;</span>)
-                    .into(),
+                    }
+                    .to_erased(),
                 )
             })
             .collect();
