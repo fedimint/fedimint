@@ -1422,6 +1422,7 @@
 <a href="#1422" id="1422">1422</a>
 <a href="#1423" id="1423">1423</a>
 <a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1517,7 +1518,8 @@
 };
 
 <span class="kw">const </span>TIMELOCK: u64 = <span class="number">100</span>;
-<span class="kw">const </span>MINT_SECRET_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
+<span class="doccomment">/// Mint module&#39;s secret key derivation child id
+</span><span class="kw">pub const </span>MINT_SECRET_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
 <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ClientError&gt;;
 <span class="kw">pub type </span>GatewayClient = Client&lt;GatewayClientConfig&gt;;

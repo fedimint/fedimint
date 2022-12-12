@@ -9,7 +9,7 @@
 
 <span class="kw">let _</span>: ApiEndpoint&lt;State&gt; = <span class="macro">api_endpoint! </span>{
     <span class="string">&quot;/foobar&quot;</span>,
-    <span class="kw">async </span>|state: <span class="kw-2">&amp;</span>State, params: ()| -&gt; i32 {
+    <span class="kw">async </span>|state: <span class="kw-2">&amp;</span>State, _dbtx, params: ()| -&gt; i32 {
         <span class="prelude-val">Ok</span>(<span class="number">0</span>)
     }
 };</code></pre></div>
