@@ -93,7 +93,11 @@ impl MintClient {
         Ok(())
     }
 
-    pub async fn restore_ecash_from_federation(&self, gap_limit: usize) -> Result<Cancellable<()>> {
+    pub async fn restore_ecash_from_federation(
+        &self,
+        gap_limit: usize,
+        task_group: &mut TaskGroup,
+    ) -> Result<Cancellable<()>> {
         let backup = if let Some(backup) = self.download_ecash_backup_from_federation().await? {
             backup
         } else {
@@ -101,7 +105,7 @@ impl MintClient {
             PlaintextEcashBackup::new_empty()
         };
 
-        let mut task_group = TaskGroup::new();
+        let mut task_group = task_group.make_subgroup().await;
 
         // TODO: If the client attempts any operations between while the recovery is working,
         // the recovery code will most probably miss them, which might lead to incorrect state.
@@ -113,6 +117,8 @@ impl MintClient {
             Ok(o) => o,
             Err(Cancelled) => return Ok(Err(Cancelled)),
         };
+
+        task_group.join_all().await?;
 
         info!("Writting out the recovered state to the database");
 
@@ -171,7 +177,8 @@ impl MintClient {
             .await?
         {
             Ok(Some(
-                EcashBackup(encrypted).decrypt_with(&self.get_derived_backup_encryption_key())?,
+                EcashBackup(encrypted.data)
+                    .decrypt_with(&self.get_derived_backup_encryption_key())?,
             ))
         } else {
             Ok(None)
@@ -561,7 +568,7 @@ impl EcashRecoveryTracker {
 
     /// Fill each tier pool to the gap limit
     fn fill_initial_pending_nonces(&mut self, amount: Amount) {
-        info!(%amount, count=self.gap_limit, "Generating initial set of nones for amount tier");
+        info!(%amount, count=self.gap_limit, "Generating initial set of nonces for amount tier");
         for _ in 0..self.gap_limit {
             self.add_next_pending_nonce_in_pending_pool(amount);
         }

@@ -263,7 +263,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::EcashBackupKeyPrefix,
                         MintRange::EcashBackupKey,
-                        fedimint_mint::db::EcashBackupValue,
+                        fedimint_mint::db::ECashUserBackupSnapshot,
                         mint,
                         "User Ecash Backup"
                     );

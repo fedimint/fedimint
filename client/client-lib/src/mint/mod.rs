@@ -664,6 +664,7 @@ mod tests {
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     use fedimint_core::modules::mint::config::MintClientConfig;
+    use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     use fedimint_core::modules::mint::{
         Mint, MintConfigGenParams, MintConfigGenerator, MintOutput,
     };
@@ -781,7 +782,7 @@ mod tests {
         async fn download_ecash_backup(
             &self,
             _id: &secp256k1::XOnlyPublicKey,
-        ) -> crate::api::Result<Option<Vec<u8>>> {
+        ) -> crate::api::Result<Option<ECashUserBackupSnapshot>> {
             unimplemented!()
         }
     }

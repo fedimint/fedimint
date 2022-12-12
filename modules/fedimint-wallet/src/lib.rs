@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::{Infallible, TryInto};
 use std::hash::Hasher;
 use std::ops::Sub;
+#[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
 use anyhow::bail;
@@ -34,7 +35,9 @@ use fedimint_api::module::{
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
+#[cfg(not(target_family = "wasm"))]
+use fedimint_api::task::sleep;
+use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{
     plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModulePlugin,
 };

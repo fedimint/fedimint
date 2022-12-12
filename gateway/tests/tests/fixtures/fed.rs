@@ -8,6 +8,7 @@ use fedimint_core::{
             contracts::{incoming::IncomingContractOffer, ContractId},
             ContractAccount, LightningGateway,
         },
+        mint::db::ECashUserBackupSnapshot,
         wallet::PegOutFees,
     },
     outcome::TransactionStatus,
@@ -103,7 +104,7 @@ impl IFederationApi for MockApi {
     async fn download_ecash_backup(
         &self,
         _id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Option<Vec<u8>>, ApiError> {
+    ) -> Result<Option<ECashUserBackupSnapshot>, ApiError> {
         unimplemented!()
     }
 }

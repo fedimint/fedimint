@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, PeerId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 use crate::{Nonce, OutputConfirmationSignatures, OutputOutcome};
@@ -148,11 +148,12 @@ pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
 impl DatabaseKeyPrefixConst for EcashBackupKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
     type Key = EcashBackupKey;
-    type Value = EcashBackupValue;
+    type Value = ECashUserBackupSnapshot;
 }
 
-#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-pub struct EcashBackupValue {
+/// User's backup, received at certain time, containing encrypted payload
+#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
+pub struct ECashUserBackupSnapshot {
     pub timestamp: SystemTime,
     #[serde(with = "hex::serde")]
     pub data: Vec<u8>,
@@ -161,5 +162,5 @@ pub struct EcashBackupValue {
 impl DatabaseKeyPrefixConst for EcashBackupKey {
     const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
     type Key = Self;
-    type Value = EcashBackupValue;
+    type Value = ECashUserBackupSnapshot;
 }
