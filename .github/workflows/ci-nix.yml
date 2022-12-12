@@ -97,7 +97,7 @@ jobs:
         continue-on-error: true
 
       - name: Build and run tests with Code Coverage
-        run: nix build -L .#debug.workspaceCov
+        run: nix build -L .#debug.workspaceTestCov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
