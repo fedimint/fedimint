@@ -105,6 +105,20 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_>;
 
+    /// Default implementation is a combination of [`Self::raw_find_by_prefix`] + loop over [`Self::raw_remove_entry`]
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        let mut keys = vec![];
+        for kv in self.raw_find_by_prefix(key_prefix).await {
+            let (k, _) = kv?;
+            keys.push(k);
+        }
+
+        for keys in &keys {
+            self.raw_remove_entry(keys).await?;
+        }
+        Ok(())
+    }
+
     async fn commit_tx(self: Box<Self>) -> Result<()>;
 
     async fn rollback_tx_to_savepoint(&mut self);
@@ -253,22 +267,11 @@ impl<'a> DatabaseTransaction<'a> {
             })
     }
 
-    // TODO: this function doesn't seem very optimal
     pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
-        let prefix_bytes = key_prefix.to_bytes();
-        let mut keys = vec![];
-        for kv in self.raw_find_by_prefix(&prefix_bytes).await {
-            let (k, _) = kv?;
-            keys.push(k);
-        }
-
-        for keys in &keys {
-            self.raw_remove_entry(keys).await?;
-        }
-        Ok(())
+        self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
     }
 }
 
