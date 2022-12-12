@@ -449,7 +449,7 @@
 ///
 /// let _: ApiEndpoint&lt;State&gt; = api_endpoint! {
 ///     &quot;/foobar&quot;,
-///     async |state: &amp;State, _dbtx, params: ()| -&gt; i32 {
+///     async |state: &amp;State, params: ()| -&gt; i32 {
 ///         Ok(0)
 ///     }
 /// };
