@@ -10,9 +10,7 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::module::{
-    ApiError, FederationModuleConfigGen, InputMeta, ModuleError, TransactionItemAmount,
-};
+use fedimint_api::module::{ApiError, IConfigGen, InputMeta, ModuleError, TransactionItemAmount};
 use fedimint_api::server::IServerModule;
 use fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
 
@@ -46,7 +44,7 @@ where
         conf_gen: &ConfGen,
     ) -> anyhow::Result<FakeFed<Module>>
     where
-        ConfGen: FederationModuleConfigGen,
+        ConfGen: IConfigGen,
         F: Fn(ServerModuleConfig, Database) -> FF,
         FF: Future<Output = anyhow::Result<Module>>,
     {

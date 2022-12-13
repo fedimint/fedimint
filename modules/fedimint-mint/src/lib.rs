@@ -19,8 +19,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, InputMeta, IntoModuleError,
-    ModuleError, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, IConfigGen, InputMeta, IntoModuleError, ModuleError,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -130,7 +130,7 @@ pub struct VerificationCache {
 pub struct MintConfigGenerator;
 
 #[async_trait]
-impl FederationModuleConfigGen for MintConfigGenerator {
+impl IConfigGen for MintConfigGenerator {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
@@ -1091,7 +1091,7 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
-    use fedimint_api::module::FederationModuleConfigGen;
+    use fedimint_api::module::IConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 

@@ -199,7 +199,7 @@ where
 }
 
 #[async_trait]
-pub trait FederationModuleConfigGen {
+pub trait IConfigGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],

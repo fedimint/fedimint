@@ -7,7 +7,7 @@ use fedimint_api::config::{
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
-use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::module::IConfigGen;
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -190,10 +190,10 @@ impl ServerConfig {
 
         let peer0 = &params[&PeerId::from(0)];
 
-        let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
+        let module_config_gens: Vec<(&'static str, Box<dyn IConfigGen>)> = vec![
             (
                 "wallet",
-                Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
+                Box::new(WalletConfigGenerator) as Box<dyn IConfigGen>,
             ),
             ("mint", Box::new(MintConfigGenerator)),
             ("ln", Box::new(LightningModuleConfigGen)),
@@ -281,10 +281,10 @@ impl ServerConfig {
         let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
 
-        let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
+        let module_config_gens: Vec<(&'static str, Box<dyn IConfigGen>)> = vec![
             (
                 "wallet",
-                Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
+                Box::new(WalletConfigGenerator) as Box<dyn IConfigGen>,
             ),
             ("mint", Box::new(MintConfigGenerator)),
             ("ln", Box::new(LightningModuleConfigGen)),

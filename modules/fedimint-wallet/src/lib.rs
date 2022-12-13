@@ -30,7 +30,7 @@ use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::{
-    api_endpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, TransactionItemAmount,
+    api_endpoint, IConfigGen, InputMeta, IntoModuleError, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -216,7 +216,7 @@ impl std::fmt::Display for WalletOutputOutcome {
 pub struct WalletConfigGenerator;
 
 #[async_trait]
-impl FederationModuleConfigGen for WalletConfigGenerator {
+impl IConfigGen for WalletConfigGenerator {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],

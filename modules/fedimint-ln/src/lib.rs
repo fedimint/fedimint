@@ -33,8 +33,8 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, InputMeta, IntoModuleError,
-    ModuleError, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, IConfigGen, InputMeta, IntoModuleError, ModuleError,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -225,7 +225,7 @@ pub struct LightningVerificationCache;
 pub struct LightningModuleConfigGen;
 
 #[async_trait]
-impl FederationModuleConfigGen for LightningModuleConfigGen {
+impl IConfigGen for LightningModuleConfigGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],

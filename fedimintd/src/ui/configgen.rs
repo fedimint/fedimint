@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ConfigGenParams};
-use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::module::IConfigGen;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
 use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
@@ -121,7 +121,7 @@ fn trusted_dealer_gen(
     let module_config_gens: Vec<(&'static str, Box<_>)> = vec![
         (
             "wallet",
-            Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
+            Box::new(WalletConfigGenerator) as Box<dyn IConfigGen>,
         ),
         ("mint", Box::new(MintConfigGenerator)),
         ("ln", Box::new(LightningModuleConfigGen)),
