@@ -6,11 +6,12 @@ mod btc;
 mod secp256k1;
 mod tbs;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use anyhow::format_err;
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use thiserror::Error;
 use url::Url;
@@ -442,7 +443,9 @@ where
         for _ in 0..len {
             let amt = K::consensus_decode(d, modules)?;
             let v = V::consensus_decode(d, modules)?;
-            res.insert(amt, v);
+            if res.insert(amt, v).is_some() {
+                return Err(DecodeError(format_err!("Duplicate key")));
+            }
         }
         Ok(res)
     }
@@ -451,6 +454,55 @@ where
 #[test]
 fn encode_decode_btreemap() {
     let t = BTreeMap::from([("a".to_string(), 1u32), ("b".to_string(), 2)]);
+
+    let mut buf = vec![];
+
+    t.consensus_encode(&mut buf).unwrap();
+
+    assert_eq!(
+        t,
+        Decodable::consensus_decode::<_>(&mut buf.as_slice(), &ModuleDecoderRegistry::default())
+            .unwrap()
+    );
+}
+
+impl<K> Encodable for BTreeSet<K>
+where
+    K: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut len = 0;
+        len += (self.len() as u64).consensus_encode(writer)?;
+        for k in self.iter() {
+            len += k.consensus_encode(writer)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<K> Decodable for BTreeSet<K>
+where
+    K: Decodable + Ord,
+{
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let mut res = BTreeSet::new();
+        let len = u64::consensus_decode(d, modules)?;
+        for _ in 0..len {
+            let k = K::consensus_decode(d, modules)?;
+            if !res.insert(k) {
+                return Err(DecodeError(format_err!("Duplicate key")));
+            }
+        }
+        Ok(res)
+    }
+}
+
+#[test]
+fn encode_decode_btreeset() {
+    let t = BTreeSet::from(["a".to_string(), "b".to_string()]);
 
     let mut buf = vec![];
 
