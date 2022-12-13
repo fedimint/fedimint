@@ -908,23 +908,16 @@ impl Lightning {
             .await;
     }
 
+    // # Panics
+    /// * If proposals is empty
     async fn process_clock_time_proposals(&self, mut proposals: Vec<u64>) -> u64 {
         assert!(!proposals.is_empty());
 
         proposals.sort();
-        let median_proposal = match proposals.len() % 2 {
-            0 => {
-                let earlier_time = proposals[proposals.len() / 2 - 1];
-                let later_time = proposals[proposals.len() / 2];
-                let time_diff = later_time.duration_since(earlier_time);
-                earlier_time
-                    + time_diff
-                        .expect("Error calculating median time")
-                        .div_f32(2.0)
-            }
-            _ => proposals[proposals.len() / 2],
-        };
-        median_proposal
+
+        *proposals
+            .get(proposals.len() / 2)
+            .expect("We checked before that proposals aren't empty")
     }
 
     pub async fn current_round_consensus(
