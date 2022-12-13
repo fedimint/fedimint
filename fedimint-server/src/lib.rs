@@ -206,6 +206,8 @@ impl FedimintServer {
     }
 
     /// Requests, verifies and processes history from peers
+    ///
+    /// `last_outcome` - The consensus outcome (unprocessed), we're trying to process.
     pub async fn process_outcome(
         &mut self,
         last_outcome: ConsensusOutcome,
@@ -219,7 +221,8 @@ impl FedimintServer {
                 EpochHistory::new(
                     last_outcome.epoch,
                     contributions,
-                    &self.last_processed_epoch,
+                    None,
+                    self.last_processed_epoch.as_ref(),
                 )
             } else {
                 info!("Downloading missing epoch {}", epoch_num);
@@ -230,14 +233,20 @@ impl FedimintServer {
                     .expect("fetches history")
             };
 
-            current_epoch.verify_hash(&self.last_processed_epoch)?;
+            // We can't validate a hash on a tx we have just created ourselves and that doesn't
+            // have a `rejected_tx` yet
+            if current_epoch.outcome.rejected_txs.is_some() {
+                current_epoch.verify_hash(&self.last_processed_epoch)?;
+            }
             epochs.push(current_epoch.clone());
 
             let pk = self.cfg.epoch_pk_set.public_key();
             if epoch_num == last_outcome.epoch || current_epoch.verify_sig(&pk).is_ok() {
                 for epoch in epochs.drain(..) {
                     let outcome = ConsensusOutcomeConversion::from(epoch.outcome.clone()).0;
-                    self.consensus.process_consensus_outcome(outcome).await;
+                    self.consensus
+                        .process_consensus_outcome(outcome, &epoch.outcome.rejected_txs)
+                        .await;
                     self.last_processed_epoch = Some(epoch);
                 }
             }
