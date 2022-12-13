@@ -21,7 +21,7 @@ use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::PluginVerificationCache;
 use crate::task::TaskGroup;
-use crate::{Amount, OutPoint, PeerId};
+use crate::{dyn_newtype_define, Amount, OutPoint, PeerId};
 
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
@@ -198,8 +198,17 @@ where
     }
 }
 
+dyn_newtype_define! {
+    /// Type erased config generator, typically used to generate module config
+    ///
+    /// Technically the main server config cgenerator could be made into a `ModuleConfigGen` too,
+    /// but type erasure isn't necessary for that one, so it should not be done. That's why it is
+    /// called `ModuleConfigGen`.
+    pub ModuleConfigGen(Box<IConfigGen>)
+}
+
 #[async_trait]
-pub trait IConfigGen {
+pub trait IConfigGen: Debug + Send + Sync {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],

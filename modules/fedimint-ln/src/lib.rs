@@ -222,6 +222,7 @@ impl std::fmt::Display for LightningConsensusItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct LightningVerificationCache;
 
+#[derive(Debug)]
 pub struct LightningModuleConfigGen;
 
 #[async_trait]

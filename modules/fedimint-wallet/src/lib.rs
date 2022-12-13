@@ -213,6 +213,7 @@ impl std::fmt::Display for WalletOutputOutcome {
     }
 }
 
+#[derive(Debug)]
 pub struct WalletConfigGenerator;
 
 #[async_trait]

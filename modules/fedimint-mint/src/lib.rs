@@ -127,6 +127,7 @@ pub struct VerificationCache {
     valid_coins: HashMap<Note, Amount>,
 }
 
+#[derive(Debug)]
 pub struct MintConfigGenerator;
 
 #[async_trait]
