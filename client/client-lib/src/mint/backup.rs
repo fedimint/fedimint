@@ -31,8 +31,6 @@ use tracing::{error, info};
 use super::{db::NextECashNoteIndexKeyPrefix, *};
 use crate::api;
 
-const BACKUP_CHILD_ID: u64 = 0;
-
 /// Some helpers to make `ring::aead` usable
 mod aead {
     use anyhow::{bail, Result};
@@ -189,7 +187,7 @@ impl MintClient {
     fn get_derived_backup_encryption_key_static(secret: &DerivableSecret) -> aead::LessSafeKey {
         aead::LessSafeKey::new(
             secret
-                .child_key(ChildId(BACKUP_CHILD_ID))
+                .child_key(MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID)
                 .to_chacha20_poly1305_key(),
         )
     }
@@ -198,7 +196,7 @@ impl MintClient {
     fn get_derived_backup_signing_key_static(secret: &DerivableSecret) -> secp256k1_zkp::KeyPair {
         // TODO: Do we need that one derivation level? This key is already derived for the mint itself, and internally another kdf will be done with key type tag.
         secret
-            .child_key(ChildId(BACKUP_CHILD_ID))
+            .child_key(MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID)
             .to_secp_key(&Secp256k1::<secp256k1::SignOnly>::gen_new())
     }
 

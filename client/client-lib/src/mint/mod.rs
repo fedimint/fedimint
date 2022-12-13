@@ -36,6 +36,8 @@ use crate::{ChildId, DerivableSecret, MintModuleDecoder};
 pub mod backup;
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
+const MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(1);
+
 const TARGET_DENOMINATION_SETS: u16 = 1;
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs

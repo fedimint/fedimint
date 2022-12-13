@@ -69,6 +69,13 @@ def reduce_to_bls12_381_key(secret):
     return bls_key
 ```
 
+#### ChaCha20-Poly1305
+
+```python
+def reduce_to_chacha20_poly1305_key(secret):
+    return derive(secret, b"c20p1305", 0)
+```
+
 # Derivation paths
 The key derivation scheme described above allows to describe keys using their descendence path from the root key, called
 derivation path. The first two derivation steps of each key concern the federation and the fedimint module, so the key
@@ -81,6 +88,7 @@ handed over to any particular module client would be derived using the following
 In the following we define how secrets should be derived for specific use cases.
 
 ## Usage: E-Cash
+
 For deriving e-cash notes we define the following derivation path:
 
 * **module_id**: The mint module has id `0`
@@ -104,6 +112,16 @@ user would race to mint notes with the same blind nonce, but a different amount 
 confuse the recovery code to use a smaller denomination version and loose money. By
 including **amount** in the derivation, the e-cash recovery code knows the expected
 denomination beforehand.
+
+## Mint module e-cash backup snapshot keys
+
+The encryption and signing key used for e-cash backups both use the following derivation path:
+
+* **module_id**: The mint module has id `0`
+* **mint_module_key_type**: The key type of backup snapshot keys is `1`
+
+The implicit per key type derivation (ChaCha20-Poly1305 vs secp256k1) makes the two keys actually different.
+
 
 [^1]: See BSI [TR-03111] section 4.1.1 and [TR-02102] section B.4 for details.
 
