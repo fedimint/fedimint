@@ -9,6 +9,7 @@
     pkgs.rust-analyzer
     pkgs.clang
     pkgs.libclang.lib
+    pkgs.lld
     pkgs.pkg-config
     pkgs.openssl
     pkgs.nix
