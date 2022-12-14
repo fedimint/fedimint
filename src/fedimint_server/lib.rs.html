@@ -446,6 +446,36 @@
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -464,6 +494,7 @@
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
 <span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 <span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>mint_client::api::{IFederationApi, WsFederationApi};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -471,8 +502,7 @@
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::{
-    ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
-    SerdeConsensusOutcome,
+    ConsensusOutcome, ConsensusProposal, FedimintConsensus, SerdeConsensusOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::LastEpochKey;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::IPeerConnections;
@@ -654,38 +684,68 @@
     }
 
     <span class="doccomment">/// Requests, verifies and processes history from peers
+    ///
+    /// `last_outcome` - The consensus outcome (unprocessed), we&#39;re trying to process.
     </span><span class="kw">pub async fn </span>process_outcome(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         last_outcome: ConsensusOutcome,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>epochs: Vec&lt;EpochHistory&gt; = <span class="macro">vec!</span>[];
+        <span class="kw">let </span><span class="kw-2">mut </span>epochs: Vec&lt;<span class="kw">_</span>&gt; = <span class="macro">vec!</span>[];
         <span class="self">self</span>.rejoin_at_epoch = <span class="prelude-val">None</span>;
 
         <span class="kw">for </span>epoch_num <span class="kw">in </span><span class="self">self</span>.next_epoch_to_process()..=last_outcome.epoch {
-            <span class="kw">let </span>current_epoch = <span class="kw">if </span>epoch_num == last_outcome.epoch {
-                <span class="kw">let </span>contributions = last_outcome.contributions.clone();
-                EpochHistory::new(
-                    last_outcome.epoch,
-                    contributions,
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.last_processed_epoch,
-                )
-            } <span class="kw">else </span>{
-                <span class="macro">info!</span>(<span class="string">&quot;Downloading missing epoch {}&quot;</span>, epoch_num);
-                <span class="kw">let </span>epoch_pk = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
-                <span class="self">self</span>.api
-                    .fetch_epoch_history(epoch_num, epoch_pk)
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;fetches history&quot;</span>)
-            };
+            <span class="kw">let </span>(items, epoch, prev_epoch_hash, rejected_txs, at_know_trusted_checkpoint) =
+                <span class="kw">if </span>epoch_num == last_outcome.epoch {
+                    (
+                        last_outcome
+                            .contributions
+                            .iter()
+                            .sorted_by_key(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer)
+                            .map(|(peer, items)| (<span class="kw-2">*</span>peer, items.clone()))
+                            .collect(),
+                        last_outcome.epoch,
+                        <span class="self">self</span>.last_processed_epoch
+                            .as_ref()
+                            .map(|epoch| epoch.outcome.hash()),
+                        <span class="prelude-val">None</span>,
+                        <span class="bool-val">true</span>,
+                    )
+                } <span class="kw">else </span>{
+                    <span class="macro">info!</span>(<span class="string">&quot;Downloading missing epoch {}&quot;</span>, epoch_num);
+                    <span class="kw">let </span>epoch_pk = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
+                    <span class="kw">let </span>epoch = <span class="self">self
+                        </span>.api
+                        .fetch_epoch_history(epoch_num, epoch_pk)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;fetches history&quot;</span>);
 
-            current_epoch.verify_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.last_processed_epoch)<span class="question-mark">?</span>;
-            epochs.push(current_epoch.clone());
+                    epoch.verify_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.last_processed_epoch)<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>pk = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
-            <span class="kw">if </span>epoch_num == last_outcome.epoch || current_epoch.verify_sig(<span class="kw-2">&amp;</span>pk).is_ok() {
-                <span class="kw">for </span>epoch <span class="kw">in </span>epochs.drain(..) {
-                    <span class="kw">let </span>outcome = ConsensusOutcomeConversion::from(epoch.outcome.clone()).<span class="number">0</span>;
-                    <span class="self">self</span>.consensus.process_consensus_outcome(outcome).<span class="kw">await</span>;
+                    <span class="kw">let </span>pk = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
+                    <span class="kw">let </span>sig_valid = epoch.verify_sig(<span class="kw-2">&amp;</span>pk).is_ok();
+                    (
+                        epoch.outcome.items,
+                        epoch.outcome.epoch,
+                        epoch.outcome.last_hash,
+                        <span class="prelude-val">Some</span>(epoch.outcome.rejected_txs),
+                        sig_valid,
+                    )
+                };
+
+            epochs.push((items, epoch, prev_epoch_hash, rejected_txs));
+
+            <span class="kw">if </span>at_know_trusted_checkpoint {
+                <span class="kw">for </span>(items, epoch, _prev_epoch_hash, rejected_txs) <span class="kw">in </span>epochs.drain(..) {
+                    <span class="kw">let </span>epoch = <span class="self">self
+                        </span>.consensus
+                        .process_consensus_outcome(
+                            Batch {
+                                epoch,
+                                contributions: BTreeMap::from_iter(items.into_iter()),
+                            },
+                            <span class="kw-2">&amp;</span>rejected_txs,
+                        )
+                        .<span class="kw">await</span>;
                     <span class="self">self</span>.last_processed_epoch = <span class="prelude-val">Some</span>(epoch);
                 }
             }

@@ -344,14 +344,27 @@
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_api::core::ConsensusItem <span class="kw">as </span>ModuleConsensusItem;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId};
+<span class="kw">use </span>fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId, TransactionId};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -391,7 +404,12 @@
     /// Some of the consensus items here might be invalid,
     /// (eg. transaction double-spending) but they were still
     /// submitted and considered as accepted.
+    </span><span class="comment">// TODO: It would be better to encode this as `Vec&lt;(ConsensusItem, Vec&lt;PeerId&gt;)&gt;`
+    // to avoid duplicates (and make iterating over it nicer too in a lot of uses).
     </span><span class="kw">pub </span>items: Vec&lt;(PeerId, Vec&lt;ConsensusItem&gt;)&gt;,
+
+    <span class="doccomment">/// Transactions from `items` that turned out to be invalid.
+    </span><span class="kw">pub </span>rejected_txs: BTreeSet&lt;TransactionId&gt;,
 }
 
 <span class="kw">impl </span>OutcomeHistory {
@@ -406,16 +424,18 @@
     <span class="kw">pub fn </span>new(
         epoch: u64,
         contributions: BTreeMap&lt;PeerId, Vec&lt;ConsensusItem&gt;&gt;,
-        prev_epoch: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;EpochHistory&gt;,
+        rejected_txs: BTreeSet&lt;TransactionId&gt;,
+        prev_epoch: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>EpochHistory&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>items = contributions
             .into_iter()
             .sorted_by_key(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer)
             .collect();
         <span class="kw">let </span>outcome = OutcomeHistory {
-            last_hash: prev_epoch.clone().map(|epoch| epoch.hash),
+            last_hash: prev_epoch.map(|epoch| epoch.hash),
             items,
             epoch,
+            rejected_txs,
         };
 
         EpochHistory {
@@ -463,9 +483,9 @@
         }
     }
 
-    <span class="kw">pub fn </span>verify_sig(<span class="kw-2">&amp;</span><span class="self">self</span>, pks: <span class="kw-2">&amp;</span>PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
+    <span class="kw">pub fn </span>verify_sig(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: <span class="kw-2">&amp;</span>PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(sig) = <span class="kw-2">&amp;</span><span class="self">self</span>.signature {
-            <span class="kw">if </span>!pks.verify(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, <span class="self">self</span>.hash) {
+            <span class="kw">if </span>!pk.verify(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, <span class="self">self</span>.hash) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::InvalidSignature);
             }
         } <span class="kw">else </span>{
@@ -479,7 +499,7 @@
         <span class="kw">if </span><span class="self">self</span>.outcome.epoch &gt; <span class="number">0 </span>{
             <span class="kw">match </span>prev_epoch {
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::MissingPreviousEpoch),
-                <span class="prelude-val">Some</span>(epoch) <span class="kw">if </span><span class="prelude-val">Some</span>(epoch.outcome.hash()) != <span class="self">self</span>.outcome.last_hash =&gt; {
+                <span class="prelude-val">Some</span>(prev_epoch) <span class="kw">if </span><span class="prelude-val">Some</span>(prev_epoch.outcome.hash()) != <span class="self">self</span>.outcome.last_hash =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::InvalidPreviousEpochHash)
                 }
                 <span class="kw">_ </span>=&gt; {}
@@ -542,7 +562,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::collections::HashSet;
+    <span class="kw">use </span>std::collections::{BTreeSet, HashSet};
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>fedimint_api::PeerId;
@@ -572,6 +592,8 @@
             last_hash: prev_epoch.clone().map(|epoch| epoch.hash),
             items,
             epoch: epoch <span class="kw">as </span>u64,
+            <span class="comment">// seems like in these tests we don&#39;t care about this one
+            </span>rejected_txs: BTreeSet::default(),
         };
 
         EpochHistory {
@@ -606,6 +628,7 @@
             epoch: <span class="number">1</span>,
             last_hash: <span class="prelude-val">None</span>,
             items: sigs[<span class="number">0</span>..<span class="number">1</span>].to_vec(),
+            rejected_txs: BTreeSet::default(),
         };
         <span class="kw">let </span>contributing = HashSet::from([PeerId::from(<span class="number">0</span>)]);
         <span class="kw">let </span>result = epoch1.add_sig_to_prev(<span class="kw-2">&amp;</span>pk_set, epoch0.clone()).unwrap_err();
@@ -618,6 +641,7 @@
             epoch: <span class="number">1</span>,
             last_hash: <span class="prelude-val">None</span>,
             items: sigs,
+            rejected_txs: BTreeSet::default(),
         };
         <span class="kw">let </span>epoch0 = epoch1.add_sig_to_prev(<span class="kw-2">&amp;</span>pk_set, epoch0).unwrap();
         <span class="macro">assert_eq!</span>(epoch0.verify_sig(<span class="kw-2">&amp;</span>pk_set.public_key()), <span class="prelude-val">Ok</span>(()));
