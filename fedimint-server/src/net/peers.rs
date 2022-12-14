@@ -4,10 +4,11 @@
 //! [`ReconnectPeerConnections`], see these for details.
 
 use std::cmp::min;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::fmt::Debug;
 use std::ops::Sub;
 use std::time::Duration;
+use anyhow::Error;
 
 use async_trait::async_trait;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -16,7 +17,7 @@ use fedimint_api::net::peers::IPeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
 use futures::future::select_all;
-use futures::{SinkExt, StreamExt};
+use futures::{Sink, SinkExt, StreamExt};
 use hbbft::Target;
 use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
@@ -310,11 +311,22 @@ where
         &mut self,
         mut connected: ConnectedPeerConnectionState<M>,
     ) -> Option<PeerConnectionState<M>> {
+        let (sink, stream) = connected.connection.borrow_split();
+
+        let send = async {
+            sink
+            .send(PeerMessage {
+                msg: self.resend_queue.queue.front().expect("must exist").clone(),
+                ack: self.last_received,
+        }).await };
+
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
                 match maybe_msg {
                     Some(msg) => {
-                        self.send_message_connected(connected, msg).await
+                        self.resend_queue.push(msg);
+                        tracing::warn!("QUEUE {}", self.resend_queue.queue.len());
+                        PeerConnectionState::Connected(connected)
                     },
                     None => {
                         debug!("Exiting peer connection IO task - parent disconnected");
@@ -334,9 +346,17 @@ where
                     },
                 }
             },
-            Some(msg_res) = connected.connection.next() => {
+            Some(msg_res) = stream.next() => {
                 self.receive_message(connected, msg_res).await
             },
+            // Flushes the send buffer, sending messages out to a peer
+            sent = send, if self.resend_queue.queue.len() > 0 => {
+                self.resend_queue.queue.pop_front();
+                match sent {
+                     Ok(()) => PeerConnectionState::Connected(connected),
+                     Err(e) => self.disconnect_err(e, 0),
+                }
+            }
         })
     }
 
@@ -389,27 +409,6 @@ where
     fn disconnect_err(&self, err: anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
         debug!(peer = ?self.peer, %err, %disconnect_count, "Peer disconnected");
         self.disconnect(disconnect_count)
-    }
-
-    async fn send_message_connected(
-        &mut self,
-        mut connected: ConnectedPeerConnectionState<M>,
-        msg: M,
-    ) -> PeerConnectionState<M> {
-        let umsg = self.resend_queue.push(msg);
-        trace!(?self.peer, id = ?umsg.id, "Sending outgoing message");
-
-        match connected
-            .connection
-            .send(PeerMessage {
-                msg: umsg,
-                ack: self.last_received,
-            })
-            .await
-        {
-            Ok(()) => PeerConnectionState::Connected(connected),
-            Err(e) => self.disconnect_err(e, 0),
-        }
     }
 
     async fn receive_message(
@@ -553,8 +552,8 @@ where
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_group: &mut TaskGroup,
     ) -> PeerConnection<M> {
-        let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
-        let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
+        let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(10);
+        let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(10);
 
         futures::executor::block_on(task_group.spawn(
             format!("io-thread-peer-{}", id),
@@ -579,6 +578,9 @@ where
     }
 
     async fn send(&mut self, msg: M) -> Cancellable<()> {
+        if self.outgoing.capacity() == 0 {
+            warn!("Ran out of send channel capacity, this shouldn't happen");
+        }
         self.outgoing.send(msg).await.map_err(|_e| Cancelled)
     }
 

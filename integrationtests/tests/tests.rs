@@ -927,10 +927,11 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         // Keep peer 3 out of consensus
         let online_peers = fed.subset_peers(&[0, 1, 2]);
         let peer3 = fed.subset_peers(&[3]);
-        bitcoin.mine_blocks(100);
-        online_peers.run_consensus_epochs(1).await;
-        bitcoin.mine_blocks(100);
-        online_peers.run_consensus_epochs(1).await;
+
+        for _ in 0..20 {
+            bitcoin.mine_blocks(10);
+            online_peers.run_consensus_epochs(1).await;
+        }
         let height = user.client.await_consensus_block_height(0).await.unwrap();
 
         // Run until peer 3 has rejoined
