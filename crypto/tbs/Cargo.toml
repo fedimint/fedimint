@@ -17,7 +17,7 @@ name = "tbs"
 path = "src/lib.rs"
 
 [dependencies]
-bls12_381 = { version = "0.7.0", features = [ "zeroize", "groups" ] }
+bls12_381 = { version = "0.7.1", features = [ "zeroize", "groups" ] }
 ff = "0.12.1"
 group = "0.12.1"
 hex = "0.4.2"
