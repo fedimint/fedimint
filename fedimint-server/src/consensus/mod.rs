@@ -49,8 +49,8 @@ impl PartialEq<Self> for ConsensusOutcomeConversion {
     }
 }
 
-impl From<OutcomeHistory> for ConsensusOutcomeConversion {
-    fn from(history: OutcomeHistory) -> Self {
+impl From<EpochOutcome> for ConsensusOutcomeConversion {
+    fn from(history: EpochOutcome) -> Self {
         ConsensusOutcomeConversion(Batch {
             epoch: history.epoch,
             contributions: BTreeMap::from_iter(history.items.into_iter()),
