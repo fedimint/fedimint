@@ -3,7 +3,7 @@
 pub mod debug;
 mod interconnect;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
 
@@ -196,8 +196,19 @@ impl FedimintConsensus {
         Ok(())
     }
 
+    /// Calculate the result of the `consesnsus_outcome` and save it/them.
+    ///
+    /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is coming from a
+    /// a reference (already signed) `OutcomeHistory`, that contains `rejected_txs`,
+    /// so we can check it against our own `rejected_txs` we calculate in this function.
+    /// **Note**: `reference_rejecte_txs` **must** come from a validated/trustworthy
+    /// source and be correct, or it can cause a panic.
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
-    pub async fn process_consensus_outcome(&self, consensus_outcome: ConsensusOutcome) {
+    pub async fn process_consensus_outcome(
+        &self,
+        consensus_outcome: ConsensusOutcome,
+        reference_rejected_txs: &Option<BTreeSet<TransactionId>>,
+    ) -> EpochHistory {
         let epoch = consensus_outcome.epoch;
         let epoch_peers: HashSet<PeerId> =
             consensus_outcome.contributions.keys().copied().collect();
@@ -234,15 +245,16 @@ impl FedimintConsensus {
         }
 
         // Process transactions
+        let mut rejected_txs: BTreeSet<TransactionId> = BTreeSet::new();
         {
             let mut dbtx = self.db.begin_transaction(self.decoders()).await;
 
             let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
-            let mut processed_tx: HashSet<TransactionId> = HashSet::new();
+            let mut processed_txs: HashSet<TransactionId> = HashSet::new();
 
             for (_, transaction) in transaction_cis {
                 let txid: TransactionId = transaction.tx_hash();
-                if !processed_tx.insert(txid) {
+                if !processed_txs.insert(txid) {
                     // Avoid processing duplicate tx from different peers
                     continue;
                 }
@@ -269,6 +281,7 @@ impl FedimintConsensus {
                             .expect("DB Error");
                         }
                         Err(error) => {
+                            rejected_txs.insert(txid);
                             dbtx.rollback_tx_to_savepoint().await;
                             warn!(%error, "Transaction failed");
                             dbtx.insert_entry(
@@ -286,12 +299,25 @@ impl FedimintConsensus {
             dbtx.commit_tx().await.expect("DB Error");
         }
 
+        if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
+            // Result of the consensus are supposed to be deterministic.
+            // If our result is not the same as what the (honest) majority of the federation
+            // signed over, it's a catastrophical bug/mismatch of Federation's fedimintd
+            // implementations.
+            assert_eq!(
+                reference_rejected_txs, &rejected_txs,
+                "rejected_txs mismatch: reference = {:?} != {:?}",
+                reference_rejected_txs, rejected_txs
+            );
+        }
+
         // End consensus epoch
-        {
+        let epoch_history = {
             let mut dbtx = self.db.begin_transaction(self.decoders()).await;
             let mut drop_peers = Vec::<PeerId>::new();
 
-            self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers)
+            let epoch_history = self
+                .save_epoch_history(outcome, &mut dbtx, &mut drop_peers, rejected_txs)
                 .await;
 
             for module in self.modules.modules() {
@@ -306,7 +332,9 @@ impl FedimintConsensus {
             }
 
             dbtx.commit_tx().await.expect("DB Error");
-        }
+
+            epoch_history
+        };
 
         let audit = self.audit().await;
         if audit.sum().milli_sat < 0 {
@@ -315,6 +343,8 @@ impl FedimintConsensus {
                 audit
             )
         }
+
+        epoch_history
     }
 
     pub async fn get_last_epoch(&self) -> Option<u64> {
@@ -341,7 +371,8 @@ impl FedimintConsensus {
         outcome: ConsensusOutcome,
         dbtx: &mut DatabaseTransaction<'a>,
         drop_peers: &mut Vec<PeerId>,
-    ) {
+        rejected_txs: BTreeSet<TransactionId>,
+    ) -> EpochHistory {
         let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self
@@ -352,7 +383,12 @@ impl FedimintConsensus {
             .await
             .expect("DB error");
 
-        let current = EpochHistory::new(outcome.epoch, outcome.contributions, &maybe_prev_epoch);
+        let current = EpochHistory::new(
+            outcome.epoch,
+            outcome.contributions,
+            rejected_txs,
+            maybe_prev_epoch.as_ref(),
+        );
 
         // validate and update sigs on prev epoch
         if let Some(prev_epoch) = maybe_prev_epoch {
@@ -383,6 +419,8 @@ impl FedimintConsensus {
         dbtx.insert_entry(&EpochHistoryKey(current.outcome.epoch), &current)
             .await
             .expect("DB Error");
+
+        current
     }
 
     pub async fn await_consensus_proposal(&self) {

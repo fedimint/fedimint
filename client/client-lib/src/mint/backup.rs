@@ -9,7 +9,7 @@
 
 use std::{
     cmp::max,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ops::RangeInclusive,
 };
 
@@ -345,10 +345,16 @@ impl MintClient {
             assert_eq!(epoch_history.outcome.epoch, epoch);
 
             info!(epoch, "Processing epoch");
+            let mut procesed_txs = Default::default();
             for (peer_id, items) in &epoch_history.outcome.items {
                 // TODO: epoch history to contain rejected items, we should skip them here
                 for item in items {
-                    tracker.handle_consensus_item(*peer_id, item);
+                    tracker.handle_consensus_item(
+                        *peer_id,
+                        item,
+                        &mut procesed_txs,
+                        &epoch_history.outcome.rejected_txs,
+                    );
                 }
             }
         }
@@ -810,11 +816,30 @@ impl EcashRecoveryTracker {
         }
     }
 
-    pub(crate) fn handle_consensus_item(&mut self, peer_id: PeerId, item: &ConsensusItem) {
+    pub(crate) fn handle_consensus_item(
+        &mut self,
+        peer_id: PeerId,
+        item: &ConsensusItem,
+        processed_txs: &mut HashSet<TransactionId>,
+        rejected_txs: &BTreeSet<TransactionId>,
+    ) {
         match item {
             ConsensusItem::EpochInfo(_) => {}
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();
+
+                if !processed_txs.insert(txid) {
+                    // Just like server side consensus, do not attempt to process the same transaction twice.
+                    return;
+                }
+
+                if rejected_txs.contains(&txid) {
+                    // Do not process invalid transactions.
+                    // Consensus history contains all data proposed by each peer, even invalid (e.g. due to double spent)
+                    // transactions. Precisely to save downstream users from having to run the consensus themselves,
+                    // each epoch contains a list of transactions  that turned out to be invalid.
+                    return;
+                }
 
                 for input in &tx.inputs {
                     if input.module_key() == MODULE_KEY_MINT {

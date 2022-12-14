@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::collections::{BTreeMap, HashSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
@@ -5,7 +6,7 @@ use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::core::ConsensusItem as ModuleConsensusItem;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId};
+use fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId, TransactionId};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -45,7 +46,12 @@ pub struct OutcomeHistory {
     /// Some of the consensus items here might be invalid,
     /// (eg. transaction double-spending) but they were still
     /// submitted and considered as accepted.
+    // TODO: It would be better to encode this as `Vec<(ConsensusItem, Vec<PeerId>)>`
+    // to avoid duplicates (and make iterating over it nicer too in a lot of uses).
     pub items: Vec<(PeerId, Vec<ConsensusItem>)>,
+
+    /// Transactions from `items` that turned out to be invalid.
+    pub rejected_txs: BTreeSet<TransactionId>,
 }
 
 impl OutcomeHistory {
@@ -60,16 +66,18 @@ impl EpochHistory {
     pub fn new(
         epoch: u64,
         contributions: BTreeMap<PeerId, Vec<ConsensusItem>>,
-        prev_epoch: &Option<EpochHistory>,
+        rejected_txs: BTreeSet<TransactionId>,
+        prev_epoch: Option<&EpochHistory>,
     ) -> Self {
         let items = contributions
             .into_iter()
             .sorted_by_key(|(peer, _)| *peer)
             .collect();
         let outcome = OutcomeHistory {
-            last_hash: prev_epoch.clone().map(|epoch| epoch.hash),
+            last_hash: prev_epoch.map(|epoch| epoch.hash),
             items,
             epoch,
+            rejected_txs,
         };
 
         EpochHistory {
@@ -117,9 +125,9 @@ impl EpochHistory {
         }
     }
 
-    pub fn verify_sig(&self, pks: &PublicKey) -> Result<(), EpochVerifyError> {
+    pub fn verify_sig(&self, pk: &PublicKey) -> Result<(), EpochVerifyError> {
         if let Some(sig) = &self.signature {
-            if !pks.verify(&sig.0, self.hash) {
+            if !pk.verify(&sig.0, self.hash) {
                 return Err(EpochVerifyError::InvalidSignature);
             }
         } else {
@@ -133,7 +141,7 @@ impl EpochHistory {
         if self.outcome.epoch > 0 {
             match prev_epoch {
                 None => return Err(EpochVerifyError::MissingPreviousEpoch),
-                Some(epoch) if Some(epoch.outcome.hash()) != self.outcome.last_hash => {
+                Some(prev_epoch) if Some(prev_epoch.outcome.hash()) != self.outcome.last_hash => {
                     return Err(EpochVerifyError::InvalidPreviousEpochHash)
                 }
                 _ => {}
@@ -196,7 +204,7 @@ impl Decodable for EpochSignatureShare {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
 
     use bitcoin::hashes::Hash;
     use fedimint_api::PeerId;
@@ -226,6 +234,8 @@ mod tests {
             last_hash: prev_epoch.clone().map(|epoch| epoch.hash),
             items,
             epoch: epoch as u64,
+            // seems like in these tests we don't care about this one
+            rejected_txs: BTreeSet::default(),
         };
 
         EpochHistory {
@@ -260,6 +270,7 @@ mod tests {
             epoch: 1,
             last_hash: None,
             items: sigs[0..1].to_vec(),
+            rejected_txs: BTreeSet::default(),
         };
         let contributing = HashSet::from([PeerId::from(0)]);
         let result = epoch1.add_sig_to_prev(&pk_set, epoch0.clone()).unwrap_err();
@@ -272,6 +283,7 @@ mod tests {
             epoch: 1,
             last_hash: None,
             items: sigs,
+            rejected_txs: BTreeSet::default(),
         };
         let epoch0 = epoch1.add_sig_to_prev(&pk_set, epoch0).unwrap();
         assert_eq!(epoch0.verify_sig(&pk_set.public_key()), Ok(()));

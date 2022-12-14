@@ -350,7 +350,12 @@ fn sanity_check_recovery_fresh_backup() {
         out_idx: 0,
     };
 
-    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_a));
+    tracker.handle_consensus_item(
+        PeerId::from(0),
+        &ConsensusItem::Transaction(tx_a),
+        &mut Default::default(),
+        &Default::default(),
+    );
 
     // At this point tracker should recognize c1's blind nonces are mined and move them
     // into `pending_outputs` to start matching against consensus items.
@@ -365,6 +370,8 @@ fn sanity_check_recovery_fresh_backup() {
         tracker.handle_consensus_item(
             confirmations_c1_a[0].0,
             &ConsensusItem::Module(confirmations_c1_a[0].1.clone().into()),
+            &mut Default::default(),
+            &Default::default(),
         );
 
         assert_eq!(
@@ -383,6 +390,8 @@ fn sanity_check_recovery_fresh_backup() {
         tracker.handle_consensus_item(
             confirmations_c1_a[wrong_peer_i].0,
             &ConsensusItem::Module(confirmations_c1_a[0].1.clone().into()),
+            &mut Default::default(),
+            &Default::default(),
         );
 
         assert_eq!(
@@ -401,6 +410,8 @@ fn sanity_check_recovery_fresh_backup() {
         tracker.handle_consensus_item(
             *peer_id,
             &ConsensusItem::Module(mint_output_confirmation.clone().into()),
+            &mut Default::default(),
+            &Default::default(),
         );
     }
 
@@ -421,7 +432,12 @@ fn sanity_check_recovery_fresh_backup() {
         signature: None,
     };
 
-    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_b));
+    tracker.handle_consensus_item(
+        PeerId::from(0),
+        &ConsensusItem::Transaction(tx_b),
+        &mut Default::default(),
+        &Default::default(),
+    );
     assert!(tracker.spendable_note_by_nonce.is_empty());
 }
 
@@ -490,12 +506,19 @@ fn sanity_check_recovery_non_empty_backup() {
     };
     let confirmations_c1_a1 = fed.confirm_mint_output(output_c1_a1_out_point, &output_c1_a1);
 
-    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_b));
+    tracker.handle_consensus_item(
+        PeerId::from(0),
+        &ConsensusItem::Transaction(tx_b),
+        &mut Default::default(),
+        &Default::default(),
+    );
 
     for (peer_id, mint_output_confirmation) in &confirmations_c1_a1 {
         tracker.handle_consensus_item(
             *peer_id,
             &ConsensusItem::Module(mint_output_confirmation.clone().into()),
+            &mut Default::default(),
+            &Default::default(),
         );
     }
 
@@ -564,8 +587,18 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
 
     // The transaction with fake outputs gets included in consensus earlier, so tracker
     // processes it first.
-    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_a));
-    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_b));
+    tracker.handle_consensus_item(
+        PeerId::from(0),
+        &ConsensusItem::Transaction(tx_a),
+        &mut Default::default(),
+        &Default::default(),
+    );
+    tracker.handle_consensus_item(
+        PeerId::from(0),
+        &ConsensusItem::Transaction(tx_b),
+        &mut Default::default(),
+        &Default::default(),
+    );
 
     // Tracker ignored the tx with incorrect values, because the amount associated with
     // this blind nonce was incorrect.
@@ -630,8 +663,18 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
 
     // The transaction with fake outputs gets included in consensus earlier, so tracker
     // processes it first.
-    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_a));
-    tracker.handle_consensus_item(PeerId::from(0), &ConsensusItem::Transaction(tx_b));
+    tracker.handle_consensus_item(
+        PeerId::from(0),
+        &ConsensusItem::Transaction(tx_a),
+        &mut Default::default(),
+        &Default::default(),
+    );
+    tracker.handle_consensus_item(
+        PeerId::from(0),
+        &ConsensusItem::Transaction(tx_b),
+        &mut Default::default(),
+        &Default::default(),
+    );
 
     // Tracker tracks both outputs now
     assert_eq!(tracker.pending_outputs.len(), 2);
@@ -644,6 +687,8 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
         tracker.handle_consensus_item(
             *peer_id,
             &ConsensusItem::Module(mint_output_confirmation.clone().into()),
+            &mut Default::default(),
+            &Default::default(),
         );
     }
 
@@ -655,6 +700,8 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
         tracker.handle_consensus_item(
             *peer_id,
             &ConsensusItem::Module(mint_output_confirmation.clone().into()),
+            &mut Default::default(),
+            &Default::default(),
         );
     }
 
