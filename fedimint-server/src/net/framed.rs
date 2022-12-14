@@ -1,17 +1,20 @@
 //! Adapter that implements a message based protocol on top of a stream based one
 use std::convert::TryInto;
 use std::fmt::Debug;
-use std::io::{Read, Write};
+use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{ready, Context, Poll};
 
 use bytes::{Buf, BufMut, BytesMut};
-use futures::{Sink, Stream};
-use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
+use fedimint_api::server::IServerModule;
+use futures::{Sink, SinkExt, Stream};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{error, trace};
+
+const OUTGOING_BUFFER_SIZE: usize = 50 * 1024 * 1024;
 
 /// Owned [`FramedTransport`] trait object
 pub type AnyFramedTransport<M> = Box<dyn FramedTransport<M> + Send + Unpin + 'static>;
@@ -28,6 +31,9 @@ pub trait FramedTransport<T>:
         &'_ mut (dyn Stream<Item = Result<T, anyhow::Error>> + Send + Unpin),
     );
 
+    /// Returns the number of bytes waiting to be sent in the outgoing write buffer
+    fn outgoing_buffer_size(&self) -> usize;
+
     /// Transforms concrete `FramedTransport` object into an owned trait object
     fn into_dyn(self) -> AnyFramedTransport<T>
     where
@@ -41,7 +47,7 @@ pub trait FramedTransport<T>:
 pub type TcpBidiFramed<T> = BidiFramed<T, OwnedWriteHalf, OwnedReadHalf>;
 
 /// Sink (sending) half of [`BidiFramed`]
-pub type FramedSink<S, T> = FramedWrite<S, BincodeCodec<T>>;
+pub type FramedSink<S, T> = FramedWrite<BufWriter<S>, BincodeCodec<T>>;
 /// Stream (receiving) half of [`BidiFramed`]
 pub type FramedStream<S, T> = FramedRead<S, BincodeCodec<T>>;
 
@@ -77,7 +83,7 @@ where
     {
         let (read, write) = tokio::io::split(stream);
         BidiFramed {
-            sink: FramedSink::new(write, BincodeCodec::new()),
+            sink: FramedSink::new(BufWriter::new(write), BincodeCodec::new()),
             stream: FramedStream::new(read, BincodeCodec::new()),
         }
     }
@@ -102,7 +108,7 @@ where
     pub fn new_from_tcp(stream: tokio::net::TcpStream) -> TcpBidiFramed<T> {
         let (read, write) = stream.into_split();
         BidiFramed {
-            sink: FramedSink::new(write, BincodeCodec::new()),
+            sink: FramedSink::new(BufWriter::new(write), BincodeCodec::new()),
             stream: FramedStream::new(read, BincodeCodec::new()),
         }
     }
@@ -160,6 +166,10 @@ where
     ) {
         let (sink, stream) = self.borrow_parts();
         (&mut *sink, &mut *stream)
+    }
+
+    fn outgoing_buffer_size(&self) -> usize {
+        self.sink.get_ref().buffer_len()
     }
 }
 
@@ -226,15 +236,82 @@ where
     }
 }
 
+#[derive(Debug)]
+pub struct BufWriter<W> {
+    buffer: BytesMut,
+    writer: W,
+}
+
+impl<W: AsyncWrite + Unpin> BufWriter<W> {
+    pub fn new(inner: W) -> Self {
+        BufWriter {
+            buffer: BytesMut::new(),
+            writer: inner,
+        }
+    }
+
+    pub fn buffer_len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    /// This should be polled in parallel to every other task to make sure the buffer is sent out
+    /// when possible
+    pub async fn drive_forward(&mut self) -> Result<(), Error> {
+        dbg!(&self.buffer);
+        while !self.buffer.is_empty() {
+            let len = self.writer.write_buf(&mut self.buffer).await?;
+            dbg!("wrote bytes ", len);
+        }
+        std::future::pending::<()>().await;
+        Ok(())
+    }
+}
+
+impl<W: AsyncWrite + Unpin> AsyncWrite for BufWriter<W> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, Error>> {
+        let BufWriter { buffer, writer } = self.get_mut();
+
+        buffer.extend_from_slice(buf);
+
+        if !buffer.has_remaining() {
+            return Poll::Ready(Ok(0));
+        }
+
+        let n = match Pin::new(writer).poll_write(cx, buffer.chunk()) {
+            Poll::Ready(Ok(n)) => n,
+            Poll::Ready(Err(e)) => {
+                return Poll::Ready(Err(e));
+            }
+            Poll::Pending => 0,
+        };
+        buffer.advance(n);
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    /// We ignore flush because it could make us stall, use `drive_forward` instead.
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        Pin::new(&mut self.get_mut().writer).poll_shutdown(cx)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
+    use fedimint_api::server::IServerModule;
     use futures::{SinkExt, StreamExt};
     use serde::{Deserialize, Serialize};
     use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
 
-    use crate::net::framed::BidiFramed;
+    use crate::net::framed::{BidiFramed, FramedTransport};
 
     #[tokio::test]
     async fn test_roundtrip() {
@@ -300,5 +377,38 @@ mod tests {
         let received = tokio::time::timeout(Duration::from_secs(1), framed_recipient.next()).await;
 
         assert!(received.is_err());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_buffer() {
+        let (sender_src, mut sender_dst) = tokio::io::duplex(4);
+
+        let mut framed_sender =
+            BidiFramed::<[u8; 8], WriteHalf<DuplexStream>, ReadHalf<DuplexStream>>::new(sender_src);
+
+        framed_sender.send([42; 8]).await.unwrap();
+        assert!(framed_sender.outgoing_buffer_size() <= 16);
+        framed_sender.send([42; 8]).await.unwrap();
+        assert!(framed_sender.outgoing_buffer_size() <= 32);
+
+        let receive_future = async {
+            let mut received_bytes = [0u8; 32];
+            sender_dst.read_exact(&mut received_bytes).await.unwrap();
+
+            let expected_bytes = vec![8, 0, 0, 0, 0, 0, 0, 0]
+                .into_iter()
+                .chain(vec![42; 8])
+                .chain(vec![8, 0, 0, 0, 0, 0, 0, 0])
+                .chain(vec![42; 8])
+                .collect::<Vec<u8>>();
+
+            assert_eq!(received_bytes.as_slice(), &expected_bytes);
+            ()
+        };
+
+        tokio::select! {
+            _ = receive_future => {},
+            _ = framed_sender.sink.get_mut().drive_forward() => {},
+        };
     }
 }
