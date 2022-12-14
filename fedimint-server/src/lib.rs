@@ -16,6 +16,7 @@ use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError, SerdeC
 pub use fedimint_core::*;
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
+use itertools::Itertools;
 use mint_client::api::{IFederationApi, WsFederationApi};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
@@ -23,8 +24,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
 use crate::consensus::{
-    ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
-    SerdeConsensusOutcome,
+    ConsensusOutcome, ConsensusProposal, FedimintConsensus, SerdeConsensusOutcome,
 };
 use crate::db::LastEpochKey;
 use crate::fedimint_api::net::peers::IPeerConnections;
@@ -212,40 +212,61 @@ impl FedimintServer {
         &mut self,
         last_outcome: ConsensusOutcome,
     ) -> Result<(), EpochVerifyError> {
-        let mut epochs: Vec<EpochHistory> = vec![];
+        let mut epochs: Vec<_> = vec![];
         self.rejoin_at_epoch = None;
 
         for epoch_num in self.next_epoch_to_process()..=last_outcome.epoch {
-            let current_epoch = if epoch_num == last_outcome.epoch {
-                let contributions = last_outcome.contributions.clone();
-                EpochHistory::new(
-                    last_outcome.epoch,
-                    contributions,
-                    None,
-                    self.last_processed_epoch.as_ref(),
-                )
-            } else {
-                info!("Downloading missing epoch {}", epoch_num);
-                let epoch_pk = self.cfg.epoch_pk_set.public_key();
-                self.api
-                    .fetch_epoch_history(epoch_num, epoch_pk)
-                    .await
-                    .expect("fetches history")
-            };
+            let (items, epoch, prev_epoch_hash, rejected_txs, at_know_trusted_checkpoint) =
+                if epoch_num == last_outcome.epoch {
+                    (
+                        last_outcome
+                            .contributions
+                            .iter()
+                            .sorted_by_key(|(peer, _)| *peer)
+                            .map(|(peer, items)| (*peer, items.clone()))
+                            .collect(),
+                        last_outcome.epoch,
+                        self.last_processed_epoch
+                            .as_ref()
+                            .map(|epoch| epoch.outcome.hash()),
+                        None,
+                        true,
+                    )
+                } else {
+                    info!("Downloading missing epoch {}", epoch_num);
+                    let epoch_pk = self.cfg.epoch_pk_set.public_key();
+                    let epoch = self
+                        .api
+                        .fetch_epoch_history(epoch_num, epoch_pk)
+                        .await
+                        .expect("fetches history");
 
-            // We can't validate a hash on a tx we have just created ourselves and that doesn't
-            // have a `rejected_tx` yet
-            if current_epoch.outcome.rejected_txs.is_some() {
-                current_epoch.verify_hash(&self.last_processed_epoch)?;
-            }
-            epochs.push(current_epoch.clone());
+                    epoch.verify_hash(&self.last_processed_epoch)?;
 
-            let pk = self.cfg.epoch_pk_set.public_key();
-            if epoch_num == last_outcome.epoch || current_epoch.verify_sig(&pk).is_ok() {
-                for epoch in epochs.drain(..) {
-                    let outcome = ConsensusOutcomeConversion::from(epoch.outcome.clone()).0;
-                    self.consensus
-                        .process_consensus_outcome(outcome, &epoch.outcome.rejected_txs)
+                    let pk = self.cfg.epoch_pk_set.public_key();
+                    let sig_valid = epoch.verify_sig(&pk).is_ok();
+                    (
+                        epoch.outcome.items,
+                        epoch.outcome.epoch,
+                        epoch.outcome.last_hash,
+                        epoch.outcome.rejected_txs,
+                        sig_valid,
+                    )
+                };
+
+            epochs.push((items, epoch, prev_epoch_hash, rejected_txs));
+
+            if at_know_trusted_checkpoint {
+                for (items, epoch, _prev_epoch_hash, rejected_txs) in epochs.drain(..) {
+                    let epoch = self
+                        .consensus
+                        .process_consensus_outcome(
+                            Batch {
+                                epoch,
+                                contributions: BTreeMap::from_iter(items.into_iter()),
+                            },
+                            &rejected_txs,
+                        )
                         .await;
                     self.last_processed_epoch = Some(epoch);
                 }

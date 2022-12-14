@@ -208,7 +208,7 @@ impl FedimintConsensus {
         &self,
         consensus_outcome: ConsensusOutcome,
         reference_rejected_txs: &Option<BTreeSet<TransactionId>>,
-    ) {
+    ) -> EpochHistory {
         let epoch = consensus_outcome.epoch;
         let epoch_peers: HashSet<PeerId> =
             consensus_outcome.contributions.keys().copied().collect();
@@ -312,11 +312,12 @@ impl FedimintConsensus {
         }
 
         // End consensus epoch
-        {
+        let epoch_history = {
             let mut dbtx = self.db.begin_transaction(self.decoders()).await;
             let mut drop_peers = Vec::<PeerId>::new();
 
-            self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers, rejected_txs)
+            let epoch_history = self
+                .save_epoch_history(outcome, &mut dbtx, &mut drop_peers, rejected_txs)
                 .await;
 
             for module in self.modules.modules() {
@@ -331,7 +332,9 @@ impl FedimintConsensus {
             }
 
             dbtx.commit_tx().await.expect("DB Error");
-        }
+
+            epoch_history
+        };
 
         let audit = self.audit().await;
         if audit.sum().milli_sat < 0 {
@@ -340,6 +343,8 @@ impl FedimintConsensus {
                 audit
             )
         }
+
+        epoch_history
     }
 
     pub async fn get_last_epoch(&self) -> Option<u64> {
@@ -367,7 +372,7 @@ impl FedimintConsensus {
         dbtx: &mut DatabaseTransaction<'a>,
         drop_peers: &mut Vec<PeerId>,
         rejected_txs: BTreeSet<TransactionId>,
-    ) {
+    ) -> EpochHistory {
         let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self
@@ -414,6 +419,8 @@ impl FedimintConsensus {
         dbtx.insert_entry(&EpochHistoryKey(current.outcome.epoch), &current)
             .await
             .expect("DB Error");
+
+        current
     }
 
     pub async fn await_consensus_proposal(&self) {
