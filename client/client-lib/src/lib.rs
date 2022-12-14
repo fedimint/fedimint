@@ -28,7 +28,7 @@ use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_api::{ServerModulePlugin, TieredMulti};
-use fedimint_core::epoch::EpochHistory;
+use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::modules::ln::common::LightningModuleDecoder;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::mint::common::MintModuleDecoder;
@@ -627,7 +627,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         &self,
         epoch: u64,
         epoch_pk: PublicKey,
-    ) -> Result<EpochHistory> {
+    ) -> Result<SignedEpochOutcome> {
         self.context
             .api
             .fetch_epoch_history(epoch, epoch_pk)

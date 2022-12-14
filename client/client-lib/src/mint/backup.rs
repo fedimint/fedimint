@@ -21,7 +21,7 @@ use fedimint_api::{
     NumPeers, PeerId,
 };
 use fedimint_core::{
-    epoch::{ConsensusItem, EpochHistory},
+    epoch::{ConsensusItem, SignedEpochOutcome},
     modules::mint::{MintInput, MintOutput, MintOutputConfirmation},
 };
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
@@ -258,7 +258,7 @@ impl MintClient {
     async fn fetch_epochs(
         &self,
         epoch_range: RangeInclusive<u64>,
-        sender: mpsc::Sender<api::Result<EpochHistory>>,
+        sender: mpsc::Sender<api::Result<SignedEpochOutcome>>,
         task_handle: &TaskHandle,
     ) {
         for epoch in epoch_range {
@@ -824,7 +824,7 @@ impl EcashRecoveryTracker {
         rejected_txs: &BTreeSet<TransactionId>,
     ) {
         match item {
-            ConsensusItem::EpochInfo(_) => {}
+            ConsensusItem::EpochOutcomeSignatureShare(_) => {}
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();
 

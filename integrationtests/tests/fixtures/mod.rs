@@ -37,7 +37,7 @@ use fedimint_ln::LightningModule;
 use fedimint_mint::{Mint, MintOutput};
 use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
-use fedimint_server::consensus::{ConsensusOutcome, ConsensusProposal};
+use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
@@ -502,7 +502,7 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
 
 pub struct FederationTest {
     servers: Vec<Rc<RefCell<ServerTest>>>,
-    last_consensus: Rc<RefCell<ConsensusOutcome>>,
+    last_consensus: Rc<RefCell<HbbftConsensusOutcome>>,
     max_balance_sheet: Rc<RefCell<i64>>,
     pub wallet: WalletConfig,
     pub cfg: ServerConfig,
@@ -510,7 +510,7 @@ pub struct FederationTest {
 
 struct ServerTest {
     fedimint: FedimintServer,
-    last_consensus: Vec<ConsensusOutcome>,
+    last_consensus: Vec<HbbftConsensusOutcome>,
     bitcoin_rpc: BitcoindRpc,
     database: Database,
     override_proposal: Option<ConsensusProposal>,
@@ -520,7 +520,7 @@ struct ServerTest {
 /// Represents a collection of fedimint peer servers
 impl FederationTest {
     /// Returns the outcome of the last consensus epoch
-    pub fn last_consensus(&self) -> ConsensusOutcome {
+    pub fn last_consensus(&self) -> HbbftConsensusOutcome {
         self.last_consensus.borrow().clone()
     }
 
@@ -542,7 +542,7 @@ impl FederationTest {
                 block_on(server.borrow().fedimint.consensus.get_consensus_proposal())
                     .items
                     .into_iter()
-                    .filter(|item| matches!(item, ConsensusItem::EpochInfo(_)))
+                    .filter(|item| matches!(item, ConsensusItem::EpochOutcomeSignatureShare(_)))
                     .collect();
 
             let mut items = items.clone();
@@ -825,7 +825,7 @@ impl FederationTest {
                     }
                     return false;
                 }
-                ConsensusItem::EpochInfo(_) => continue,
+                ConsensusItem::EpochOutcomeSignatureShare(_) => continue,
                 _ => return false,
             }
         }

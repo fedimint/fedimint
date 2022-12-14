@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{PeerId, TransactionId};
-use fedimint_core::epoch::EpochHistory;
+use fedimint_core::epoch::SignedEpochOutcome;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -105,7 +105,7 @@ pub struct EpochHistoryKey(pub u64);
 impl DatabaseKeyPrefixConst for EpochHistoryKey {
     const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
     type Key = Self;
-    type Value = EpochHistory;
+    type Value = SignedEpochOutcome;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -114,7 +114,7 @@ pub struct EpochHistoryKeyPrefix;
 impl DatabaseKeyPrefixConst for EpochHistoryKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
     type Key = EpochHistoryKey;
-    type Value = EpochHistory;
+    type Value = SignedEpochOutcome;
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]

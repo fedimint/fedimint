@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::mem;
 
 use fedimint_api::PeerId;
-use fedimint_core::epoch::EpochHistory;
+use fedimint_core::epoch::SignedEpochOutcome;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use threshold_crypto::PublicKey;
@@ -25,7 +25,7 @@ impl<R> QueryStrategy<R> for TrustAllPeers {
 /// Returns first epoch with a valid sig, otherwise wait till `required` agree
 pub struct ValidHistory {
     epoch_pk: PublicKey,
-    current: CurrentConsensus<EpochHistory>,
+    current: CurrentConsensus<SignedEpochOutcome>,
 }
 
 impl ValidHistory {
@@ -37,8 +37,11 @@ impl ValidHistory {
     }
 }
 
-impl QueryStrategy<EpochHistory> for ValidHistory {
-    fn process(&mut self, response: FedResponse<EpochHistory>) -> QueryStep<EpochHistory> {
+impl QueryStrategy<SignedEpochOutcome> for ValidHistory {
+    fn process(
+        &mut self,
+        response: FedResponse<SignedEpochOutcome>,
+    ) -> QueryStep<SignedEpochOutcome> {
         let FedResponse { peer, result } = response;
         match result {
             Ok(epoch) if epoch.verify_sig(&self.epoch_pk).is_ok() => QueryStep::Finished(Ok(epoch)),

@@ -12,7 +12,9 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
-use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError, SerdeConsensusItem};
+use fedimint_core::epoch::{
+    ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
+};
 pub use fedimint_core::*;
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
@@ -24,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
 use crate::consensus::{
-    ConsensusOutcome, ConsensusProposal, FedimintConsensus, SerdeConsensusOutcome,
+    ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
 };
 use crate::db::LastEpochKey;
 use crate::fedimint_api::net::peers::IPeerConnections;
@@ -74,7 +76,7 @@ pub struct FedimintServer {
     pub peers: BTreeSet<PeerId>,
     pub rejoin_at_epoch: Option<HashMap<u64, HashSet<PeerId>>>,
     pub run_empty_epochs: u64,
-    pub last_processed_epoch: Option<EpochHistory>,
+    pub last_processed_epoch: Option<SignedEpochOutcome>,
 }
 
 impl FedimintServer {
@@ -210,7 +212,7 @@ impl FedimintServer {
     /// `last_outcome` - The consensus outcome (unprocessed), we're trying to process.
     pub async fn process_outcome(
         &mut self,
-        last_outcome: ConsensusOutcome,
+        last_outcome: HbbftConsensusOutcome,
     ) -> Result<(), EpochVerifyError> {
         let mut epochs: Vec<_> = vec![];
         self.rejoin_at_epoch = None;
@@ -284,7 +286,7 @@ impl FedimintServer {
         &mut self,
         proposal: impl Future<Output = ConsensusProposal>,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) -> Cancellable<Vec<ConsensusOutcome>> {
+    ) -> Cancellable<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
         if self.cfg.peers.len() == 1 {
             tokio::select! {
@@ -294,14 +296,14 @@ impl FedimintServer {
             let proposal = proposal.await;
             let epoch = self.hbbft.epoch();
             self.hbbft.skip_to_epoch(epoch + 1);
-            return Ok(vec![ConsensusOutcome {
+            return Ok(vec![HbbftConsensusOutcome {
                 epoch,
                 contributions: BTreeMap::from([(self.cfg.identity, proposal.items)]),
             }]);
         }
 
         // process messages until new epoch or we have a proposal
-        let mut outcomes: Vec<ConsensusOutcome> = loop {
+        let mut outcomes: Vec<HbbftConsensusOutcome> = loop {
             match self.await_next_epoch().await? {
                 Some(msg) if self.start_next_epoch(&msg) => break self.handle_message(msg).await?,
                 Some(msg) => self.handle_message(msg).await?,
@@ -325,7 +327,7 @@ impl FedimintServer {
 
     /// Handles one step of the HBBFT algorithm, sending messages to peers and parsing any
     /// outcomes contained in the step
-    async fn handle_step(&mut self, step: EpochStep) -> Cancellable<Vec<ConsensusOutcome>> {
+    async fn handle_step(&mut self, step: EpochStep) -> Cancellable<Vec<HbbftConsensusOutcome>> {
         for msg in step.messages {
             self.connections
                 .send(
@@ -339,7 +341,7 @@ impl FedimintServer {
             warn!(?step.fault_log);
         }
 
-        let mut outcomes: Vec<ConsensusOutcome> = vec![];
+        let mut outcomes: Vec<HbbftConsensusOutcome> = vec![];
         for outcome in step.output {
             let (outcome, ban_peers) =
                 module_parse_outcome(outcome, &self.consensus.modules.decoders());
@@ -387,7 +389,10 @@ impl FedimintServer {
     }
 
     /// Runs a single HBBFT consensus step
-    async fn handle_message(&mut self, msg: PeerMessage) -> Cancellable<Vec<ConsensusOutcome>> {
+    async fn handle_message(
+        &mut self,
+        msg: PeerMessage,
+    ) -> Cancellable<Vec<HbbftConsensusOutcome>> {
         match msg {
             (peer, EpochMessage::Continue(peer_msg)) => {
                 self.rejoin_at_epoch(peer_msg.epoch(), peer).await;
@@ -445,9 +450,9 @@ impl RngGenerator for OsRngGen {
 }
 
 fn module_parse_outcome(
-    outcome: SerdeConsensusOutcome,
+    outcome: HbbftSerdeConsensusOutcome,
     module_registry: &ModuleDecoderRegistry,
-) -> (ConsensusOutcome, Vec<PeerId>) {
+) -> (HbbftConsensusOutcome, Vec<PeerId>) {
     let mut ban_peers = vec![];
     let contributions = outcome
         .contributions
