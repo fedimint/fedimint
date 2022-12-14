@@ -104,7 +104,7 @@ impl IFederationApi for MockApi {
     async fn download_ecash_backup(
         &self,
         _id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Option<ECashUserBackupSnapshot>, ApiError> {
+    ) -> Result<Vec<ECashUserBackupSnapshot>, ApiError> {
         unimplemented!()
     }
 }

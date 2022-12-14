@@ -8,7 +8,7 @@
 //! to avoid having to scan the whole history.
 
 use std::{
-    cmp::max,
+    cmp::{max, Reverse},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ops::RangeInclusive,
 };
@@ -168,19 +168,29 @@ impl MintClient {
     pub async fn download_ecash_backup_from_federation(
         &self,
     ) -> Result<Option<PlaintextEcashBackup>> {
-        if let Some(encrypted) = self
+        let mut responses: Vec<_> = self
             .context
             .api
             .download_ecash_backup(&self.get_derived_backup_signing_key().x_only_public_key().0)
             .await?
-        {
-            Ok(Some(
-                EcashBackup(encrypted.data)
-                    .decrypt_with(&self.get_derived_backup_encryption_key())?,
-            ))
-        } else {
-            Ok(None)
-        }
+            .into_iter()
+            .filter_map(|backup| {
+                match EcashBackup(backup.data)
+                    .decrypt_with(&self.get_derived_backup_encryption_key())
+                {
+                    Ok(valid) => Some(valid),
+                    Err(e) => {
+                        warn!("Invalid backup returned by one of the peers: {e}");
+                        None
+                    }
+                }
+            })
+            .collect();
+
+        // Use the newest (highest epoch)
+        responses.sort_by_key(|backup| Reverse(backup.epoch));
+
+        Ok(responses.into_iter().next())
     }
 
     /// Static version of [`Self::get_derived_backup_encryption_key`] for testing without creating whole `MintClient`
@@ -395,8 +405,7 @@ impl PlaintextEcashBackup {
 
     /// Encode `self` to a padded (but still plaintext) message
     fn encode(&self) -> Result<Vec<u8>> {
-        let mut bytes = vec![];
-        self.consensus_encode(&mut bytes)?;
+        let mut bytes = self.consensus_encode_to_vec()?;
 
         let padding_size = Self::get_alignment_size(bytes.len()) - bytes.len();
 

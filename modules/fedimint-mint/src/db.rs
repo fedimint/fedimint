@@ -152,7 +152,7 @@ impl DatabaseKeyPrefixConst for EcashBackupKeyPrefix {
 }
 
 /// User's backup, received at certain time, containing encrypted payload
-#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct ECashUserBackupSnapshot {
     pub timestamp: SystemTime,
     #[serde(with = "hex::serde")]

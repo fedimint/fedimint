@@ -474,7 +474,7 @@ mod tests {
         async fn download_ecash_backup(
             &self,
             _id: &secp256k1::XOnlyPublicKey,
-        ) -> crate::api::Result<Option<ECashUserBackupSnapshot>> {
+        ) -> crate::api::Result<Vec<ECashUserBackupSnapshot>> {
             unimplemented!()
         }
     }
