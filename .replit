@@ -57,7 +57,7 @@ start = "nix --extra-experimental-features nix-command --extra-experimental-feat
 
 [nix]
 # this must be kept in sync with `nixpkgs` channel in `flake.nix`
-channel = "stable-22_05"
+channel = "stable-22_11"
 
 [gitHubImport]
 requiredFiles = [".replit", "replit.nix"]
