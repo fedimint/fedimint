@@ -249,7 +249,7 @@ impl FedimintServer {
                         epoch.outcome.items,
                         epoch.outcome.epoch,
                         epoch.outcome.last_hash,
-                        epoch.outcome.rejected_txs,
+                        Some(epoch.outcome.rejected_txs),
                         sig_valid,
                     )
                 };

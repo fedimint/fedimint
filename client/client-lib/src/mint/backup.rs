@@ -353,11 +353,7 @@ impl MintClient {
                         *peer_id,
                         item,
                         &mut procesed_txs,
-                        epoch_history
-                            .outcome
-                            .rejected_txs
-                            .as_ref()
-                            .expect("at this point the rejected must always be present already"),
+                        &epoch_history.outcome.rejected_txs,
                     );
                 }
             }

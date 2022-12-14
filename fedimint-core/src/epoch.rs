@@ -51,13 +51,7 @@ pub struct OutcomeHistory {
     pub items: Vec<(PeerId, Vec<ConsensusItem>)>,
 
     /// Transactions from `items` that turned out to be invalid.
-    /// It's an `Option` as in certain places we do have a `OutcomeHistory`, from which
-    /// we can deterministically calculate it, but we have not yet run that calculation.
-    /// We might consider splitting [`OutcomeHistory`] into two types - with or without
-    /// this field, and an an `enum` to unify them in places where it's possible to
-    /// have either (there is a place like this as of writting this comment), but it's
-    /// unclear if it's worth it.
-    pub rejected_txs: Option<BTreeSet<TransactionId>>,
+    pub rejected_txs: BTreeSet<TransactionId>,
 }
 
 impl OutcomeHistory {
@@ -72,7 +66,7 @@ impl EpochHistory {
     pub fn new(
         epoch: u64,
         contributions: BTreeMap<PeerId, Vec<ConsensusItem>>,
-        rejected_txs: Option<BTreeSet<TransactionId>>,
+        rejected_txs: BTreeSet<TransactionId>,
         prev_epoch: Option<&EpochHistory>,
     ) -> Self {
         let items = contributions
@@ -132,9 +126,6 @@ impl EpochHistory {
     }
 
     pub fn verify_sig(&self, pk: &PublicKey) -> Result<(), EpochVerifyError> {
-        if self.outcome.rejected_txs.is_none() {
-            return Err(EpochVerifyError::MissingRejectedTxs);
-        }
         if let Some(sig) = &self.signature {
             if !pk.verify(&sig.0, self.hash) {
                 return Err(EpochVerifyError::InvalidSignature);
@@ -147,14 +138,10 @@ impl EpochHistory {
     }
 
     pub fn verify_hash(&self, prev_epoch: &Option<EpochHistory>) -> Result<(), EpochVerifyError> {
-        if self.outcome.rejected_txs.is_none() {
-            return Err(EpochVerifyError::MissingRejectedTxs);
-        }
-
         if self.outcome.epoch > 0 {
             match prev_epoch {
                 None => return Err(EpochVerifyError::MissingPreviousEpoch),
-                Some(epoch) if Some(epoch.outcome.hash()) != self.outcome.last_hash => {
+                Some(prev_epoch) if Some(prev_epoch.outcome.hash()) != self.outcome.last_hash => {
                     return Err(EpochVerifyError::InvalidPreviousEpochHash)
                 }
                 _ => {}
@@ -172,7 +159,6 @@ impl EpochHistory {
 #[derive(Debug, PartialEq, Eq)]
 pub enum EpochVerifyError {
     MissingSignature,
-    MissingRejectedTxs,
     InvalidSignature,
     MissingPreviousEpoch,
     InvalidEpochHash,
@@ -249,7 +235,7 @@ mod tests {
             items,
             epoch: epoch as u64,
             // seems like in these tests we don't care about this one
-            rejected_txs: Some(BTreeSet::default()),
+            rejected_txs: BTreeSet::default(),
         };
 
         EpochHistory {
@@ -284,7 +270,7 @@ mod tests {
             epoch: 1,
             last_hash: None,
             items: sigs[0..1].to_vec(),
-            rejected_txs: Some(BTreeSet::default()),
+            rejected_txs: BTreeSet::default(),
         };
         let contributing = HashSet::from([PeerId::from(0)]);
         let result = epoch1.add_sig_to_prev(&pk_set, epoch0.clone()).unwrap_err();
@@ -297,7 +283,7 @@ mod tests {
             epoch: 1,
             last_hash: None,
             items: sigs,
-            rejected_txs: Some(BTreeSet::default()),
+            rejected_txs: BTreeSet::default(),
         };
         let epoch0 = epoch1.add_sig_to_prev(&pk_set, epoch0).unwrap();
         assert_eq!(epoch0.verify_sig(&pk_set.public_key()), Ok(()));

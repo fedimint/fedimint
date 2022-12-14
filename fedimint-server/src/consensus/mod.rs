@@ -386,7 +386,7 @@ impl FedimintConsensus {
         let current = EpochHistory::new(
             outcome.epoch,
             outcome.contributions,
-            Some(rejected_txs),
+            rejected_txs,
             maybe_prev_epoch.as_ref(),
         );
 
