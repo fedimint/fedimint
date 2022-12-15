@@ -846,7 +846,6 @@
 <a href="#846" id="846">846</a>
 <a href="#847" id="847">847</a>
 <a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -1244,8 +1243,7 @@
             </span>.request_complex(
                 <span class="string">&quot;/mint/recover&quot;</span>,
                 id,
-                <span class="comment">// TODO: do we need a different strategy for this?
-                </span>UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
+                UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
                     <span class="self">self</span>.peers().one_honest(),
                 ),
             )
