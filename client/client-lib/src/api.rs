@@ -395,7 +395,6 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
             .request_complex(
                 "/mint/recover",
                 id,
-                // TODO: do we need a different strategy for this?
                 UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
                     self.peers().one_honest(),
                 ),
