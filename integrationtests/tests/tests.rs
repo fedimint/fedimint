@@ -974,7 +974,7 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_can_be_recovered() -> Result<()> {
-    test(4, |fed, user_send, bitcoin, _, _| async move {
+    test(2, |fed, user_send, bitcoin, _, _| async move {
         let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
 
         fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
