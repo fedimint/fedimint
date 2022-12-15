@@ -15,7 +15,7 @@ use crate::transaction::Transaction;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
 pub enum ConsensusItem {
-    EpochInfo(EpochSignatureShare),
+    EpochOutcomeSignatureShare(EpochOutcomeSignatureShare),
     Transaction(Transaction),
     Module(ModuleConsensusItem),
 }
@@ -23,22 +23,22 @@ pub enum ConsensusItem {
 serde_module_encoding_wrapper!(SerdeConsensusItem, ConsensusItem);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct EpochSignatureShare(pub SignatureShare);
+pub struct EpochOutcomeSignatureShare(pub SignatureShare);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct EpochSignature(pub Signature);
+pub struct EpochOutcomeSignature(pub Signature);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
-pub struct EpochHistory {
-    pub outcome: OutcomeHistory,
+pub struct SignedEpochOutcome {
+    pub outcome: EpochOutcome,
     pub hash: Sha256,
-    pub signature: Option<EpochSignature>,
+    pub signature: Option<EpochOutcomeSignature>,
 }
 
-serde_module_encoding_wrapper!(SerdeEpochHistory, EpochHistory);
+serde_module_encoding_wrapper!(SerdeEpochHistory, SignedEpochOutcome);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
-pub struct OutcomeHistory {
+pub struct EpochOutcome {
     pub epoch: u64,
     pub last_hash: Option<Sha256>,
     /// All the consensus items along with the `PeerId` of the
@@ -54,7 +54,7 @@ pub struct OutcomeHistory {
     pub rejected_txs: BTreeSet<TransactionId>,
 }
 
-impl OutcomeHistory {
+impl EpochOutcome {
     pub fn hash(&self) -> Sha256 {
         let mut engine = HashEngine::default();
         self.consensus_encode(&mut engine).unwrap();
@@ -62,25 +62,25 @@ impl OutcomeHistory {
     }
 }
 
-impl EpochHistory {
+impl SignedEpochOutcome {
     pub fn new(
         epoch: u64,
         contributions: BTreeMap<PeerId, Vec<ConsensusItem>>,
         rejected_txs: BTreeSet<TransactionId>,
-        prev_epoch: Option<&EpochHistory>,
+        prev_epoch: Option<&SignedEpochOutcome>,
     ) -> Self {
         let items = contributions
             .into_iter()
             .sorted_by_key(|(peer, _)| *peer)
             .collect();
-        let outcome = OutcomeHistory {
+        let outcome = EpochOutcome {
             last_hash: prev_epoch.map(|epoch| epoch.hash),
             items,
             epoch,
             rejected_txs,
         };
 
-        EpochHistory {
+        SignedEpochOutcome {
             hash: outcome.hash(),
             outcome,
             signature: None,
@@ -90,8 +90,8 @@ impl EpochHistory {
     pub fn add_sig_to_prev(
         &self,
         pks: &PublicKeySet,
-        mut prev_epoch: EpochHistory,
-    ) -> Result<EpochHistory, EpochVerifyError> {
+        mut prev_epoch: SignedEpochOutcome,
+    ) -> Result<SignedEpochOutcome, EpochVerifyError> {
         let mut contributing_peers = HashSet::new();
 
         let sigs: BTreeMap<_, _> = self
@@ -100,7 +100,9 @@ impl EpochHistory {
             .iter()
             .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
             .filter_map(|(peer, item)| match item {
-                ConsensusItem::EpochInfo(EpochSignatureShare(sig)) => Some((peer, sig)),
+                ConsensusItem::EpochOutcomeSignatureShare(EpochOutcomeSignatureShare(sig)) => {
+                    Some((peer, sig))
+                }
                 _ => None,
             })
             .filter(|(peer, sig)| {
@@ -116,7 +118,7 @@ impl EpochHistory {
         if let Ok(final_sig) = pks.combine_signatures(sigs) {
             assert!(pks.public_key().verify(&final_sig, prev_epoch.hash));
 
-            prev_epoch.signature = Some(EpochSignature(final_sig));
+            prev_epoch.signature = Some(EpochOutcomeSignature(final_sig));
             Ok(prev_epoch)
         } else {
             Err(EpochVerifyError::NotEnoughValidSigShares(
@@ -137,7 +139,10 @@ impl EpochHistory {
         Ok(())
     }
 
-    pub fn verify_hash(&self, prev_epoch: &Option<EpochHistory>) -> Result<(), EpochVerifyError> {
+    pub fn verify_hash(
+        &self,
+        prev_epoch: &Option<SignedEpochOutcome>,
+    ) -> Result<(), EpochVerifyError> {
         if self.outcome.epoch > 0 {
             match prev_epoch {
                 None => return Err(EpochVerifyError::MissingPreviousEpoch),
@@ -166,37 +171,37 @@ pub enum EpochVerifyError {
     NotEnoughValidSigShares(HashSet<PeerId>),
 }
 
-impl Encodable for EpochSignature {
+impl Encodable for EpochOutcomeSignature {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.0.to_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for EpochSignature {
+impl Decodable for EpochOutcomeSignature {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-        Ok(EpochSignature(Signature::from_bytes(bytes).unwrap()))
+        Ok(EpochOutcomeSignature(Signature::from_bytes(bytes).unwrap()))
     }
 }
 
-impl Encodable for EpochSignatureShare {
+impl Encodable for EpochOutcomeSignatureShare {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.0.to_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for EpochSignatureShare {
+impl Decodable for EpochOutcomeSignatureShare {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-        Ok(EpochSignatureShare(
+        Ok(EpochOutcomeSignatureShare(
             SignatureShare::from_bytes(bytes).unwrap(),
         ))
     }
@@ -211,26 +216,26 @@ mod tests {
     use rand::rngs::OsRng;
     use threshold_crypto::{SecretKey, SecretKeySet};
 
-    use crate::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
-    use crate::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
+    use crate::epoch::{ConsensusItem, EpochOutcomeSignatureShare, Sha256};
+    use crate::epoch::{EpochOutcome, EpochOutcomeSignature, EpochVerifyError, SignedEpochOutcome};
 
     fn signed_history(
         epoch: u16,
-        prev_epoch: &Option<EpochHistory>,
+        prev_epoch: &Option<SignedEpochOutcome>,
         sk: &SecretKey,
-    ) -> EpochHistory {
+    ) -> SignedEpochOutcome {
         let missing_sig = history(epoch, prev_epoch, None);
         let signature = sk.sign(missing_sig.outcome.hash());
-        history(epoch, prev_epoch, Some(EpochSignature(signature)))
+        history(epoch, prev_epoch, Some(EpochOutcomeSignature(signature)))
     }
 
     fn history(
         epoch: u16,
-        prev_epoch: &Option<EpochHistory>,
-        signature: Option<EpochSignature>,
-    ) -> EpochHistory {
+        prev_epoch: &Option<SignedEpochOutcome>,
+        signature: Option<EpochOutcomeSignature>,
+    ) -> SignedEpochOutcome {
         let items = vec![(PeerId::from(epoch), vec![])];
-        let outcome = OutcomeHistory {
+        let outcome = EpochOutcome {
             last_hash: prev_epoch.clone().map(|epoch| epoch.hash),
             items,
             epoch: epoch as u64,
@@ -238,7 +243,7 @@ mod tests {
             rejected_txs: BTreeSet::default(),
         };
 
-        EpochHistory {
+        SignedEpochOutcome {
             hash: outcome.hash(),
             outcome,
             signature,
@@ -261,12 +266,14 @@ mod tests {
                 let sig = sk_set.secret_key_share(peer.to_usize()).sign(epoch0.hash);
                 (
                     peer,
-                    vec![ConsensusItem::EpochInfo(EpochSignatureShare(sig))],
+                    vec![ConsensusItem::EpochOutcomeSignatureShare(
+                        EpochOutcomeSignatureShare(sig),
+                    )],
                 )
             })
             .collect();
 
-        epoch1.outcome = OutcomeHistory {
+        epoch1.outcome = EpochOutcome {
             epoch: 1,
             last_hash: None,
             items: sigs[0..1].to_vec(),
@@ -279,7 +286,7 @@ mod tests {
             EpochVerifyError::NotEnoughValidSigShares(contributing)
         );
 
-        epoch1.outcome = OutcomeHistory {
+        epoch1.outcome = EpochOutcome {
             epoch: 1,
             last_hash: None,
             items: sigs,
@@ -294,10 +301,10 @@ mod tests {
         let sk: SecretKey = SecretKey::random();
         let _pk = sk.public_key();
         let wrong_hash: Sha256 = Hash::hash(b"wrong");
-        let sig = EpochSignature(sk.sign(wrong_hash));
+        let sig = EpochOutcomeSignature(sk.sign(wrong_hash));
 
         let epoch0 = history(0, &None, Some(sig));
-        let epoch = EpochHistory {
+        let epoch = SignedEpochOutcome {
             outcome: epoch0.outcome,
             hash: wrong_hash,
             signature: epoch0.signature,

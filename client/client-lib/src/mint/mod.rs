@@ -661,7 +661,7 @@ mod tests {
     use fedimint_api::db::Database;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
-    use fedimint_core::epoch::EpochHistory;
+    use fedimint_core::epoch::SignedEpochOutcome;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -759,7 +759,7 @@ mod tests {
             &self,
             _epoch: u64,
             _pk: PublicKey,
-        ) -> crate::api::Result<EpochHistory> {
+        ) -> crate::api::Result<SignedEpochOutcome> {
             unimplemented!()
         }
 

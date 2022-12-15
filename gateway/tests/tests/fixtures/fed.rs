@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use bitcoin::{secp256k1, Address};
 use fedimint_api::{backup::SignedBackupRequest, TransactionId};
 use fedimint_core::{
-    epoch::EpochHistory,
+    epoch::SignedEpochOutcome,
     modules::{
         ln::{
             contracts::{incoming::IncomingContractOffer, ContractId},
@@ -82,7 +82,7 @@ impl IFederationApi for MockApi {
         &self,
         _epoch: u64,
         _pk: threshold_crypto::PublicKey,
-    ) -> Result<EpochHistory, ApiError> {
+    ) -> Result<SignedEpochOutcome, ApiError> {
         unimplemented!()
     }
 

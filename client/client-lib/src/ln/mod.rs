@@ -347,7 +347,7 @@ mod tests {
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::{Amount, OutPoint, TransactionId};
-    use fedimint_core::epoch::EpochHistory;
+    use fedimint_core::epoch::SignedEpochOutcome;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
@@ -449,7 +449,7 @@ mod tests {
             &self,
             _epoch: u64,
             _pk: PublicKey,
-        ) -> crate::api::Result<EpochHistory> {
+        ) -> crate::api::Result<SignedEpochOutcome> {
             unimplemented!()
         }
 

@@ -11,7 +11,7 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
-use fedimint_core::epoch::{EpochHistory, SerdeEpochHistory};
+use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -54,7 +54,11 @@ pub trait IFederationApi: Debug + Send + Sync {
     /// Submit a transaction to all federation members
     async fn submit_transaction(&self, tx: LegacyTransaction) -> Result<TransactionId>;
 
-    async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory>;
+    async fn fetch_epoch_history(
+        &self,
+        epoch: u64,
+        epoch_pk: PublicKey,
+    ) -> Result<SignedEpochOutcome>;
 
     async fn fetch_last_epoch(&self) -> Result<u64>;
 
@@ -250,7 +254,11 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
         .await
     }
 
-    async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory> {
+    async fn fetch_epoch_history(
+        &self,
+        epoch: u64,
+        epoch_pk: PublicKey,
+    ) -> Result<SignedEpochOutcome> {
         struct ValidHistoryWrapper<'a> {
             modules: &'a ModuleDecoderRegistry,
             strategy: ValidHistory,

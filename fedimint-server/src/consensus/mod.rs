@@ -35,13 +35,13 @@ use crate::rng::RngGenerator;
 use crate::transaction::{Transaction, TransactionError};
 use crate::OsRngGen;
 
-pub type SerdeConsensusOutcome = Batch<Vec<SerdeConsensusItem>, PeerId>;
-pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
-pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
+pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
+pub type HbbftConsensusOutcome = hbbft::honey_badger::Batch<Vec<ConsensusItem>, PeerId>;
+pub type HbbftMessage = hbbft::honey_badger::Message<PeerId>;
 
 // TODO remove HBBFT `Batch` from `ConsensusOutcome`
 #[derive(Debug, Clone)]
-pub struct ConsensusOutcomeConversion(pub ConsensusOutcome);
+pub struct ConsensusOutcomeConversion(pub HbbftConsensusOutcome);
 
 impl PartialEq<Self> for ConsensusOutcomeConversion {
     fn eq(&self, other: &Self) -> bool {
@@ -49,8 +49,8 @@ impl PartialEq<Self> for ConsensusOutcomeConversion {
     }
 }
 
-impl From<OutcomeHistory> for ConsensusOutcomeConversion {
-    fn from(history: OutcomeHistory) -> Self {
+impl From<EpochOutcome> for ConsensusOutcomeConversion {
+    fn from(history: EpochOutcome) -> Self {
         ConsensusOutcomeConversion(Batch {
             epoch: history.epoch,
             contributions: BTreeMap::from_iter(history.items.into_iter()),
@@ -206,16 +206,16 @@ impl FedimintConsensus {
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     pub async fn process_consensus_outcome(
         &self,
-        consensus_outcome: ConsensusOutcome,
+        consensus_outcome: HbbftConsensusOutcome,
         reference_rejected_txs: &Option<BTreeSet<TransactionId>>,
-    ) -> EpochHistory {
+    ) -> SignedEpochOutcome {
         let epoch = consensus_outcome.epoch;
         let epoch_peers: HashSet<PeerId> =
             consensus_outcome.contributions.keys().copied().collect();
         let outcome = consensus_outcome.clone();
 
         let UnzipConsensusItem {
-            epoch_info: _epoch_info_cis,
+            epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
             transaction: transaction_cis,
             module: module_cis,
         } = consensus_outcome
@@ -357,7 +357,7 @@ impl FedimintConsensus {
             .map(|e| e.0)
     }
 
-    pub async fn epoch_history(&self, epoch: u64) -> Option<EpochHistory> {
+    pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
         self.db
             .begin_transaction(self.decoders())
             .await
@@ -368,11 +368,11 @@ impl FedimintConsensus {
 
     async fn save_epoch_history<'a>(
         &self,
-        outcome: ConsensusOutcome,
+        outcome: HbbftConsensusOutcome,
         dbtx: &mut DatabaseTransaction<'a>,
         drop_peers: &mut Vec<PeerId>,
         rejected_txs: BTreeSet<TransactionId>,
-    ) -> EpochHistory {
+    ) -> SignedEpochOutcome {
         let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self
@@ -383,7 +383,7 @@ impl FedimintConsensus {
             .await
             .expect("DB error");
 
-        let current = EpochHistory::new(
+        let current = SignedEpochOutcome::new(
             outcome.epoch,
             outcome.contributions,
             rejected_txs,
@@ -472,7 +472,7 @@ impl FedimintConsensus {
         if let Some(epoch) = dbtx.get_value(&LastEpochKey).await.unwrap() {
             let last_epoch = dbtx.get_value(&epoch).await.unwrap().unwrap();
             let sig = self.cfg.epoch_sks.0.sign(last_epoch.hash);
-            let item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
+            let item = ConsensusItem::EpochOutcomeSignatureShare(EpochOutcomeSignatureShare(sig));
             items.push(item);
         };
 
