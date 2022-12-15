@@ -829,6 +829,24 @@
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
 <a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -872,8 +890,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::module_decode_stubs;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
-    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, TrustAllPeers,
-    UnionResponses, ValidHistory,
+    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
+    UnionResponsesSingle, ValidHistory,
 };
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
@@ -927,7 +945,7 @@
     </span><span class="kw">async fn </span>download_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -1221,15 +1239,20 @@
     <span class="kw">async fn </span>download_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request(
+            </span>.request_complex(
                 <span class="string">&quot;/mint/recover&quot;</span>,
                 id,
                 <span class="comment">// TODO: do we need a different strategy for this?
-                </span>TrustAllPeers,
+                </span>UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
+                    <span class="self">self</span>.peers().one_honest(),
+                ),
             )
-            .<span class="kw">await</span><span class="question-mark">?</span>)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .flatten()
+            .collect())
     }
 }
 
@@ -1397,8 +1420,21 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: <span class="kw-2">&amp;</span>str,
         param: P,
-        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;R&gt;,
+        strategy: <span class="kw">impl </span>QueryStrategy&lt;R&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt; {
+        <span class="self">self</span>.request_complex(method, param, strategy).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>request_complex&lt;
+        P: serde::Serialize,
+        IR: serde::de::DeserializeOwned,
+        OR: serde::de::DeserializeOwned,
+    &gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: <span class="kw-2">&amp;</span>str,
+        param: P,
+        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;IR, OR&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OR&gt; {
         <span class="kw">let </span>params = [serde_json::to_value(param).expect(<span class="string">&quot;encoding error&quot;</span>)];
         <span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::new();
 

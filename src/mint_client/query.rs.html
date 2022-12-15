@@ -235,6 +235,61 @@
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -287,7 +342,7 @@
     }
 }
 
-<span class="doccomment">/// Returns the deduplicated union of `required` responses
+<span class="doccomment">/// Returns the deduplicated union of `required` number of responses
 </span><span class="kw">pub struct </span>UnionResponses&lt;R&gt; {
     responses: HashSet&lt;PeerId&gt;,
     existing_results: Vec&lt;R&gt;,
@@ -329,6 +384,61 @@
         } <span class="kw">else </span>{
             <span class="comment">// handle error case using the CurrentConsensus method
             </span><span class="self">self</span>.current.process(response)
+        }
+    }
+}
+
+<span class="doccomment">/// Returns the deduplicated union of `required` number of responses
+///
+/// Unlike [`UnionResponses`], it works with single values, not `Vec`s.
+/// TODO: Should we make UnionResponses a wrapper around this one?
+</span><span class="kw">pub struct </span>UnionResponsesSingle&lt;R&gt; {
+    responses: HashSet&lt;PeerId&gt;,
+    existing_results: Vec&lt;R&gt;,
+    current: CurrentConsensus&lt;Vec&lt;R&gt;&gt;,
+    required: usize,
+}
+
+<span class="kw">impl</span>&lt;R&gt; UnionResponsesSingle&lt;R&gt; {
+    <span class="kw">pub fn </span>new(required: usize) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            responses: HashSet::new(),
+            existing_results: <span class="macro">vec!</span>[],
+            current: CurrentConsensus::new(required),
+            required,
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;R, Vec&lt;R&gt;&gt; <span class="kw">for </span>UnionResponsesSingle&lt;R&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;R&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
+        <span class="kw">match </span>response {
+            FedResponse {
+                peer,
+                result: <span class="prelude-val">Ok</span>(new_result),
+            } =&gt; {
+                <span class="kw">if </span>!<span class="self">self</span>.existing_results.iter().any(|r| r == <span class="kw-2">&amp;</span>new_result) {
+                    <span class="self">self</span>.existing_results.push(new_result);
+                }
+
+                <span class="self">self</span>.responses.insert(peer);
+
+                <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required {
+                    QueryStep::Finished(<span class="prelude-val">Ok</span>(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.existing_results)))
+                } <span class="kw">else </span>{
+                    QueryStep::Continue
+                }
+            }
+            FedResponse {
+                peer,
+                result: <span class="prelude-val">Err</span>(e),
+            } =&gt; {
+                <span class="comment">// handle error case using the CurrentConsensus method
+                </span><span class="self">self</span>.current.process(FedResponse {
+                    peer,
+                    result: <span class="prelude-val">Err</span>(e),
+                })
+            }
         }
     }
 }
@@ -458,8 +568,8 @@
     }
 }
 
-<span class="kw">pub trait </span>QueryStrategy&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;R&gt;) -&gt; QueryStep&lt;R&gt;;
+<span class="kw">pub trait </span>QueryStrategy&lt;IR, OR = IR&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;IR&gt;) -&gt; QueryStep&lt;OR&gt;;
 }
 
 <span class="doccomment">/// Results from the strategy handling a response from a peer
