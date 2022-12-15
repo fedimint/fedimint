@@ -5,7 +5,7 @@
   <a href="https://github.com/fedimint/fedimint/actions/workflows/ci-nix.yml">
       <img src="https://github.com/fedimint/fedimint/actions/workflows/ci-nix.yml/badge.svg" alt="Github Actions CI Build Status">
   </a>
-  <a href="https://discord.com/channels/990354215060795454"><img alt="Chat for developers on Discord" src="https://img.shields.io/discord/990354215060795454"></a>
+  <a href="https://discord.com/channels/990354215060795454"><img alt="Chat for developers on Discord" src="https://img.shields.io/discord/990354215060795454?label=dev%20chat"></a>
   <img alt="Lines of code" src="https://img.shields.io/tokei/lines/github/fedimint/fedimint">
 </p>
 
