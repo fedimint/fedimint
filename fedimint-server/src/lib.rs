@@ -215,6 +215,9 @@ impl FedimintServer {
         last_outcome: HbbftConsensusOutcome,
     ) -> Result<(), EpochVerifyError> {
         let mut epochs: Vec<_> = vec![];
+        // for checking the hashes of the epoch history
+        let mut prev_epoch: Option<SignedEpochOutcome> = self.last_processed_epoch.clone();
+        // once we produce an outcome we no longer need to rejoin
         self.rejoin_at_epoch = None;
 
         for epoch_num in self.next_epoch_to_process()..=last_outcome.epoch {
@@ -243,7 +246,8 @@ impl FedimintServer {
                         .await
                         .expect("fetches history");
 
-                    epoch.verify_hash(&self.last_processed_epoch)?;
+                    epoch.verify_hash(&prev_epoch)?;
+                    prev_epoch = Some(epoch.clone());
 
                     let pk = self.cfg.epoch_pk_set.public_key();
                     let sig_valid = epoch.verify_sig(&pk).is_ok();
