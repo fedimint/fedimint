@@ -481,6 +481,10 @@
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -698,7 +702,10 @@
         last_outcome: HbbftConsensusOutcome,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>epochs: Vec&lt;<span class="kw">_</span>&gt; = <span class="macro">vec!</span>[];
-        <span class="self">self</span>.rejoin_at_epoch = <span class="prelude-val">None</span>;
+        <span class="comment">// for checking the hashes of the epoch history
+        </span><span class="kw">let </span><span class="kw-2">mut </span>prev_epoch: <span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt; = <span class="self">self</span>.last_processed_epoch.clone();
+        <span class="comment">// once we produce an outcome we no longer need to rejoin
+        </span><span class="self">self</span>.rejoin_at_epoch = <span class="prelude-val">None</span>;
 
         <span class="kw">for </span>epoch_num <span class="kw">in </span><span class="self">self</span>.next_epoch_to_process()..=last_outcome.epoch {
             <span class="kw">let </span>(items, epoch, prev_epoch_hash, rejected_txs, at_know_trusted_checkpoint) =
@@ -726,7 +733,8 @@
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;fetches history&quot;</span>);
 
-                    epoch.verify_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.last_processed_epoch)<span class="question-mark">?</span>;
+                    epoch.verify_hash(<span class="kw-2">&amp;</span>prev_epoch)<span class="question-mark">?</span>;
+                    prev_epoch = <span class="prelude-val">Some</span>(epoch.clone());
 
                     <span class="kw">let </span>pk = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
                     <span class="kw">let </span>sig_valid = epoch.verify_sig(<span class="kw-2">&amp;</span>pk).is_ok();
