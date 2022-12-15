@@ -60,6 +60,13 @@ pub trait Encodable {
     ///
     /// The only errors returned are errors propagated from the writer.
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error>;
+
+    /// [`Self::consensus_encode`] to newly allocated `Vec<u8>`
+    fn consensus_encode_to_vec(&self) -> Result<Vec<u8>, std::io::Error> {
+        let mut bytes = vec![];
+        self.consensus_encode(&mut bytes)?;
+        Ok(bytes)
+    }
 }
 
 /// Data which can be encoded in a consensus-consistent way

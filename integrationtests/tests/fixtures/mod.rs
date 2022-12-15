@@ -451,6 +451,7 @@ pub struct UserTest<C> {
 }
 
 impl UserTest<UserClientConfig> {
+    /// Create a user that communicates only with a subset of peers
     pub async fn new_user_with_peers(&self, peers: Vec<PeerId>) -> UserTest<UserClientConfig> {
         let user = create_user_client(self.config.clone(), peers, MemDatabase::new().into()).await;
         UserTest::new(Arc::new(user))

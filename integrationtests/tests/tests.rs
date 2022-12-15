@@ -7,6 +7,7 @@ use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::core::MODULE_KEY_LN;
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
@@ -967,6 +968,56 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
         fed.await_consensus_epochs(1).await.unwrap();
         bitcoin.mine_blocks(100);
         fed.run_consensus_epochs(1).await;
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ecash_can_be_recovered() -> Result<()> {
+    test(4, |fed, user_send, bitcoin, _, _| async move {
+        let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
+
+        fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
+        assert_eq!(user_send.total_coins().await, sats(5000));
+        assert_eq!(user_receive.total_coins().await, sats(0));
+
+        user_send
+            .client
+            .mint_client()
+            .back_up_ecash_to_federation()
+            .await
+            .unwrap();
+
+        user_send.client.mint_client().wipe_notes().await.unwrap();
+
+        user_send.assert_total_coins(sats(0)).await;
+
+        let mut task_group = TaskGroup::new();
+
+        user_send
+            .client
+            .mint_client()
+            .restore_ecash_from_federation(2, &mut task_group)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(user_send.total_coins().await, sats(5000));
+
+        let ecash = fed.spend_ecash(&user_send, sats(3500)).await;
+        user_receive.client.reissue(ecash, rng()).await.unwrap();
+        fed.run_consensus_epochs(2).await; // process transaction + sign new coins
+
+        user_send
+            .client
+            .mint_client()
+            .restore_ecash_from_federation(2, &mut task_group)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(user_send.total_coins().await, sats(1500));
+
+        task_group.join_all().await.unwrap();
     })
     .await
 }

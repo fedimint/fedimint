@@ -41,8 +41,8 @@ use url::Url;
 
 use crate::module_decode_stubs;
 use crate::query::{
-    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, TrustAllPeers,
-    UnionResponses, ValidHistory,
+    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
+    UnionResponsesSingle, ValidHistory,
 };
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
@@ -96,7 +96,7 @@ pub trait IFederationApi: Debug + Send + Sync {
     async fn download_ecash_backup(
         &self,
         id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Option<ECashUserBackupSnapshot>>;
+    ) -> Result<Vec<ECashUserBackupSnapshot>>;
 }
 
 dyn_newtype_define! {
@@ -390,15 +390,20 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
     async fn download_ecash_backup(
         &self,
         id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Option<ECashUserBackupSnapshot>> {
+    ) -> Result<Vec<ECashUserBackupSnapshot>> {
         Ok(self
-            .request(
+            .request_complex(
                 "/mint/recover",
                 id,
                 // TODO: do we need a different strategy for this?
-                TrustAllPeers,
+                UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
+                    self.peers().one_honest(),
+                ),
             )
-            .await?)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect())
     }
 }
 
@@ -566,8 +571,21 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
         &self,
         method: &str,
         param: P,
-        mut strategy: impl QueryStrategy<R>,
+        strategy: impl QueryStrategy<R>,
     ) -> Result<R> {
+        self.request_complex(method, param, strategy).await
+    }
+
+    pub async fn request_complex<
+        P: serde::Serialize,
+        IR: serde::de::DeserializeOwned,
+        OR: serde::de::DeserializeOwned,
+    >(
+        &self,
+        method: &str,
+        param: P,
+        mut strategy: impl QueryStrategy<IR, OR>,
+    ) -> Result<OR> {
         let params = [serde_json::to_value(param).expect("encoding error")];
         let mut futures = FuturesUnordered::new();
 

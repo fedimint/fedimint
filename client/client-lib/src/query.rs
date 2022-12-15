@@ -50,7 +50,7 @@ impl QueryStrategy<SignedEpochOutcome> for ValidHistory {
     }
 }
 
-/// Returns the deduplicated union of `required` responses
+/// Returns the deduplicated union of `required` number of responses
 pub struct UnionResponses<R> {
     responses: HashSet<PeerId>,
     existing_results: Vec<R>,
@@ -92,6 +92,61 @@ impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
         } else {
             // handle error case using the CurrentConsensus method
             self.current.process(response)
+        }
+    }
+}
+
+/// Returns the deduplicated union of `required` number of responses
+///
+/// Unlike [`UnionResponses`], it works with single values, not `Vec`s.
+/// TODO: Should we make UnionResponses a wrapper around this one?
+pub struct UnionResponsesSingle<R> {
+    responses: HashSet<PeerId>,
+    existing_results: Vec<R>,
+    current: CurrentConsensus<Vec<R>>,
+    required: usize,
+}
+
+impl<R> UnionResponsesSingle<R> {
+    pub fn new(required: usize) -> Self {
+        Self {
+            responses: HashSet::new(),
+            existing_results: vec![],
+            current: CurrentConsensus::new(required),
+            required,
+        }
+    }
+}
+
+impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R> {
+    fn process(&mut self, response: FedResponse<R>) -> QueryStep<Vec<R>> {
+        match response {
+            FedResponse {
+                peer,
+                result: Ok(new_result),
+            } => {
+                if !self.existing_results.iter().any(|r| r == &new_result) {
+                    self.existing_results.push(new_result);
+                }
+
+                self.responses.insert(peer);
+
+                if self.responses.len() >= self.required {
+                    QueryStep::Finished(Ok(mem::take(&mut self.existing_results)))
+                } else {
+                    QueryStep::Continue
+                }
+            }
+            FedResponse {
+                peer,
+                result: Err(e),
+            } => {
+                // handle error case using the CurrentConsensus method
+                self.current.process(FedResponse {
+                    peer,
+                    result: Err(e),
+                })
+            }
         }
     }
 }
@@ -221,8 +276,8 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
     }
 }
 
-pub trait QueryStrategy<R> {
-    fn process(&mut self, response: FedResponse<R>) -> QueryStep<R>;
+pub trait QueryStrategy<IR, OR = IR> {
+    fn process(&mut self, response: FedResponse<IR>) -> QueryStep<OR>;
 }
 
 /// Results from the strategy handling a response from a peer
