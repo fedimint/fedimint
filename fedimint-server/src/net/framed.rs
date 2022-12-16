@@ -6,9 +6,11 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
 
+use async_trait::async_trait;
 use bytes::{Buf, BufMut, BytesMut};
 use fedimint_api::server::IServerModule;
 use futures::{Sink, SinkExt, Stream};
+use serde::Serialize;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -27,7 +29,7 @@ pub trait FramedTransport<T>:
     fn borrow_split(
         &mut self,
     ) -> (
-        &'_ mut (dyn Sink<T, Error = anyhow::Error> + Send + Unpin),
+        &'_ mut (dyn BufferedSink<T> + Send + Unpin),
         &'_ mut (dyn Stream<Item = Result<T, anyhow::Error>> + Send + Unpin),
     );
 
@@ -40,6 +42,22 @@ pub trait FramedTransport<T>:
         Self: Sized + Send + Unpin + 'static,
     {
         Box::new(self)
+    }
+}
+
+#[async_trait]
+pub trait BufferedSink<T>: Sink<T, Error = anyhow::Error> {
+    async fn drive_forward(&mut self) -> Result<(), Error>;
+}
+
+#[async_trait]
+impl<S, T> BufferedSink<T> for FramedSink<S, T>
+where
+    T: Serialize + Debug + Send,
+    S: AsyncWrite + Unpin + Send,
+{
+    async fn drive_forward(&mut self) -> Result<(), Error> {
+        self.get_mut().drive_forward().await
     }
 }
 
@@ -161,7 +179,7 @@ where
     fn borrow_split(
         &mut self,
     ) -> (
-        &'_ mut (dyn Sink<T, Error = anyhow::Error> + Send + Unpin),
+        &'_ mut (dyn BufferedSink<T> + Send + Unpin),
         &'_ mut (dyn Stream<Item = Result<T, anyhow::Error>> + Send + Unpin),
     ) {
         let (sink, stream) = self.borrow_parts();
