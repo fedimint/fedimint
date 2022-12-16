@@ -40,7 +40,7 @@ for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
 done
 
 errors=""
-for path in $(echo "$git_ls_files" | grep -v -E '.*\.ods'); do
+for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg)'); do
   # extra branches for clarity
   if [ ! -s "$path" ]; then
      # echo "$path is empty"
