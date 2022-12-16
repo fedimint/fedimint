@@ -33,6 +33,8 @@ use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 /// Maximum connection failures we consider for our back-off strategy
 const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
 
+const MAX_BUFFER_SIZE: usize = 4 * 1024 * 1024;
+
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
 pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
@@ -310,6 +312,7 @@ where
         &mut self,
         mut connected: ConnectedPeerConnectionState<M>,
     ) -> Option<PeerConnectionState<M>> {
+        let (sink, stream) = connected.connection.borrow_split();
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
                 match maybe_msg {
@@ -334,9 +337,15 @@ where
                     },
                 }
             },
-            Some(msg_res) = connected.connection.next() => {
+            Some(msg_res) = stream.next() => {
                 self.receive_message(connected, msg_res).await
             },
+            Err(e) = sink.drive_forward() => {
+                self.disconnect_err(
+                    anyhow::Error::new(e).context("Connection failed while sending buffer contents"),
+                    0,
+                )
+            }
         })
     }
 
@@ -398,6 +407,10 @@ where
     ) -> PeerConnectionState<M> {
         let umsg = self.resend_queue.push(msg);
         trace!(?self.peer, id = ?umsg.id, "Sending outgoing message");
+
+        if connected.connection.outgoing_buffer_size() >= MAX_BUFFER_SIZE {
+            return self.disconnect_err(anyhow::anyhow!("Buffer overflow"), 0);
+        }
 
         match connected
             .connection
