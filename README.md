@@ -5,6 +5,10 @@
 </h1>
 
 <p align="center">
+    <img src="docs/logo.jpg">
+</p>
+
+<p align="center">
   <a href="https://github.com/fedimint/fedimint/discussions">
     <img src="https://img.shields.io/badge/commmunity-discussion-blue" alt="github discussion">
   </a>
