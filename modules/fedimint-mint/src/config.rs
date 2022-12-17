@@ -15,6 +15,9 @@ pub struct MintConfig {
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
     pub fee_consensus: FeeConsensus,
     pub threshold: usize,
+    /// controls the maximum amount of change a client can request
+    /// TODO implement this restriction
+    pub max_target_denomination_sets: u16,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -22,6 +25,7 @@ pub struct MintClientConfig {
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
+    pub target_denomination_sets: u16,
 }
 
 impl TypedClientModuleConfig for MintClientConfig {}
@@ -61,6 +65,7 @@ impl TypedServerModuleConfig for MintConfig {
             tbs_pks: Tiered::from_iter(pub_key.into_iter()),
             fee_consensus: self.fee_consensus.clone(),
             peer_tbs_pks: self.peer_tbs_pks.clone(),
+            target_denomination_sets: self.max_target_denomination_sets,
         })
         .expect("Serialization can't fail")
         .into()
