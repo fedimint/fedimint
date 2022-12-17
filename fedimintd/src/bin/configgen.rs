@@ -1,8 +1,10 @@
+use std::fs;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use fedimint_api::{Amount, NumPeers, PeerId};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
+use fedimintd::{plaintext_json_write, write_nonprivate_configs, PRIVATE_CONFIG};
 use rand::rngs::OsRng;
 
 #[derive(Parser)]
@@ -78,22 +80,14 @@ fn main() {
                 &bitcoind_rpc,
             );
 
-            let (server_cfg, client_cfg) = ServerConfig::trusted_dealer_gen(&peers, &params, rng);
+            let (server_cfg, _) = ServerConfig::trusted_dealer_gen(&peers, &params, rng);
 
-            for (id, cfg) in server_cfg {
-                let mut path: PathBuf = cfg_path.clone();
-                path.push(format!("server-{}.json", id));
-
-                let file = std::fs::File::create(path).expect("Could not create cfg file");
-                serde_json::to_writer_pretty(file, &cfg).unwrap();
+            for (id, server) in server_cfg {
+                let path = cfg_path.join(id.to_string());
+                fs::create_dir_all(path.clone()).expect("Could not create cfg dir");
+                write_nonprivate_configs(&server, path.clone());
+                plaintext_json_write(&server.private, path.join(PRIVATE_CONFIG));
             }
-
-            let mut client_cfg_file_path: PathBuf = cfg_path;
-            client_cfg_file_path.push("client.json");
-            let client_cfg_file =
-                std::fs::File::create(client_cfg_file_path).expect("Could not create cfg file");
-
-            serde_json::to_writer_pretty(client_cfg_file, &client_cfg).unwrap();
         }
     }
 }

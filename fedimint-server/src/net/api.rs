@@ -54,13 +54,13 @@ pub async fn run_server(
         attach_endpoints_erased(&mut rpc_module, module);
     }
 
-    debug!(addr = cfg.api_bind_addr, "Starting WSServer");
+    debug!(addr = cfg.local.api_bind_addr, "Starting WSServer");
     let server = ServerBuilder::new()
-        .max_connections(cfg.max_connections)
+        .max_connections(cfg.local.max_connections)
         .ping_interval(Duration::from_secs(10))
-        .build(&cfg.api_bind_addr)
+        .build(&cfg.local.api_bind_addr)
         .await
-        .context(format!("Bind address: {}", cfg.api_bind_addr))
+        .context(format!("Bind address: {}", cfg.local.api_bind_addr))
         .expect("Could not start API server");
 
     let server_handle = server

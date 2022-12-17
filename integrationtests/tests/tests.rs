@@ -908,7 +908,7 @@ async fn can_get_signed_epoch_history() -> Result<()> {
         fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
         fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
 
-        let pubkey = fed.cfg.epoch_pk_set.public_key();
+        let pubkey = fed.cfg.consensus.epoch_pk_set.public_key();
         let epoch0 = user.client.fetch_epoch_history(0, pubkey).await.unwrap();
         let epoch1 = user.client.fetch_epoch_history(1, pubkey).await.unwrap();
 

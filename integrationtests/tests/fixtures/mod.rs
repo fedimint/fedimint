@@ -231,7 +231,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
+            let connect_gen =
+                move |cfg: &ServerConfig| net_ref.connector(cfg.local.identity).into_dyn();
 
             let fed_db = || MemDatabase::new().into();
             let fed = FederationTest::new(
@@ -587,7 +588,7 @@ impl FederationTest {
             servers: self
                 .servers
                 .iter()
-                .filter(|s| peers.contains(&s.as_ref().borrow().fedimint.cfg.identity))
+                .filter(|s| peers.contains(&s.as_ref().borrow().fedimint.cfg.local.identity))
                 .map(Rc::clone)
                 .collect(),
             wallet: self.wallet.clone(),

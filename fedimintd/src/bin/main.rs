@@ -5,13 +5,13 @@ use fedimint_api::db::Database;
 use fedimint_api::task::TaskGroup;
 use fedimint_core::all_decoders;
 use fedimint_core::modules::ln::LightningModule;
-use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::Wallet;
 use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
+use fedimintd::*;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
@@ -77,9 +77,7 @@ async fn main() -> anyhow::Result<()> {
 
     let salt_path = opts.cfg_path.join(SALT_FILE);
     let key = get_key(opts.password, salt_path);
-    let decrypted = encrypted_read(&key, opts.cfg_path.join(CONFIG_FILE));
-    let cfg_string = String::from_utf8(decrypted).expect("is not correctly encoded");
-    let cfg: ServerConfig = serde_json::from_str(&cfg_string).expect("could not parse config");
+    let cfg = read_server_configs(&key, opts.cfg_path.clone());
 
     let mut task_group = TaskGroup::new();
 

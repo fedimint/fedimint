@@ -116,7 +116,8 @@ impl FedimintServer {
         connector: PeerConnector<EpochMessage>,
         task_group: &mut TaskGroup,
     ) -> Self {
-        cfg.validate_config(&cfg.identity).expect("invalid config");
+        cfg.validate_config(&cfg.local.identity)
+            .expect("invalid config");
 
         let connections =
             ReconnectPeerConnections::new(cfg.network_config(), connector, task_group)
@@ -124,16 +125,17 @@ impl FedimintServer {
                 .into_dyn();
 
         let net_info = NetworkInfo::new(
-            cfg.identity,
-            cfg.hbbft_sks.inner().clone(),
-            cfg.hbbft_pk_set.clone(),
-            cfg.peers.iter().map(|(id, _)| *id),
+            cfg.local.identity,
+            cfg.private.hbbft_sks.inner().clone(),
+            cfg.consensus.hbbft_pk_set.clone(),
+            cfg.local.peers.iter().map(|(id, _)| *id),
         );
 
         let hbbft: HoneyBadger<Vec<SerdeConsensusItem>, _> =
             HoneyBadger::builder(Arc::new(net_info)).build();
 
         let api_endpoints = cfg
+            .local
             .peers
             .clone()
             .into_iter()
@@ -146,7 +148,7 @@ impl FedimintServer {
             consensus: Arc::new(consensus),
             cfg: cfg.clone(),
             api,
-            peers: cfg.peers.keys().cloned().collect(),
+            peers: cfg.local.peers.keys().cloned().collect(),
             rejoin_at_epoch: None,
             run_empty_epochs: 0,
             last_processed_epoch: None,
@@ -239,7 +241,7 @@ impl FedimintServer {
                     )
                 } else {
                     info!("Downloading missing epoch {}", epoch_num);
-                    let epoch_pk = self.cfg.epoch_pk_set.public_key();
+                    let epoch_pk = self.cfg.consensus.epoch_pk_set.public_key();
                     let epoch = self
                         .api
                         .fetch_epoch_history(epoch_num, epoch_pk)
@@ -249,7 +251,7 @@ impl FedimintServer {
                     epoch.verify_hash(&prev_epoch)?;
                     prev_epoch = Some(epoch.clone());
 
-                    let pk = self.cfg.epoch_pk_set.public_key();
+                    let pk = self.cfg.consensus.epoch_pk_set.public_key();
                     let sig_valid = epoch.verify_sig(&pk).is_ok();
                     (
                         epoch.outcome.items,
@@ -292,7 +294,7 @@ impl FedimintServer {
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
     ) -> Cancellable<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
-        if self.cfg.peers.len() == 1 {
+        if self.cfg.local.peers.len() == 1 {
             tokio::select! {
               () = self.consensus.transaction_notify.notified() => (),
               () = self.consensus.await_consensus_proposal() => (),
@@ -302,7 +304,7 @@ impl FedimintServer {
             self.hbbft.skip_to_epoch(epoch + 1);
             return Ok(vec![HbbftConsensusOutcome {
                 epoch,
-                contributions: BTreeMap::from([(self.cfg.identity, proposal.items)]),
+                contributions: BTreeMap::from([(self.cfg.local.identity, proposal.items)]),
             }]);
         }
 

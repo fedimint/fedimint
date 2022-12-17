@@ -23,13 +23,6 @@ use ring::{aead, digest, pbkdf2};
 const ITERATIONS_PROD: Option<NonZeroU32> = NonZeroU32::new(1_000_000);
 const ITERATIONS_DEBUG: Option<NonZeroU32> = NonZeroU32::new(1);
 
-// server files
-pub const SALT_FILE: &str = "salt";
-pub const CONFIG_FILE: &str = "config";
-pub const DB_FILE: &str = "database";
-pub const TLS_PK: &str = "tls-pk";
-pub const TLS_CERT: &str = "tls-cert";
-
 /// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
 pub fn encrypted_write(mut data: Vec<u8>, key: &LessSafeKey, file: PathBuf) {
     let nonce_bytes: [u8; NONCE_LEN] = rand::random();
@@ -43,6 +36,7 @@ pub fn encrypted_write(mut data: Vec<u8>, key: &LessSafeKey, file: PathBuf) {
 
 /// Reads encrypted data from a file
 pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Vec<u8> {
+    tracing::warn!("READ {:?}", file);
     let hex = fs::read_to_string(file).expect("Can't read file.");
     let mut bytes = hex::decode(hex).expect("not hex encoded");
     let (nonce_bytes, encrypted_bytes) = bytes.split_at_mut(NONCE_LEN);
