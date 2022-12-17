@@ -11,6 +11,7 @@ use fedimint_api::{Amount, PeerId};
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimintd::encrypt::*;
+use fedimintd::*;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use ring::aead::LessSafeKey;
@@ -180,13 +181,8 @@ async fn main() {
                 return;
             };
 
-            let server_path = dir_out_path.join(CONFIG_FILE);
-            let config_bytes = serde_json::to_string(&server).unwrap().into_bytes();
-            encrypted_write(config_bytes, &key, server_path);
-
-            let client_path: PathBuf = dir_out_path.join("client.json");
-            let client_file = fs::File::create(client_path).expect("Could not create cfg file");
-            serde_json::to_writer_pretty(client_file, &server.to_client_config()).unwrap();
+            encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG));
+            write_nonprivate_configs(&server, dir_out_path);
         }
         Command::VersionHash => {
             println!("{}", env!("GIT_HASH"));

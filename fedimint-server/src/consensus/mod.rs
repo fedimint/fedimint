@@ -392,7 +392,7 @@ impl FedimintConsensus {
 
         // validate and update sigs on prev epoch
         if let Some(prev_epoch) = maybe_prev_epoch {
-            let pks = &self.cfg.epoch_pk_set;
+            let pks = &self.cfg.consensus.epoch_pk_set;
 
             match current.add_sig_to_prev(pks, prev_epoch) {
                 Ok(prev_epoch) => {
@@ -471,7 +471,7 @@ impl FedimintConsensus {
 
         if let Some(epoch) = dbtx.get_value(&LastEpochKey).await.unwrap() {
             let last_epoch = dbtx.get_value(&epoch).await.unwrap().unwrap();
-            let sig = self.cfg.epoch_sks.0.sign(last_epoch.hash);
+            let sig = self.cfg.private.epoch_sks.0.sign(last_epoch.hash);
             let item = ConsensusItem::EpochOutcomeSignatureShare(EpochOutcomeSignatureShare(sig));
             items.push(item);
         };

@@ -5,7 +5,10 @@ use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
 use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
-use fedimint_server::config::{gen_cert_and_key, Peer as ServerPeer, ServerConfig};
+use fedimint_server::config::{
+    gen_cert_and_key, Peer as ServerPeer, SerdeCert, ServerConfig, ServerConfigConsensus,
+    ServerConfigLocal, ServerConfigPrivate,
+};
 use fedimint_server::net::peers::ConnectionConfig;
 use fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
 use rand::rngs::OsRng;
@@ -101,7 +104,6 @@ fn trusted_dealer_gen(
                     );
                     Url::parse(&s).expect("Could not parse URL")
                 },
-                tls_cert: tls_keys[&id].0.clone(),
                 name: format!("peer-{}", id.to_usize()),
             };
 
@@ -141,27 +143,36 @@ fn trusted_dealer_gen(
                 .expect("Could not get keys from epoch info");
 
             let mut config = ServerConfig {
-                federation_name: params.federation_name.clone(),
-                identity: id,
-                hbbft_bind_addr: format!("0.0.0.0:{}", hbbft_base_port + id_u16),
-                api_bind_addr: format!("0.0.0.0:{}", api_base_port + id_u16),
-                tls_cert: tls_keys[&id].0.clone(),
-                tls_key: tls_keys[&id].1.clone(),
-                peers: cfg_peers.clone(),
-                hbbft_sks: SerdeSecret(
-                    netinf
-                        .secret_key_share()
-                        .expect("Could not find secret share")
-                        .clone(),
-                ),
-                hbbft_pk_set: netinf.public_key_set().clone(),
-                epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
-                epoch_pk_set: epoch_keys.public_key_set().clone(),
-
-                modules_local: Default::default(),
-                modules_private: Default::default(),
-                modules_consensus: Default::default(),
-                max_connections: 1000,
+                consensus: ServerConfigConsensus {
+                    federation_name: params.federation_name.clone(),
+                    peer_certs: tls_keys
+                        .iter()
+                        .map(|(peer, cert)| (*peer, SerdeCert(cert.0.clone())))
+                        .collect(),
+                    hbbft_pk_set: netinf.public_key_set().clone(),
+                    epoch_pk_set: epoch_keys.public_key_set().clone(),
+                    modules: Default::default(),
+                },
+                local: ServerConfigLocal {
+                    peers: cfg_peers.clone(),
+                    identity: id,
+                    hbbft_bind_addr: format!("0.0.0.0:{}", hbbft_base_port + id_u16),
+                    api_bind_addr: format!("0.0.0.0:{}", api_base_port + id_u16),
+                    tls_cert: tls_keys[&id].0.clone(),
+                    modules: Default::default(),
+                    max_connections: 1000,
+                },
+                private: ServerConfigPrivate {
+                    tls_key: tls_keys[&id].1.clone(),
+                    hbbft_sks: SerdeSecret(
+                        netinf
+                            .secret_key_share()
+                            .expect("Could not find secret share")
+                            .clone(),
+                    ),
+                    epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
+                    modules: Default::default(),
+                },
             };
 
             config.add_modules(

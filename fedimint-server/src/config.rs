@@ -35,39 +35,56 @@ use crate::{ReconnectPeerConnections, TlsTcpConnector};
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// All the serializable configuration for the fedimint server
 pub struct ServerConfig {
+    /// Contains all configuration that needs to be the same for every server
+    pub consensus: ServerConfigConsensus,
+    /// Contains all configuration that is locally configurable and not secret
+    pub local: ServerConfigLocal,
+    /// Contains all configuration that is secret such as private key material
+    pub private: ServerConfigPrivate,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigPrivate {
+    #[serde(with = "serde_tls_key")]
+    pub tls_key: rustls::PrivateKey,
+    #[serde(with = "serde_binary_human_readable")]
+    pub hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
+    #[serde(with = "serde_binary_human_readable")]
+    pub epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
+    pub modules: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigConsensus {
     pub federation_name: String,
+    pub peer_certs: HashMap<PeerId, SerdeCert>,
+    #[serde(with = "serde_binary_human_readable")]
+    pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
+    #[serde(with = "serde_binary_human_readable")]
+    pub epoch_pk_set: hbbft::crypto::PublicKeySet,
+    pub modules: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigLocal {
+    pub peers: BTreeMap<PeerId, Peer>,
     pub identity: PeerId,
     pub hbbft_bind_addr: String,
     pub api_bind_addr: String,
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
-    #[serde(with = "serde_tls_key")]
-    pub tls_key: rustls::PrivateKey,
-
-    pub peers: BTreeMap<PeerId, Peer>,
-    #[serde(with = "serde_binary_human_readable")]
-    pub hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
-    #[serde(with = "serde_binary_human_readable")]
-    pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
-
-    #[serde(with = "serde_binary_human_readable")]
-    pub epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
-    #[serde(with = "serde_binary_human_readable")]
-    pub epoch_pk_set: hbbft::crypto::PublicKeySet,
-
-    // TODO split these into separate structs so they can be serialized independently
-    pub modules_local: BTreeMap<String, serde_json::Value>,
-    pub modules_private: BTreeMap<String, serde_json::Value>,
-    pub modules_consensus: BTreeMap<String, serde_json::Value>,
     pub max_connections: u32,
+    pub modules: BTreeMap<String, serde_json::Value>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerdeCert(#[serde(with = "serde_tls_cert")] pub rustls::Certificate);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
     pub hbbft: ConnectionConfig,
-    #[serde(with = "serde_tls_cert")]
-    pub tls_cert: rustls::Certificate,
     /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     pub api_addr: Url,
     /// human-readable name
@@ -99,22 +116,37 @@ impl ServerConfig {
         modules: BTreeMap<String, ServerModuleConfig>,
     ) -> Self {
         let peers = params.peers();
-        let mut cfg = Self {
-            federation_name: params.federation_name,
+        let private = ServerConfigPrivate {
+            tls_key: params.tls.our_private_key,
+            hbbft_sks,
+            epoch_sks,
+            modules: Default::default(),
+        };
+        let local = ServerConfigLocal {
+            peers,
             identity,
             hbbft_bind_addr: params.hbbft.bind_addr,
             api_bind_addr: params.api.bind_addr,
             tls_cert: params.tls.our_certificate,
-            tls_key: params.tls.our_private_key,
-            peers,
-            hbbft_sks,
-            hbbft_pk_set,
-            epoch_sks,
-            epoch_pk_set,
-            modules_local: Default::default(),
-            modules_private: Default::default(),
-            modules_consensus: Default::default(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
+            modules: Default::default(),
+        };
+        let consensus = ServerConfigConsensus {
+            federation_name: params.federation_name,
+            peer_certs: params
+                .tls
+                .peer_certs
+                .into_iter()
+                .map(|(peer, cert)| (peer, SerdeCert(cert)))
+                .collect(),
+            hbbft_pk_set,
+            epoch_pk_set,
+            modules: Default::default(),
+        };
+        let mut cfg = Self {
+            consensus,
+            local,
+            private,
         };
         cfg.add_modules(modules);
         cfg
@@ -128,17 +160,17 @@ impl ServerConfig {
                 consensus,
             } = config;
 
-            self.modules_local.insert(name.clone(), local);
-            self.modules_private.insert(name.clone(), private);
-            self.modules_consensus.insert(name, consensus);
+            self.local.modules.insert(name.clone(), local);
+            self.private.modules.insert(name.clone(), private);
+            self.consensus.modules.insert(name, consensus);
         }
     }
 
     /// Constructs a module config by name
     pub fn get_module_config<T: TypedServerModuleConfig>(&self, name: &str) -> anyhow::Result<T> {
-        let local = Self::get_or_error(&self.modules_local, name)?;
-        let private = Self::get_or_error(&self.modules_private, name)?;
-        let consensus = Self::get_or_error(&self.modules_consensus, name)?;
+        let local = Self::get_or_error(&self.local.modules, name)?;
+        let private = Self::get_or_error(&self.private.modules, name)?;
+        let consensus = Self::get_or_error(&self.consensus.modules, name)?;
         let module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
@@ -155,6 +187,7 @@ impl ServerConfig {
 
     pub fn to_client_config(&self) -> ClientConfig {
         let nodes = self
+            .local
             .peers
             .iter()
             .map(|(_peer_id, peer)| Node {
@@ -170,8 +203,8 @@ impl ServerConfig {
         ];
 
         ClientConfig {
-            federation_name: self.federation_name.clone(),
-            epoch_pk: self.epoch_pk_set.public_key(),
+            federation_name: self.consensus.federation_name.clone(),
+            epoch_pk: self.consensus.epoch_pk_set.public_key(),
             nodes,
             modules: modules.into_iter().collect(),
         }
@@ -190,20 +223,21 @@ impl ServerConfig {
     }
 
     pub fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
-        if self.epoch_sks.public_key_share()
-            != self.epoch_pk_set.public_key_share(identity.to_usize())
-        {
+        let peers = self.local.peers.clone();
+        let consensus = self.consensus.clone();
+        let private = self.private.clone();
+        let id = identity.to_usize();
+
+        if private.epoch_sks.public_key_share() != consensus.epoch_pk_set.public_key_share(id) {
             bail!("Epoch private key doesn't match pubkey share");
         }
-        if self.hbbft_sks.public_key_share()
-            != self.hbbft_pk_set.public_key_share(identity.to_usize())
-        {
+        if private.hbbft_sks.public_key_share() != consensus.hbbft_pk_set.public_key_share(id) {
             bail!("HBBFT private key doesn't match pubkey share");
         }
-        if self.peers.keys().max().copied().map(|id| id.to_usize()) != Some(self.peers.len() - 1) {
+        if peers.keys().max().copied().map(|id| id.to_usize()) != Some(peers.len() - 1) {
             bail!("Peer ids are not indexed from 0");
         }
-        if self.peers.keys().min().copied() != Some(PeerId::from(0)) {
+        if peers.keys().min().copied() != Some(PeerId::from(0)) {
             bail!("Peer ids are not indexed from 0");
         }
 
@@ -273,6 +307,7 @@ impl ServerConfig {
             epoch_pk: server_config
                 .get(&peers[0])
                 .expect("must have at least one peer")
+                .consensus
                 .epoch_pk_set
                 .public_key(),
             modules: module_configs
@@ -363,9 +398,10 @@ pub enum KeyType {
 impl ServerConfig {
     pub fn network_config(&self) -> NetworkConfig {
         NetworkConfig {
-            identity: self.identity,
-            bind_addr: self.hbbft_bind_addr.clone(),
+            identity: self.local.identity,
+            bind_addr: self.local.hbbft_bind_addr.clone(),
             peers: self
+                .local
                 .peers
                 .iter()
                 .map(|(&id, peer)| (id, peer.hbbft.clone()))
@@ -375,14 +411,16 @@ impl ServerConfig {
 
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            our_certificate: self.tls_cert.clone(),
-            our_private_key: self.tls_key.clone(),
+            our_certificate: self.local.tls_cert.clone(),
+            our_private_key: self.private.tls_key.clone(),
             peer_certs: self
-                .peers
+                .consensus
+                .peer_certs
                 .iter()
-                .map(|(peer, cfg)| (*peer, cfg.tls_cert.clone()))
+                .map(|(peer, cert)| (*peer, cert.0.clone()))
                 .collect(),
             peer_names: self
+                .local
                 .peers
                 .iter()
                 .map(|(peer, cfg)| (*peer, cfg.name.to_string()))
@@ -391,7 +429,7 @@ impl ServerConfig {
     }
 
     pub fn get_incoming_count(&self) -> u16 {
-        self.identity.into()
+        self.local.identity.into()
     }
 }
 
@@ -426,7 +464,6 @@ impl ServerConfigParams {
                     Peer {
                         name: self.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
-                        tls_cert: self.tls.peer_certs[peer].clone(),
                         api_addr: Url::parse(&format!("ws://{}", self.api.peers[peer].address))
                             .expect("Could not parse URL"),
                     },
