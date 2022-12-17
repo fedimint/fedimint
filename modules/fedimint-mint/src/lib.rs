@@ -56,6 +56,9 @@ pub mod config;
 pub mod common;
 pub mod db;
 
+/// By default, how many denomination sets of notes should change-making target for users
+const DEFAULT_TARGET_DENOMINATION_SETS: u16 = 1;
+
 /// Data structures taking into account different amount tiers
 
 /// Federated mint member mint
@@ -171,11 +174,13 @@ impl FederationModuleConfigGen for MintConfigGenerator {
                         })
                         .collect(),
                     fee_consensus: FeeConsensus::default(),
+                    max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
                 };
                 (peer, config)
             })
             .collect();
 
+        // TODO will be deleted
         let client_cfg = MintClientConfig {
             tbs_pks: tbs_keys
                 .into_iter()
@@ -189,6 +194,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
                 .1
                 .peer_tbs_pks
                 .clone(),
+            target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
         };
 
         (
@@ -252,6 +258,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
                 .collect(),
             fee_consensus: Default::default(),
             threshold: peers.threshold(),
+            max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
         };
 
         Ok(Ok(server.to_erased()))
@@ -1292,6 +1299,7 @@ mod test {
                 .unwrap()
                 .peer_tbs_pks,
             fee_consensus: FeeConsensus::default(),
+            max_target_denomination_sets: 0,
         });
     }
 }

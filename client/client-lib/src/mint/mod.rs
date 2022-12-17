@@ -38,8 +38,6 @@ pub mod backup;
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 const MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(1);
 
-const TARGET_DENOMINATION_SETS: u16 = 1;
-
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
 #[derive(Debug, Clone)]
@@ -264,7 +262,7 @@ impl MintClient {
             amount,
             &self.coins().await,
             &self.config.tbs_pks,
-            TARGET_DENOMINATION_SETS,
+            self.config.target_denomination_sets,
         );
         for (amt, num) in denominations.iter() {
             for _ in 0..*num {
@@ -971,6 +969,7 @@ mod tests {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
                 peer_tbs_pks: BTreeMap::default(),
+                target_denomination_sets: 0,
             },
             context: Arc::new(ClientContext {
                 db: db.into(),
