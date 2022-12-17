@@ -204,7 +204,7 @@ pub trait FederationModuleConfigGen {
         &self,
         peers: &[PeerId],
         params: &ConfigGenParams,
-    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig);
+    ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,

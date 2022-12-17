@@ -53,7 +53,8 @@ where
         let peers = (0..members)
             .map(|idx| PeerId::from(idx as u16))
             .collect::<Vec<_>>();
-        let (server_cfg, client_cfg) = conf_gen.trusted_dealer_gen(&peers, params);
+        let server_cfg = conf_gen.trusted_dealer_gen(&peers, params);
+        let client_cfg = conf_gen.to_client_config(server_cfg[&PeerId::from(0)].clone())?;
 
         let mut members = vec![];
         for (peer, cfg) in server_cfg {

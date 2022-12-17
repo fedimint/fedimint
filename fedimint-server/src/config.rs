@@ -255,7 +255,7 @@ impl ServerConfig {
         peers: &[PeerId],
         params: &HashMap<PeerId, ServerConfigParams>,
         mut rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<PeerId, Self>, ClientConfig) {
+    ) -> BTreeMap<PeerId, Self> {
         let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
         let epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
@@ -289,34 +289,14 @@ impl ServerConfig {
                     epoch_keys.public_key_set().clone(),
                     module_configs
                         .iter()
-                        .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
+                        .map(|(name, cfgs)| (name.to_string(), cfgs[&id].clone()))
                         .collect(),
                 );
                 (id, config)
             })
             .collect();
 
-        let names: HashMap<PeerId, String> = peers
-            .iter()
-            .map(|peer| (*peer, format!("peer-{}", peer.to_usize())))
-            .collect();
-
-        let client_config = ClientConfig {
-            federation_name: peer0.federation_name.clone(),
-            nodes: peer0.api.nodes("ws://", names),
-            epoch_pk: server_config
-                .get(&peers[0])
-                .expect("must have at least one peer")
-                .consensus
-                .epoch_pk_set
-                .public_key(),
-            modules: module_configs
-                .iter()
-                .map(|(name, cfgs)| (name.to_string(), cfgs.1.clone()))
-                .collect(),
-        };
-
-        (server_config, client_config)
+        server_config
     }
 
     pub async fn distributed_gen(
@@ -329,7 +309,7 @@ impl ServerConfig {
     ) -> anyhow::Result<Cancellable<Self>> {
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
-            let (server, _) =
+            let server =
                 Self::trusted_dealer_gen(peers, &HashMap::from([(*our_id, params.clone())]), rng);
             return Ok(Ok(server[our_id].clone()));
         }

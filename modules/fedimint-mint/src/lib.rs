@@ -4,7 +4,7 @@ use std::iter::FromIterator;
 use std::ops::Sub;
 
 use async_trait::async_trait;
-use config::{FeeConsensus, MintClientConfig};
+use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey};
 use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -15,7 +15,6 @@ use fedimint_api::config::{
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
@@ -138,7 +137,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
         &self,
         peers: &[PeerId],
         params: &ConfigGenParams,
-    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+    ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
             .get::<MintConfigGenParams>()
             .expect("Invalid mint params");
@@ -180,32 +179,10 @@ impl FederationModuleConfigGen for MintConfigGenerator {
             })
             .collect();
 
-        // TODO will be deleted
-        let client_cfg = MintClientConfig {
-            tbs_pks: tbs_keys
-                .into_iter()
-                .map(|(amount, (pk, _, _))| (amount, pk))
-                .collect(),
-            fee_consensus: FeeConsensus::default(),
-            peer_tbs_pks: mint_cfg
-                .iter()
-                .next()
-                .expect("must have at least one element")
-                .1
-                .peer_tbs_pks
-                .clone(),
-            target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
-        };
-
-        (
-            mint_cfg
-                .into_iter()
-                .map(|(k, v)| (k, v.to_erased()))
-                .collect(),
-            serde_json::to_value(client_cfg)
-                .expect("serialization can't fail")
-                .into(),
-        )
+        mint_cfg
+            .into_iter()
+            .map(|(k, v)| (k, v.to_erased()))
+            .collect()
     }
 
     async fn distributed_gen(
@@ -1096,7 +1073,9 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+    use fedimint_api::config::{
+        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConfig,
+    };
     use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
@@ -1112,12 +1091,16 @@ mod test {
 
     fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-        let (mint_cfg, client_cfg) = MintConfigGenerator.trusted_dealer_gen(
+        let mint_cfg = MintConfigGenerator.trusted_dealer_gen(
             &peers,
             &ConfigGenParams::new().attach(MintConfigGenParams {
                 mint_amounts: vec![Amount::from_sats(1)],
             }),
         );
+        let client_cfg = mint_cfg[&PeerId::from(0)]
+            .to_typed::<MintConfig>()
+            .unwrap()
+            .to_client_config();
 
         (mint_cfg.into_iter().map(|(_, c)| c).collect(), client_cfg)
     }

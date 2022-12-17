@@ -65,7 +65,7 @@ fn main() {
         } => {
             let rng = OsRng;
             // Recursively create config directory if it doesn't exist
-            std::fs::create_dir_all(&cfg_path).expect("Failed to create config directory");
+            fs::create_dir_all(&cfg_path).expect("Failed to create config directory");
 
             let peers = (0..nodes).map(PeerId::from).collect::<Vec<_>>();
             println!(
@@ -80,7 +80,7 @@ fn main() {
                 &bitcoind_rpc,
             );
 
-            let (server_cfg, _) = ServerConfig::trusted_dealer_gen(&peers, &params, rng);
+            let server_cfg = ServerConfig::trusted_dealer_gen(&peers, &params, rng);
 
             for (id, server) in server_cfg {
                 let path = cfg_path.join(id.to_string());

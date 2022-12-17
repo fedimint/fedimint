@@ -178,7 +178,7 @@ fn trusted_dealer_gen(
             config.add_modules(
                 module_configs
                     .iter()
-                    .map(|(name, cfgs)| (name.to_string(), cfgs.0[&id].clone()))
+                    .map(|(name, cfgs)| (name.to_string(), cfgs[&id].clone()))
                     .collect(),
             );
 
