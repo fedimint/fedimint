@@ -1030,7 +1030,6 @@
 <a href="#1030" id="1030">1030</a>
 <a href="#1031" id="1031">1031</a>
 <a href="#1032" id="1032">1032</a>
-<a href="#1033" id="1033">1033</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1070,8 +1069,6 @@
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 <span class="kw">const </span>MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">1</span>);
-
-<span class="kw">const </span>TARGET_DENOMINATION_SETS: u16 = <span class="number">1</span>;
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -1297,7 +1294,7 @@
             amount,
             <span class="kw-2">&amp;</span><span class="self">self</span>.coins().<span class="kw">await</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
-            TARGET_DENOMINATION_SETS,
+            <span class="self">self</span>.config.target_denomination_sets,
         );
         <span class="kw">for </span>(amt, num) <span class="kw">in </span>denominations.iter() {
             <span class="kw">for _ in </span><span class="number">0</span>..<span class="kw-2">*</span>num {
@@ -2004,6 +2001,7 @@
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
                 peer_tbs_pks: BTreeMap::default(),
+                target_denomination_sets: <span class="number">0</span>,
             },
             context: Arc::new(ClientContext {
                 db: db.into(),

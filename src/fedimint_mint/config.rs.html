@@ -99,6 +99,11 @@
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -116,6 +121,9 @@
     <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;tbs::PublicKeyShare&gt;&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>threshold: usize,
+    <span class="doccomment">/// controls the maximum amount of change a client can request
+    /// TODO implement this restriction
+    </span><span class="kw">pub </span>max_target_denomination_sets: u16,
 }
 
 <span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -123,6 +131,7 @@
     <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;tbs::PublicKeyShare&gt;&gt;,
+    <span class="kw">pub </span>target_denomination_sets: u16,
 }
 
 <span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>MintClientConfig {}
@@ -162,6 +171,7 @@
             tbs_pks: Tiered::from_iter(pub_key.into_iter()),
             fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
             peer_tbs_pks: <span class="self">self</span>.peer_tbs_pks.clone(),
+            target_denomination_sets: <span class="self">self</span>.max_target_denomination_sets,
         })
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
         .into()
