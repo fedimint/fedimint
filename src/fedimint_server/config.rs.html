@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-06d53869768b7c80.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-b500e95a81de8901.css"><link rel="stylesheet" disabled href="../../static.files/dark-8e2401c021b2439b.css"><link rel="stylesheet" disabled href="../../static.files/ayu-0c8cf6c01af981d0.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-5cf2e01a42cc9858.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-a211dbb005fb8161.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-1cc40db21e31a224.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-8fe2cf7ee64a76fb.css"><link rel="stylesheet" disabled href="../../static.files/dark-7aacebe982779e9a.css"><link rel="stylesheet" disabled href="../../static.files/ayu-29dcc614f7a7b461.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-a211dbb005fb8161.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -641,6 +641,43 @@
 <a href="#641" id="641">641</a>
 <a href="#642" id="642">642</a>
 <a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -678,39 +715,56 @@
 <span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="doccomment">/// All the serializable configuration for the fedimint server
 </span><span class="kw">pub struct </span>ServerConfig {
+    <span class="doccomment">/// Contains all configuration that needs to be the same for every server
+    </span><span class="kw">pub </span>consensus: ServerConfigConsensus,
+    <span class="doccomment">/// Contains all configuration that is locally configurable and not secret
+    </span><span class="kw">pub </span>local: ServerConfigLocal,
+    <span class="doccomment">/// Contains all configuration that is secret such as private key material
+    </span><span class="kw">pub </span>private: ServerConfigPrivate,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ServerConfigPrivate {
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
+    </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>hbbft_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>epoch_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
+    <span class="kw">pub </span>modules: BTreeMap&lt;String, serde_json::Value&gt;,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ServerConfigConsensus {
     <span class="kw">pub </span>federation_name: String,
+    <span class="kw">pub </span>peer_certs: HashMap&lt;PeerId, SerdeCert&gt;,
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>hbbft_pk_set: hbbft::crypto::PublicKeySet,
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
+    <span class="kw">pub </span>modules: BTreeMap&lt;String, serde_json::Value&gt;,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ServerConfigLocal {
+    <span class="kw">pub </span>peers: BTreeMap&lt;PeerId, Peer&gt;,
     <span class="kw">pub </span>identity: PeerId,
     <span class="kw">pub </span>hbbft_bind_addr: String,
     <span class="kw">pub </span>api_bind_addr: String,
     <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
-    </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
-
-    <span class="kw">pub </span>peers: BTreeMap&lt;PeerId, Peer&gt;,
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
-    </span><span class="kw">pub </span>hbbft_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
-    </span><span class="kw">pub </span>hbbft_pk_set: hbbft::crypto::PublicKeySet,
-
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
-    </span><span class="kw">pub </span>epoch_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
-    </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
-
-    <span class="comment">// TODO split these into separate structs so they can be serialized independently
-    </span><span class="kw">pub </span>modules_local: BTreeMap&lt;String, serde_json::Value&gt;,
-    <span class="kw">pub </span>modules_private: BTreeMap&lt;String, serde_json::Value&gt;,
-    <span class="kw">pub </span>modules_consensus: BTreeMap&lt;String, serde_json::Value&gt;,
     <span class="kw">pub </span>max_connections: u32,
+    <span class="kw">pub </span>modules: BTreeMap&lt;String, serde_json::Value&gt;,
 }
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>SerdeCert(<span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)] </span><span class="kw">pub </span>rustls::Certificate);
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Peer {
     <span class="kw">pub </span>hbbft: ConnectionConfig,
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
-    </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
     <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     </span><span class="kw">pub </span>api_addr: Url,
     <span class="doccomment">/// human-readable name
@@ -742,22 +796,37 @@
         modules: BTreeMap&lt;String, ServerModuleConfig&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peers = params.peers();
-        <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
-            federation_name: params.federation_name,
+        <span class="kw">let </span>private = ServerConfigPrivate {
+            tls_key: params.tls.our_private_key,
+            hbbft_sks,
+            epoch_sks,
+            modules: Default::default(),
+        };
+        <span class="kw">let </span>local = ServerConfigLocal {
+            peers,
             identity,
             hbbft_bind_addr: params.hbbft.bind_addr,
             api_bind_addr: params.api.bind_addr,
             tls_cert: params.tls.our_certificate,
-            tls_key: params.tls.our_private_key,
-            peers,
-            hbbft_sks,
-            hbbft_pk_set,
-            epoch_sks,
-            epoch_pk_set,
-            modules_local: Default::default(),
-            modules_private: Default::default(),
-            modules_consensus: Default::default(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
+            modules: Default::default(),
+        };
+        <span class="kw">let </span>consensus = ServerConfigConsensus {
+            federation_name: params.federation_name,
+            peer_certs: params
+                .tls
+                .peer_certs
+                .into_iter()
+                .map(|(peer, cert)| (peer, SerdeCert(cert)))
+                .collect(),
+            hbbft_pk_set,
+            epoch_pk_set,
+            modules: Default::default(),
+        };
+        <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
+            consensus,
+            local,
+            private,
         };
         cfg.add_modules(modules);
         cfg
@@ -771,17 +840,17 @@
                 consensus,
             } = config;
 
-            <span class="self">self</span>.modules_local.insert(name.clone(), local);
-            <span class="self">self</span>.modules_private.insert(name.clone(), private);
-            <span class="self">self</span>.modules_consensus.insert(name, consensus);
+            <span class="self">self</span>.local.modules.insert(name.clone(), local);
+            <span class="self">self</span>.private.modules.insert(name.clone(), private);
+            <span class="self">self</span>.consensus.modules.insert(name, consensus);
         }
     }
 
     <span class="doccomment">/// Constructs a module config by name
     </span><span class="kw">pub fn </span>get_module_config&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;T&gt; {
-        <span class="kw">let </span>local = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.modules_local, name)<span class="question-mark">?</span>;
-        <span class="kw">let </span>private = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.modules_private, name)<span class="question-mark">?</span>;
-        <span class="kw">let </span>consensus = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.modules_consensus, name)<span class="question-mark">?</span>;
+        <span class="kw">let </span>local = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.local.modules, name)<span class="question-mark">?</span>;
+        <span class="kw">let </span>private = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.private.modules, name)<span class="question-mark">?</span>;
+        <span class="kw">let </span>consensus = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules, name)<span class="question-mark">?</span>;
         <span class="kw">let </span>module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
@@ -798,7 +867,8 @@
 
     <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
         <span class="kw">let </span>nodes = <span class="self">self
-            </span>.peers
+            </span>.local
+            .peers
             .iter()
             .map(|(_peer_id, peer)| Node {
                 url: peer.api_addr.clone(),
@@ -813,8 +883,8 @@
         ];
 
         ClientConfig {
-            federation_name: <span class="self">self</span>.federation_name.clone(),
-            epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
+            federation_name: <span class="self">self</span>.consensus.federation_name.clone(),
+            epoch_pk: <span class="self">self</span>.consensus.epoch_pk_set.public_key(),
             nodes,
             modules: modules.into_iter().collect(),
         }
@@ -833,20 +903,21 @@
     }
 
     <span class="kw">pub fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if </span><span class="self">self</span>.epoch_sks.public_key_share()
-            != <span class="self">self</span>.epoch_pk_set.public_key_share(identity.to_usize())
-        {
+        <span class="kw">let </span>peers = <span class="self">self</span>.local.peers.clone();
+        <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
+        <span class="kw">let </span>private = <span class="self">self</span>.private.clone();
+        <span class="kw">let </span>id = identity.to_usize();
+
+        <span class="kw">if </span>private.epoch_sks.public_key_share() != consensus.epoch_pk_set.public_key_share(id) {
             <span class="macro">bail!</span>(<span class="string">&quot;Epoch private key doesn&#39;t match pubkey share&quot;</span>);
         }
-        <span class="kw">if </span><span class="self">self</span>.hbbft_sks.public_key_share()
-            != <span class="self">self</span>.hbbft_pk_set.public_key_share(identity.to_usize())
-        {
+        <span class="kw">if </span>private.hbbft_sks.public_key_share() != consensus.hbbft_pk_set.public_key_share(id) {
             <span class="macro">bail!</span>(<span class="string">&quot;HBBFT private key doesn&#39;t match pubkey share&quot;</span>);
         }
-        <span class="kw">if </span><span class="self">self</span>.peers.keys().max().copied().map(|id| id.to_usize()) != <span class="prelude-val">Some</span>(<span class="self">self</span>.peers.len() - <span class="number">1</span>) {
+        <span class="kw">if </span>peers.keys().max().copied().map(|id| id.to_usize()) != <span class="prelude-val">Some</span>(peers.len() - <span class="number">1</span>) {
             <span class="macro">bail!</span>(<span class="string">&quot;Peer ids are not indexed from 0&quot;</span>);
         }
-        <span class="kw">if </span><span class="self">self</span>.peers.keys().min().copied() != <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)) {
+        <span class="kw">if </span>peers.keys().min().copied() != <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)) {
             <span class="macro">bail!</span>(<span class="string">&quot;Peer ids are not indexed from 0&quot;</span>);
         }
 
@@ -916,6 +987,7 @@
             epoch_pk: server_config
                 .get(<span class="kw-2">&amp;</span>peers[<span class="number">0</span>])
                 .expect(<span class="string">&quot;must have at least one peer&quot;</span>)
+                .consensus
                 .epoch_pk_set
                 .public_key(),
             modules: module_configs
@@ -1006,10 +1078,11 @@
 <span class="kw">impl </span>ServerConfig {
     <span class="kw">pub fn </span>network_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkConfig {
         NetworkConfig {
-            identity: <span class="self">self</span>.identity,
-            bind_addr: <span class="self">self</span>.hbbft_bind_addr.clone(),
+            identity: <span class="self">self</span>.local.identity,
+            bind_addr: <span class="self">self</span>.local.hbbft_bind_addr.clone(),
             peers: <span class="self">self
-                </span>.peers
+                </span>.local
+                .peers
                 .iter()
                 .map(|(<span class="kw-2">&amp;</span>id, peer)| (id, peer.hbbft.clone()))
                 .collect(),
@@ -1018,15 +1091,17 @@
 
     <span class="kw">pub fn </span>tls_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TlsConfig {
         TlsConfig {
-            our_certificate: <span class="self">self</span>.tls_cert.clone(),
-            our_private_key: <span class="self">self</span>.tls_key.clone(),
+            our_certificate: <span class="self">self</span>.local.tls_cert.clone(),
+            our_private_key: <span class="self">self</span>.private.tls_key.clone(),
             peer_certs: <span class="self">self
-                </span>.peers
+                </span>.consensus
+                .peer_certs
                 .iter()
-                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.tls_cert.clone()))
+                .map(|(peer, cert)| (<span class="kw-2">*</span>peer, cert.<span class="number">0</span>.clone()))
                 .collect(),
             peer_names: <span class="self">self
-                </span>.peers
+                </span>.local
+                .peers
                 .iter()
                 .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.name.to_string()))
                 .collect(),
@@ -1034,7 +1109,7 @@
     }
 
     <span class="kw">pub fn </span>get_incoming_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u16 {
-        <span class="self">self</span>.identity.into()
+        <span class="self">self</span>.local.identity.into()
     }
 }
 
@@ -1069,7 +1144,6 @@
                     Peer {
                         name: <span class="self">self</span>.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
-                        tls_cert: <span class="self">self</span>.tls.peer_certs[peer].clone(),
                         api_addr: Url::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;ws://{}&quot;</span>, <span class="self">self</span>.api.peers[peer].address))
                             .expect(<span class="string">&quot;Could not parse URL&quot;</span>),
                     },
@@ -1285,4 +1359,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (ec56537c4 2022-12-15)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-af96d9e2fc13e081.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (9c07efe84 2022-12-16)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
