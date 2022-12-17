@@ -85,7 +85,9 @@ async fn main() -> anyhow::Result<()> {
         .expect("Error opening DB")
         .into();
     let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-        &cfg.get_module_config::<WalletConfig>("wallet")?.btc_rpc,
+        &cfg.get_module_config::<WalletConfig>("wallet")?
+            .local
+            .btc_rpc,
         task_group.make_handle(),
     )?;
 

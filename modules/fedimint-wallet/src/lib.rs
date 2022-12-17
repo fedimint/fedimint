@@ -415,7 +415,7 @@ impl ServerModulePlugin for Wallet {
             .get_fee_rate(CONFIRMATION_TARGET)
             .await
             .expect("bitcoind rpc failed")
-            .unwrap_or(self.cfg.default_fee);
+            .unwrap_or(self.cfg.consensus.default_fee);
 
         let round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
             block_height: proposed_height,
@@ -507,7 +507,7 @@ impl ServerModulePlugin for Wallet {
         }
 
         input
-            .verify(&self.secp, &self.cfg.peg_in_descriptor)
+            .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)
             .into_module_error_other()?;
 
         if dbtx
@@ -522,7 +522,7 @@ impl ServerModulePlugin for Wallet {
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount: fedimint_api::Amount::from_sats(input.tx_output().value),
-                fee: self.cfg.fee_consensus.peg_in_abs,
+                fee: self.cfg.consensus.fee_consensus.peg_in_abs,
             },
             puk_keys: vec![*input.tweak_contract_key()],
         })
@@ -558,9 +558,9 @@ impl ServerModulePlugin for Wallet {
         dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        if !is_address_valid_for_network(&output.recipient, self.cfg.network) {
+        if !is_address_valid_for_network(&output.recipient, self.cfg.consensus.network) {
             return Err(WalletError::WrongNetwork(
-                self.cfg.network,
+                self.cfg.consensus.network,
                 output.recipient.network,
             ))
             .into_module_error_other();
@@ -578,7 +578,7 @@ impl ServerModulePlugin for Wallet {
         }
         Ok(TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
-            fee: self.cfg.fee_consensus.peg_out_abs,
+            fee: self.cfg.consensus.fee_consensus.peg_out_abs,
         })
     }
 
@@ -802,8 +802,11 @@ impl Wallet {
             .get_network()
             .await
             .map_err(|e| WalletError::RpcError(e.into()))?;
-        if bitcoind_net != cfg.network {
-            return Err(WalletError::WrongNetwork(cfg.network, bitcoind_net));
+        if bitcoind_net != cfg.consensus.network {
+            return Err(WalletError::WrongNetwork(
+                cfg.consensus.network,
+                bitcoind_net,
+            ));
         }
 
         let wallet = Wallet {
@@ -864,6 +867,7 @@ impl Wallet {
     ) -> Result<(), ProcessPegOutSigError> {
         let peer_key = self
             .cfg
+            .consensus
             .peer_peg_in_keys
             .get(peer)
             .expect("always called with valid peer id");
@@ -1003,7 +1007,7 @@ impl Wallet {
             .get_block_height()
             .await
             .expect("bitcoind rpc failed") as u32;
-        our_network_height.saturating_sub(self.cfg.finality_delay)
+        our_network_height.saturating_sub(self.cfg.consensus.finality_delay)
     }
 
     pub async fn consensus_height(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u32> {
@@ -1093,6 +1097,7 @@ impl Wallet {
     ) {
         let script_pk = self
             .cfg
+            .consensus
             .peg_in_descriptor
             .tweak(&pending_tx.tweak, &self.secp)
             .script_pubkey();
@@ -1166,8 +1171,8 @@ impl Wallet {
 
     fn offline_wallet(&self) -> StatelessWallet {
         StatelessWallet {
-            descriptor: &self.cfg.peg_in_descriptor,
-            secret_key: &self.cfg.peg_in_key,
+            descriptor: &self.cfg.consensus.peg_in_descriptor,
+            secret_key: &self.cfg.private.peg_in_key,
             secp: &self.secp,
         }
     }

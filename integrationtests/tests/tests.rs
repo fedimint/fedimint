@@ -37,7 +37,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
         let peg_in_address = user.client.get_new_pegin_address(rng()).await;
         let (proof, tx) =
             bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(peg_in_amount));
-        bitcoin.mine_blocks(fed.wallet.finality_delay as u64);
+        bitcoin.mine_blocks(fed.wallet.consensus.finality_delay as u64);
         fed.run_consensus_epochs(1).await;
 
         user.client.peg_in(proof, tx, rng()).await.unwrap();
@@ -843,7 +843,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
         join_all(vec![
             Either::Left(async {
                 tokio::time::sleep(Duration::from_millis(500)).await;
-                bitcoin.mine_blocks(fed.wallet.finality_delay as u64);
+                bitcoin.mine_blocks(fed.wallet.consensus.finality_delay as u64);
             }),
             Either::Right(async { fed.await_consensus_epochs(1).await.unwrap() }),
         ])

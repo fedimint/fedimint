@@ -49,7 +49,7 @@ use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
 use crate::common::LightningModuleDecoder;
-use crate::config::LightningModuleConfig;
+use crate::config::{LightningConfigConsensus, LightningConfigPrivate, LightningModuleConfig};
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
@@ -242,10 +242,14 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
                 (
                     peer,
                     LightningModuleConfig {
-                        threshold_pub_keys: pks.clone(),
-                        threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
-                        threshold: peers.threshold(),
-                        fee_consensus: FeeConsensus::default(),
+                        consensus: LightningConfigConsensus {
+                            threshold_pub_keys: pks.clone(),
+                            threshold: peers.threshold(),
+                            fee_consensus: FeeConsensus::default(),
+                        },
+                        private: LightningConfigPrivate {
+                            threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
+                        },
                     }
                     .to_erased(),
                 )
@@ -273,10 +277,14 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
         let (pks, sks) = g1[&()].threshold_crypto();
 
         let server = LightningModuleConfig {
-            threshold_pub_keys: pks,
-            threshold_sec_key: SerdeSecret(sks),
-            threshold: peers.threshold(),
-            fee_consensus: Default::default(),
+            consensus: LightningConfigConsensus {
+                threshold_pub_keys: pks,
+                threshold: peers.threshold(),
+                fee_consensus: Default::default(),
+            },
+            private: LightningConfigPrivate {
+                threshold_sec_key: SerdeSecret(sks),
+            },
         };
 
         Ok(Ok(server.to_erased()))
@@ -424,7 +432,7 @@ impl ServerModulePlugin for LightningModule {
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.amount,
-                fee: self.cfg.fee_consensus.contract_input,
+                fee: self.cfg.consensus.fee_consensus.contract_input,
             },
             puk_keys: vec![pub_key],
         })
@@ -486,7 +494,7 @@ impl ServerModulePlugin for LightningModule {
                 } else {
                     Ok(TransactionItemAmount {
                         amount: contract.amount,
-                        fee: self.cfg.fee_consensus.contract_output,
+                        fee: self.cfg.consensus.fee_consensus.contract_output,
                     })
                 }
             }
@@ -576,6 +584,7 @@ impl ServerModulePlugin for LightningModule {
 
                     let decryption_share = self
                         .cfg
+                        .private
                         .threshold_sec_key
                         .decrypt_share(&incoming.encrypted_preimage.0)
                         .expect("We checked for decryption share validity on contract creation");
@@ -685,10 +694,10 @@ impl ServerModulePlugin for LightningModule {
                 warn!("{} did not contribute valid decryption shares", peer);
             }
 
-            if valid_shares.len() < self.cfg.threshold {
+            if valid_shares.len() < self.cfg.consensus.threshold {
                 warn!(
                     valid_shares = %valid_shares.len(),
-                    shares_needed = %self.cfg.threshold,
+                    shares_needed = %self.cfg.consensus.threshold,
                     "Too few decryption shares"
                 );
                 continue;
@@ -715,7 +724,7 @@ impl ServerModulePlugin for LightningModule {
                 continue;
             }
 
-            let preimage_vec = match self.cfg.threshold_pub_keys.decrypt(
+            let preimage_vec = match self.cfg.consensus.threshold_pub_keys.decrypt(
                 valid_shares
                     .iter()
                     .map(|(peer, share)| (peer.to_usize(), &share.0)),
@@ -878,6 +887,7 @@ impl LightningModule {
         message: &EncryptedPreimage,
     ) -> bool {
         self.cfg
+            .consensus
             .threshold_pub_keys
             .public_key_share(peer.to_usize())
             .verify_decryption_share(&share.0, &message.0)
