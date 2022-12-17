@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package gwlightningrpc;
+
+/* GatewayLightning is a service that provides limited access and functionality
+ * from a lightning node to Fedimint gateways */
+service GatewayLightning {
+  /* GetPubKey returns the public key of the associated lightning node */
+  rpc GetPubKey(GetPubKeyRequest) returns (GetPubKeyResponse) {}
+
+  /* PayInvoice attempts to pay an invoice using the associated lightning node
+   */
+  rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse) {}
+
+  /* SubscribeInterceptHtlcs opens a stream that intercepts specific HTLCs to be
+   * handled by the gateway  */
+  rpc SubscribeInterceptHtlcs(SubscribeInterceptHtlcsRequest)
+      returns (stream SubscribeInterceptHtlcsResponse) {}
+}
+
+message GetPubKeyRequest {}
+
+message GetPubKeyResponse {
+  // The public key of the associated lightning node
+  bytes pub_key = 1;
+}
+
+message PayInvoiceRequest {
+  string invoice = 1;
+
+  uint64 max_delay = 2;
+
+  double max_fee_percent = 3;
+}
+
+message PayInvoiceResponse {
+  // The payment hash of the invoice
+  bytes payment_hash = 1;
+
+  // The preimage of the invoice
+  bytes preimage = 2;
+}
+
+message SubscribeInterceptHtlcsRequest {
+  // The public key indentifying HTLCs going to a specific mint served by the
+  // gateway
+  bytes mint_pub_key = 1;
+}
+
+message SubscribeInterceptHtlcsResponse {
+  // The payment hash of the invoice
+  bytes payment_hash = 1;
+
+  // The preimage of the invoice
+  bytes preimage = 2;
+
+  // The amount of the invoice
+  uint64 amount = 3;
+
+  // The expiry of the invoice
+  uint64 expiry = 4;
+
+  // The cltv delta of the invoice
+  uint64 cltv_delta = 5;
+
+  // The payment request of the invoice
+  string payment_request = 6;
+}
