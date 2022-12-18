@@ -17,7 +17,6 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use bitcoin::{PackedLockTime, Sequence};
-use config::WalletClientConfig;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
@@ -26,7 +25,6 @@ use fedimint_api::config::{
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
-use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -224,7 +222,7 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
         &self,
         peers: &[PeerId],
         params: &ConfigGenParams,
-    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+    ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
             .get::<WalletConfigGenParams>()
             .expect("Invalid wallet params");
@@ -254,18 +252,10 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
             })
             .collect();
 
-        let descriptor = wallet_cfg[&PeerId::from(0)].peg_in_descriptor.clone();
-        let client_cfg = WalletClientConfig::new(descriptor, params.network, params.finality_delay);
-
-        (
-            wallet_cfg
-                .into_iter()
-                .map(|(k, v)| (k, v.to_erased()))
-                .collect(),
-            serde_json::to_value(client_cfg)
-                .expect("serialization can't fail")
-                .into(),
-        )
+        wallet_cfg
+            .into_iter()
+            .map(|(k, v)| (k, v.to_erased()))
+            .collect()
     }
 
     async fn distributed_gen(

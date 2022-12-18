@@ -222,8 +222,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let (server_config, client_config) =
-                ServerConfig::trusted_dealer_gen(&peers, &params, OsRng);
+            let server_config = ServerConfig::trusted_dealer_gen(&peers, &params, OsRng);
+            let client_config = server_config[&PeerId::from(0)].to_client_config();
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();

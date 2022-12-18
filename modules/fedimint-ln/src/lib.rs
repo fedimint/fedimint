@@ -20,7 +20,7 @@ use std::ops::Sub;
 
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
-use config::{FeeConsensus, LightningModuleClientConfig};
+use config::FeeConsensus;
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
@@ -230,7 +230,7 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
         &self,
         peers: &[PeerId],
         _params: &ConfigGenParams,
-    ) -> (BTreeMap<PeerId, ServerModuleConfig>, ClientModuleConfig) {
+    ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);
         let pks = sks.public_keys();
 
@@ -252,14 +252,7 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
             })
             .collect();
 
-        let client_cfg = serde_json::to_value(&LightningModuleClientConfig {
-            threshold_pub_key: pks.public_key(),
-            fee_consensus: FeeConsensus::default(),
-        })
-        .expect("serialization can't fail here")
-        .into();
-
-        (server_cfg, client_cfg)
+        server_cfg
     }
 
     async fn distributed_gen(
