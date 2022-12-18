@@ -185,7 +185,7 @@ async fn main() {
             write_nonprivate_configs(&server, dir_out_path);
         }
         Command::VersionHash => {
-            println!("{}", env!("GIT_HASH"));
+            println!("{}", CODE_VERSION);
         }
         Command::ConfigDecrypt {
             in_file,
@@ -270,9 +270,17 @@ async fn run_dkg(
         fedimint_server::config::connect(params.server_dkg.clone(), params.tls.clone(), task_group)
             .await;
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
-    ServerConfig::distributed_gen(&connections, &our_id, &peer_ids, &params, OsRng, task_group)
-        .await
-        .expect("failed to run DKG to generate configs")
+    ServerConfig::distributed_gen(
+        CODE_VERSION,
+        &connections,
+        &our_id,
+        &peer_ids,
+        &params,
+        OsRng,
+        task_group,
+    )
+    .await
+    .expect("failed to run DKG to generate configs")
 }
 
 fn parse_peer_params(url: String) -> PeerServerParams {

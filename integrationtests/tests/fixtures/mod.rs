@@ -157,7 +157,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
             let (server_config, client_config) =
-                distributed_config(&peers, params, max_evil, &mut task_group)
+                distributed_config("", &peers, params, max_evil, &mut task_group)
                     .await
                     .expect("distributed config should not be canceled");
 
@@ -222,7 +222,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config = ServerConfig::trusted_dealer_gen(&peers, &params, OsRng);
+            let server_config = ServerConfig::trusted_dealer_gen("", &peers, &params, OsRng);
             let client_config = server_config[&PeerId::from(0)].to_client_config();
 
             let bitcoin = FakeBitcoinTest::new();
@@ -298,6 +298,7 @@ pub async fn create_user_client(
 }
 
 async fn distributed_config(
+    code_version: &str,
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
     _max_evil: usize,
@@ -321,6 +322,7 @@ async fn distributed_config(
 
             let rng = OsRng;
             let cfg = ServerConfig::distributed_gen(
+                code_version,
                 &connections,
                 peer,
                 &peers,

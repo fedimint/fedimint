@@ -17,6 +17,7 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use url::Url;
 
 use crate::ui::Guardian;
+use crate::CODE_VERSION;
 
 pub fn configgen(
     federation_name: String,
@@ -144,6 +145,7 @@ fn trusted_dealer_gen(
 
             let mut config = ServerConfig {
                 consensus: ServerConfigConsensus {
+                    code_version: CODE_VERSION.to_string(),
                     federation_name: params.federation_name.clone(),
                     peer_certs: tls_keys
                         .iter()

@@ -62,6 +62,8 @@ pub struct ServerConfigPrivate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigConsensus {
+    /// The version of the binary code running
+    pub code_version: String,
     /// Configurable federation name
     pub federation_name: String,
     /// Certs for TLS communication, required for peer authentication
@@ -122,7 +124,9 @@ pub struct ServerConfigParams {
 
 impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key setup
+    #[allow(clippy::too_many_arguments)]
     pub fn from(
+        code_version: &str,
         params: ServerConfigParams,
         identity: PeerId,
         hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
@@ -148,6 +152,7 @@ impl ServerConfig {
             modules: Default::default(),
         };
         let consensus = ServerConfigConsensus {
+            code_version: code_version.to_string(),
             federation_name: params.federation_name,
             peer_certs: params
                 .tls
@@ -268,6 +273,7 @@ impl ServerConfig {
     }
 
     pub fn trusted_dealer_gen(
+        code_version: &str,
         peers: &[PeerId],
         params: &HashMap<PeerId, ServerConfigParams>,
         mut rng: impl RngCore + CryptoRng,
@@ -297,6 +303,7 @@ impl ServerConfig {
             .map(|(&id, netinf)| {
                 let epoch_keys = epochinfo.get(&id).unwrap();
                 let config = ServerConfig::from(
+                    code_version,
                     params[&id].clone(),
                     id,
                     SerdeSecret(netinf.secret_key_share().unwrap().clone()),
@@ -316,6 +323,7 @@ impl ServerConfig {
     }
 
     pub async fn distributed_gen(
+        code_version: &str,
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
@@ -325,8 +333,12 @@ impl ServerConfig {
     ) -> anyhow::Result<Cancellable<Self>> {
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
-            let server =
-                Self::trusted_dealer_gen(peers, &HashMap::from([(*our_id, params.clone())]), rng);
+            let server = Self::trusted_dealer_gen(
+                code_version,
+                peers,
+                &HashMap::from([(*our_id, params.clone())]),
+                rng,
+            );
             return Ok(Ok(server[our_id].clone()));
         }
         info!("Peer {} running distributed key generation...", our_id);
@@ -370,6 +382,7 @@ impl ServerConfig {
         }
 
         let server = ServerConfig::from(
+            code_version,
             params.clone(),
             *our_id,
             SerdeSecret(hbbft_sks),

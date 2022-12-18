@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     let mut args = std::env::args();
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
-            println!("{}", env!("GIT_HASH"));
+            println!("{}", CODE_VERSION);
             return Ok(());
         }
     }
