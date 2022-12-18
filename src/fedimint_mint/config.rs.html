@@ -104,6 +104,25 @@
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -117,13 +136,29 @@
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintConfig {
-    <span class="kw">pub </span>tbs_sks: Tiered&lt;tbs::SecretKeyShare&gt;,
-    <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;tbs::PublicKeyShare&gt;&gt;,
-    <span class="kw">pub </span>fee_consensus: FeeConsensus,
-    <span class="kw">pub </span>threshold: usize,
-    <span class="doccomment">/// controls the maximum amount of change a client can request
+    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key material
+    </span><span class="kw">pub </span>private: MintConfigPrivate,
+    <span class="doccomment">/// Contains all configuration that needs to be the same for every server
+    </span><span class="kw">pub </span>consensus: MintConfigConsensus,
+}
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>MintConfigConsensus {
+    <span class="doccomment">/// The set of public keys for blind-signing all peers and note denominations
+    </span><span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
+    <span class="doccomment">/// Fees charged for ecash transactions
+    </span><span class="kw">pub </span>fee_consensus: FeeConsensus,
+    <span class="doccomment">/// Number of signers required
+    </span><span class="kw">pub </span>threshold: usize,
+    <span class="doccomment">/// The maximum amount of change a client can request
     /// TODO implement this restriction
     </span><span class="kw">pub </span>max_target_denomination_sets: u16,
+}
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>MintConfigPrivate {
+    <span class="doccomment">/// Secret keys for blind-signing ecash of varying note denominations
+    </span><span class="kw">pub </span>tbs_sks: Tiered&lt;tbs::SecretKeyShare&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -137,25 +172,22 @@
 <span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>MintClientConfig {}
 
 <span class="kw">impl </span>TypedServerModuleConfig <span class="kw">for </span>MintConfig {
-    <span class="kw">type </span>Local = MintConfig;
-    <span class="kw">type </span>Private = ();
-    <span class="kw">type </span>Consensus = ();
+    <span class="kw">type </span>Local = ();
+    <span class="kw">type </span>Private = MintConfigPrivate;
+    <span class="kw">type </span>Consensus = MintConfigConsensus;
 
-    <span class="kw">fn </span>from_parts(
-        local: <span class="self">Self</span>::Local,
-        _private: <span class="self">Self</span>::Private,
-        _consensus: <span class="self">Self</span>::Consensus,
-    ) -&gt; <span class="self">Self </span>{
-        local
+    <span class="kw">fn </span>from_parts(_local: <span class="self">Self</span>::Local, private: <span class="self">Self</span>::Private, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ private, consensus }
     }
 
     <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
-        (<span class="self">self</span>, (), ())
+        ((), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
     }
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
         <span class="kw">let </span>pub_key: HashMap&lt;Amount, AggregatePublicKey&gt; = TieredMultiZip::new(
-            <span class="self">self</span>.peer_tbs_pks
+            <span class="self">self</span>.consensus
+                .peer_tbs_pks
                 .iter()
                 .map(|(<span class="kw">_</span>, keys)| keys.iter())
                 .collect(),
@@ -163,15 +195,15 @@
         .map(|(amt, keys)| {
             <span class="comment">// TODO: avoid this through better aggregation API allowing references or
             </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-            (amt, keys.aggregate(<span class="self">self</span>.threshold))
+            (amt, keys.aggregate(<span class="self">self</span>.consensus.threshold))
         })
         .collect();
 
         serde_json::to_value(<span class="kw-2">&amp;</span>MintClientConfig {
             tbs_pks: Tiered::from_iter(pub_key.into_iter()),
-            fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
-            peer_tbs_pks: <span class="self">self</span>.peer_tbs_pks.clone(),
-            target_denomination_sets: <span class="self">self</span>.max_target_denomination_sets,
+            fee_consensus: <span class="self">self</span>.consensus.fee_consensus.clone(),
+            peer_tbs_pks: <span class="self">self</span>.consensus.peer_tbs_pks.clone(),
+            target_denomination_sets: <span class="self">self</span>.consensus.max_target_denomination_sets,
         })
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
         .into()
@@ -179,12 +211,18 @@
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>sks: BTreeMap&lt;Amount, PublicKeyShare&gt; = <span class="self">self
-            </span>.tbs_sks
+            </span>.private
+            .tbs_sks
             .iter()
             .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
             .collect();
-        <span class="kw">let </span>pks: BTreeMap&lt;Amount, PublicKeyShare&gt; =
-            <span class="self">self</span>.peer_tbs_pks.get(identity).unwrap().as_map().clone();
+        <span class="kw">let </span>pks: BTreeMap&lt;Amount, PublicKeyShare&gt; = <span class="self">self
+            </span>.consensus
+            .peer_tbs_pks
+            .get(identity)
+            .unwrap()
+            .as_map()
+            .clone();
         <span class="kw">if </span>sks != pks {
             <span class="macro">bail!</span>(<span class="string">&quot;Mint private key doesn&#39;t match pubkey share&quot;</span>);
         }

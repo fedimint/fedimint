@@ -1286,6 +1286,27 @@
 <a href="#1286" id="1286">1286</a>
 <a href="#1287" id="1287">1287</a>
 <a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1331,7 +1352,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::common::MintModuleDecoder;
-<span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
+<span class="kw">use </span><span class="kw">crate</span>::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
     ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
@@ -1443,25 +1464,31 @@
             .iter()
             .map(|<span class="kw-2">&amp;</span>peer| {
                 <span class="kw">let </span>config = MintConfig {
-                    threshold: peers.threshold(),
-                    tbs_sks: params
-                        .mint_amounts
-                        .iter()
-                        .map(|amount| (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">2</span>[peer.to_usize()]))
-                        .collect(),
-                    peer_tbs_pks: peers
-                        .iter()
-                        .map(|<span class="kw-2">&amp;</span>key_peer| {
-                            <span class="kw">let </span>keys = params
-                                .mint_amounts
-                                .iter()
-                                .map(|amount| (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">1</span>[key_peer.to_usize()]))
-                                .collect();
-                            (key_peer, keys)
-                        })
-                        .collect(),
-                    fee_consensus: FeeConsensus::default(),
-                    max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                    consensus: MintConfigConsensus {
+                        threshold: peers.threshold(),
+                        peer_tbs_pks: peers
+                            .iter()
+                            .map(|<span class="kw-2">&amp;</span>key_peer| {
+                                <span class="kw">let </span>keys = params
+                                    .mint_amounts
+                                    .iter()
+                                    .map(|amount| {
+                                        (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">1</span>[key_peer.to_usize()])
+                                    })
+                                    .collect();
+                                (key_peer, keys)
+                            })
+                            .collect(),
+                        fee_consensus: FeeConsensus::default(),
+                        max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                    },
+                    private: MintConfigPrivate {
+                        tbs_sks: params
+                            .mint_amounts
+                            .iter()
+                            .map(|amount| (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">2</span>[peer.to_usize()]))
+                            .collect(),
+                    },
                 };
                 (peer, config)
             })
@@ -1503,27 +1530,31 @@
             .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span>server = MintConfig {
-            tbs_sks: amounts_keys
-                .iter()
-                .map(|(amount, (<span class="kw">_</span>, sks))| (<span class="kw-2">*</span>amount, <span class="kw-2">*</span>sks))
-                .collect(),
-            peer_tbs_pks: peers
-                .iter()
-                .map(|peer| {
-                    <span class="kw">let </span>pks = amounts_keys
-                        .iter()
-                        .map(|(amount, (pks, <span class="kw">_</span>))| {
-                            <span class="kw">let </span>pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
-                            (<span class="kw-2">*</span>amount, pks)
-                        })
-                        .collect::&lt;Tiered&lt;PublicKeyShare&gt;&gt;();
+            private: MintConfigPrivate {
+                tbs_sks: amounts_keys
+                    .iter()
+                    .map(|(amount, (<span class="kw">_</span>, sks))| (<span class="kw-2">*</span>amount, <span class="kw-2">*</span>sks))
+                    .collect(),
+            },
+            consensus: MintConfigConsensus {
+                peer_tbs_pks: peers
+                    .iter()
+                    .map(|peer| {
+                        <span class="kw">let </span>pks = amounts_keys
+                            .iter()
+                            .map(|(amount, (pks, <span class="kw">_</span>))| {
+                                <span class="kw">let </span>pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
+                                (<span class="kw-2">*</span>amount, pks)
+                            })
+                            .collect::&lt;Tiered&lt;PublicKeyShare&gt;&gt;();
 
-                    (<span class="kw-2">*</span>peer, pks)
-                })
-                .collect(),
-            fee_consensus: Default::default(),
-            threshold: peers.threshold(),
-            max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                        (<span class="kw-2">*</span>peer, pks)
+                    })
+                    .collect(),
+                fee_consensus: Default::default(),
+                threshold: peers.threshold(),
+                max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+            },
         };
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server.to_erased()))
@@ -1708,7 +1739,7 @@
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.total_amount(),
-                fee: <span class="self">self</span>.cfg.fee_consensus.coin_spend_abs * (input.item_count() <span class="kw">as </span>u64),
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.coin_spend_abs * (input.item_count() <span class="kw">as </span>u64),
             },
             puk_keys: input
                 .iter_items()
@@ -1755,7 +1786,8 @@
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(TransactionItemAmount {
                 amount: output.total_amount(),
-                fee: <span class="self">self</span>.cfg.fee_consensus.coin_issuance_abs * (output.item_count() <span class="kw">as </span>u64),
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.coin_issuance_abs
+                    * (output.item_count() <span class="kw">as </span>u64),
             })
         }
     }
@@ -2032,34 +2064,38 @@
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
     </span><span class="kw">pub fn </span>new(cfg: MintConfig) -&gt; Mint {
-        <span class="macro">assert!</span>(cfg.tbs_sks.tiers().count() &gt; <span class="number">0</span>);
+        <span class="macro">assert!</span>(cfg.private.tbs_sks.tiers().count() &gt; <span class="number">0</span>);
 
         <span class="comment">// The amount tiers are implicitly provided by the key sets, make sure they are internally
         // consistent.
         </span><span class="macro">assert!</span>(cfg
+            .consensus
             .peer_tbs_pks
             .values()
-            .all(|pk| pk.structural_eq(<span class="kw-2">&amp;</span>cfg.tbs_sks)));
+            .all(|pk| pk.structural_eq(<span class="kw-2">&amp;</span>cfg.private.tbs_sks)));
 
-        <span class="kw">let </span>ref_pub_key = cfg.tbs_sks.to_public();
+        <span class="kw">let </span>ref_pub_key = cfg.private.tbs_sks.to_public();
 
         <span class="comment">// Find our key index and make sure we know the private key for all our public key shares
-        </span><span class="kw">let </span>our_id = cfg <span class="comment">// FIXME: make sure we use id instead of idx everywhere
+        </span><span class="kw">let </span>our_id = cfg
+            .consensus <span class="comment">// FIXME: make sure we use id instead of idx everywhere
             </span>.peer_tbs_pks
             .iter()
             .find_map(|(<span class="kw-2">&amp;</span>id, pk)| <span class="kw">if </span>pk == <span class="kw-2">&amp;</span>ref_pub_key { <span class="prelude-val">Some</span>(id) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
             .expect(<span class="string">&quot;Own key not found among pub keys.&quot;</span>);
 
         <span class="macro">assert_eq!</span>(
-            cfg.peer_tbs_pks[<span class="kw-2">&amp;</span>our_id],
-            cfg.tbs_sks
+            cfg.consensus.peer_tbs_pks[<span class="kw-2">&amp;</span>our_id],
+            cfg.private
+                .tbs_sks
                 .iter()
                 .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
                 .collect()
         );
 
         <span class="kw">let </span>aggregate_pub_keys = TieredMultiZip::new(
-            cfg.peer_tbs_pks
+            cfg.consensus
+                .peer_tbs_pks
                 .iter()
                 .map(|(<span class="kw">_</span>, keys)| keys.iter())
                 .collect(),
@@ -2067,14 +2103,14 @@
         .map(|(amt, keys)| {
             <span class="comment">// TODO: avoid this through better aggregation API allowing references or
             </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-            (amt, keys.aggregate(cfg.threshold))
+            (amt, keys.aggregate(cfg.consensus.threshold))
         })
         .collect();
 
         Mint {
             cfg: cfg.clone(),
-            sec_key: cfg.tbs_sks,
-            pub_key_shares: cfg.peer_tbs_pks,
+            sec_key: cfg.private.tbs_sks,
+            pub_key_shares: cfg.consensus.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
         }
     }
@@ -2102,11 +2138,11 @@
         partial_sigs: Vec&lt;(PeerId, OutputConfirmationSignatures)&gt;,
     ) -&gt; (<span class="prelude-ty">Result</span>&lt;OutputOutcome, CombineError&gt;, MintShareErrors) {
         <span class="comment">// Terminate early if there are not enough shares
-        </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.cfg.threshold {
+        </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.cfg.consensus.threshold {
             <span class="kw">return </span>(
                 <span class="prelude-val">Err</span>(CombineError::TooFewShares(
                     partial_sigs.iter().map(|(peer, <span class="kw">_</span>)| peer).cloned().collect(),
-                    <span class="self">self</span>.cfg.threshold,
+                    <span class="self">self</span>.cfg.consensus.threshold,
                 )),
                 MintShareErrors(<span class="macro">vec!</span>[]),
             );
@@ -2199,11 +2235,11 @@
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
             <span class="comment">// Check that there are still sufficient
-            </span><span class="kw">if </span>valid_sigs.len() &lt; <span class="self">self</span>.cfg.threshold {
+            </span><span class="kw">if </span>valid_sigs.len() &lt; <span class="self">self</span>.cfg.consensus.threshold {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(CombineError::TooFewValidShares(
                     valid_sigs.len(),
                     partial_sigs.len(),
-                    <span class="self">self</span>.cfg.threshold,
+                    <span class="self">self</span>.cfg.consensus.threshold,
                 ));
             }
 
@@ -2211,7 +2247,7 @@
                 valid_sigs
                     .into_iter()
                     .map(|(peer, share)| (peer.to_usize(), share)),
-                <span class="self">self</span>.cfg.threshold,
+                <span class="self">self</span>.cfg.consensus.threshold,
             );
 
             <span class="prelude-val">Ok</span>((amt, sig))
@@ -2370,8 +2406,8 @@
 
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
     <span class="kw">use crate</span>::{
-        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenParams, MintConfigGenerator,
-        PeerErrorType,
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigGenParams,
+        MintConfigGenerator, MintConfigPrivate, PeerErrorType,
     };
 
     <span class="kw">const </span>THRESHOLD: usize = <span class="number">1</span>;
@@ -2560,17 +2596,23 @@
         <span class="kw">let </span>(mint_server_cfg2, <span class="kw">_</span>) = build_configs();
 
         Mint::new(MintConfig {
-            threshold: THRESHOLD,
-            tbs_sks: mint_server_cfg1[<span class="number">0</span>]
-                .to_typed::&lt;MintConfig&gt;()
-                .unwrap()
-                .tbs_sks,
-            peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>]
-                .to_typed::&lt;MintConfig&gt;()
-                .unwrap()
-                .peer_tbs_pks,
-            fee_consensus: FeeConsensus::default(),
-            max_target_denomination_sets: <span class="number">0</span>,
+            consensus: MintConfigConsensus {
+                threshold: THRESHOLD,
+                peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>]
+                    .to_typed::&lt;MintConfig&gt;()
+                    .unwrap()
+                    .consensus
+                    .peer_tbs_pks,
+                fee_consensus: FeeConsensus::default(),
+                max_target_denomination_sets: <span class="number">0</span>,
+            },
+            private: MintConfigPrivate {
+                tbs_sks: mint_server_cfg1[<span class="number">0</span>]
+                    .to_typed::&lt;MintConfig&gt;()
+                    .unwrap()
+                    .private
+                    .tbs_sks,
+            },
         });
     }
 }

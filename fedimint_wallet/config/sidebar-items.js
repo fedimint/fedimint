@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["WalletClientConfig",""],["WalletConfig",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["WalletClientConfig",""],["WalletConfig",""],["WalletConfigConsensus",""],["WalletConfigLocal",""],["WalletConfigPrivate",""]]};

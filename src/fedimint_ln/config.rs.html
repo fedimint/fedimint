@@ -73,19 +73,48 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig};
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningModuleConfig {
-    <span class="kw">pub </span>threshold_pub_keys: threshold_crypto::PublicKeySet,
+    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key material
+    </span><span class="kw">pub </span>private: LightningConfigPrivate,
+    <span class="doccomment">/// Contains all configuration that needs to be the same for every server
+    </span><span class="kw">pub </span>consensus: LightningConfigConsensus,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>LightningConfigConsensus {
+    <span class="doccomment">/// The threshold public keys for encrypting the LN preimage
+    </span><span class="kw">pub </span>threshold_pub_keys: threshold_crypto::PublicKeySet,
+    <span class="doccomment">/// The number of decryption shares required
+    </span><span class="kw">pub </span>threshold: usize,
+    <span class="doccomment">/// Fees charged for LN transactions
+    </span><span class="kw">pub </span>fee_consensus: FeeConsensus,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>LightningConfigPrivate {
     <span class="comment">// TODO: propose serde(with = &quot;…&quot;) based protection upstream instead
-    </span><span class="kw">pub </span>threshold_sec_key:
-        threshold_crypto::serde_impl::SerdeSecret&lt;threshold_crypto::SecretKeyShare&gt;,
-    <span class="kw">pub </span>threshold: usize,
-    <span class="kw">pub </span>fee_consensus: FeeConsensus,
+    </span><span class="doccomment">/// Our secret key for decrypting preimages
+    </span><span class="kw">pub </span>threshold_sec_key: SerdeSecret&lt;threshold_crypto::SecretKeyShare&gt;,
 }
 
 <span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>LightningModuleClientConfig {}
@@ -97,35 +126,32 @@
 }
 
 <span class="kw">impl </span>TypedServerModuleConfig <span class="kw">for </span>LightningModuleConfig {
-    <span class="kw">type </span>Local = LightningModuleConfig;
-    <span class="kw">type </span>Private = ();
-    <span class="kw">type </span>Consensus = ();
+    <span class="kw">type </span>Local = ();
+    <span class="kw">type </span>Private = LightningConfigPrivate;
+    <span class="kw">type </span>Consensus = LightningConfigConsensus;
 
-    <span class="kw">fn </span>from_parts(
-        local: <span class="self">Self</span>::Local,
-        _private: <span class="self">Self</span>::Private,
-        _consensus: <span class="self">Self</span>::Consensus,
-    ) -&gt; <span class="self">Self </span>{
-        local
+    <span class="kw">fn </span>from_parts(_local: <span class="self">Self</span>::Local, private: <span class="self">Self</span>::Private, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ private, consensus }
     }
 
     <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
-        (<span class="self">self</span>, (), ())
+        ((), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
     }
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
         serde_json::to_value(<span class="kw-2">&amp;</span>LightningModuleClientConfig {
-            threshold_pub_key: <span class="self">self</span>.threshold_pub_keys.public_key(),
-            fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
+            threshold_pub_key: <span class="self">self</span>.consensus.threshold_pub_keys.public_key(),
+            fee_consensus: <span class="self">self</span>.consensus.fee_consensus.clone(),
         })
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
         .into()
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if </span><span class="self">self</span>.threshold_sec_key.public_key_share()
+        <span class="kw">if </span><span class="self">self</span>.private.threshold_sec_key.public_key_share()
             != <span class="self">self
-                </span>.threshold_pub_keys
+                </span>.consensus
+                .threshold_pub_keys
                 .public_key_share(identity.to_usize())
         {
             <span class="macro">bail!</span>(<span class="string">&quot;Lightning private key doesn&#39;t match pubkey share&quot;</span>);

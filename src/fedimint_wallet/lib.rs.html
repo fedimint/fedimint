@@ -1566,6 +1566,11 @@
 <a href="#1566" id="1566">1566</a>
 <a href="#1567" id="1567">1567</a>
 <a href="#1568" id="1568">1568</a>
+<a href="#1569" id="1569">1569</a>
+<a href="#1570" id="1570">1570</a>
+<a href="#1571" id="1571">1571</a>
+<a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1983,7 +1988,7 @@
             .get_fee_rate(CONFIRMATION_TARGET)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>)
-            .unwrap_or(<span class="self">self</span>.cfg.default_fee);
+            .unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee);
 
         <span class="kw">let </span>round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
             block_height: proposed_height,
@@ -2075,7 +2080,7 @@
         }
 
         input
-            .verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_descriptor)
+            .verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.peg_in_descriptor)
             .into_module_error_other()<span class="question-mark">?</span>;
 
         <span class="kw">if </span>dbtx
@@ -2090,7 +2095,7 @@
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
                 amount: fedimint_api::Amount::from_sats(input.tx_output().value),
-                fee: <span class="self">self</span>.cfg.fee_consensus.peg_in_abs,
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.peg_in_abs,
             },
             puk_keys: <span class="macro">vec!</span>[<span class="kw-2">*</span>input.tweak_contract_key()],
         })
@@ -2126,9 +2131,9 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">if </span>!is_address_valid_for_network(<span class="kw-2">&amp;</span>output.recipient, <span class="self">self</span>.cfg.network) {
+        <span class="kw">if </span>!is_address_valid_for_network(<span class="kw-2">&amp;</span>output.recipient, <span class="self">self</span>.cfg.consensus.network) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
-                <span class="self">self</span>.cfg.network,
+                <span class="self">self</span>.cfg.consensus.network,
                 output.recipient.network,
             ))
             .into_module_error_other();
@@ -2146,7 +2151,7 @@
         }
         <span class="prelude-val">Ok</span>(TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
-            fee: <span class="self">self</span>.cfg.fee_consensus.peg_out_abs,
+            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.peg_out_abs,
         })
     }
 
@@ -2370,8 +2375,11 @@
             .get_network()
             .<span class="kw">await
             </span>.map_err(|e| WalletError::RpcError(e.into()))<span class="question-mark">?</span>;
-        <span class="kw">if </span>bitcoind_net != cfg.network {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(cfg.network, bitcoind_net));
+        <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
+                cfg.consensus.network,
+                bitcoind_net,
+            ));
         }
 
         <span class="kw">let </span>wallet = Wallet {
@@ -2432,6 +2440,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ProcessPegOutSigError&gt; {
         <span class="kw">let </span>peer_key = <span class="self">self
             </span>.cfg
+            .consensus
             .peer_peg_in_keys
             .get(peer)
             .expect(<span class="string">&quot;always called with valid peer id&quot;</span>);
@@ -2571,7 +2580,7 @@
             .get_block_height()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>) <span class="kw">as </span>u32;
-        our_network_height.saturating_sub(<span class="self">self</span>.cfg.finality_delay)
+        our_network_height.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay)
     }
 
     <span class="kw">pub async fn </span>consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
@@ -2661,6 +2670,7 @@
     ) {
         <span class="kw">let </span>script_pk = <span class="self">self
             </span>.cfg
+            .consensus
             .peg_in_descriptor
             .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
             .script_pubkey();
@@ -2734,8 +2744,8 @@
 
     <span class="kw">fn </span>offline_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatelessWallet {
         StatelessWallet {
-            descriptor: <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_descriptor,
-            secret_key: <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_key,
+            descriptor: <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.peg_in_descriptor,
+            secret_key: <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.peg_in_key,
             secp: <span class="kw-2">&amp;</span><span class="self">self</span>.secp,
         }
     }

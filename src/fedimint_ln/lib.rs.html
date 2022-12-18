@@ -978,6 +978,16 @@
 <a href="#978" id="978">978</a>
 <a href="#979" id="979">979</a>
 <a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1029,7 +1039,7 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::common::LightningModuleDecoder;
-<span class="kw">use </span><span class="kw">crate</span>::config::LightningModuleConfig;
+<span class="kw">use </span><span class="kw">crate</span>::config::{LightningConfigConsensus, LightningConfigPrivate, LightningModuleConfig};
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{
     incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
@@ -1222,10 +1232,14 @@
                 (
                     peer,
                     LightningModuleConfig {
-                        threshold_pub_keys: pks.clone(),
-                        threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
-                        threshold: peers.threshold(),
-                        fee_consensus: FeeConsensus::default(),
+                        consensus: LightningConfigConsensus {
+                            threshold_pub_keys: pks.clone(),
+                            threshold: peers.threshold(),
+                            fee_consensus: FeeConsensus::default(),
+                        },
+                        private: LightningConfigPrivate {
+                            threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
+                        },
                     }
                     .to_erased(),
                 )
@@ -1253,10 +1267,14 @@
         <span class="kw">let </span>(pks, sks) = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
 
         <span class="kw">let </span>server = LightningModuleConfig {
-            threshold_pub_keys: pks,
-            threshold_sec_key: SerdeSecret(sks),
-            threshold: peers.threshold(),
-            fee_consensus: Default::default(),
+            consensus: LightningConfigConsensus {
+                threshold_pub_keys: pks,
+                threshold: peers.threshold(),
+                fee_consensus: Default::default(),
+            },
+            private: LightningConfigPrivate {
+                threshold_sec_key: SerdeSecret(sks),
+            },
         };
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server.to_erased()))
@@ -1404,7 +1422,7 @@
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.amount,
-                fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_input,
             },
             puk_keys: <span class="macro">vec!</span>[pub_key],
         })
@@ -1466,7 +1484,7 @@
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Ok</span>(TransactionItemAmount {
                         amount: contract.amount,
-                        fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
+                        fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_output,
                     })
                 }
             }
@@ -1556,6 +1574,7 @@
 
                     <span class="kw">let </span>decryption_share = <span class="self">self
                         </span>.cfg
+                        .private
                         .threshold_sec_key
                         .decrypt_share(<span class="kw-2">&amp;</span>incoming.encrypted_preimage.<span class="number">0</span>)
                         .expect(<span class="string">&quot;We checked for decryption share validity on contract creation&quot;</span>);
@@ -1665,10 +1684,10 @@
                 <span class="macro">warn!</span>(<span class="string">&quot;{} did not contribute valid decryption shares&quot;</span>, peer);
             }
 
-            <span class="kw">if </span>valid_shares.len() &lt; <span class="self">self</span>.cfg.threshold {
+            <span class="kw">if </span>valid_shares.len() &lt; <span class="self">self</span>.cfg.consensus.threshold {
                 <span class="macro">warn!</span>(
                     valid_shares = %valid_shares.len(),
-                    shares_needed = %<span class="self">self</span>.cfg.threshold,
+                    shares_needed = %<span class="self">self</span>.cfg.consensus.threshold,
                     <span class="string">&quot;Too few decryption shares&quot;
                 </span>);
                 <span class="kw">continue</span>;
@@ -1695,7 +1714,7 @@
                 <span class="kw">continue</span>;
             }
 
-            <span class="kw">let </span>preimage_vec = <span class="kw">match </span><span class="self">self</span>.cfg.threshold_pub_keys.decrypt(
+            <span class="kw">let </span>preimage_vec = <span class="kw">match </span><span class="self">self</span>.cfg.consensus.threshold_pub_keys.decrypt(
                 valid_shares
                     .iter()
                     .map(|(peer, share)| (peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>)),
@@ -1858,6 +1877,7 @@
         message: <span class="kw-2">&amp;</span>EncryptedPreimage,
     ) -&gt; bool {
         <span class="self">self</span>.cfg
+            .consensus
             .threshold_pub_keys
             .public_key_share(peer.to_usize())
             .verify_decryption_share(<span class="kw-2">&amp;</span>share.<span class="number">0</span>, <span class="kw-2">&amp;</span>message.<span class="number">0</span>)
