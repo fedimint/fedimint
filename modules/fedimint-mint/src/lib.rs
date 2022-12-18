@@ -43,7 +43,7 @@ use threshold_crypto::group::Curve;
 use tracing::{debug, error, info, warn};
 
 use crate::common::MintModuleDecoder;
-use crate::config::MintConfig;
+use crate::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
     ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
@@ -155,25 +155,31 @@ impl FederationModuleConfigGen for MintConfigGenerator {
             .iter()
             .map(|&peer| {
                 let config = MintConfig {
-                    threshold: peers.threshold(),
-                    tbs_sks: params
-                        .mint_amounts
-                        .iter()
-                        .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
-                        .collect(),
-                    peer_tbs_pks: peers
-                        .iter()
-                        .map(|&key_peer| {
-                            let keys = params
-                                .mint_amounts
-                                .iter()
-                                .map(|amount| (*amount, tbs_keys[amount].1[key_peer.to_usize()]))
-                                .collect();
-                            (key_peer, keys)
-                        })
-                        .collect(),
-                    fee_consensus: FeeConsensus::default(),
-                    max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                    consensus: MintConfigConsensus {
+                        threshold: peers.threshold(),
+                        peer_tbs_pks: peers
+                            .iter()
+                            .map(|&key_peer| {
+                                let keys = params
+                                    .mint_amounts
+                                    .iter()
+                                    .map(|amount| {
+                                        (*amount, tbs_keys[amount].1[key_peer.to_usize()])
+                                    })
+                                    .collect();
+                                (key_peer, keys)
+                            })
+                            .collect(),
+                        fee_consensus: FeeConsensus::default(),
+                        max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                    },
+                    private: MintConfigPrivate {
+                        tbs_sks: params
+                            .mint_amounts
+                            .iter()
+                            .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
+                            .collect(),
+                    },
                 };
                 (peer, config)
             })
@@ -215,27 +221,31 @@ impl FederationModuleConfigGen for MintConfigGenerator {
             .collect::<HashMap<_, _>>();
 
         let server = MintConfig {
-            tbs_sks: amounts_keys
-                .iter()
-                .map(|(amount, (_, sks))| (*amount, *sks))
-                .collect(),
-            peer_tbs_pks: peers
-                .iter()
-                .map(|peer| {
-                    let pks = amounts_keys
-                        .iter()
-                        .map(|(amount, (pks, _))| {
-                            let pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
-                            (*amount, pks)
-                        })
-                        .collect::<Tiered<PublicKeyShare>>();
+            private: MintConfigPrivate {
+                tbs_sks: amounts_keys
+                    .iter()
+                    .map(|(amount, (_, sks))| (*amount, *sks))
+                    .collect(),
+            },
+            consensus: MintConfigConsensus {
+                peer_tbs_pks: peers
+                    .iter()
+                    .map(|peer| {
+                        let pks = amounts_keys
+                            .iter()
+                            .map(|(amount, (pks, _))| {
+                                let pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
+                                (*amount, pks)
+                            })
+                            .collect::<Tiered<PublicKeyShare>>();
 
-                    (*peer, pks)
-                })
-                .collect(),
-            fee_consensus: Default::default(),
-            threshold: peers.threshold(),
-            max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                        (*peer, pks)
+                    })
+                    .collect(),
+                fee_consensus: Default::default(),
+                threshold: peers.threshold(),
+                max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+            },
         };
 
         Ok(Ok(server.to_erased()))
@@ -420,7 +430,7 @@ impl ServerModulePlugin for Mint {
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.total_amount(),
-                fee: self.cfg.fee_consensus.coin_spend_abs * (input.item_count() as u64),
+                fee: self.cfg.consensus.fee_consensus.coin_spend_abs * (input.item_count() as u64),
             },
             puk_keys: input
                 .iter_items()
@@ -467,7 +477,8 @@ impl ServerModulePlugin for Mint {
         } else {
             Ok(TransactionItemAmount {
                 amount: output.total_amount(),
-                fee: self.cfg.fee_consensus.coin_issuance_abs * (output.item_count() as u64),
+                fee: self.cfg.consensus.fee_consensus.coin_issuance_abs
+                    * (output.item_count() as u64),
             })
         }
     }
@@ -744,34 +755,38 @@ impl Mint {
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
     pub fn new(cfg: MintConfig) -> Mint {
-        assert!(cfg.tbs_sks.tiers().count() > 0);
+        assert!(cfg.private.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
         // consistent.
         assert!(cfg
+            .consensus
             .peer_tbs_pks
             .values()
-            .all(|pk| pk.structural_eq(&cfg.tbs_sks)));
+            .all(|pk| pk.structural_eq(&cfg.private.tbs_sks)));
 
-        let ref_pub_key = cfg.tbs_sks.to_public();
+        let ref_pub_key = cfg.private.tbs_sks.to_public();
 
         // Find our key index and make sure we know the private key for all our public key shares
-        let our_id = cfg // FIXME: make sure we use id instead of idx everywhere
+        let our_id = cfg
+            .consensus // FIXME: make sure we use id instead of idx everywhere
             .peer_tbs_pks
             .iter()
             .find_map(|(&id, pk)| if pk == &ref_pub_key { Some(id) } else { None })
             .expect("Own key not found among pub keys.");
 
         assert_eq!(
-            cfg.peer_tbs_pks[&our_id],
-            cfg.tbs_sks
+            cfg.consensus.peer_tbs_pks[&our_id],
+            cfg.private
+                .tbs_sks
                 .iter()
                 .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
                 .collect()
         );
 
         let aggregate_pub_keys = TieredMultiZip::new(
-            cfg.peer_tbs_pks
+            cfg.consensus
+                .peer_tbs_pks
                 .iter()
                 .map(|(_, keys)| keys.iter())
                 .collect(),
@@ -779,14 +794,14 @@ impl Mint {
         .map(|(amt, keys)| {
             // TODO: avoid this through better aggregation API allowing references or
             let keys = keys.into_iter().copied().collect::<Vec<_>>();
-            (amt, keys.aggregate(cfg.threshold))
+            (amt, keys.aggregate(cfg.consensus.threshold))
         })
         .collect();
 
         Mint {
             cfg: cfg.clone(),
-            sec_key: cfg.tbs_sks,
-            pub_key_shares: cfg.peer_tbs_pks,
+            sec_key: cfg.private.tbs_sks,
+            pub_key_shares: cfg.consensus.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
         }
     }
@@ -814,11 +829,11 @@ impl Mint {
         partial_sigs: Vec<(PeerId, OutputConfirmationSignatures)>,
     ) -> (Result<OutputOutcome, CombineError>, MintShareErrors) {
         // Terminate early if there are not enough shares
-        if partial_sigs.len() < self.cfg.threshold {
+        if partial_sigs.len() < self.cfg.consensus.threshold {
             return (
                 Err(CombineError::TooFewShares(
                     partial_sigs.iter().map(|(peer, _)| peer).cloned().collect(),
-                    self.cfg.threshold,
+                    self.cfg.consensus.threshold,
                 )),
                 MintShareErrors(vec![]),
             );
@@ -911,11 +926,11 @@ impl Mint {
                 .collect::<Vec<_>>();
 
             // Check that there are still sufficient
-            if valid_sigs.len() < self.cfg.threshold {
+            if valid_sigs.len() < self.cfg.consensus.threshold {
                 return Err(CombineError::TooFewValidShares(
                     valid_sigs.len(),
                     partial_sigs.len(),
-                    self.cfg.threshold,
+                    self.cfg.consensus.threshold,
                 ));
             }
 
@@ -923,7 +938,7 @@ impl Mint {
                 valid_sigs
                     .into_iter()
                     .map(|(peer, share)| (peer.to_usize(), share)),
-                self.cfg.threshold,
+                self.cfg.consensus.threshold,
             );
 
             Ok((amt, sig))
@@ -1082,8 +1097,8 @@ mod test {
 
     use crate::config::{FeeConsensus, MintClientConfig};
     use crate::{
-        BlindNonce, CombineError, Mint, MintConfig, MintConfigGenParams, MintConfigGenerator,
-        PeerErrorType,
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigGenParams,
+        MintConfigGenerator, MintConfigPrivate, PeerErrorType,
     };
 
     const THRESHOLD: usize = 1;
@@ -1272,17 +1287,23 @@ mod test {
         let (mint_server_cfg2, _) = build_configs();
 
         Mint::new(MintConfig {
-            threshold: THRESHOLD,
-            tbs_sks: mint_server_cfg1[0]
-                .to_typed::<MintConfig>()
-                .unwrap()
-                .tbs_sks,
-            peer_tbs_pks: mint_server_cfg2[0]
-                .to_typed::<MintConfig>()
-                .unwrap()
-                .peer_tbs_pks,
-            fee_consensus: FeeConsensus::default(),
-            max_target_denomination_sets: 0,
+            consensus: MintConfigConsensus {
+                threshold: THRESHOLD,
+                peer_tbs_pks: mint_server_cfg2[0]
+                    .to_typed::<MintConfig>()
+                    .unwrap()
+                    .consensus
+                    .peer_tbs_pks,
+                fee_consensus: FeeConsensus::default(),
+                max_target_denomination_sets: 0,
+            },
+            private: MintConfigPrivate {
+                tbs_sks: mint_server_cfg1[0]
+                    .to_typed::<MintConfig>()
+                    .unwrap()
+                    .private
+                    .tbs_sks,
+            },
         });
     }
 }

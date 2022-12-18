@@ -11,13 +11,29 @@ use tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
-    pub tbs_sks: Tiered<tbs::SecretKeyShare>,
-    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
+    /// Contains all configuration that will be encrypted such as private key material
+    pub private: MintConfigPrivate,
+    /// Contains all configuration that needs to be the same for every server
+    pub consensus: MintConfigConsensus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MintConfigConsensus {
+    /// The set of public keys for blind-signing all peers and note denominations
+    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    /// Fees charged for ecash transactions
     pub fee_consensus: FeeConsensus,
+    /// Number of signers required
     pub threshold: usize,
-    /// controls the maximum amount of change a client can request
+    /// The maximum amount of change a client can request
     /// TODO implement this restriction
     pub max_target_denomination_sets: u16,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MintConfigPrivate {
+    /// Secret keys for blind-signing ecash of varying note denominations
+    pub tbs_sks: Tiered<tbs::SecretKeyShare>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -31,25 +47,22 @@ pub struct MintClientConfig {
 impl TypedClientModuleConfig for MintClientConfig {}
 
 impl TypedServerModuleConfig for MintConfig {
-    type Local = MintConfig;
-    type Private = ();
-    type Consensus = ();
+    type Local = ();
+    type Private = MintConfigPrivate;
+    type Consensus = MintConfigConsensus;
 
-    fn from_parts(
-        local: Self::Local,
-        _private: Self::Private,
-        _consensus: Self::Consensus,
-    ) -> Self {
-        local
+    fn from_parts(_local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self {
+        Self { private, consensus }
     }
 
     fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
-        (self, (), ())
+        ((), self.private, self.consensus)
     }
 
     fn to_client_config(&self) -> ClientModuleConfig {
         let pub_key: HashMap<Amount, AggregatePublicKey> = TieredMultiZip::new(
-            self.peer_tbs_pks
+            self.consensus
+                .peer_tbs_pks
                 .iter()
                 .map(|(_, keys)| keys.iter())
                 .collect(),
@@ -57,15 +70,15 @@ impl TypedServerModuleConfig for MintConfig {
         .map(|(amt, keys)| {
             // TODO: avoid this through better aggregation API allowing references or
             let keys = keys.into_iter().copied().collect::<Vec<_>>();
-            (amt, keys.aggregate(self.threshold))
+            (amt, keys.aggregate(self.consensus.threshold))
         })
         .collect();
 
         serde_json::to_value(&MintClientConfig {
             tbs_pks: Tiered::from_iter(pub_key.into_iter()),
-            fee_consensus: self.fee_consensus.clone(),
-            peer_tbs_pks: self.peer_tbs_pks.clone(),
-            target_denomination_sets: self.max_target_denomination_sets,
+            fee_consensus: self.consensus.fee_consensus.clone(),
+            peer_tbs_pks: self.consensus.peer_tbs_pks.clone(),
+            target_denomination_sets: self.consensus.max_target_denomination_sets,
         })
         .expect("Serialization can't fail")
         .into()
@@ -73,12 +86,18 @@ impl TypedServerModuleConfig for MintConfig {
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
         let sks: BTreeMap<Amount, PublicKeyShare> = self
+            .private
             .tbs_sks
             .iter()
             .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
             .collect();
-        let pks: BTreeMap<Amount, PublicKeyShare> =
-            self.peer_tbs_pks.get(identity).unwrap().as_map().clone();
+        let pks: BTreeMap<Amount, PublicKeyShare> = self
+            .consensus
+            .peer_tbs_pks
+            .get(identity)
+            .unwrap()
+            .as_map()
+            .clone();
         if sks != pks {
             bail!("Mint private key doesn't match pubkey share");
         }

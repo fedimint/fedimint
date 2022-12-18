@@ -41,41 +41,57 @@ pub struct ServerConfig {
     pub consensus: ServerConfigConsensus,
     /// Contains all configuration that is locally configurable and not secret
     pub local: ServerConfigLocal,
-    /// Contains all configuration that is secret such as private key material
+    /// Contains all configuration that will be encrypted such as private key material
     pub private: ServerConfigPrivate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
+    /// Secret key for TLS communication, required for peer authentication
     #[serde(with = "serde_tls_key")]
     pub tls_key: rustls::PrivateKey,
+    /// Secret key for contributing to HBBFT consensus
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
+    /// Secret key for signing consensus epochs
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
+    /// Secret material from modules
     pub modules: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigConsensus {
+    /// Configurable federation name
     pub federation_name: String,
+    /// Certs for TLS communication, required for peer authentication
     pub peer_certs: HashMap<PeerId, SerdeCert>,
+    /// Public keys for HBBFT consensus from all peers
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
+    /// Public keys for signing consensus epochs from all peers
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
+    /// All configuration that needs to be the same for modules
     pub modules: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
+    /// Network addresses for all peers
     pub peers: BTreeMap<PeerId, Peer>,
+    /// Our peer id (generally should not change)
     pub identity: PeerId,
+    /// Our bind address for running HBBFT
     pub hbbft_bind_addr: String,
+    /// Our bind address for our API endpoints
     pub api_bind_addr: String,
+    /// Our publicly known TLS cert
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
+    /// How many API connections we will accept
     pub max_connections: u32,
+    /// Non-consensus, non-private configuration from modules
     pub modules: BTreeMap<String, serde_json::Value>,
 }
 
