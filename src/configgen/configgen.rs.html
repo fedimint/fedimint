@@ -158,7 +158,7 @@
         } =&gt; {
             <span class="kw">let </span>rng = OsRng;
             <span class="comment">// Recursively create config directory if it doesn&#39;t exist
-            </span>std::fs::create_dir_all(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to create config directory&quot;</span>);
+            </span>fs::create_dir_all(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to create config directory&quot;</span>);
 
             <span class="kw">let </span>peers = (<span class="number">0</span>..nodes).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
             <span class="macro">println!</span>(
@@ -173,7 +173,7 @@
                 <span class="kw-2">&amp;</span>bitcoind_rpc,
             );
 
-            <span class="kw">let </span>(server_cfg, <span class="kw">_</span>) = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>params, rng);
+            <span class="kw">let </span>server_cfg = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>params, rng);
 
             <span class="kw">for </span>(id, server) <span class="kw">in </span>server_cfg {
                 <span class="kw">let </span>path = cfg_path.join(id.to_string());
@@ -185,4 +185,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="configgen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (9c07efe84 2022-12-16)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="configgen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (0468a00ae 2022-12-17)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>

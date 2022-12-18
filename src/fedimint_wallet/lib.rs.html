@@ -1566,16 +1566,6 @@
 <a href="#1566" id="1566">1566</a>
 <a href="#1567" id="1567">1567</a>
 <a href="#1568" id="1568">1568</a>
-<a href="#1569" id="1569">1569</a>
-<a href="#1570" id="1570">1570</a>
-<a href="#1571" id="1571">1571</a>
-<a href="#1572" id="1572">1572</a>
-<a href="#1573" id="1573">1573</a>
-<a href="#1574" id="1574">1574</a>
-<a href="#1575" id="1575">1575</a>
-<a href="#1576" id="1576">1576</a>
-<a href="#1577" id="1577">1577</a>
-<a href="#1578" id="1578">1578</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1595,7 +1585,6 @@
     Transaction, TxIn, TxOut, Txid,
 };
 <span class="kw">use </span>bitcoin::{PackedLockTime, Sequence};
-<span class="kw">use </span>config::WalletClientConfig;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
     BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
@@ -1604,7 +1593,6 @@
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -1802,7 +1790,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
-    ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
+    ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>params = params
             .get::&lt;WalletConfigGenParams&gt;()
             .expect(<span class="string">&quot;Invalid wallet params&quot;</span>);
@@ -1832,18 +1820,10 @@
             })
             .collect();
 
-        <span class="kw">let </span>descriptor = wallet_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].peg_in_descriptor.clone();
-        <span class="kw">let </span>client_cfg = WalletClientConfig::new(descriptor, params.network, params.finality_delay);
-
-        (
-            wallet_cfg
-                .into_iter()
-                .map(|(k, v)| (k, v.to_erased()))
-                .collect(),
-            serde_json::to_value(client_cfg)
-                .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
-                .into(),
-        )
+        wallet_cfg
+            .into_iter()
+            .map(|(k, v)| (k, v.to_erased()))
+            .collect()
     }
 
     <span class="kw">async fn </span>distributed_gen(
@@ -3155,4 +3135,4 @@
 <span class="doccomment">/// **WARNING**: this is only intended to be used for testing
 </span><span class="kw">impl </span>Eq <span class="kw">for </span>WalletError {}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (9c07efe84 2022-12-16)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (0468a00ae 2022-12-17)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>

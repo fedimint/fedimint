@@ -1286,30 +1286,13 @@
 <a href="#1286" id="1286">1286</a>
 <a href="#1287" id="1287">1287</a>
 <a href="#1288" id="1288">1288</a>
-<a href="#1289" id="1289">1289</a>
-<a href="#1290" id="1290">1290</a>
-<a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
-<a href="#1293" id="1293">1293</a>
-<a href="#1294" id="1294">1294</a>
-<a href="#1295" id="1295">1295</a>
-<a href="#1296" id="1296">1296</a>
-<a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
-<a href="#1301" id="1301">1301</a>
-<a href="#1302" id="1302">1302</a>
-<a href="#1303" id="1303">1303</a>
-<a href="#1304" id="1304">1304</a>
-<a href="#1305" id="1305">1305</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::ops::Sub;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>config::{FeeConsensus, MintClientConfig};
+<span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{ECashUserBackupSnapshot, EcashBackupKey};
 <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -1320,7 +1303,6 @@
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
@@ -1443,7 +1425,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
-    ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
+    ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>params = params
             .get::&lt;MintConfigGenParams&gt;()
             .expect(<span class="string">&quot;Invalid mint params&quot;</span>);
@@ -1485,32 +1467,10 @@
             })
             .collect();
 
-        <span class="comment">// TODO will be deleted
-        </span><span class="kw">let </span>client_cfg = MintClientConfig {
-            tbs_pks: tbs_keys
-                .into_iter()
-                .map(|(amount, (pk, <span class="kw">_</span>, <span class="kw">_</span>))| (amount, pk))
-                .collect(),
-            fee_consensus: FeeConsensus::default(),
-            peer_tbs_pks: mint_cfg
-                .iter()
-                .next()
-                .expect(<span class="string">&quot;must have at least one element&quot;</span>)
-                .<span class="number">1
-                </span>.peer_tbs_pks
-                .clone(),
-            target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
-        };
-
-        (
-            mint_cfg
-                .into_iter()
-                .map(|(k, v)| (k, v.to_erased()))
-                .collect(),
-            serde_json::to_value(client_cfg)
-                .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
-                .into(),
-        )
+        mint_cfg
+            .into_iter()
+            .map(|(k, v)| (k, v.to_erased()))
+            .collect()
     }
 
     <span class="kw">async fn </span>distributed_gen(
@@ -2401,7 +2361,9 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
-    <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+    <span class="kw">use </span>fedimint_api::config::{
+        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConfig,
+    };
     <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
@@ -2417,12 +2379,16 @@
 
     <span class="kw">fn </span>build_configs() -&gt; (Vec&lt;ServerModuleConfig&gt;, ClientModuleConfig) {
         <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span>(mint_cfg, client_cfg) = MintConfigGenerator.trusted_dealer_gen(
+        <span class="kw">let </span>mint_cfg = MintConfigGenerator.trusted_dealer_gen(
             <span class="kw-2">&amp;</span>peers,
             <span class="kw-2">&amp;</span>ConfigGenParams::new().attach(MintConfigGenParams {
                 mint_amounts: <span class="macro">vec!</span>[Amount::from_sats(<span class="number">1</span>)],
             }),
         );
+        <span class="kw">let </span>client_cfg = mint_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
+            .to_typed::&lt;MintConfig&gt;()
+            .unwrap()
+            .to_client_config();
 
         (mint_cfg.into_iter().map(|(<span class="kw">_</span>, c)| c).collect(), client_cfg)
     }
@@ -2609,4 +2575,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (9c07efe84 2022-12-16)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (0468a00ae 2022-12-17)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>

@@ -978,13 +978,6 @@
 <a href="#978" id="978">978</a>
 <a href="#979" id="979">979</a>
 <a href="#980" id="980">980</a>
-<a href="#981" id="981">981</a>
-<a href="#982" id="982">982</a>
-<a href="#983" id="983">983</a>
-<a href="#984" id="984">984</a>
-<a href="#985" id="985">985</a>
-<a href="#986" id="986">986</a>
-<a href="#987" id="987">987</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1007,7 +1000,7 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>config::{FeeConsensus, LightningModuleClientConfig};
+<span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
@@ -1217,7 +1210,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         _params: <span class="kw-2">&amp;</span>ConfigGenParams,
-    ) -&gt; (BTreeMap&lt;PeerId, ServerModuleConfig&gt;, ClientModuleConfig) {
+    ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>pks = sks.public_keys();
 
@@ -1239,14 +1232,7 @@
             })
             .collect();
 
-        <span class="kw">let </span>client_cfg = serde_json::to_value(<span class="kw-2">&amp;</span>LightningModuleClientConfig {
-            threshold_pub_key: pks.public_key(),
-            fee_consensus: FeeConsensus::default(),
-        })
-        .expect(<span class="string">&quot;serialization can&#39;t fail here&quot;</span>)
-        .into();
-
-        (server_cfg, client_cfg)
+        server_cfg
     }
 
     <span class="kw">async fn </span>distributed_gen(
@@ -1973,4 +1959,4 @@
     </span>InvalidCancellationSignature,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (9c07efe84 2022-12-16)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (0468a00ae 2022-12-17)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
