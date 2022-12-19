@@ -480,6 +480,7 @@
           bin = "fedimintd";
           dirs = [
             "client/client-lib"
+            "crypto/aead"
             "crypto/hkdf"
             "crypto/tbs"
             "fedimintd"
@@ -506,6 +507,7 @@
           name = "ln-gateway";
           bin = "ln-gateway";
           dirs = [
+            "crypto/aead"
             "crypto/tbs"
             "crypto/hkdf"
             "client/client-lib"
@@ -531,6 +533,7 @@
           name = "gateway-cli";
           bin = "gateway-cli";
           dirs = [
+            "crypto/aead"
             "crypto/tbs"
             "crypto/hkdf"
             "client/client-lib"
@@ -559,6 +562,7 @@
           dirs = [
             "client/client-lib"
             "client/cli"
+            "crypto/aead"
             "crypto/tbs"
             "crypto/hkdf"
             "fedimint-api"
@@ -581,6 +585,7 @@
           inherit target;
           dirs = [
             "client/client-lib"
+            "crypto/aead"
             "crypto/tbs"
             "crypto/hkdf"
             "fedimint-api"
@@ -602,6 +607,7 @@
           dirs = [
             "client/cli"
             "client/client-lib"
+            "crypto/aead"
             "crypto/tbs"
             "crypto/hkdf"
             "gateway/ln-gateway"

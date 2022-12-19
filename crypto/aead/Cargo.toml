@@ -1,0 +1,16 @@
+[package]
+name = "aead"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "aead utilities on top of ring "
+license = "MIT"
+
+[lib]
+name = "aead"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.65"
+ring = "0.16.20"
+rand = "0.8"

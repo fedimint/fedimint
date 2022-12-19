@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 
 [dependencies]
+aead = { path = "../../crypto/aead" }
 anyhow = "1.0.66"
 async-trait = "0.1.59"
 base64 = "0.20.0"
