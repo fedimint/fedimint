@@ -167,15 +167,30 @@ impl DelayCalculator {
     }
 }
 
+/// IO task state that is required no matter if there is a connection
 struct CommonPeerConnectionState<M> {
-    resend_queue: MessageQueue<M>,
+    /// Buffer containing both to-be-sent messages and messages that were already sent but not
+    /// acknowledged yet.
+    message_buffer: MessageQueue<M>,
+    /// Some if the connection was just re-established and we are still sending old messages from
+    /// the buffer None otherwise.
+    resend_catch_up_goal: Option<MessageId>,
+    /// Send side of the incoming message channel from io task to main task
     incoming: Sender<M>,
+    /// Receive side of the outgoing message channel from main task to io task
     outgoing: Receiver<M>,
+    /// Id of the peer the io task is responsible for
     peer: PeerId,
+    /// The peer's address we try to connect to
     peer_address: Url,
     delay_calculator: DelayCalculator,
+    /// Network connector to establish new connections with. The connector determines what kind of
+    /// underlying transport is used (plain TCP, TLS, Tor)
     connect: SharedAnyConnector<PeerMessage<M>>,
+    /// Receiver that incoming connections from this io tasks' peer are sent to
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
+    /// Message id of the last received message that will be acknowledged in the next message we
+    /// send
     last_received: Option<MessageId>,
     status_query_receiver: PeerStatusChannelReceiver,
 }
@@ -409,11 +424,31 @@ where
         mut connected: ConnectedPeerConnectionState<M>,
         task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
+        let (peer_sink, peer_stream) = connected.connection.borrow_split();
+        let buffer_mut_ref = &mut self.message_buffer;
+        let last_received = self.last_received;
+
+        let buffer_send_future = async move {
+            let msg = match buffer_mut_ref.next_send_message() {
+                Some(msg) => msg,
+                None => std::future::pending().await,
+            };
+            let msg_id = msg.id;
+            peer_sink
+                .send(PeerMessage {
+                    msg: msg.clone(),
+                    ack: last_received,
+                })
+                .await
+                .map(|()| msg_id)
+        };
+
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
                 match maybe_msg {
                     Some(msg) => {
-                        self.send_message_connected(connected, msg).await
+                        self.message_buffer.queue_message(msg);
+                        PeerConnectionState::Connected(connected)
                     },
                     None => {
                         debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
@@ -421,6 +456,17 @@ where
                     },
                 }
             },
+            buffer_send_res = buffer_send_future => {
+                match buffer_send_res {
+                    Ok(msg_id) => {
+                        self.message_buffer.mark_sent(msg_id);
+                        PeerConnectionState::Connected(connected)
+                    },
+                    Err(e) => {
+                        self.disconnect_err(e, 0)
+                    }
+                }
+            }
             new_connection_res = self.incoming_connections.recv() => {
                 match new_connection_res {
                     Some(new_connection) => {
@@ -442,7 +488,7 @@ where
                 }
                 PeerConnectionState::Connected(connected)
             },
-            Some(msg_res) = connected.connection.next() => {
+            Some(msg_res) = peer_stream.next() => {
                 self.receive_message(connected, msg_res).await
             },
             _ = task_handle.make_shutdown_rx().await => {
@@ -453,35 +499,21 @@ where
 
     async fn connect(
         &mut self,
-        mut new_connection: AnyFramedTransport<PeerMessage<M>>,
+        new_connection: AnyFramedTransport<PeerMessage<M>>,
         disconnect_count: u64,
     ) -> PeerConnectionState<M> {
         debug!(target: LOG_NET_PEER,
             peer = ?self.peer, %disconnect_count,
-            resend_queue_len = self.resend_queue.queue.len(),
+            resend_queue_len = self.message_buffer.queue.len(),
             "Received incoming connection");
-        match self.resend_buffer_contents(&mut new_connection).await {
-            Ok(()) => PeerConnectionState::Connected(ConnectedPeerConnectionState {
-                connection: new_connection,
-            }),
-            Err(e) => self.disconnect_err(e, disconnect_count),
-        }
-    }
+        self.resend_catch_up_goal = self
+            .message_buffer
+            .resend_all()
+            .map(|(_oldest, newest)| newest);
 
-    async fn resend_buffer_contents(
-        &self,
-        connection: &mut AnyFramedTransport<PeerMessage<M>>,
-    ) -> Result<(), anyhow::Error> {
-        for msg in self.resend_queue.iter().cloned() {
-            connection
-                .send(PeerMessage {
-                    msg,
-                    ack: self.last_received,
-                })
-                .await?
-        }
-
-        Ok(())
+        PeerConnectionState::Connected(ConnectedPeerConnectionState {
+            connection: new_connection,
+        })
     }
 
     fn disconnect(&self, mut disconnect_count: u64) -> PeerConnectionState<M> {
@@ -510,27 +542,6 @@ where
         debug!(target: LOG_NET_PEER,
             peer = ?self.peer, %err, %disconnect_count, "Peer disconnected");
         self.disconnect(disconnect_count)
-    }
-
-    async fn send_message_connected(
-        &mut self,
-        mut connected: ConnectedPeerConnectionState<M>,
-        msg: M,
-    ) -> PeerConnectionState<M> {
-        let umsg = self.resend_queue.push(msg);
-        trace!(target: LOG_NET_PEER, peer = ?self.peer, id = ?umsg.id, "Sending outgoing message");
-
-        match connected
-            .connection
-            .send(PeerMessage {
-                msg: umsg,
-                ack: self.last_received,
-            })
-            .await
-        {
-            Ok(()) => PeerConnectionState::Connected(connected),
-            Err(e) => self.disconnect_err(e, 0),
-        }
     }
 
     async fn receive_message(
@@ -573,7 +584,7 @@ where
         debug_assert_eq!(expected, msg.id, "someone removed the check above");
         self.last_received = Some(expected);
         if let Some(ack) = ack {
-            self.resend_queue.ack(ack);
+            self.message_buffer.ack(ack);
         }
 
         if self.incoming.send(msg.msg).await.is_err() {
@@ -597,7 +608,9 @@ where
             maybe_msg = self.outgoing.recv() => {
                 match maybe_msg {
                     Some(msg) => {
-                        self.send_message(disconnected, msg).await}
+                        self.message_buffer.queue_message(msg);
+                        PeerConnectionState::Disconnected(disconnected)
+                    }
                     None => {
                         debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
                         return None;
@@ -607,7 +620,7 @@ where
             new_connection_res = self.incoming_connections.recv() => {
                 match new_connection_res {
                     Some(new_connection) => {
-                        self.receive_connection(disconnected, new_connection).await
+                        self.connect(new_connection, 0).await
                     },
                     None => {
                         debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
@@ -631,34 +644,12 @@ where
         })
     }
 
-    async fn send_message(
-        &mut self,
-        disconnected: DisconnectedPeerConnectionState,
-        msg: M,
-    ) -> PeerConnectionState<M> {
-        let umsg = self.resend_queue.push(msg);
-        trace!(target: LOG_NET_PEER, id = ?umsg.id, "Queueing outgoing message");
-        PeerConnectionState::Disconnected(disconnected)
-    }
-
-    async fn receive_connection(
-        &mut self,
-        disconnect: DisconnectedPeerConnectionState,
-        new_connection: AnyFramedTransport<PeerMessage<M>>,
-    ) -> PeerConnectionState<M> {
-        self.connect(new_connection, disconnect.failed_reconnect_counter)
-            .await
-    }
-
     async fn reconnect(
         &mut self,
         disconnected: DisconnectedPeerConnectionState,
     ) -> PeerConnectionState<M> {
         match self.try_reconnect().await {
-            Ok(conn) => {
-                self.connect(conn, disconnected.failed_reconnect_counter)
-                    .await
-            }
+            Ok(conn) => self.connect(conn, disconnected.failed_reconnect_counter).await,
             Err(e) => self.disconnect_err(e, disconnected.failed_reconnect_counter),
         }
     }
@@ -741,7 +732,8 @@ where
         task_handle: &TaskHandle,
     ) {
         let common = CommonPeerConnectionState {
-            resend_queue: Default::default(),
+            message_buffer: Default::default(),
+            resend_catch_up_goal: None,
             incoming,
             outgoing,
             peer,
