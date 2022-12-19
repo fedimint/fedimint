@@ -11,6 +11,9 @@ use crate::encrypt::{encrypted_read, encrypted_write};
 pub mod encrypt;
 pub mod ui;
 
+/// Version of the server code (should be the same among peers)
+pub const CODE_VERSION: &str = env!("GIT_HASH");
+
 /// Client configuration file
 pub const CLIENT_CONFIG: &str = "client";
 

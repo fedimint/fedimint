@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use fedimint_api::{Amount, NumPeers, PeerId};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
-use fedimintd::{plaintext_json_write, write_nonprivate_configs, PRIVATE_CONFIG};
+use fedimintd::{plaintext_json_write, write_nonprivate_configs, CODE_VERSION, PRIVATE_CONFIG};
 use rand::rngs::OsRng;
 
 #[derive(Parser)]
@@ -53,7 +53,7 @@ fn main() {
     let cli = Cli::parse();
     match cli.command {
         Command::VersionHash => {
-            println!("{}", env!("GIT_HASH"));
+            println!("{}", CODE_VERSION);
         }
         Command::Generate {
             dir_out_path: cfg_path,
@@ -80,7 +80,7 @@ fn main() {
                 &bitcoind_rpc,
             );
 
-            let server_cfg = ServerConfig::trusted_dealer_gen(&peers, &params, rng);
+            let server_cfg = ServerConfig::trusted_dealer_gen(CODE_VERSION, &peers, &params, rng);
 
             for (id, server) in server_cfg {
                 let path = cfg_path.join(id.to_string());
