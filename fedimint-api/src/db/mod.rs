@@ -367,6 +367,7 @@ mod tests {
     pub enum TestDbKeyPrefix {
         Test = 0x42,
         AltTest = 0x43,
+        PercentTestKey = 0x25,
     }
 
     #[derive(Debug, Encodable, Decodable)]
@@ -402,6 +403,24 @@ mod tests {
     impl DatabaseKeyPrefixConst for AltDbPrefixTestPrefix {
         const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
         type Key = AltTestKey;
+        type Value = TestVal;
+    }
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct PercentTestKey(u64);
+
+    impl DatabaseKeyPrefixConst for PercentTestKey {
+        const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
+        type Key = Self;
+        type Value = TestVal;
+    }
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct PercentPrefixTestPrefix;
+
+    impl DatabaseKeyPrefixConst for PercentPrefixTestPrefix {
+        const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
+        type Key = PercentTestKey;
         type Value = TestVal;
     }
 
@@ -708,12 +727,68 @@ mod tests {
             .await
             .is_ok());
 
-        assert!(dbtx3
+        // Depending on if the database implementation supports optimistic or pessimistic transactions, this test should generate
+        // an error here (pessimistic) or at commit time (optimistic)
+        let res = dbtx3
             .insert_entry(&TestKey(100), &TestVal(103))
+            .await
+            .is_ok();
+
+        dbtx2.commit_tx().await.expect("DB Error");
+
+        // We do not need to commit the second transaction if the insert failed.
+        if res {
+            dbtx3.commit_tx().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
+        }
+    }
+
+    pub async fn verify_string_prefix(db: Database) {
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+        assert!(dbtx
+            .insert_entry(&PercentTestKey(100), &TestVal(101))
             .await
             .is_ok());
 
-        dbtx2.commit_tx().await.expect("DB Error");
-        dbtx3.commit_tx().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
+        assert_eq!(
+            dbtx.get_value(&PercentTestKey(100)).await.unwrap(),
+            Some(TestVal(101))
+        );
+
+        assert!(dbtx
+            .insert_entry(&PercentTestKey(101), &TestVal(100))
+            .await
+            .is_ok());
+
+        assert!(dbtx
+            .insert_entry(&PercentTestKey(101), &TestVal(100))
+            .await
+            .is_ok());
+
+        assert!(dbtx
+            .insert_entry(&PercentTestKey(101), &TestVal(100))
+            .await
+            .is_ok());
+
+        // If the wildcard character ('%') is not handled properly, this will make find_by_prefix return 5 results instead of 4
+        assert!(dbtx
+            .insert_entry(&TestKey(101), &TestVal(100))
+            .await
+            .is_ok());
+
+        let mut returned_keys = 0;
+        let expected_keys = 4;
+        for res in dbtx.find_by_prefix(&PercentPrefixTestPrefix).await {
+            match res.as_ref().unwrap().0 {
+                PercentTestKey(101) => {
+                    assert!(res.unwrap().1.eq(&TestVal(100)));
+                    returned_keys += 1;
+                }
+                _ => {
+                    returned_keys += 1;
+                }
+            }
+        }
+
+        assert_eq!(returned_keys, expected_keys);
     }
 }

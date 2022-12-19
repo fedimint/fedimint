@@ -28,6 +28,7 @@ fedimint-api = { path = "../fedimint-api" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
 fedimint-mint = { path = "../modules/fedimint-mint" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
+fedimint-sqlite = { path = "../fedimint-sqlite" }
 fedimint-testing = { path = "../fedimint-testing" }
 fedimint-wallet = { path = "../modules/fedimint-wallet" }
 mint-client = { path = "../client/client-lib" }
