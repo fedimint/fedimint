@@ -17,37 +17,32 @@ use std::fs;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 
-use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
-use ring::{aead, digest, pbkdf2};
+use ring::aead::{LessSafeKey, UnboundKey};
+use ring::{digest, pbkdf2};
 
 const ITERATIONS_PROD: Option<NonZeroU32> = NonZeroU32::new(1_000_000);
 const ITERATIONS_DEBUG: Option<NonZeroU32> = NonZeroU32::new(1);
 
 /// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
-pub fn encrypted_write(mut data: Vec<u8>, key: &LessSafeKey, file: PathBuf) {
-    let nonce_bytes: [u8; NONCE_LEN] = rand::random();
-    let mut bytes = nonce_bytes.to_vec();
-    let nonce = Nonce::assume_unique_for_key(nonce_bytes);
-    key.seal_in_place_append_tag(nonce, Aad::empty(), &mut data)
-        .expect("encrypted");
-    bytes.append(&mut data);
+// TODO: Use anyhow to handle errors
+pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) {
+    let bytes = aead::encrypt(data, key).expect("encryption should not fail");
     fs::write(file, &hex::encode(bytes)).expect("Can't write file.");
 }
 
 /// Reads encrypted data from a file
+// TODO: Use anyhow to handle errors
 pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Vec<u8> {
     tracing::warn!("READ {:?}", file);
     let hex = fs::read_to_string(file).expect("Can't read file.");
     let mut bytes = hex::decode(hex).expect("not hex encoded");
-    let (nonce_bytes, encrypted_bytes) = bytes.split_at_mut(NONCE_LEN);
-    let nonce = Nonce::assume_unique_for_key(nonce_bytes.try_into().expect("right len"));
-    key.open_in_place(nonce, Aad::empty(), encrypted_bytes)
-        .expect("decrypts");
-    let mut encrypted_bytes = encrypted_bytes.to_vec();
-    encrypted_bytes.truncate(encrypted_bytes.len() - key.algorithm().tag_len());
-    encrypted_bytes
+
+    aead::decrypt(&mut bytes, key)
+        .expect("decryption failed")
+        .to_vec()
 }
 
+// TODO: Move to `aead` crate?
 pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
     let password = match password {
         None => rpassword::prompt_password("Enter a password to encrypt configs: ").unwrap(),
@@ -72,6 +67,6 @@ pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
         password.as_bytes(),
         &mut key,
     );
-    let key = UnboundKey::new(&aead::CHACHA20_POLY1305, &key).expect("created key");
+    let key = UnboundKey::new(&ring::aead::CHACHA20_POLY1305, &key).expect("created key");
     LessSafeKey::new(key)
 }

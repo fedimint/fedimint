@@ -1150,6 +1150,7 @@ dependencies = [
 name = "fedimintd"
 version = "0.1.0"
 dependencies = [
+ "aead",
  "anyhow",
  "askama",
  "askama_axum",

@@ -23,6 +23,7 @@ name = "distributedgen"
 path  = "src/bin/distributedgen.rs"
 
 [dependencies]
+aead = { path = "../crypto/aead" }
 ring = "0.16.20"
 rpassword = "7.2.0"
 anyhow = "1.0.66"
