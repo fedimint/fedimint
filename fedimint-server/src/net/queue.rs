@@ -3,10 +3,31 @@ use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace};
 
+/// Message queue to manage unsent and unacknowledged messages
+///
+/// # Lifetime of a message
+/// 1. A message is inserted into the queue using `queue_message`. It receives an auto-incrementing
+///    message id.
+/// 2. Unsent messages are retrieved using `next_send_message`.
+/// 3. If sending a message succeeds `mark_sent` is called after which the next call to
+///    `next_send_message` will return the next message to be sent. The message remains in the
+///    buffer though till an ACK is received.
+///
+///    The separation of step 2+3 is necessary to make the future that attempts to send the message
+///    cancellation safe. Marking the message as sent has to happen right after the future writing
+///    it to the destination returns, without an await point in between.
+/// 4. Once an acknowledgement is received for a message, `ack` is called with its message id. All
+///    messages with a lower or equal id will be removed from the buffer.
+/// 5. If a reconnect happens all messages that have not been acknowledged have to be resent. In
+///    that case `resend_all` has to be called.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MessageQueue<M> {
-    pub(super) queue: VecDeque<UniqueMessage<M>>,
-    pub(super) next_id: MessageId,
+    /// Messages that were scheduled to be sent (sent and unsent) and not acknowledged yet
+    queue: VecDeque<UniqueMessage<M>>,
+    /// Id for the next message to be inserted into the queue
+    next_id: MessageId,
+    /// How many of the messages at the tip of the queue weren't sent out yet
+    unsent_messages: u64,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]
@@ -29,6 +50,7 @@ impl<M> Default for MessageQueue<M> {
         MessageQueue {
             queue: Default::default(),
             next_id: MessageId(1),
+            unsent_messages: 0,
         }
     }
 }
@@ -37,18 +59,18 @@ impl<M> MessageQueue<M>
 where
     M: Clone,
 {
-    pub fn push(&mut self, msg: M) -> UniqueMessage<M> {
-        let id_msg = UniqueMessage {
+    /// Queue message for being sent over the wire
+    pub fn queue_message(&mut self, msg: M) {
+        self.queue.push_back(UniqueMessage {
             id: self.next_id,
             msg,
-        };
-
-        self.queue.push_back(id_msg.clone());
+        });
+        trace!(id = ?self.next_id, "Queueing outgoing message");
         self.next_id = self.next_id.increment();
-
-        id_msg
+        self.unsent_messages += 1;
     }
 
+    /// Remove all messages older than `msg_id` from the buffer since they were received by our peer
     pub fn ack(&mut self, msg_id: MessageId) {
         debug!("Received ACK for {:?}", msg_id);
         while self
@@ -60,49 +82,111 @@ where
             let msg = self.queue.pop_front().expect("Checked in while head");
             trace!("Removing message {:?} from resend buffer", msg.id);
         }
+
+        // If we got an ACK from the future we remove all of them from the queue even if we haven't
+        // sent them yet (can happen on reconnect). In that case we need to adjust the unsent
+        // messages field so we never try to send messages not in the buffer anymore
+        let queued_messages = self.queue.len() as u64;
+        if self.unsent_messages > queued_messages {
+            self.unsent_messages = queued_messages;
+        }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &UniqueMessage<M>> {
-        self.queue.iter()
+    /// Fetch the next message to be sent from the queue
+    pub fn next_send_message(&self) -> Option<&UniqueMessage<M>> {
+        if self.unsent_messages > 0 {
+            let idx = self.queue.len() - (self.unsent_messages as usize);
+            // If we always properly update unsent_messages this can never fail
+            let maybe_message = self
+                .queue
+                .get(idx)
+                .expect("We tried to send a message no longer in the buffer");
+
+            Some(maybe_message)
+        } else {
+            None
+        }
+    }
+
+    /// Marks the message `msg_id` as sent over the wire. This does not aknowledge the receipt by
+    /// our peer and thus keeps the message in the buffer in case it needs to be re-sent.
+    pub fn mark_sent(&mut self, msg_id: MessageId) {
+        assert_ne!(self.unsent_messages, 0, "There are no messages to be sent!");
+        assert_eq!(
+            msg_id.0,
+            self.next_id.0 - self.unsent_messages,
+            "The sent message is not the expected one!"
+        );
+        self.unsent_messages -= 1;
+    }
+
+    /// Mark all messages as unsent to attempt re-sending and return the oldest and newest messages
+    /// to be sent.
+    pub fn resend_all(&mut self) -> Option<(MessageId, MessageId)> {
+        self.unsent_messages = self.queue.len() as u64;
+
+        if self.queue.is_empty() {
+            None
+        } else {
+            let oldest = self.queue.front().expect("Queue not empty").id;
+            let newest = self.queue.back().expect("Queue not empty").id;
+            Some((oldest, newest))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::net::queue::{MessageId, MessageQueue};
+    use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 
     #[test]
     fn test_queue() {
         let mut queue = MessageQueue::default();
 
+        // Test queuing unsent
         for i in 0u64..10 {
-            let umsg = queue.push(42 * i);
-            assert_eq!(umsg.msg, 42 * i);
-            assert_eq!(umsg.id.0, i + 1);
+            queue.queue_message(42 * i);
+            assert_eq!(queue.next_id, MessageId(i + 2));
+            assert_eq!(queue.unsent_messages, i + 1);
+            assert_eq!(
+                queue.next_send_message().unwrap(),
+                &UniqueMessage {
+                    id: MessageId(1),
+                    msg: 0
+                }
+            );
         }
 
-        fn assert_contains(queue: &MessageQueue<u64>, iter: impl Iterator<Item = u64>) {
-            let mut queue_iter = queue.iter();
-
-            for i in iter {
-                let umsg = queue_iter.next().unwrap();
-                assert_eq!(umsg.msg, 42 * i);
-                assert_eq!(umsg.id.0, i + 1);
+        // Test sending
+        queue.mark_sent(MessageId(1));
+        assert_eq!(
+            queue.next_send_message().unwrap(),
+            &UniqueMessage {
+                id: MessageId(2),
+                msg: 42
             }
+        );
+        queue.mark_sent(MessageId(2));
+        assert_eq!(
+            queue.next_send_message().unwrap(),
+            &UniqueMessage {
+                id: MessageId(3),
+                msg: 84
+            }
+        );
 
-            assert_eq!(queue_iter.next(), None);
-        }
-
-        assert_eq!(queue.iter().count(), 10);
-        assert_contains(&queue, 0..10);
-
+        // Test ACK
         queue.ack(MessageId(1));
-        assert_contains(&queue, 1..10);
+        assert_eq!(queue.queue.len(), 9);
 
-        queue.ack(MessageId(4));
-        assert_contains(&queue, 4..10);
-
-        queue.ack(MessageId(2)); // TODO: should that throw an error?
-        assert_contains(&queue, 4..10);
+        // Test resend
+        queue.resend_all();
+        assert_eq!(
+            queue.next_send_message().unwrap(),
+            &UniqueMessage {
+                id: MessageId(2),
+                msg: 42
+            }
+        );
     }
 }
