@@ -199,8 +199,17 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cln_plugin::{anyhow, options, Builder, Error, Plugin};
@@ -362,11 +371,18 @@
         .hook(<span class="string">&quot;htlc_accepted&quot;</span>, |plugin, value| <span class="kw">async move </span>{
             <span class="comment">// This callback needs to be `Sync`, so we use tokio::spawn
             </span><span class="kw">let </span>handle = tokio::spawn(<span class="kw">async move </span>{
-                htlc_accepted_hook(plugin, value).<span class="kw">await</span>.or_else(|e| {
-                    <span class="macro">error!</span>(<span class="string">&quot;htlc_accepted error {:?}&quot;</span>, e);
-                    <span class="comment">// cln_plugin doesn&#39;t handle errors very well ... tell it to proceed normally
-                    </span><span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>}))
-                })
+                <span class="comment">// FIXME: Test this potential fix for Issue 1018: Gateway channel force closures
+                //
+                // Timeout processing of intecepted HTLC after 30 seconds
+                // If the HTLC is not resolved, we continue and forward it to the next hop
+                </span>tokio::time::timeout(Duration::from_secs(<span class="number">30</span>), htlc_accepted_hook(plugin, value))
+                    .<span class="kw">await
+                    </span>.unwrap_or_else(|<span class="kw">_</span>| <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;htlc_accepted timeout&quot;</span>)))
+                    .or_else(|e| {
+                        <span class="macro">error!</span>(<span class="string">&quot;htlc_accepted error {:?}&quot;</span>, e);
+                        <span class="comment">// cln_plugin doesn&#39;t handle errors very well ... tell it to proceed normally
+                        </span><span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>}))
+                    })
             });
             handle.<span class="kw">await</span><span class="question-mark">?
         </span>})
