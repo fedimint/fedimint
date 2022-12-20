@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use cln_plugin::{anyhow, options, Builder, Error, Plugin};
@@ -161,11 +162,18 @@ pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<ClnRpcRef, Error>
         .hook("htlc_accepted", |plugin, value| async move {
             // This callback needs to be `Sync`, so we use tokio::spawn
             let handle = tokio::spawn(async move {
-                htlc_accepted_hook(plugin, value).await.or_else(|e| {
-                    error!("htlc_accepted error {:?}", e);
-                    // cln_plugin doesn't handle errors very well ... tell it to proceed normally
-                    Ok(json!({ "result": "continue" }))
-                })
+                // FIXME: Test this potential fix for Issue 1018: Gateway channel force closures
+                //
+                // Timeout processing of intecepted HTLC after 30 seconds
+                // If the HTLC is not resolved, we continue and forward it to the next hop
+                tokio::time::timeout(Duration::from_secs(30), htlc_accepted_hook(plugin, value))
+                    .await
+                    .unwrap_or_else(|_| Err(anyhow!("htlc_accepted timeout")))
+                    .or_else(|e| {
+                        error!("htlc_accepted error {:?}", e);
+                        // cln_plugin doesn't handle errors very well ... tell it to proceed normally
+                        Ok(json!({ "result": "continue" }))
+                    })
             });
             handle.await?
         })
