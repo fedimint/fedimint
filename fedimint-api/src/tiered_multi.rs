@@ -33,7 +33,7 @@ impl<T> TieredMulti<T> {
     }
 
     pub fn item_count(&self) -> usize {
-        self.0.iter().map(|(_, coins)| coins.len()).sum()
+        self.0.values().map(|coins| coins.len()).sum()
     }
 
     pub fn tier_count(&self) -> usize {
