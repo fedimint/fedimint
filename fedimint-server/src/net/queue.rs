@@ -133,6 +133,11 @@ where
             Some((oldest, newest))
         }
     }
+
+    /// Return the number of unsent messages
+    pub fn unsent_len(&self) -> usize {
+        self.unsent_messages as usize
+    }
 }
 
 #[cfg(test)]
