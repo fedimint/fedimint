@@ -3,7 +3,7 @@ pub mod rpc_server;
 
 use std::io::Cursor;
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use bitcoin::{Address, Transaction, XOnlyPublicKey};
 use fedimint_api::{Amount, TransactionId};
 use fedimint_server::{modules::ln::contracts::Preimage, modules::wallet::txoproof::TxOutProof};
@@ -11,8 +11,9 @@ use futures::Future;
 use mint_client::{ln::PayInvoicePayload, FederationId};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
+use tracing::error;
 
-use crate::{cln::HtlcAccepted, Result};
+use crate::{cln::HtlcAccepted, LnGatewayError, Result};
 
 #[derive(Debug, Clone)]
 pub struct GatewayRpcSender {
@@ -34,11 +35,20 @@ impl GatewayRpcSender {
     {
         let (sender, receiver) = oneshot::channel::<Result<R::Response>>();
         let msg = message.to_enum(sender);
-        self.sender
-            .send(msg)
+
+        if let Err(e) = self.sender.send(msg).await {
+            error!("Failed to send message over channel: {}", e);
+            return Err(e.into());
+        }
+
+        receiver
             .await
-            .expect("failed to send over channel");
-        Ok(receiver.await.expect("Failed to send over channel")?)
+            .unwrap_or_else(|_| {
+                Err(LnGatewayError::Other(anyhow!(
+                    "Failed to receive response over channel"
+                )))
+            })
+            .map_err(|e| e.into())
     }
 }
 
