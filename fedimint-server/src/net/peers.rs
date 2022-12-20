@@ -33,6 +33,8 @@ use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 /// Maximum connection failures we consider for our back-off strategy
 const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
 
+const MAX_UNSENT_MESSAGES: usize = 4096;
+
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
 pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
@@ -326,10 +328,17 @@ where
 
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
+                // If we aren't resending right after a reconnect we want to enforce a maximum
+                // buffer size and otherwise disconnect and try again with a new connection
+                let is_buffer_ready = self.resend_catch_up_goal.is_some() ||
+                    self.message_buffer.unsent_len() < MAX_UNSENT_MESSAGES;
                 match maybe_msg {
-                    Some(msg) => {
+                    Some(msg) if is_buffer_ready => {
                         self.message_buffer.queue_message(msg);
                         PeerConnectionState::Connected(connected)
+                    },
+                    Some(_) => {
+                        self.disconnect_err(anyhow::anyhow!("Buffer too full, disconnecting"), 0)
                     },
                     None => {
                         debug!("Exiting peer connection IO task - parent disconnected");
@@ -341,6 +350,13 @@ where
                 match buffer_send_res {
                     Ok(msg_id) => {
                         self.message_buffer.mark_sent(msg_id);
+
+                        // If we are resending messages we don't enforce the maximum send buffer
+                        // size. Once we are caught up we want to start again. Here we set the catch
+                        // up goal to None, which means we are done resending.
+                        if self.resend_catch_up_goal.map(|goal| goal <= msg_id).unwrap_or(false) {
+                            self.resend_catch_up_goal = None;
+                        }
                         PeerConnectionState::Connected(connected)
                     },
                     Err(e) => {
