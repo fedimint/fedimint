@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::encrypt::{encrypted_read, encrypted_write};
 
+pub mod distributedgen;
 pub mod encrypt;
 pub mod ui;
 

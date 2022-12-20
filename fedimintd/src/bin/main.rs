@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -18,6 +19,7 @@ use fedimint_wallet::Wallet;
 use fedimint_wallet::WalletConfigGenerator;
 use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
+use fedimintd::ui::UiMessage;
 use fedimintd::*;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -25,11 +27,14 @@ use tracing_subscriber::Layer;
 
 #[derive(Parser)]
 pub struct ServerOpts {
+    /// Path to folder containing federation config files
     pub cfg_path: PathBuf,
+    /// Password to encrypt sensitive config files
     #[arg(env = "FM_PASSWORD")]
     pub password: Option<String>,
-    #[arg(default_value = None)]
-    pub ui_port: Option<u32>,
+    /// Port to run admin UI on
+    #[arg(default_value = "127.0.0.1:8175")]
+    pub ui_bind: SocketAddr,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
@@ -71,15 +76,36 @@ async fn main() -> anyhow::Result<()> {
         registry.init();
     }
 
-    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
-    if let Some(ui_port) = opts.ui_port {
+    let cfg_path = opts.cfg_path.join(PRIVATE_CONFIG);
+    let cfg_exists = std::path::Path::new(&cfg_path).exists();
+    if !cfg_exists {
+        // Make sure password is set
+        let password = match opts.password.clone() {
+            Some(password) => password,
+            None => {
+                eprintln!("Setup UI requires FM_PASSWORD to be set");
+                std::process::exit(1);
+            }
+        };
         // Spawn UI, wait for it to finish
-        tokio::spawn(run_ui(opts.cfg_path.clone(), sender, ui_port));
-        receiver
-            .recv()
-            .await
-            .expect("failed to receive setup message");
+        tokio::spawn(run_ui(
+            opts.cfg_path.clone(),
+            ui_sender,
+            opts.ui_bind,
+            password,
+        ));
+        // Wait until DKG finishes to join consensus
+        loop {
+            if let UiMessage::DKGSuccess = ui_receiver
+                .recv()
+                .await
+                .expect("failed to receive setup message")
+            {
+                break;
+            }
+        }
     }
 
     let salt_path = opts.cfg_path.join(SALT_FILE);
