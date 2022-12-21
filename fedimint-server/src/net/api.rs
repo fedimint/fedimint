@@ -225,7 +225,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         api_endpoint! {
             "/config",
             async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> ClientConfig {
-                Ok(fedimint.cfg.to_client_config())
+                Ok(fedimint.cfg.consensus.to_client_config())
             }
         },
     ]

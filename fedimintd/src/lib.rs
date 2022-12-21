@@ -67,7 +67,10 @@ pub fn encrypted_json_read<T: Serialize + DeserializeOwned>(key: &LessSafeKey, p
 pub fn write_nonprivate_configs(server: &ServerConfig, path: PathBuf) {
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG));
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG));
-    plaintext_json_write(&server.to_client_config(), path.join(CLIENT_CONFIG));
+    plaintext_json_write(
+        &server.consensus.to_client_config(),
+        path.join(CLIENT_CONFIG),
+    );
 }
 
 /// Writes struct into a plaintext json file

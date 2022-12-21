@@ -223,7 +223,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
             let server_config = ServerConfig::trusted_dealer_gen("", &peers, &params, OsRng);
-            let client_config = server_config[&PeerId::from(0)].to_client_config();
+            let client_config = server_config[&PeerId::from(0)].consensus.to_client_config();
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
@@ -342,7 +342,10 @@ async fn distributed_config(
 
     let (_, config) = configs.first().unwrap().clone();
 
-    Ok((configs.into_iter().collect(), config.to_client_config()))
+    Ok((
+        configs.into_iter().collect(),
+        config.consensus.to_client_config(),
+    ))
 }
 
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {

@@ -149,10 +149,14 @@ impl ServerModuleConfig {
     }
 }
 
+pub trait TypedServerModuleConsensusConfig: DeserializeOwned + Serialize {
+    fn to_client_config(&self) -> ClientModuleConfig;
+}
+
 pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
     type Local: DeserializeOwned + Serialize;
     type Private: DeserializeOwned + Serialize;
-    type Consensus: DeserializeOwned + Serialize;
+    type Consensus: TypedServerModuleConsensusConfig;
 
     fn from_parts(local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self;
 
@@ -167,8 +171,6 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
             consensus: serde_json::to_value(consensus).expect("serialization can't fail"),
         }
     }
-
-    fn to_client_config(&self) -> ClientModuleConfig;
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()>;
 }

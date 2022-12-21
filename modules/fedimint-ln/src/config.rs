@@ -1,11 +1,14 @@
 use anyhow::bail;
-use fedimint_api::config::{ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig};
+use fedimint_api::config::{
+    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
+};
 use fedimint_api::PeerId;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningModuleConfig {
+pub struct LightningConfig {
     /// Contains all configuration that will be encrypted such as private key material
     pub private: LightningConfigPrivate,
     /// Contains all configuration that needs to be the same for every server
@@ -37,7 +40,18 @@ pub struct LightningModuleClientConfig {
     pub fee_consensus: FeeConsensus,
 }
 
-impl TypedServerModuleConfig for LightningModuleConfig {
+impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
+    fn to_client_config(&self) -> ClientModuleConfig {
+        serde_json::to_value(&LightningModuleClientConfig {
+            threshold_pub_key: self.threshold_pub_keys.public_key(),
+            fee_consensus: self.fee_consensus.clone(),
+        })
+        .expect("Serialization can't fail")
+        .into()
+    }
+}
+
+impl TypedServerModuleConfig for LightningConfig {
     type Local = ();
     type Private = LightningConfigPrivate;
     type Consensus = LightningConfigConsensus;
@@ -48,15 +62,6 @@ impl TypedServerModuleConfig for LightningModuleConfig {
 
     fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
         ((), self.private, self.consensus)
-    }
-
-    fn to_client_config(&self) -> ClientModuleConfig {
-        serde_json::to_value(&LightningModuleClientConfig {
-            threshold_pub_key: self.consensus.threshold_pub_keys.public_key(),
-            fee_consensus: self.consensus.fee_consensus.clone(),
-        })
-        .expect("Serialization can't fail")
-        .into()
     }
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {

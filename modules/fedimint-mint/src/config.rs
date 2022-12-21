@@ -2,7 +2,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 
 use anyhow::bail;
-use fedimint_api::config::{ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig};
+use fedimint_api::config::{
+    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
+};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
@@ -45,6 +48,28 @@ pub struct MintClientConfig {
 
 impl TypedClientModuleConfig for MintClientConfig {}
 
+impl TypedServerModuleConsensusConfig for MintConfigConsensus {
+    fn to_client_config(&self) -> ClientModuleConfig {
+        let pub_key: HashMap<Amount, AggregatePublicKey> =
+            TieredMultiZip::new(self.peer_tbs_pks.values().map(|keys| keys.iter()).collect())
+                .map(|(amt, keys)| {
+                    // TODO: avoid this through better aggregation API allowing references or
+                    let keys = keys.into_iter().copied().collect::<Vec<_>>();
+                    (amt, keys.aggregate(self.threshold))
+                })
+                .collect();
+
+        serde_json::to_value(&MintClientConfig {
+            tbs_pks: Tiered::from_iter(pub_key.into_iter()),
+            fee_consensus: self.fee_consensus.clone(),
+            peer_tbs_pks: self.peer_tbs_pks.clone(),
+            max_notes_per_denomination: self.max_notes_per_denomination,
+        })
+        .expect("Serialization can't fail")
+        .into()
+    }
+}
+
 impl TypedServerModuleConfig for MintConfig {
     type Local = ();
     type Private = MintConfigPrivate;
@@ -56,31 +81,6 @@ impl TypedServerModuleConfig for MintConfig {
 
     fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
         ((), self.private, self.consensus)
-    }
-
-    fn to_client_config(&self) -> ClientModuleConfig {
-        let pub_key: HashMap<Amount, AggregatePublicKey> = TieredMultiZip::new(
-            self.consensus
-                .peer_tbs_pks
-                .values()
-                .map(|keys| keys.iter())
-                .collect(),
-        )
-        .map(|(amt, keys)| {
-            // TODO: avoid this through better aggregation API allowing references or
-            let keys = keys.into_iter().copied().collect::<Vec<_>>();
-            (amt, keys.aggregate(self.consensus.threshold))
-        })
-        .collect();
-
-        serde_json::to_value(&MintClientConfig {
-            tbs_pks: Tiered::from_iter(pub_key.into_iter()),
-            fee_consensus: self.consensus.fee_consensus.clone(),
-            peer_tbs_pks: self.consensus.peer_tbs_pks.clone(),
-            max_notes_per_denomination: self.consensus.max_notes_per_denomination,
-        })
-        .expect("Serialization can't fail")
-        .into()
     }
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
