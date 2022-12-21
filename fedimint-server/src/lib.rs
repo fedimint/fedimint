@@ -128,7 +128,7 @@ impl FedimintServer {
             cfg.local.identity,
             cfg.private.hbbft_sks.inner().clone(),
             cfg.consensus.hbbft_pk_set.clone(),
-            cfg.local.peers.iter().map(|(id, _)| *id),
+            cfg.local.peers.keys().copied(),
         );
 
         let hbbft: HoneyBadger<Vec<SerdeConsensusItem>, _> =

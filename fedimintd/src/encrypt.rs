@@ -27,7 +27,7 @@ const ITERATIONS_DEBUG: Option<NonZeroU32> = NonZeroU32::new(1);
 // TODO: Use anyhow to handle errors
 pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) {
     let bytes = aead::encrypt(data, key).expect("encryption should not fail");
-    fs::write(file, &hex::encode(bytes)).expect("Can't write file.");
+    fs::write(file, hex::encode(bytes)).expect("Can't write file.");
 }
 
 /// Reads encrypted data from a file

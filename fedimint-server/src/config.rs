@@ -210,8 +210,8 @@ impl ServerConfig {
         let nodes = self
             .local
             .peers
-            .iter()
-            .map(|(_peer_id, peer)| Node {
+            .values()
+            .map(|peer| Node {
                 url: peer.api_addr.clone(),
                 name: peer.name.clone(),
             })

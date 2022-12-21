@@ -1200,11 +1200,11 @@ impl<'a> StatelessWallet<'a> {
             + 1 // script len varint, 1 byte for all addresses we accept
             + change_script.len() * 4 // script len
             + 32) as u64; // value
-        let mut total_weight = (16 + // version
+        let mut total_weight = 16 + // version
             12 + // up to 2**16-1 inputs
             12 + // up to 2**16-1 outputs
             out_weight + // weight of all outputs
-            16) as u64; // lock time
+            16; // lock time
         let max_input_weight = (self
             .descriptor
             .max_satisfaction_weight()

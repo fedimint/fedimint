@@ -146,11 +146,11 @@ impl MicroMintFed {
                 pub_key_shares
                     .entry(peer_id)
                     .or_default()
-                    .insert(amount, pub_keys[peer_i as usize]);
+                    .insert(amount, pub_keys[peer_i]);
                 sec_key_shares
                     .entry(peer_id)
                     .or_default()
-                    .insert(amount, sec_keys[peer_i as usize]);
+                    .insert(amount, sec_keys[peer_i]);
             }
         }
         Self {

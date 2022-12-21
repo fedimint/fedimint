@@ -63,8 +63,8 @@ impl TypedServerModuleConfig for MintConfig {
         let pub_key: HashMap<Amount, AggregatePublicKey> = TieredMultiZip::new(
             self.consensus
                 .peer_tbs_pks
-                .iter()
-                .map(|(_, keys)| keys.iter())
+                .values()
+                .map(|keys| keys.iter())
                 .collect(),
         )
         .map(|(amt, keys)| {
