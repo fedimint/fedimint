@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -14,6 +15,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
+use url::Url;
 
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
@@ -37,10 +39,10 @@ pub type ConnectionListener<M> =
 #[async_trait]
 pub trait Connector<M> {
     /// Connect to a `destination`
-    async fn connect_framed(&self, destination: String, peer: PeerId) -> ConnectResult<M>;
+    async fn connect_framed(&self, destination: Url, peer: PeerId) -> ConnectResult<M>;
 
     /// Listen for incoming connections on `bind_addr`
-    async fn listen(&self, bind_addr: String) -> Result<ConnectionListener<M>, anyhow::Error>;
+    async fn listen(&self, bind_addr: SocketAddr) -> Result<ConnectionListener<M>, anyhow::Error>;
 
     /// Transform this concrete `Connector` into an owned trait object version of itself
     fn into_dyn(self) -> AnyConnector<M>
@@ -155,7 +157,7 @@ impl<M> Connector<M> for TlsTcpConnector
 where
     M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
 {
-    async fn connect_framed(&self, destination: String, peer: PeerId) -> ConnectResult<M> {
+    async fn connect_framed(&self, destination: Url, peer: PeerId) -> ConnectResult<M> {
         let cfg = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(self.cert_store.clone())
@@ -170,7 +172,10 @@ where
 
         let connector = TlsConnector::from(Arc::new(cfg));
         let tls_conn = connector
-            .connect(fake_domain, TcpStream::connect(destination).await?)
+            .connect(
+                fake_domain,
+                TcpStream::connect(parse_host_port(destination)).await?,
+            )
             .await?;
 
         let (_, tls_session) = tls_conn.get_ref();
@@ -191,7 +196,7 @@ where
         Ok((peer, framed))
     }
 
-    async fn listen(&self, bind_addr: String) -> Result<ConnectionListener<M>, anyhow::Error> {
+    async fn listen(&self, bind_addr: SocketAddr) -> Result<ConnectionListener<M>, anyhow::Error> {
         let verifier = AllowAnyAuthenticatedClient::new(self.cert_store.clone());
         let config = rustls::ServerConfig::builder()
             .with_safe_defaults()
@@ -217,12 +222,21 @@ where
     }
 }
 
+/// Parses the host and port from a url
+fn parse_host_port(url: Url) -> String {
+    let host = url.host_str().expect("Expected host to exist");
+    let port = url.port().expect("Expected port to exist");
+
+    format!("{}:{}", host, port)
+}
+
 /// Fake network stack used in tests
 #[allow(unused_imports)]
 pub mod mock {
     use std::collections::HashMap;
     use std::fmt::Debug;
     use std::future::Future;
+    use std::net::SocketAddr;
     use std::pin::Pin;
     use std::sync::Arc;
     use std::time::Duration;
@@ -235,8 +249,9 @@ pub mod mock {
     };
     use tokio::sync::mpsc::Sender;
     use tokio::sync::Mutex;
+    use url::Url;
 
-    use crate::net::connect::{ConnectResult, Connector};
+    use crate::net::connect::{parse_host_port, ConnectResult, Connector};
     use crate::net::framed::{BidiFramed, FramedTransport};
 
     pub struct MockNetwork {
@@ -269,9 +284,9 @@ pub mod mock {
     where
         M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
     {
-        async fn connect_framed(&self, destination: String, _peer: PeerId) -> ConnectResult<M> {
+        async fn connect_framed(&self, destination: Url, _peer: PeerId) -> ConnectResult<M> {
             let mut clients_lock = self.clients.lock().await;
-            if let Some(client) = clients_lock.get_mut(&destination) {
+            if let Some(client) = clients_lock.get_mut(&parse_host_port(destination)) {
                 let (mut stream_our, stream_theirs) = tokio::io::duplex(43_689);
                 client.send(stream_theirs).await.unwrap();
                 let peer = do_handshake(self.id, &mut stream_our).await.unwrap();
@@ -287,12 +302,18 @@ pub mod mock {
 
         async fn listen(
             &self,
-            bind_addr: String,
+            bind_addr: SocketAddr,
         ) -> Result<Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + Unpin + 'static>>, Error>
         {
             let (send, receive) = tokio::sync::mpsc::channel(16);
 
-            if self.clients.lock().await.insert(bind_addr, send).is_some() {
+            if self
+                .clients
+                .lock()
+                .await
+                .insert(bind_addr.to_string(), send)
+                .is_some()
+            {
                 return Err(anyhow::anyhow!("Address already bound"));
             }
 
@@ -330,6 +351,8 @@ pub mod mock {
 
     #[tokio::test]
     async fn test_mock_network() {
+        let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
+        let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
         let peer_a = PeerId::from(1);
         let peer_b = PeerId::from(2);
 
@@ -337,13 +360,12 @@ pub mod mock {
         let conn_a = net.connector(peer_a);
         let conn_b = net.connector(peer_b);
 
-        let mut listener = Connector::<u64>::listen(&conn_a, "a".into()).await.unwrap();
+        let mut listener = Connector::<u64>::listen(&conn_a, bind_addr).await.unwrap();
         let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
 
-        let (auth_peer_b, mut conn_b) =
-            Connector::<u64>::connect_framed(&conn_b, "a".into(), peer_a)
-                .await
-                .unwrap();
+        let (auth_peer_b, mut conn_b) = Connector::<u64>::connect_framed(&conn_b, url, peer_a)
+            .await
+            .unwrap();
         let (auth_peer_a, mut conn_a) = conn_a_fut.await.unwrap();
 
         assert_eq!(auth_peer_a, peer_b);
@@ -366,6 +388,8 @@ pub mod mock {
 
     #[tokio::test]
     async fn test_large_messages() {
+        let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
+        let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
         let peer_a = PeerId::from(1);
         let peer_b = PeerId::from(2);
 
@@ -373,15 +397,14 @@ pub mod mock {
         let conn_a = net.connector(peer_a);
         let conn_b = net.connector(peer_b);
 
-        let mut listener = Connector::<Vec<u8>>::listen(&conn_a, "a".into())
+        let mut listener = Connector::<Vec<u8>>::listen(&conn_a, bind_addr)
             .await
             .unwrap();
         let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
 
-        let (auth_peer_b, mut conn_b) =
-            Connector::<Vec<u8>>::connect_framed(&conn_b, "a".into(), peer_a)
-                .await
-                .unwrap();
+        let (auth_peer_b, mut conn_b) = Connector::<Vec<u8>>::connect_framed(&conn_b, url, peer_a)
+            .await
+            .unwrap();
         let (auth_peer_a, mut conn_a) = conn_a_fut.await.unwrap();
 
         assert_eq!(auth_peer_a, peer_b);
@@ -405,8 +428,11 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
+
     use fedimint_api::PeerId;
     use futures::{SinkExt, StreamExt};
+    use url::Url;
 
     use crate::config::gen_cert_and_key;
     use crate::net::connect::{ConnectionListener, TlsConfig};
@@ -443,14 +469,14 @@ mod tests {
     #[tokio::test]
     async fn connect_success() {
         // FIXME: don't actually bind here, probably requires yet another Box<dyn Trait> layer :(
-        let bind_addr = "127.0.0.1:7000".to_owned();
+        let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
+        let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
         let connectors = gen_connector_config(5)
             .into_iter()
             .map(TlsTcpConnector::new)
             .collect::<Vec<_>>();
 
-        let mut server: ConnectionListener<u64> =
-            connectors[0].listen(bind_addr.clone()).await.unwrap();
+        let mut server: ConnectionListener<u64> = connectors[0].listen(bind_addr).await.unwrap();
 
         let server_task = tokio::spawn(async move {
             let (peer, mut conn) = server.next().await.unwrap().unwrap();
@@ -462,7 +488,7 @@ mod tests {
         });
 
         let (peer_of_a, mut client_a): (_, AnyFramedTransport<u64>) = connectors[2]
-            .connect_framed(bind_addr.clone(), PeerId::from(0))
+            .connect_framed(url.clone(), PeerId::from(0))
             .await
             .unwrap();
         assert_eq!(peer_of_a.to_usize(), 0);
@@ -476,7 +502,8 @@ mod tests {
 
     #[tokio::test]
     async fn connect_reject() {
-        let bind_addr = "127.0.0.1:7001".to_owned();
+        let bind_addr: SocketAddr = "127.0.0.1:7001".parse().unwrap();
+        let url: Url = "wss://127.0.0.1:7001".parse().unwrap();
         let cfg = gen_connector_config(5);
 
         let honest = TlsTcpConnector::new(cfg[0].clone());
@@ -487,8 +514,7 @@ mod tests {
 
         // Honest server, malicious client with wrong private key
         {
-            let mut server: ConnectionListener<u64> =
-                honest.listen(bind_addr.clone()).await.unwrap();
+            let mut server: ConnectionListener<u64> = honest.listen(bind_addr).await.unwrap();
 
             let server_task = tokio::spawn(async move {
                 let conn_res = server.next().await.unwrap();
@@ -500,7 +526,7 @@ mod tests {
 
             let err_anytime = async {
                 let (_peer, mut conn): (_, AnyFramedTransport<u64>) = malicious_wrong_key
-                    .connect_framed(bind_addr.clone(), PeerId::from(0))
+                    .connect_framed(url.clone(), PeerId::from(0))
                     .await?;
 
                 conn.send(42).await?;
@@ -522,7 +548,7 @@ mod tests {
         // Malicious server with wrong key, honest client
         {
             let mut server: ConnectionListener<u64> =
-                malicious_wrong_key.listen(bind_addr.clone()).await.unwrap();
+                malicious_wrong_key.listen(bind_addr).await.unwrap();
 
             let server_task = tokio::spawn(async move {
                 let conn_res = server.next().await.unwrap();
@@ -533,9 +559,8 @@ mod tests {
             });
 
             let err_anytime = async {
-                let (_peer, mut conn): (_, AnyFramedTransport<u64>) = honest
-                    .connect_framed(bind_addr.clone(), PeerId::from(1))
-                    .await?;
+                let (_peer, mut conn): (_, AnyFramedTransport<u64>) =
+                    honest.connect_framed(url.clone(), PeerId::from(1)).await?;
 
                 conn.send(42).await?;
                 conn.flush().await?;
@@ -556,7 +581,7 @@ mod tests {
         // Server with wrong certificate, honest client
         {
             let mut server: ConnectionListener<u64> = TlsTcpConnector::new(cfg[2].clone())
-                .listen(bind_addr.clone())
+                .listen(bind_addr)
                 .await
                 .unwrap();
 
@@ -569,9 +594,8 @@ mod tests {
             });
 
             let err_anytime = async {
-                let (_peer, mut conn): (_, AnyFramedTransport<u64>) = honest
-                    .connect_framed(bind_addr.clone(), PeerId::from(0))
-                    .await?;
+                let (_peer, mut conn): (_, AnyFramedTransport<u64>) =
+                    honest.connect_framed(url.clone(), PeerId::from(0)).await?;
 
                 conn.send(42).await?;
                 conn.flush().await?;

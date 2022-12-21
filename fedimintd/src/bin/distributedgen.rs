@@ -284,7 +284,7 @@ async fn run_dkg(
 }
 
 fn parse_peer_params(url: String) -> PeerServerParams {
-    let split: Vec<&str> = url.split(':').collect();
+    let split: Vec<&str> = url.split('@').collect();
     assert_eq!(split.len(), 4, "Cannot parse cert string");
     let base_port = split[1].parse().expect("could not parse base port");
     let hex_cert = hex::decode(split[3]).expect("cert was not hex encoded");
@@ -308,7 +308,7 @@ fn gen_tls(
 
     rustls::ServerName::try_from(name.as_str()).expect("Valid DNS name");
     // TODO Base64 encode name, hash fingerprint cert_string
-    let cert_url = format!("{}:{}:{}:{}", address, base_port, name, hex::encode(cert.0));
+    let cert_url = format!("{}@{}@{}@{}", address, base_port, name, hex::encode(cert.0));
     fs::write(dir_out_path.join(TLS_CERT), &cert_url).unwrap();
     cert_url
 }
