@@ -42,5 +42,5 @@ pub fn decrypt<'c>(ciphertext: &'c mut [u8], key: &LessSafeKey) -> Result<&'c [u
     )
     .map_err(|_| anyhow::format_err!("Decryption failed due to unspecified aead error"))?;
 
-    Ok(encrypted_bytes)
+    Ok(&encrypted_bytes[..encrypted_bytes.len() - key.algorithm().tag_len()])
 }
