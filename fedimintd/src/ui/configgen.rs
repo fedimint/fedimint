@@ -6,10 +6,9 @@ use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
 use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
 use fedimint_server::config::{
-    gen_cert_and_key, Peer as ServerPeer, SerdeCert, ServerConfig, ServerConfigConsensus,
-    ServerConfigLocal, ServerConfigPrivate,
+    gen_cert_and_key, Peer as ServerPeer, ServerConfig, ServerConfigConsensus, ServerConfigLocal,
+    ServerConfigPrivate,
 };
-use fedimint_server::net::peers::ConnectionConfig;
 use fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
@@ -90,16 +89,17 @@ fn trusted_dealer_gen(
         .map(|(&id, _)| {
             let id_u16: u16 = id.into();
             let peer = ServerPeer {
-                hbbft: ConnectionConfig {
-                    address: format!(
-                        "{}:{}",
-                        hostnames[id_u16 as usize].clone(),
-                        hbbft_base_port + id_u16
-                    ),
-                },
+                tls_cert: tls_keys[&id].0.clone(),
+                hbbft: format!(
+                    "{}:{}",
+                    hostnames[id_u16 as usize].clone(),
+                    hbbft_base_port + id_u16
+                )
+                .parse()
+                .expect("Could not parse address"),
                 api_addr: {
                     let s = format!(
-                        "ws://{}:{}",
+                        "{}:{}",
                         hostnames[id_u16 as usize].clone(),
                         api_base_port + id_u16
                     );
@@ -145,21 +145,21 @@ fn trusted_dealer_gen(
 
             let mut config = ServerConfig {
                 consensus: ServerConfigConsensus {
+                    peers: cfg_peers.clone(),
                     code_version: CODE_VERSION.to_string(),
                     federation_name: params.federation_name.clone(),
-                    peer_certs: tls_keys
-                        .iter()
-                        .map(|(peer, cert)| (*peer, SerdeCert(cert.0.clone())))
-                        .collect(),
                     hbbft_pk_set: netinf.public_key_set().clone(),
                     epoch_pk_set: epoch_keys.public_key_set().clone(),
                     modules: Default::default(),
                 },
                 local: ServerConfigLocal {
-                    peers: cfg_peers.clone(),
                     identity: id,
-                    hbbft_bind_addr: format!("0.0.0.0:{}", hbbft_base_port + id_u16),
-                    api_bind_addr: format!("0.0.0.0:{}", api_base_port + id_u16),
+                    hbbft_bind_addr: format!("0.0.0.0:{}", hbbft_base_port + id_u16)
+                        .parse()
+                        .expect("Could not parse address"),
+                    api_bind_addr: format!("0.0.0.0:{}", api_base_port + id_u16)
+                        .parse()
+                        .expect("Could not parse address"),
                     tls_cert: tls_keys[&id].0.clone(),
                     modules: Default::default(),
                     max_connections: 1000,

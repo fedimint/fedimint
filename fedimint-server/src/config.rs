@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::net::{IpAddr, SocketAddr};
 
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -29,7 +30,7 @@ use url::Url;
 use crate::fedimint_api::NumPeers;
 use crate::net::connect::Connector;
 use crate::net::connect::TlsConfig;
-use crate::net::peers::{ConnectionConfig, NetworkConfig};
+use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
@@ -62,12 +63,12 @@ pub struct ServerConfigPrivate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigConsensus {
+    /// Network addresses and certs for all peers
+    pub peers: BTreeMap<PeerId, Peer>,
     /// The version of the binary code running
     pub code_version: String,
     /// Configurable federation name
     pub federation_name: String,
-    /// Certs for TLS communication, required for peer authentication
-    pub peer_certs: HashMap<PeerId, SerdeCert>,
     /// Public keys for HBBFT consensus from all peers
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
@@ -80,14 +81,12 @@ pub struct ServerConfigConsensus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
-    /// Network addresses for all peers
-    pub peers: BTreeMap<PeerId, Peer>,
     /// Our peer id (generally should not change)
     pub identity: PeerId,
     /// Our bind address for running HBBFT
-    pub hbbft_bind_addr: String,
+    pub hbbft_bind_addr: SocketAddr,
     /// Our bind address for our API endpoints
-    pub api_bind_addr: String,
+    pub api_bind_addr: SocketAddr,
     /// Our publicly known TLS cert
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
@@ -98,11 +97,12 @@ pub struct ServerConfigLocal {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SerdeCert(#[serde(with = "serde_tls_cert")] pub rustls::Certificate);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
-    pub hbbft: ConnectionConfig,
+    /// Certs for TLS communication, required for peer authentication
+    #[serde(with = "serde_tls_cert")]
+    pub tls_cert: rustls::Certificate,
+    /// The TLS network address and port, used for HBBFT consensus
+    pub hbbft: Url,
     /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     pub api_addr: Url,
     /// human-readable name
@@ -135,31 +135,24 @@ impl ServerConfig {
         epoch_pk_set: hbbft::crypto::PublicKeySet,
         modules: BTreeMap<String, ServerModuleConfig>,
     ) -> Self {
-        let peers = params.peers();
         let private = ServerConfigPrivate {
-            tls_key: params.tls.our_private_key,
+            tls_key: params.tls.our_private_key.clone(),
             hbbft_sks,
             epoch_sks,
             modules: Default::default(),
         };
         let local = ServerConfigLocal {
-            peers,
             identity,
             hbbft_bind_addr: params.hbbft.bind_addr,
             api_bind_addr: params.api.bind_addr,
-            tls_cert: params.tls.our_certificate,
+            tls_cert: params.tls.our_certificate.clone(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
         };
         let consensus = ServerConfigConsensus {
             code_version: code_version.to_string(),
-            federation_name: params.federation_name,
-            peer_certs: params
-                .tls
-                .peer_certs
-                .into_iter()
-                .map(|(peer, cert)| (peer, SerdeCert(cert)))
-                .collect(),
+            federation_name: params.federation_name.clone(),
+            peers: params.peers(),
             hbbft_pk_set,
             epoch_pk_set,
             modules: Default::default(),
@@ -208,7 +201,7 @@ impl ServerConfig {
 
     pub fn to_client_config(&self) -> ClientConfig {
         let nodes = self
-            .local
+            .consensus
             .peers
             .values()
             .map(|peer| Node {
@@ -244,7 +237,7 @@ impl ServerConfig {
     }
 
     pub fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
-        let peers = self.local.peers.clone();
+        let peers = self.consensus.peers.clone();
         let consensus = self.consensus.clone();
         let private = self.private.clone();
         let id = identity.to_usize();
@@ -408,9 +401,9 @@ impl ServerConfig {
     pub fn network_config(&self) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.identity,
-            bind_addr: self.local.hbbft_bind_addr.clone(),
+            bind_addr: self.local.hbbft_bind_addr,
             peers: self
-                .local
+                .consensus
                 .peers
                 .iter()
                 .map(|(&id, peer)| (id, peer.hbbft.clone()))
@@ -424,12 +417,12 @@ impl ServerConfig {
             our_private_key: self.private.tls_key.clone(),
             peer_certs: self
                 .consensus
-                .peer_certs
+                .peers
                 .iter()
-                .map(|(peer, cert)| (*peer, cert.0.clone()))
+                .map(|(peer, cfg)| (*peer, cfg.tls_cert.clone()))
                 .collect(),
             peer_names: self
-                .local
+                .consensus
                 .peers
                 .iter()
                 .map(|(peer, cfg)| (*peer, cfg.name.to_string()))
@@ -471,10 +464,10 @@ impl ServerConfigParams {
                 (
                     *peer,
                     Peer {
+                        tls_cert: self.tls.peer_certs[peer].clone(),
                         name: self.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
-                        api_addr: Url::parse(&format!("ws://{}", self.api.peers[peer].address))
-                            .expect("Could not parse URL"),
+                        api_addr: self.api.peers[peer].clone(),
                     },
                 )
             })
@@ -510,6 +503,8 @@ impl ServerConfigParams {
             peer_names,
         };
 
+        let bind_address = bind_address.parse().expect("Could not parse address");
+
         ServerConfigParams {
             tls,
             hbbft: Self::gen_network(&bind_address, &our_id, 0, peers),
@@ -533,20 +528,20 @@ impl ServerConfigParams {
     }
 
     fn gen_network(
-        bind_address: &str,
+        bind_address: &IpAddr,
         our_id: &PeerId,
         offset: u16,
         peers: &BTreeMap<PeerId, PeerServerParams>,
     ) -> NetworkConfig {
         NetworkConfig {
             identity: *our_id,
-            bind_addr: format!("{}:{}", bind_address, peers[our_id].base_port + offset),
+            bind_addr: SocketAddr::new(*bind_address, peers[our_id].base_port + offset),
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
-                    let connection = ConnectionConfig {
-                        address: format!("{}:{}", params.address, params.base_port + offset),
-                    };
+                    let connection = format!("{}:{}", params.address, params.base_port + offset)
+                        .parse()
+                        .expect("Could not parse address");
                     (*peer, connection)
                 })
                 .collect(),
@@ -574,7 +569,7 @@ impl ServerConfigParams {
             .map(|peer| {
                 let params: PeerServerParams = PeerServerParams {
                     cert: keys[peer].0.clone(),
-                    address: "127.0.0.1".to_string(),
+                    address: "ws://127.0.0.1".to_string(),
                     base_port: base_port + (u16::from(*peer) * 6),
                     name: format!("peer-{}", peer.to_usize()),
                 };

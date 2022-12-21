@@ -6,12 +6,12 @@
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::ops::Sub;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::Node;
 use fedimint_api::net::peers::IPeerConnections;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::PeerId;
@@ -58,16 +58,9 @@ pub struct NetworkConfig {
     /// Our federation member's identity
     pub identity: PeerId,
     /// Our listen address for incoming connections from other federation members
-    pub bind_addr: String,
+    pub bind_addr: SocketAddr,
     /// Map of all peers' connection information we want to be connected to
-    pub peers: HashMap<PeerId, ConnectionConfig>,
-}
-
-/// Information needed to connect to one other federation member
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectionConfig {
-    /// The peer's network address and port (e.g. `10.42.0.10:4000`)
-    pub address: String,
+    pub peers: HashMap<PeerId, Url>,
 }
 
 /// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
@@ -88,7 +81,7 @@ struct CommonPeerConnectionState<M> {
     incoming: Sender<M>,
     outgoing: Receiver<M>,
     peer: PeerId,
-    cfg: ConnectionConfig,
+    peer_address: Url,
     connect: SharedAnyConnector<PeerMessage<M>>,
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
     last_received: Option<MessageId>,
@@ -106,19 +99,6 @@ struct ConnectedPeerConnectionState<M> {
 enum PeerConnectionState<M> {
     Disconnected(DisconnectedPeerConnectionState),
     Connected(ConnectedPeerConnectionState<M>),
-}
-
-impl NetworkConfig {
-    pub fn nodes(&self, prefix: &str, names: HashMap<PeerId, String>) -> Vec<Node> {
-        self.peers
-            .iter()
-            .map(|(peer, connection)| Node {
-                name: names[peer].to_string(),
-                url: Url::parse(&format!("{}{}", prefix, connection.address))
-                    .expect("Could not parse Url"),
-            })
-            .collect()
-    }
 }
 
 impl<T: 'static> ReconnectPeerConnections<T>
@@ -140,7 +120,7 @@ where
             .peers
             .iter()
             .filter(|(&peer, _)| peer != cfg.identity)
-            .map(|(&peer, cfg)| {
+            .map(|(&peer, peer_address)| {
                 let (connection_sender, connection_receiver) =
                     tokio::sync::mpsc::channel::<AnyFramedTransport<PeerMessage<T>>>(4);
                 (
@@ -149,7 +129,7 @@ where
                         peer,
                         PeerConnection::new(
                             peer,
-                            cfg.clone(),
+                            peer_address.clone(),
                             shared_connector.clone(),
                             connection_receiver,
                             task_group,
@@ -175,7 +155,7 @@ where
         task_handle: TaskHandle,
     ) {
         let mut listener = connect
-            .listen(cfg.bind_addr.clone())
+            .listen(cfg.bind_addr)
             .await
             .expect("Could not bind port");
 
@@ -528,8 +508,8 @@ where
 
     async fn try_reconnect(&self) -> Result<AnyFramedTransport<PeerMessage<M>>, anyhow::Error> {
         debug!("Trying to reconnect");
-        let addr = &self.cfg.address;
-        let (connected_peer, conn) = self.connect.connect_framed(addr.clone(), self.peer).await?;
+        let addr = self.peer_address.clone();
+        let (connected_peer, conn) = self.connect.connect_framed(addr, self.peer).await?;
 
         if connected_peer == self.peer {
             Ok(conn)
@@ -548,7 +528,7 @@ where
 {
     fn new(
         id: PeerId,
-        cfg: ConnectionConfig,
+        peer_address: Url,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_group: &mut TaskGroup,
@@ -563,7 +543,7 @@ where
                     incoming_sender,
                     outgoing_receiver,
                     id,
-                    cfg,
+                    peer_address,
                     connect,
                     incoming_connections,
                     &handle,
@@ -591,7 +571,7 @@ where
         incoming: Sender<M>,
         outgoing: Receiver<M>,
         peer: PeerId,
-        cfg: ConnectionConfig,
+        peer_address: Url,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_handle: &TaskHandle,
@@ -601,7 +581,7 @@ where
             incoming,
             outgoing,
             peer,
-            cfg,
+            peer_address,
             connect,
             incoming_connections,
             last_received: None,
@@ -628,9 +608,7 @@ mod tests {
 
     use crate::net::connect::mock::MockNetwork;
     use crate::net::connect::Connector;
-    use crate::net::peers::{
-        ConnectionConfig, IPeerConnections, NetworkConfig, ReconnectPeerConnections,
-    };
+    use crate::net::peers::{IPeerConnections, NetworkConfig, ReconnectPeerConnections};
 
     async fn timeout<F, T>(f: F) -> Option<T>
     where
@@ -646,31 +624,33 @@ mod tests {
         {
             let net = MockNetwork::new();
 
-            let peers = ["a", "b", "c"]
-                .iter()
-                .enumerate()
-                .map(|(idx, &peer)| {
-                    let cfg = ConnectionConfig {
-                        address: peer.to_string(),
-                    };
-                    (PeerId::from(idx as u16 + 1), cfg)
-                })
-                .collect::<HashMap<_, _>>();
+            let peers = [
+                "http://127.0.0.1:1000",
+                "http://127.0.0.1:2000",
+                "http://127.0.0.1:3000",
+            ]
+            .iter()
+            .enumerate()
+            .map(|(idx, &peer)| {
+                let cfg = peer.parse().unwrap();
+                (PeerId::from(idx as u16 + 1), cfg)
+            })
+            .collect::<HashMap<_, _>>();
 
             let peers_ref = &peers;
             let net_ref = &net;
             let build_peers = move |bind: &'static str, id: u16, mut task_group: TaskGroup| async move {
                 let cfg = NetworkConfig {
                     identity: PeerId::from(id),
-                    bind_addr: bind.to_string(),
+                    bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
                 let connect = net_ref.connector(cfg.identity).into_dyn();
                 ReconnectPeerConnections::<u64>::new(cfg, connect, &mut task_group).await
             };
 
-            let mut peers_a = build_peers("a", 1, task_group.clone()).await;
-            let mut peers_b = build_peers("b", 2, task_group.clone()).await;
+            let mut peers_a = build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
+            let mut peers_b = build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
 
             peers_a.send(&[PeerId::from(2)], 42).await.unwrap();
             let recv = timeout(peers_b.receive()).await.unwrap().unwrap();
@@ -679,7 +659,7 @@ mod tests {
 
             peers_a.send(&[PeerId::from(3)], 21).await.unwrap();
 
-            let mut peers_c = build_peers("c", 3, task_group.clone()).await;
+            let mut peers_c = build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
             let recv = timeout(peers_c.receive()).await.unwrap().unwrap();
             assert_eq!(recv.0, PeerId::from(1));
             assert_eq!(recv.1, 21);
