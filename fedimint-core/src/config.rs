@@ -15,7 +15,7 @@ pub mod serde_binary_human_readable {
         if s.is_human_readable() {
             let bytes =
                 bincode::serialize(x).map_err(|e| serde::ser::Error::custom(format!("{:?}", e)))?;
-            s.serialize_str(&hex::encode(&bytes))
+            s.serialize_str(&hex::encode(bytes))
         } else {
             Serialize::serialize(x, s)
         }

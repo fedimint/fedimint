@@ -787,8 +787,8 @@ impl Mint {
         let aggregate_pub_keys = TieredMultiZip::new(
             cfg.consensus
                 .peer_tbs_pks
-                .iter()
-                .map(|(_, keys)| keys.iter())
+                .values()
+                .map(|keys| keys.iter())
                 .collect(),
         )
         .map(|(amt, keys)| {
@@ -1117,7 +1117,7 @@ mod test {
             .unwrap()
             .to_client_config();
 
-        (mint_cfg.into_iter().map(|(_, c)| c).collect(), client_cfg)
+        (mint_cfg.into_values().collect(), client_cfg)
     }
 
     fn build_mints() -> (AggregatePublicKey, Vec<Mint>) {

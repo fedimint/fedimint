@@ -137,7 +137,7 @@ impl WalletConfig {
         finality_delay: u32,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
-            Wsh::new_sortedmulti(threshold, pubkeys.iter().map(|(_, pk)| *pk).collect()).unwrap(),
+            Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
         );
 
         Self {
