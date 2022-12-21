@@ -308,7 +308,7 @@
         finality_delay: u32,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
-            Wsh::new_sortedmulti(threshold, pubkeys.iter().map(|(<span class="kw">_</span>, pk)| <span class="kw-2">*</span>pk).collect()).unwrap(),
+            Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
         );
 
         <span class="self">Self </span>{

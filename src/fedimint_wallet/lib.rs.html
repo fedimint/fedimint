@@ -2773,11 +2773,11 @@
             </span>+ <span class="number">1 </span><span class="comment">// script len varint, 1 byte for all addresses we accept
             </span>+ change_script.len() * <span class="number">4 </span><span class="comment">// script len
             </span>+ <span class="number">32</span>) <span class="kw">as </span>u64; <span class="comment">// value
-        </span><span class="kw">let </span><span class="kw-2">mut </span>total_weight = (<span class="number">16 </span>+ <span class="comment">// version
+        </span><span class="kw">let </span><span class="kw-2">mut </span>total_weight = <span class="number">16 </span>+ <span class="comment">// version
             </span><span class="number">12 </span>+ <span class="comment">// up to 2**16-1 inputs
             </span><span class="number">12 </span>+ <span class="comment">// up to 2**16-1 outputs
             </span>out_weight + <span class="comment">// weight of all outputs
-            </span><span class="number">16</span>) <span class="kw">as </span>u64; <span class="comment">// lock time
+            </span><span class="number">16</span>; <span class="comment">// lock time
         </span><span class="kw">let </span>max_input_weight = (<span class="self">self
             </span>.descriptor
             .max_satisfaction_weight()

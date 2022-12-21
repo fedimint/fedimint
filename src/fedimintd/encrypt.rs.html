@@ -99,7 +99,7 @@
 </span><span class="comment">// TODO: Use anyhow to handle errors
 </span><span class="kw">pub fn </span>encrypted_write(data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) {
     <span class="kw">let </span>bytes = aead::encrypt(data, key).expect(<span class="string">&quot;encryption should not fail&quot;</span>);
-    fs::write(file, <span class="kw-2">&amp;</span>hex::encode(bytes)).expect(<span class="string">&quot;Can&#39;t write file.&quot;</span>);
+    fs::write(file, hex::encode(bytes)).expect(<span class="string">&quot;Can&#39;t write file.&quot;</span>);
 }
 
 <span class="doccomment">/// Reads encrypted data from a file

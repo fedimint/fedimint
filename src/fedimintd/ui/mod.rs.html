@@ -542,7 +542,7 @@
     serde_json::to_writer_pretty(cfg_file, <span class="kw-2">&amp;</span>server_config).unwrap();
     <span class="kw">let </span>client_cfg_path = parent.join(<span class="string">&quot;client.json&quot;</span>);
     <span class="kw">let </span>client_cfg_file =
-        std::fs::File::create(<span class="kw-2">&amp;</span>client_cfg_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
+        std::fs::File::create(client_cfg_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
     serde_json::to_writer_pretty(client_cfg_file, <span class="kw-2">&amp;</span>client_config).unwrap();
 }
 

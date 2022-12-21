@@ -2096,8 +2096,8 @@
         <span class="kw">let </span>aggregate_pub_keys = TieredMultiZip::new(
             cfg.consensus
                 .peer_tbs_pks
-                .iter()
-                .map(|(<span class="kw">_</span>, keys)| keys.iter())
+                .values()
+                .map(|keys| keys.iter())
                 .collect(),
         )
         .map(|(amt, keys)| {
@@ -2426,7 +2426,7 @@
             .unwrap()
             .to_client_config();
 
-        (mint_cfg.into_iter().map(|(<span class="kw">_</span>, c)| c).collect(), client_cfg)
+        (mint_cfg.into_values().collect(), client_cfg)
     }
 
     <span class="kw">fn </span>build_mints() -&gt; (AggregatePublicKey, Vec&lt;Mint&gt;) {

@@ -188,8 +188,8 @@
         <span class="kw">let </span>pub_key: HashMap&lt;Amount, AggregatePublicKey&gt; = TieredMultiZip::new(
             <span class="self">self</span>.consensus
                 .peer_tbs_pks
-                .iter()
-                .map(|(<span class="kw">_</span>, keys)| keys.iter())
+                .values()
+                .map(|keys| keys.iter())
                 .collect(),
         )
         .map(|(amt, keys)| {

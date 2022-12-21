@@ -48,7 +48,7 @@
         <span class="kw">if </span>s.is_human_readable() {
             <span class="kw">let </span>bytes =
                 bincode::serialize(x).map_err(|e| serde::ser::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))<span class="question-mark">?</span>;
-            s.serialize_str(<span class="kw-2">&amp;</span>hex::encode(<span class="kw-2">&amp;</span>bytes))
+            s.serialize_str(<span class="kw-2">&amp;</span>hex::encode(bytes))
         } <span class="kw">else </span>{
             Serialize::serialize(x, s)
         }

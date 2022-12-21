@@ -617,7 +617,7 @@
             cfg.local.identity,
             cfg.private.hbbft_sks.inner().clone(),
             cfg.consensus.hbbft_pk_set.clone(),
-            cfg.local.peers.iter().map(|(id, <span class="kw">_</span>)| <span class="kw-2">*</span>id),
+            cfg.local.peers.keys().copied(),
         );
 
         <span class="kw">let </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, <span class="kw">_</span>&gt; =
