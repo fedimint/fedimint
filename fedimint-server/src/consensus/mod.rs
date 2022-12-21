@@ -39,6 +39,18 @@ pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsen
 pub type HbbftConsensusOutcome = hbbft::honey_badger::Batch<Vec<ConsensusItem>, PeerId>;
 pub type HbbftMessage = hbbft::honey_badger::Message<PeerId>;
 
+/// A message sent by a consensus protocol that might belong to a specific epoch
+pub trait MaybeEpochMessage {
+    /// Return the epoch the message belongs to, if any
+    fn message_epoch(&self) -> Option<u64>;
+}
+
+impl MaybeEpochMessage for HbbftMessage {
+    fn message_epoch(&self) -> Option<u64> {
+        Some(self.epoch())
+    }
+}
+
 // TODO remove HBBFT `Batch` from `ConsensusOutcome`
 #[derive(Debug, Clone)]
 pub struct ConsensusOutcomeConversion(pub HbbftConsensusOutcome);
