@@ -29,8 +29,8 @@ use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::PLAINTEXT_PASSWORD;
-use crate::consensus::server::ConsensusServer;
-use crate::consensus::HbbftConsensusOutcome;
+use crate::consensus::server::{ConsensusServer, EpochMessage};
+use crate::consensus::{HbbftConsensusOutcome, MaybeEpochMessage};
 use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 use crate::net::peers::ReconnectPeerConnections;
@@ -64,6 +64,15 @@ pub trait HasApiContext<State> {
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
     ) -> (&State, ApiEndpointContext<'_>);
+}
+
+impl MaybeEpochMessage for EpochMessage {
+    fn message_epoch(&self) -> Option<u64> {
+        match self {
+            EpochMessage::Continue(msg) => msg.message_epoch(),
+            EpochMessage::RejoinRequest(_) => None,
+        }
+    }
 }
 
 /// Main server for running Fedimint consensus and APIs
