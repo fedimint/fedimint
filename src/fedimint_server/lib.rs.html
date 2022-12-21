@@ -617,14 +617,14 @@
             cfg.local.identity,
             cfg.private.hbbft_sks.inner().clone(),
             cfg.consensus.hbbft_pk_set.clone(),
-            cfg.local.peers.keys().copied(),
+            cfg.consensus.peers.keys().copied(),
         );
 
         <span class="kw">let </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, <span class="kw">_</span>&gt; =
             HoneyBadger::builder(Arc::new(net_info)).build();
 
         <span class="kw">let </span>api_endpoints = cfg
-            .local
+            .consensus
             .peers
             .clone()
             .into_iter()
@@ -637,7 +637,7 @@
             consensus: Arc::new(consensus),
             cfg: cfg.clone(),
             api,
-            peers: cfg.local.peers.keys().cloned().collect(),
+            peers: cfg.consensus.peers.keys().cloned().collect(),
             rejoin_at_epoch: <span class="prelude-val">None</span>,
             run_empty_epochs: <span class="number">0</span>,
             last_processed_epoch: <span class="prelude-val">None</span>,
@@ -783,7 +783,7 @@
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
     ) -&gt; Cancellable&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
         <span class="comment">// for testing federations with one peer
-        </span><span class="kw">if </span><span class="self">self</span>.cfg.local.peers.len() == <span class="number">1 </span>{
+        </span><span class="kw">if </span><span class="self">self</span>.cfg.consensus.peers.len() == <span class="number">1 </span>{
             <span class="macro">tokio::select! </span>{
               () = <span class="self">self</span>.consensus.transaction_notify.notified() =&gt; (),
               () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),

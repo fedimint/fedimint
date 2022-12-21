@@ -590,11 +590,36 @@
 <a href="#590" id="590">590</a>
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple implementations
 
 </span><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::convert::TryFrom;
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -606,6 +631,7 @@
 <span class="kw">use </span>tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 <span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
 <span class="kw">use </span>tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
@@ -629,10 +655,10 @@
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>Connector&lt;M&gt; {
     <span class="doccomment">/// Connect to a `destination`
-    </span><span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: String, peer: PeerId) -&gt; ConnectResult&lt;M&gt;;
+    </span><span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: Url, peer: PeerId) -&gt; ConnectResult&lt;M&gt;;
 
     <span class="doccomment">/// Listen for incoming connections on `bind_addr`
-    </span><span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: String) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt;;
+    </span><span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: SocketAddr) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt;;
 
     <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version of itself
     </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; AnyConnector&lt;M&gt;
@@ -747,7 +773,7 @@
 <span class="kw">where
     </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: String, peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
+    <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: Url, peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
         <span class="kw">let </span>cfg = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(<span class="self">self</span>.cert_store.clone())
@@ -762,7 +788,10 @@
 
         <span class="kw">let </span>connector = TlsConnector::from(Arc::new(cfg));
         <span class="kw">let </span>tls_conn = connector
-            .connect(fake_domain, TcpStream::connect(destination).<span class="kw">await</span><span class="question-mark">?</span>)
+            .connect(
+                fake_domain,
+                TcpStream::connect(parse_host_port(destination)).<span class="kw">await</span><span class="question-mark">?</span>,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>(<span class="kw">_</span>, tls_session) = tls_conn.get_ref();
@@ -783,7 +812,7 @@
         <span class="prelude-val">Ok</span>((peer, framed))
     }
 
-    <span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: String) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt; {
+    <span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: SocketAddr) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt; {
         <span class="kw">let </span>verifier = AllowAnyAuthenticatedClient::new(<span class="self">self</span>.cert_store.clone());
         <span class="kw">let </span>config = rustls::ServerConfig::builder()
             .with_safe_defaults()
@@ -809,12 +838,21 @@
     }
 }
 
+<span class="doccomment">/// Parses the host and port from a url
+</span><span class="kw">fn </span>parse_host_port(url: Url) -&gt; String {
+    <span class="kw">let </span>host = url.host_str().expect(<span class="string">&quot;Expected host to exist&quot;</span>);
+    <span class="kw">let </span>port = url.port().expect(<span class="string">&quot;Expected port to exist&quot;</span>);
+
+    <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, host, port)
+}
+
 <span class="doccomment">/// Fake network stack used in tests
 </span><span class="attr">#[allow(unused_imports)]
 </span><span class="kw">pub mod </span>mock {
     <span class="kw">use </span>std::collections::HashMap;
     <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::future::Future;
+    <span class="kw">use </span>std::net::SocketAddr;
     <span class="kw">use </span>std::pin::Pin;
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
@@ -827,8 +865,9 @@
     };
     <span class="kw">use </span>tokio::sync::mpsc::Sender;
     <span class="kw">use </span>tokio::sync::Mutex;
+    <span class="kw">use </span>url::Url;
 
-    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectResult, Connector};
+    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, ConnectResult, Connector};
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::{BidiFramed, FramedTransport};
 
     <span class="kw">pub struct </span>MockNetwork {
@@ -861,9 +900,9 @@
     <span class="kw">where
         </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
-        <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: String, _peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
+        <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: Url, _peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>clients_lock = <span class="self">self</span>.clients.lock().<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>destination) {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>parse_host_port(destination)) {
                 <span class="kw">let </span>(<span class="kw-2">mut </span>stream_our, stream_theirs) = tokio::io::duplex(<span class="number">43_689</span>);
                 client.send(stream_theirs).<span class="kw">await</span>.unwrap();
                 <span class="kw">let </span>peer = do_handshake(<span class="self">self</span>.id, <span class="kw-2">&amp;mut </span>stream_our).<span class="kw">await</span>.unwrap();
@@ -879,12 +918,18 @@
 
         <span class="kw">async fn </span>listen(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            bind_addr: String,
+            bind_addr: SocketAddr,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ConnectResult&lt;M&gt;&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt;
         {
             <span class="kw">let </span>(send, receive) = tokio::sync::mpsc::channel(<span class="number">16</span>);
 
-            <span class="kw">if </span><span class="self">self</span>.clients.lock().<span class="kw">await</span>.insert(bind_addr, send).is_some() {
+            <span class="kw">if </span><span class="self">self
+                </span>.clients
+                .lock()
+                .<span class="kw">await
+                </span>.insert(bind_addr.to_string(), send)
+                .is_some()
+            {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Address already bound&quot;</span>));
             }
 
@@ -922,6 +967,8 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_mock_network() {
+        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -929,13 +976,12 @@
         <span class="kw">let </span>conn_a = net.connector(peer_a);
         <span class="kw">let </span>conn_b = net.connector(peer_b);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;u64&gt;::listen(<span class="kw-2">&amp;</span>conn_a, <span class="string">&quot;a&quot;</span>.into()).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;u64&gt;::listen(<span class="kw-2">&amp;</span>conn_a, bind_addr).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>conn_a_fut = tokio::spawn(<span class="kw">async move </span>{ listener.next().<span class="kw">await</span>.unwrap().unwrap() });
 
-        <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) =
-            Connector::&lt;u64&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, <span class="string">&quot;a&quot;</span>.into(), peer_a)
-                .<span class="kw">await
-                </span>.unwrap();
+        <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) = Connector::&lt;u64&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, url, peer_a)
+            .<span class="kw">await
+            </span>.unwrap();
         <span class="kw">let </span>(auth_peer_a, <span class="kw-2">mut </span>conn_a) = conn_a_fut.<span class="kw">await</span>.unwrap();
 
         <span class="macro">assert_eq!</span>(auth_peer_a, peer_b);
@@ -958,6 +1004,8 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_large_messages() {
+        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -965,15 +1013,14 @@
         <span class="kw">let </span>conn_a = net.connector(peer_a);
         <span class="kw">let </span>conn_b = net.connector(peer_b);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;Vec&lt;u8&gt;&gt;::listen(<span class="kw-2">&amp;</span>conn_a, <span class="string">&quot;a&quot;</span>.into())
+        <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;Vec&lt;u8&gt;&gt;::listen(<span class="kw-2">&amp;</span>conn_a, bind_addr)
             .<span class="kw">await
             </span>.unwrap();
         <span class="kw">let </span>conn_a_fut = tokio::spawn(<span class="kw">async move </span>{ listener.next().<span class="kw">await</span>.unwrap().unwrap() });
 
-        <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) =
-            Connector::&lt;Vec&lt;u8&gt;&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, <span class="string">&quot;a&quot;</span>.into(), peer_a)
-                .<span class="kw">await
-                </span>.unwrap();
+        <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) = Connector::&lt;Vec&lt;u8&gt;&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, url, peer_a)
+            .<span class="kw">await
+            </span>.unwrap();
         <span class="kw">let </span>(auth_peer_a, <span class="kw-2">mut </span>conn_a) = conn_a_fut.<span class="kw">await</span>.unwrap();
 
         <span class="macro">assert_eq!</span>(auth_peer_a, peer_b);
@@ -997,8 +1044,11 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::net::SocketAddr;
+
     <span class="kw">use </span>fedimint_api::PeerId;
     <span class="kw">use </span>futures::{SinkExt, StreamExt};
+    <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::gen_cert_and_key;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectionListener, TlsConfig};
@@ -1035,14 +1085,14 @@
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>connect_success() {
         <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt; layer :(
-        </span><span class="kw">let </span>bind_addr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.to_owned();
+        </span><span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>connectors = gen_connector_config(<span class="number">5</span>)
             .into_iter()
             .map(TlsTcpConnector::new)
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
-            connectors[<span class="number">0</span>].listen(bind_addr.clone()).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = connectors[<span class="number">0</span>].listen(bind_addr).<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
             <span class="kw">let </span>(peer, <span class="kw-2">mut </span>conn) = server.next().<span class="kw">await</span>.unwrap().unwrap();
@@ -1054,7 +1104,7 @@
         });
 
         <span class="kw">let </span>(peer_of_a, <span class="kw-2">mut </span>client_a): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = connectors[<span class="number">2</span>]
-            .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">0</span>))
+            .connect_framed(url.clone(), PeerId::from(<span class="number">0</span>))
             .<span class="kw">await
             </span>.unwrap();
         <span class="macro">assert_eq!</span>(peer_of_a.to_usize(), <span class="number">0</span>);
@@ -1068,7 +1118,8 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>connect_reject() {
-        <span class="kw">let </span>bind_addr = <span class="string">&quot;127.0.0.1:7001&quot;</span>.to_owned();
+        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7001&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: Url = <span class="string">&quot;wss://127.0.0.1:7001&quot;</span>.parse().unwrap();
         <span class="kw">let </span>cfg = gen_connector_config(<span class="number">5</span>);
 
         <span class="kw">let </span>honest = TlsTcpConnector::new(cfg[<span class="number">0</span>].clone());
@@ -1079,8 +1130,7 @@
 
         <span class="comment">// Honest server, malicious client with wrong private key
         </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
-                honest.listen(bind_addr.clone()).<span class="kw">await</span>.unwrap();
+            <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = honest.listen(bind_addr).<span class="kw">await</span>.unwrap();
 
             <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
@@ -1092,7 +1142,7 @@
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
                 <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = malicious_wrong_key
-                    .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">0</span>))
+                    .connect_framed(url.clone(), PeerId::from(<span class="number">0</span>))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 conn.send(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1114,7 +1164,7 @@
         <span class="comment">// Malicious server with wrong key, honest client
         </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
-                malicious_wrong_key.listen(bind_addr.clone()).<span class="kw">await</span>.unwrap();
+                malicious_wrong_key.listen(bind_addr).<span class="kw">await</span>.unwrap();
 
             <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
@@ -1125,9 +1175,8 @@
             });
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
-                <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = honest
-                    .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">1</span>))
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) =
+                    honest.connect_framed(url.clone(), PeerId::from(<span class="number">1</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 conn.send(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 conn.flush().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1148,7 +1197,7 @@
         <span class="comment">// Server with wrong certificate, honest client
         </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = TlsTcpConnector::new(cfg[<span class="number">2</span>].clone())
-                .listen(bind_addr.clone())
+                .listen(bind_addr)
                 .<span class="kw">await
                 </span>.unwrap();
 
@@ -1161,9 +1210,8 @@
             });
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
-                <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = honest
-                    .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">0</span>))
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) =
+                    honest.connect_framed(url.clone(), PeerId::from(<span class="number">0</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 conn.send(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 conn.flush().<span class="kw">await</span><span class="question-mark">?</span>;

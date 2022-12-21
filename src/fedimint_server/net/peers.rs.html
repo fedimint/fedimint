@@ -669,26 +669,6 @@
 <a href="#669" id="669">669</a>
 <a href="#670" id="670">670</a>
 <a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
-<a href="#674" id="674">674</a>
-<a href="#675" id="675">675</a>
-<a href="#676" id="676">676</a>
-<a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
-<a href="#680" id="680">680</a>
-<a href="#681" id="681">681</a>
-<a href="#682" id="682">682</a>
-<a href="#683" id="683">683</a>
-<a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a>
-<a href="#687" id="687">687</a>
-<a href="#688" id="688">688</a>
-<a href="#689" id="689">689</a>
-<a href="#690" id="690">690</a>
-<a href="#691" id="691">691</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
@@ -697,12 +677,12 @@
 </span><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::Node;
 <span class="kw">use </span>fedimint_api::net::peers::IPeerConnections;
 <span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::PeerId;
@@ -749,16 +729,9 @@
     <span class="doccomment">/// Our federation member&#39;s identity
     </span><span class="kw">pub </span>identity: PeerId,
     <span class="doccomment">/// Our listen address for incoming connections from other federation members
-    </span><span class="kw">pub </span>bind_addr: String,
+    </span><span class="kw">pub </span>bind_addr: SocketAddr,
     <span class="doccomment">/// Map of all peers&#39; connection information we want to be connected to
-    </span><span class="kw">pub </span>peers: HashMap&lt;PeerId, ConnectionConfig&gt;,
-}
-
-<span class="doccomment">/// Information needed to connect to one other federation member
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>ConnectionConfig {
-    <span class="doccomment">/// The peer&#39;s network address and port (e.g. `10.42.0.10:4000`)
-    </span><span class="kw">pub </span>address: String,
+    </span><span class="kw">pub </span>peers: HashMap&lt;PeerId, Url&gt;,
 }
 
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
@@ -779,7 +752,7 @@
     incoming: Sender&lt;M&gt;,
     outgoing: Receiver&lt;M&gt;,
     peer: PeerId,
-    cfg: ConnectionConfig,
+    peer_address: Url,
     connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
     incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
     last_received: <span class="prelude-ty">Option</span>&lt;MessageId&gt;,
@@ -797,19 +770,6 @@
 <span class="kw">enum </span>PeerConnectionState&lt;M&gt; {
     Disconnected(DisconnectedPeerConnectionState),
     Connected(ConnectedPeerConnectionState&lt;M&gt;),
-}
-
-<span class="kw">impl </span>NetworkConfig {
-    <span class="kw">pub fn </span>nodes(<span class="kw-2">&amp;</span><span class="self">self</span>, prefix: <span class="kw-2">&amp;</span>str, names: HashMap&lt;PeerId, String&gt;) -&gt; Vec&lt;Node&gt; {
-        <span class="self">self</span>.peers
-            .iter()
-            .map(|(peer, connection)| Node {
-                name: names[peer].to_string(),
-                url: Url::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, prefix, connection.address))
-                    .expect(<span class="string">&quot;Could not parse Url&quot;</span>),
-            })
-            .collect()
-    }
 }
 
 <span class="kw">impl</span>&lt;T: <span class="lifetime">&#39;static</span>&gt; ReconnectPeerConnections&lt;T&gt;
@@ -831,7 +791,7 @@
             .peers
             .iter()
             .filter(|(<span class="kw-2">&amp;</span>peer, <span class="kw">_</span>)| peer != cfg.identity)
-            .map(|(<span class="kw-2">&amp;</span>peer, cfg)| {
+            .map(|(<span class="kw-2">&amp;</span>peer, peer_address)| {
                 <span class="kw">let </span>(connection_sender, connection_receiver) =
                     tokio::sync::mpsc::channel::&lt;AnyFramedTransport&lt;PeerMessage&lt;T&gt;&gt;&gt;(<span class="number">4</span>);
                 (
@@ -840,7 +800,7 @@
                         peer,
                         PeerConnection::new(
                             peer,
-                            cfg.clone(),
+                            peer_address.clone(),
                             shared_connector.clone(),
                             connection_receiver,
                             task_group,
@@ -866,7 +826,7 @@
         task_handle: TaskHandle,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>listener = connect
-            .listen(cfg.bind_addr.clone())
+            .listen(cfg.bind_addr)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Could not bind port&quot;</span>);
 
@@ -1219,8 +1179,8 @@
 
     <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Trying to reconnect&quot;</span>);
-        <span class="kw">let </span>addr = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.address;
-        <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr.clone(), <span class="self">self</span>.peer).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>addr = <span class="self">self</span>.peer_address.clone();
+        <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr, <span class="self">self</span>.peer).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>connected_peer == <span class="self">self</span>.peer {
             <span class="prelude-val">Ok</span>(conn)
@@ -1239,7 +1199,7 @@
 {
     <span class="kw">fn </span>new(
         id: PeerId,
-        cfg: ConnectionConfig,
+        peer_address: Url,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
@@ -1254,7 +1214,7 @@
                     incoming_sender,
                     outgoing_receiver,
                     id,
-                    cfg,
+                    peer_address,
                     connect,
                     incoming_connections,
                     <span class="kw-2">&amp;</span>handle,
@@ -1282,7 +1242,7 @@
         incoming: Sender&lt;M&gt;,
         outgoing: Receiver&lt;M&gt;,
         peer: PeerId,
-        cfg: ConnectionConfig,
+        peer_address: Url,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
         task_handle: <span class="kw-2">&amp;</span>TaskHandle,
@@ -1292,7 +1252,7 @@
             incoming,
             outgoing,
             peer,
-            cfg,
+            peer_address,
             connect,
             incoming_connections,
             last_received: <span class="prelude-val">None</span>,
@@ -1319,9 +1279,7 @@
 
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::MockNetwork;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
-    <span class="kw">use </span><span class="kw">crate</span>::net::peers::{
-        ConnectionConfig, IPeerConnections, NetworkConfig, ReconnectPeerConnections,
-    };
+    <span class="kw">use </span><span class="kw">crate</span>::net::peers::{IPeerConnections, NetworkConfig, ReconnectPeerConnections};
 
     <span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
     <span class="kw">where
@@ -1337,31 +1295,33 @@
         {
             <span class="kw">let </span>net = MockNetwork::new();
 
-            <span class="kw">let </span>peers = [<span class="string">&quot;a&quot;</span>, <span class="string">&quot;b&quot;</span>, <span class="string">&quot;c&quot;</span>]
-                .iter()
-                .enumerate()
-                .map(|(idx, <span class="kw-2">&amp;</span>peer)| {
-                    <span class="kw">let </span>cfg = ConnectionConfig {
-                        address: peer.to_string(),
-                    };
-                    (PeerId::from(idx <span class="kw">as </span>u16 + <span class="number">1</span>), cfg)
-                })
-                .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+            <span class="kw">let </span>peers = [
+                <span class="string">&quot;http://127.0.0.1:1000&quot;</span>,
+                <span class="string">&quot;http://127.0.0.1:2000&quot;</span>,
+                <span class="string">&quot;http://127.0.0.1:3000&quot;</span>,
+            ]
+            .iter()
+            .enumerate()
+            .map(|(idx, <span class="kw-2">&amp;</span>peer)| {
+                <span class="kw">let </span>cfg = peer.parse().unwrap();
+                (PeerId::from(idx <span class="kw">as </span>u16 + <span class="number">1</span>), cfg)
+            })
+            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
             <span class="kw">let </span>peers_ref = <span class="kw-2">&amp;</span>peers;
             <span class="kw">let </span>net_ref = <span class="kw-2">&amp;</span>net;
             <span class="kw">let </span>build_peers = <span class="kw">move </span>|bind: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, id: u16, <span class="kw-2">mut </span>task_group: TaskGroup| <span class="kw">async move </span>{
                 <span class="kw">let </span>cfg = NetworkConfig {
                     identity: PeerId::from(id),
-                    bind_addr: bind.to_string(),
+                    bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
                 <span class="kw">let </span>connect = net_ref.connector(cfg.identity).into_dyn();
                 ReconnectPeerConnections::&lt;u64&gt;::new(cfg, connect, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await
             </span>};
 
-            <span class="kw">let </span><span class="kw-2">mut </span>peers_a = build_peers(<span class="string">&quot;a&quot;</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>peers_b = build_peers(<span class="string">&quot;b&quot;</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>peers_a = build_peers(<span class="string">&quot;127.0.0.1:1000&quot;</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>peers_b = build_peers(<span class="string">&quot;127.0.0.1:2000&quot;</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
 
             peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>.unwrap();
             <span class="kw">let </span>recv = timeout(peers_b.receive()).<span class="kw">await</span>.unwrap().unwrap();
@@ -1370,7 +1330,7 @@
 
             peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>.unwrap();
 
-            <span class="kw">let </span><span class="kw-2">mut </span>peers_c = build_peers(<span class="string">&quot;c&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>peers_c = build_peers(<span class="string">&quot;127.0.0.1:3000&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
             <span class="kw">let </span>recv = timeout(peers_c.receive()).<span class="kw">await</span>.unwrap().unwrap();
             <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">21</span>);

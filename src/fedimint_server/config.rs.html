@@ -682,12 +682,8 @@
 <a href="#682" id="682">682</a>
 <a href="#683" id="683">683</a>
 <a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a>
-<a href="#687" id="687">687</a>
-<a href="#688" id="688">688</a>
-<a href="#689" id="689">689</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span class="kw">use </span>std::net::{IpAddr, SocketAddr};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -718,7 +714,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::NumPeers;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::NetworkConfig;
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
 
 <span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
@@ -751,12 +747,12 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfigConsensus {
+    <span class="doccomment">/// Network addresses and certs for all peers
+    </span><span class="kw">pub </span>peers: BTreeMap&lt;PeerId, Peer&gt;,
     <span class="doccomment">/// The version of the binary code running
     </span><span class="kw">pub </span>code_version: String,
     <span class="doccomment">/// Configurable federation name
     </span><span class="kw">pub </span>federation_name: String,
-    <span class="doccomment">/// Certs for TLS communication, required for peer authentication
-    </span><span class="kw">pub </span>peer_certs: HashMap&lt;PeerId, SerdeCert&gt;,
     <span class="doccomment">/// Public keys for HBBFT consensus from all peers
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>hbbft_pk_set: hbbft::crypto::PublicKeySet,
@@ -769,14 +765,12 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfigLocal {
-    <span class="doccomment">/// Network addresses for all peers
-    </span><span class="kw">pub </span>peers: BTreeMap&lt;PeerId, Peer&gt;,
     <span class="doccomment">/// Our peer id (generally should not change)
     </span><span class="kw">pub </span>identity: PeerId,
     <span class="doccomment">/// Our bind address for running HBBFT
-    </span><span class="kw">pub </span>hbbft_bind_addr: String,
+    </span><span class="kw">pub </span>hbbft_bind_addr: SocketAddr,
     <span class="doccomment">/// Our bind address for our API endpoints
-    </span><span class="kw">pub </span>api_bind_addr: String,
+    </span><span class="kw">pub </span>api_bind_addr: SocketAddr,
     <span class="doccomment">/// Our publicly known TLS cert
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
@@ -787,11 +781,12 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>SerdeCert(<span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)] </span><span class="kw">pub </span>rustls::Certificate);
-
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Peer {
-    <span class="kw">pub </span>hbbft: ConnectionConfig,
+    <span class="doccomment">/// Certs for TLS communication, required for peer authentication
+    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
+    <span class="doccomment">/// The TLS network address and port, used for HBBFT consensus
+    </span><span class="kw">pub </span>hbbft: Url,
     <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     </span><span class="kw">pub </span>api_addr: Url,
     <span class="doccomment">/// human-readable name
@@ -824,31 +819,24 @@
         epoch_pk_set: hbbft::crypto::PublicKeySet,
         modules: BTreeMap&lt;String, ServerModuleConfig&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>peers = params.peers();
         <span class="kw">let </span>private = ServerConfigPrivate {
-            tls_key: params.tls.our_private_key,
+            tls_key: params.tls.our_private_key.clone(),
             hbbft_sks,
             epoch_sks,
             modules: Default::default(),
         };
         <span class="kw">let </span>local = ServerConfigLocal {
-            peers,
             identity,
             hbbft_bind_addr: params.hbbft.bind_addr,
             api_bind_addr: params.api.bind_addr,
-            tls_cert: params.tls.our_certificate,
+            tls_cert: params.tls.our_certificate.clone(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
         };
         <span class="kw">let </span>consensus = ServerConfigConsensus {
             code_version: code_version.to_string(),
-            federation_name: params.federation_name,
-            peer_certs: params
-                .tls
-                .peer_certs
-                .into_iter()
-                .map(|(peer, cert)| (peer, SerdeCert(cert)))
-                .collect(),
+            federation_name: params.federation_name.clone(),
+            peers: params.peers(),
             hbbft_pk_set,
             epoch_pk_set,
             modules: Default::default(),
@@ -897,7 +885,7 @@
 
     <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
         <span class="kw">let </span>nodes = <span class="self">self
-            </span>.local
+            </span>.consensus
             .peers
             .values()
             .map(|peer| Node {
@@ -933,7 +921,7 @@
     }
 
     <span class="kw">pub fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>peers = <span class="self">self</span>.local.peers.clone();
+        <span class="kw">let </span>peers = <span class="self">self</span>.consensus.peers.clone();
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
         <span class="kw">let </span>private = <span class="self">self</span>.private.clone();
         <span class="kw">let </span>id = identity.to_usize();
@@ -1097,9 +1085,9 @@
     <span class="kw">pub fn </span>network_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkConfig {
         NetworkConfig {
             identity: <span class="self">self</span>.local.identity,
-            bind_addr: <span class="self">self</span>.local.hbbft_bind_addr.clone(),
+            bind_addr: <span class="self">self</span>.local.hbbft_bind_addr,
             peers: <span class="self">self
-                </span>.local
+                </span>.consensus
                 .peers
                 .iter()
                 .map(|(<span class="kw-2">&amp;</span>id, peer)| (id, peer.hbbft.clone()))
@@ -1113,12 +1101,12 @@
             our_private_key: <span class="self">self</span>.private.tls_key.clone(),
             peer_certs: <span class="self">self
                 </span>.consensus
-                .peer_certs
+                .peers
                 .iter()
-                .map(|(peer, cert)| (<span class="kw-2">*</span>peer, cert.<span class="number">0</span>.clone()))
+                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.tls_cert.clone()))
                 .collect(),
             peer_names: <span class="self">self
-                </span>.local
+                </span>.consensus
                 .peers
                 .iter()
                 .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.name.to_string()))
@@ -1160,10 +1148,10 @@
                 (
                     <span class="kw-2">*</span>peer,
                     Peer {
+                        tls_cert: <span class="self">self</span>.tls.peer_certs[peer].clone(),
                         name: <span class="self">self</span>.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
-                        api_addr: Url::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;ws://{}&quot;</span>, <span class="self">self</span>.api.peers[peer].address))
-                            .expect(<span class="string">&quot;Could not parse URL&quot;</span>),
+                        api_addr: <span class="self">self</span>.api.peers[peer].clone(),
                     },
                 )
             })
@@ -1199,6 +1187,8 @@
             peer_names,
         };
 
+        <span class="kw">let </span>bind_address = bind_address.parse().expect(<span class="string">&quot;Could not parse address&quot;</span>);
+
         ServerConfigParams {
             tls,
             hbbft: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">0</span>, peers),
@@ -1222,20 +1212,20 @@
     }
 
     <span class="kw">fn </span>gen_network(
-        bind_address: <span class="kw-2">&amp;</span>str,
+        bind_address: <span class="kw-2">&amp;</span>IpAddr,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         offset: u16,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
     ) -&gt; NetworkConfig {
         NetworkConfig {
             identity: <span class="kw-2">*</span>our_id,
-            bind_addr: <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, bind_address, peers[our_id].base_port + offset),
+            bind_addr: SocketAddr::new(<span class="kw-2">*</span>bind_address, peers[our_id].base_port + offset),
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
-                    <span class="kw">let </span>connection = ConnectionConfig {
-                        address: <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, params.address, params.base_port + offset),
-                    };
+                    <span class="kw">let </span>connection = <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, params.address, params.base_port + offset)
+                        .parse()
+                        .expect(<span class="string">&quot;Could not parse address&quot;</span>);
                     (<span class="kw-2">*</span>peer, connection)
                 })
                 .collect(),
@@ -1263,7 +1253,7 @@
             .map(|peer| {
                 <span class="kw">let </span>params: PeerServerParams = PeerServerParams {
                     cert: keys[peer].<span class="number">0</span>.clone(),
-                    address: <span class="string">&quot;127.0.0.1&quot;</span>.to_string(),
+                    address: <span class="string">&quot;ws://127.0.0.1&quot;</span>.to_string(),
                     base_port: base_port + (u16::from(<span class="kw-2">*</span>peer) * <span class="number">6</span>),
                     name: <span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize()),
                 };

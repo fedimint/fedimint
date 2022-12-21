@@ -200,10 +200,9 @@
 <span class="kw">use </span>fedimint_core::modules::ln::LightningModuleConfigGen;
 <span class="kw">use </span>fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
 <span class="kw">use </span>fedimint_server::config::{
-    gen_cert_and_key, Peer <span class="kw">as </span>ServerPeer, SerdeCert, ServerConfig, ServerConfigConsensus,
-    ServerConfigLocal, ServerConfigPrivate,
+    gen_cert_and_key, Peer <span class="kw">as </span>ServerPeer, ServerConfig, ServerConfigConsensus, ServerConfigLocal,
+    ServerConfigPrivate,
 };
-<span class="kw">use </span>fedimint_server::net::peers::ConnectionConfig;
 <span class="kw">use </span>fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -284,16 +283,17 @@
         .map(|(<span class="kw-2">&amp;</span>id, <span class="kw">_</span>)| {
             <span class="kw">let </span>id_u16: u16 = id.into();
             <span class="kw">let </span>peer = ServerPeer {
-                hbbft: ConnectionConfig {
-                    address: <span class="macro">format!</span>(
-                        <span class="string">&quot;{}:{}&quot;</span>,
-                        hostnames[id_u16 <span class="kw">as </span>usize].clone(),
-                        hbbft_base_port + id_u16
-                    ),
-                },
+                tls_cert: tls_keys[<span class="kw-2">&amp;</span>id].<span class="number">0</span>.clone(),
+                hbbft: <span class="macro">format!</span>(
+                    <span class="string">&quot;{}:{}&quot;</span>,
+                    hostnames[id_u16 <span class="kw">as </span>usize].clone(),
+                    hbbft_base_port + id_u16
+                )
+                .parse()
+                .expect(<span class="string">&quot;Could not parse address&quot;</span>),
                 api_addr: {
                     <span class="kw">let </span>s = <span class="macro">format!</span>(
-                        <span class="string">&quot;ws://{}:{}&quot;</span>,
+                        <span class="string">&quot;{}:{}&quot;</span>,
                         hostnames[id_u16 <span class="kw">as </span>usize].clone(),
                         api_base_port + id_u16
                     );
@@ -339,21 +339,21 @@
 
             <span class="kw">let </span><span class="kw-2">mut </span>config = ServerConfig {
                 consensus: ServerConfigConsensus {
+                    peers: cfg_peers.clone(),
                     code_version: CODE_VERSION.to_string(),
                     federation_name: params.federation_name.clone(),
-                    peer_certs: tls_keys
-                        .iter()
-                        .map(|(peer, cert)| (<span class="kw-2">*</span>peer, SerdeCert(cert.<span class="number">0</span>.clone())))
-                        .collect(),
                     hbbft_pk_set: netinf.public_key_set().clone(),
                     epoch_pk_set: epoch_keys.public_key_set().clone(),
                     modules: Default::default(),
                 },
                 local: ServerConfigLocal {
-                    peers: cfg_peers.clone(),
                     identity: id,
-                    hbbft_bind_addr: <span class="macro">format!</span>(<span class="string">&quot;0.0.0.0:{}&quot;</span>, hbbft_base_port + id_u16),
-                    api_bind_addr: <span class="macro">format!</span>(<span class="string">&quot;0.0.0.0:{}&quot;</span>, api_base_port + id_u16),
+                    hbbft_bind_addr: <span class="macro">format!</span>(<span class="string">&quot;0.0.0.0:{}&quot;</span>, hbbft_base_port + id_u16)
+                        .parse()
+                        .expect(<span class="string">&quot;Could not parse address&quot;</span>),
+                    api_bind_addr: <span class="macro">format!</span>(<span class="string">&quot;0.0.0.0:{}&quot;</span>, api_base_port + id_u16)
+                        .parse()
+                        .expect(<span class="string">&quot;Could not parse address&quot;</span>),
                     tls_cert: tls_keys[<span class="kw-2">&amp;</span>id].<span class="number">0</span>.clone(),
                     modules: Default::default(),
                     max_connections: <span class="number">1000</span>,

@@ -598,7 +598,7 @@
 }
 
 <span class="kw">fn </span>parse_peer_params(url: String) -&gt; PeerServerParams {
-    <span class="kw">let </span>split: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = url.split(<span class="string">&#39;:&#39;</span>).collect();
+    <span class="kw">let </span>split: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = url.split(<span class="string">&#39;@&#39;</span>).collect();
     <span class="macro">assert_eq!</span>(split.len(), <span class="number">4</span>, <span class="string">&quot;Cannot parse cert string&quot;</span>);
     <span class="kw">let </span>base_port = split[<span class="number">1</span>].parse().expect(<span class="string">&quot;could not parse base port&quot;</span>);
     <span class="kw">let </span>hex_cert = hex::decode(split[<span class="number">3</span>]).expect(<span class="string">&quot;cert was not hex encoded&quot;</span>);
@@ -622,7 +622,7 @@
 
     rustls::ServerName::try_from(name.as_str()).expect(<span class="string">&quot;Valid DNS name&quot;</span>);
     <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string
-    </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}:{}:{}:{}&quot;</span>, address, base_port, name, hex::encode(cert.<span class="number">0</span>));
+    </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}@{}@{}@{}&quot;</span>, address, base_port, name, hex::encode(cert.<span class="number">0</span>));
     fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url).unwrap();
     cert_url
 }
