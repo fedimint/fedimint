@@ -106,7 +106,8 @@ fn attach_endpoints(
             .register_async_method(path, move |params, state| async move {
                 let params = params.one::<serde_json::Value>()?;
                 let fedimint = &state.fedimint;
-                let dbtx = fedimint.database_transaction().await;
+                let mut dbtx = fedimint.database_transaction().await;
+                dbtx.surpress_warning();
                 // Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
@@ -152,7 +153,8 @@ fn attach_endpoints_erased(
                 // Hack to avoid Sync/Send issues
                 let params = params.one::<serde_json::Value>()?;
                 let fedimint = &state.fedimint;
-                let dbtx = fedimint.database_transaction().await;
+                let mut dbtx = fedimint.database_transaction().await;
+                dbtx.surpress_warning();
                 // Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this

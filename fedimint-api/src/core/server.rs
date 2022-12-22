@@ -14,8 +14,9 @@ use fedimint_api::{
 };
 
 use super::*;
-use crate::module::{
-    ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount,
+use crate::{
+    db::ReadOnlyDatabaseTransaction,
+    module::{ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount},
 };
 
 pub trait ModuleVerificationCache: Debug {
@@ -62,10 +63,13 @@ pub trait IServerModule: Debug {
     fn as_any(&self) -> &(dyn Any + 'static);
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>);
+    async fn await_consensus_proposal(&self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<ConsensusItem>;
+    async fn consensus_proposal(
+        &self,
+        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+    ) -> Vec<ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -90,7 +94,7 @@ pub trait IServerModule: Debug {
     async fn validate_input<'a>(
         &self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -116,7 +120,7 @@ pub trait IServerModule: Debug {
     /// and merely generate a warning.
     async fn validate_output(
         &self,
-        dbtx: &mut DatabaseTransaction,
+        dbtx: &mut ReadOnlyDatabaseTransaction,
         output: &Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -153,7 +157,7 @@ pub trait IServerModule: Debug {
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<OutputOutcome>;
 
@@ -161,7 +165,7 @@ pub trait IServerModule: Debug {
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
+    async fn audit(&self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///
@@ -199,12 +203,15 @@ where
     }
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn await_consensus_proposal(&self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>) {
         <Self as ServerModulePlugin>::await_consensus_proposal(self, dbtx).await
     }
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<ConsensusItem> {
+    async fn consensus_proposal(
+        &self,
+        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+    ) -> Vec<ConsensusItem> {
         <Self as ServerModulePlugin>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
@@ -264,7 +271,7 @@ where
     async fn validate_input<'a>(
         &self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
         verification_cache: &VerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError> {
@@ -322,7 +329,7 @@ where
     /// and merely generate a warning.
     async fn validate_output(
         &self,
-        dbtx: &mut DatabaseTransaction,
+        dbtx: &mut ReadOnlyDatabaseTransaction,
         output: &Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModulePlugin>::validate_output(
@@ -382,7 +389,7 @@ where
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<OutputOutcome> {
         <Self as ServerModulePlugin>::output_status(self, dbtx, out_point)
@@ -394,7 +401,7 @@ where
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
+    async fn audit(&self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>, audit: &mut Audit) {
         <Self as ServerModulePlugin>::audit(self, dbtx, audit).await
     }
 

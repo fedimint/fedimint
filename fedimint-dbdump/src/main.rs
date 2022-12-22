@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use docopt::Docopt;
 use erased_serde::Serialize;
-use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::db::ReadOnlyDatabaseTransaction;
 use fedimint_api::encoding::Encodable;
 use fedimint_core::all_decoders;
 use fedimint_ln::db as LightningRange;
@@ -77,7 +77,7 @@ macro_rules! push_db_key_items {
 /// Also includes metadata on which sections of the database to read.
 struct DatabaseDump<'a> {
     serialized: BTreeMap<String, Box<dyn Serialize>>,
-    read_only: DatabaseTransaction<'a>,
+    read_only: ReadOnlyDatabaseTransaction<'a>,
     ranges: Vec<String>,
     prefixes: Vec<String>,
     include_all_prefixes: bool,
@@ -676,7 +676,7 @@ async fn main() {
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
     let mut dbdump = DatabaseDump {
         serialized,
-        read_only: DatabaseTransaction::new(read_only, all_decoders()),
+        read_only: ReadOnlyDatabaseTransaction::new(read_only, all_decoders()),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == "All",

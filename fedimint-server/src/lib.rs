@@ -188,7 +188,9 @@ impl FedimintServer {
     /// Starts consensus by skipping to the last saved epoch history  and triggering a new epoch
     pub async fn start_consensus(&mut self) {
         let db = self.consensus.db.clone();
-        let mut tx = db.begin_transaction(self.consensus.decoders()).await;
+        let mut tx = db
+            .begin_readonly_transaction(self.consensus.decoders())
+            .await;
 
         if let Some(key) = tx.get_value(&LastEpochKey).await.expect("DB error") {
             self.last_processed_epoch = tx.get_value(&key).await.expect("DB error");

@@ -154,6 +154,7 @@ impl FedimintConsensus {
 
         // Create read-only DB tx so that the read state is consistent
         let mut dbtx = self.db.begin_transaction(self.decoders()).await;
+        dbtx.surpress_warning();
 
         for input in &transaction.inputs {
             let module = self.modules.module(input.module_key());
@@ -161,7 +162,7 @@ impl FedimintConsensus {
             let cache = module.build_verification_cache(&[input.clone()]);
             let interconnect = self.build_interconnect();
             let meta = module
-                .validate_input(&interconnect, &mut dbtx, &cache, input)
+                .validate_input(&interconnect, dbtx.to_readonly(), &cache, input)
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
 
@@ -174,7 +175,7 @@ impl FedimintConsensus {
             let amount = self
                 .modules
                 .module(output.module_key())
-                .validate_output(&mut dbtx, output)
+                .validate_output(dbtx.to_readonly(), output)
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
@@ -349,7 +350,7 @@ impl FedimintConsensus {
 
     pub async fn get_last_epoch(&self) -> Option<u64> {
         self.db
-            .begin_transaction(self.decoders())
+            .begin_readonly_transaction(self.decoders())
             .await
             .get_value(&LastEpochKey)
             .await
@@ -359,7 +360,7 @@ impl FedimintConsensus {
 
     pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
         self.db
-            .begin_transaction(self.decoders())
+            .begin_readonly_transaction(self.decoders())
             .await
             .get_value(&EpochHistoryKey(epoch))
             .await
@@ -377,7 +378,7 @@ impl FedimintConsensus {
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self
             .db
-            .begin_transaction(self.decoders())
+            .begin_readonly_transaction(self.decoders())
             .await
             .get_value(&prev_epoch_key)
             .await
@@ -429,7 +430,7 @@ impl FedimintConsensus {
             .modules()
             .map(|module| {
                 Box::pin(async {
-                    let mut dbtx = self.database_transaction().await;
+                    let mut dbtx = self.db.begin_readonly_transaction(self.decoders()).await;
                     module.await_consensus_proposal(&mut dbtx).await
                 })
             })
@@ -439,7 +440,7 @@ impl FedimintConsensus {
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
-        let mut dbtx = self.database_transaction().await;
+        let mut dbtx = self.db.begin_readonly_transaction(self.decoders()).await;
 
         let drop_peers = dbtx
             .find_by_prefix(&DropPeerKeyPrefix)
@@ -530,7 +531,7 @@ impl FedimintConsensus {
         &self,
         txid: TransactionId,
     ) -> Option<crate::outcome::TransactionStatus> {
-        let mut dbtx = self.database_transaction().await;
+        let mut dbtx = self.db.begin_readonly_transaction(self.decoders()).await;
 
         let accepted: Option<AcceptedTransaction> = dbtx
             .get_value(&AcceptedTransactionKey(txid))
@@ -561,7 +562,7 @@ impl FedimintConsensus {
 
         let rejected: Option<String> = self
             .db
-            .begin_transaction(self.decoders())
+            .begin_readonly_transaction(self.decoders())
             .await
             .get_value(&RejectedTransactionKey(txid))
             .await
@@ -596,7 +597,7 @@ impl FedimintConsensus {
     }
 
     pub async fn audit(&self) -> Audit {
-        let mut dbtx = self.database_transaction().await;
+        let mut dbtx = self.db.begin_readonly_transaction(self.decoders()).await;
         let mut audit = Audit::default();
         for module in self.modules.modules() {
             module.audit(&mut dbtx, &mut audit).await

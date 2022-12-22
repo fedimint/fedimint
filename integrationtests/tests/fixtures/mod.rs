@@ -773,7 +773,7 @@ impl FederationTest {
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
             let svr = server.borrow();
-            let dbtx = block_on(svr.database.begin_transaction(all_decoders()));
+            let dbtx = block_on(svr.database.begin_readonly_transaction(all_decoders()));
             block_on(fedimint_wallet::broadcast_pending_tx(
                 dbtx,
                 &svr.bitcoin_rpc,
@@ -825,7 +825,12 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
-        let mut dbtx = block_on(server.consensus.db.begin_transaction(all_decoders()));
+        let mut dbtx = block_on(
+            server
+                .consensus
+                .db
+                .begin_readonly_transaction(all_decoders()),
+        );
         let height = block_on(wallet.consensus_height(&mut dbtx)).unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 

@@ -172,7 +172,7 @@ impl MintClient {
         // fetch consensus height first - so we dont miss anything when scanning
         let epoch = self.context.api.fetch_last_epoch().await?;
 
-        let mut dbtx = self.start_dbtx().await;
+        let mut dbtx = self.start_readonly_dbtx().await;
         let notes = self.get_available_notes(&mut dbtx).await;
 
         let pending_notes: Vec<_> = dbtx

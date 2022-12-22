@@ -540,6 +540,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .db
             .begin_transaction(ModuleDecoderRegistry::default())
             .await;
+        dbtx.surpress_warning();
         self.mint_client().fetch_coins(&mut dbtx, outpoint).await?;
         dbtx.commit_tx().await.expect("DB Error");
         Ok(())
@@ -551,7 +552,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut dbtx = self
             .context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_readonly_transaction(ModuleDecoderRegistry::default())
             .await;
         let pending = dbtx
             .find_by_prefix(&PendingCoinsKeyPrefix)
@@ -643,7 +644,7 @@ impl Client<UserClientConfig> {
         if let Some(gateway) = self
             .context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_readonly_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&LightningGatewayKey)
             .await
@@ -755,7 +756,7 @@ impl Client<UserClientConfig> {
         let contract_data = self
             .context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_readonly_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&OutgoingPaymentKey(contract_id))
             .await
@@ -1067,7 +1068,7 @@ impl Client<GatewayClientConfig> {
     pub async fn list_pending_outgoing(&self) -> Vec<OutgoingContractAccount> {
         self.context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_readonly_transaction(ModuleDecoderRegistry::default())
             .await
             .find_by_prefix(&OutgoingContractAccountKeyPrefix)
             .await
@@ -1221,7 +1222,7 @@ impl Client<GatewayClientConfig> {
     pub async fn list_pending_claimed_outgoing(&self) -> Vec<ContractId> {
         self.context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_readonly_transaction(ModuleDecoderRegistry::default())
             .await
             .find_by_prefix(&OutgoingPaymentClaimKeyPrefix)
             .await

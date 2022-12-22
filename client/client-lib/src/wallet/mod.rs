@@ -113,7 +113,7 @@ impl WalletClient {
                 let result = self
                     .context
                     .db
-                    .begin_transaction(ModuleDecoderRegistry::default())
+                    .begin_readonly_transaction(ModuleDecoderRegistry::default())
                     .await
                     .get_value(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
@@ -449,7 +449,9 @@ mod tests {
             .fetch_from_all(|wallet, db| async {
                 wallet
                     .get_wallet_value(
-                        &mut db.begin_transaction(ModuleDecoderRegistry::default()).await,
+                        &mut db
+                            .begin_readonly_transaction(ModuleDecoderRegistry::default())
+                            .await,
                     )
                     .await
             })
@@ -467,7 +469,9 @@ mod tests {
             .fetch_from_all(|wallet, db| async {
                 wallet
                     .get_wallet_value(
-                        &mut db.begin_transaction(ModuleDecoderRegistry::default()).await,
+                        &mut db
+                            .begin_readonly_transaction(ModuleDecoderRegistry::default())
+                            .await,
                     )
                     .await
             })
