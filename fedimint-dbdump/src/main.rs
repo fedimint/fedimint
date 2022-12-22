@@ -545,6 +545,16 @@ impl<'a> DatabaseDump<'a> {
                         "Last e-cash note index"
                     );
                 }
+                ClientMintRange::DbKeyPrefix::NotesPerDenomination => {
+                    let notes = self
+                        .read_only
+                        .get_value(&ClientMintRange::NotesPerDenominationKey)
+                        .await
+                        .unwrap();
+                    if let Some(notes) = notes {
+                        mint_client.insert("NotesPerDenomination".to_string(), Box::new(notes));
+                    }
+                }
             }
         }
 

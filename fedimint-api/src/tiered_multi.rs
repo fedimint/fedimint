@@ -95,6 +95,11 @@ impl<T> TieredMulti<T> {
             .flat_map(|(amt, coins)| coins.into_iter().map(move |c| (amt, c)))
     }
 
+    /// Returns the max number of notes for any given denomination tier
+    pub fn max_tier_len(&self) -> usize {
+        self.0.values().map(|notes| notes.len()).max().unwrap_or(0)
+    }
+
     pub fn check_tiers<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
         match self.0.keys().find(|&amt| keys.get(*amt).is_none()) {
             Some(amt) => Err(InvalidAmountTierError(*amt)),

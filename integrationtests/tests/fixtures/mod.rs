@@ -150,7 +150,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     }
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let params =
-        ServerConfigParams::gen_local(&peers, sats(1000), base_port, "test", "127.0.0.1:18443");
+        ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test", "127.0.0.1:18443");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     match env::var("FM_TEST_DISABLE_MOCKS") {

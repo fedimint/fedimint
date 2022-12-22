@@ -55,8 +55,8 @@ pub mod config;
 pub mod common;
 pub mod db;
 
-/// By default, how many denomination sets of notes should change-making target for users
-const DEFAULT_TARGET_DENOMINATION_SETS: u16 = 1;
+/// By default, the maximum notes per denomination when change-making for users
+const DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = 3;
 
 /// Data structures taking into account different amount tiers
 
@@ -171,7 +171,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
                             })
                             .collect(),
                         fee_consensus: FeeConsensus::default(),
-                        max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                        max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
                     },
                     private: MintConfigPrivate {
                         tbs_sks: params
@@ -244,7 +244,7 @@ impl FederationModuleConfigGen for MintConfigGenerator {
                     .collect(),
                 fee_consensus: Default::default(),
                 threshold: peers.threshold(),
-                max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },
         };
 
@@ -466,6 +466,14 @@ impl ServerModulePlugin for Mint {
         _dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
+        if output.max_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
+            return Err(MintError::ExceededMaxNotes(
+                self.cfg.consensus.max_notes_per_denomination,
+                output.max_tier_len(),
+            ))
+            .into_module_error_other();
+        }
+
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
             if self.pub_key.get(&amount).is_none() {
                 Some(amount)
@@ -1078,6 +1086,8 @@ pub enum MintError {
     InvalidAmountTier(Amount),
     #[error("One of the coins had an invalid signature")]
     InvalidSignature,
+    #[error("Exceeded maximum notes per denomination {0}, found {1}")]
+    ExceededMaxNotes(u16, usize),
 }
 
 impl From<InvalidAmountTierError> for MintError {
@@ -1295,7 +1305,7 @@ mod test {
                     .consensus
                     .peer_tbs_pks,
                 fee_consensus: FeeConsensus::default(),
-                max_target_denomination_sets: 0,
+                max_notes_per_denomination: 0,
             },
             private: MintConfigPrivate {
                 tbs_sks: mint_server_cfg1[0]
