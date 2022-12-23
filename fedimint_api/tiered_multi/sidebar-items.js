@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["TieredMulti","Represents coins of different denominations."],["TieredMultiZip",""]]};
+window.SIDEBAR_ITEMS = {"macro":[["try",""]],"opaque":[["",""]],"struct":[["TieredMulti","Represents coins of different denominations."],["TieredMultiZip",""],["__Visitor",""]]};

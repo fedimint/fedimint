@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["GatewayConfig",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"macro":[["try",""]],"struct":[["GatewayConfig",""],["__FieldVisitor",""],["__Visitor",""]]};

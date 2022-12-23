@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"derive":[["Decodable",""],["Encodable",""],["UnzipConsensus",""]]};
+window.SIDEBAR_ITEMS = {"derive":[["Decodable",""],["Encodable",""],["UnzipConsensus",""]],"static":[["_DECLS",""]]};

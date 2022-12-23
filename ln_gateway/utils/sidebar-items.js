@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["retry","Retry an operation util the operation succeeds, OR The maximum number of attempts are made without success"]]};
+window.SIDEBAR_ITEMS = {"fn":[["retry","Retry an operation util the operation succeeds, OR The maximum number of attempts are made without success"]],"opaque":[["",""]],"static":[["CALLSITE",""],["META",""]]};

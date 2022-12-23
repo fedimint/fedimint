@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["gen_tls",""],["main",""],["parse_peer_params",""],["run_dkg",""],["salt_file_path_from_file_path",""]],"struct":[["Cli",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["gen_tls",""],["main",""],["parse_peer_params",""],["run_dkg",""],["salt_file_path_from_file_path",""]],"opaque":[["",""]],"static":[["CALLSITE",""],["META",""]],"struct":[["Cli",""]]};
