@@ -8,7 +8,7 @@ mod tbs;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
-use std::io::{Error, Read, Write};
+use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::format_err;
@@ -72,8 +72,8 @@ pub trait Encodable {
 /// Data which can be encoded in a consensus-consistent way
 pub trait Decodable: Sized {
     /// Decode an object with a well-defined format
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError>;
 }
@@ -507,6 +507,33 @@ where
     }
 }
 
+/// A wrapper counting bytes written
+struct CountWrite<'a, W> {
+    inner: &'a mut W,
+    count: usize,
+}
+
+impl<'a, W> CountWrite<'a, W> {
+    fn new(inner: &'a mut W) -> Self {
+        Self { inner, count: 0 }
+    }
+}
+
+impl<'a, W> io::Write for CountWrite<'a, W>
+where
+    W: io::Write,
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let count = self.inner.write(buf)?;
+        self.count += count;
+        Ok(count)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 #[test]
 fn encode_decode_btreeset() {
     let t = BTreeSet::from(["a".to_string(), "b".to_string()]);
@@ -522,11 +549,42 @@ fn encode_decode_btreeset() {
     );
 }
 
+/// Wrappers for `T` that are `De-Serializable`, while we need them in `Encodable` contex
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+pub struct SerdeEncodable<T>(T);
+
+impl<T> Encodable for SerdeEncodable<T>
+where
+    T: serde::Serialize,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut count_writer = CountWrite::new(writer);
+        bincode::serialize_into(&mut count_writer, &self.0)
+            .map_err(|e| std::io::Error::new(io::ErrorKind::Other, e))?;
+        Ok(count_writer.count)
+    }
+}
+
+impl<T> Decodable for SerdeEncodable<T>
+where
+    T: for<'de> serde::Deserialize<'de>,
+{
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self(
+            bincode::deserialize_from(r).map_err(|e| DecodeError(e.into()))?,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
     use std::io::Cursor;
 
+    use super::*;
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
 
@@ -629,5 +687,10 @@ mod tests {
 			j5r6drg6k6zcqj0fcwg";
         let invoice = invoice_str.parse::<lightning_invoice::Invoice>().unwrap();
         test_roundtrip(invoice);
+    }
+
+    #[test_log::test]
+    fn test_serde_encodable() {
+        test_roundtrip(SerdeEncodable(6usize));
     }
 }

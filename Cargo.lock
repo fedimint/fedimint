@@ -807,6 +807,7 @@ dependencies = [
  "anyhow",
  "async-lock",
  "async-trait",
+ "bincode",
  "bitcoin",
  "bitcoin_hashes 0.11.0",
  "fedimint-derive",
