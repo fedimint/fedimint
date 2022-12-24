@@ -6,6 +6,10 @@ pub mod ln;
 pub mod rpc;
 pub mod utils;
 
+pub mod gwlightningrpc {
+    tonic::include_proto!("gwlightningrpc");
+}
+
 use std::{
     borrow::Cow,
     collections::HashMap,
