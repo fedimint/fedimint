@@ -341,21 +341,6 @@ impl Encodable for lightning_invoice::Invoice {
     }
 }
 
-#[test]
-fn encode_decode_systemtime() {
-    let t = SystemTime::now();
-
-    let mut buf = vec![];
-
-    t.consensus_encode(&mut buf).unwrap();
-
-    assert_eq!(
-        t,
-        Decodable::consensus_decode::<_>(&mut buf.as_slice(), &ModuleDecoderRegistry::default())
-            .unwrap()
-    );
-}
-
 impl Decodable for lightning_invoice::Invoice {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
@@ -458,21 +443,6 @@ where
     }
 }
 
-#[test]
-fn encode_decode_btreemap() {
-    let t = BTreeMap::from([("a".to_string(), 1u32), ("b".to_string(), 2)]);
-
-    let mut buf = vec![];
-
-    t.consensus_encode(&mut buf).unwrap();
-
-    assert_eq!(
-        t,
-        Decodable::consensus_decode::<_>(&mut buf.as_slice(), &ModuleDecoderRegistry::default())
-            .unwrap()
-    );
-}
-
 impl<K> Encodable for BTreeSet<K>
 where
     K: Encodable,
@@ -533,22 +503,6 @@ where
         self.inner.flush()
     }
 }
-
-#[test]
-fn encode_decode_btreeset() {
-    let t = BTreeSet::from(["a".to_string(), "b".to_string()]);
-
-    let mut buf = vec![];
-
-    t.consensus_encode(&mut buf).unwrap();
-
-    assert_eq!(
-        t,
-        Decodable::consensus_decode::<_>(&mut buf.as_slice(), &ModuleDecoderRegistry::default())
-            .unwrap()
-    );
-}
-
 /// Wrappers for `T` that are `De-Serializable`, while we need them in `Encodable` contex
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct SerdeEncodable<T>(T);
@@ -692,5 +646,23 @@ mod tests {
     #[test_log::test]
     fn test_serde_encodable() {
         test_roundtrip(SerdeEncodable(6usize));
+    }
+
+    #[test_log::test]
+    fn test_btreemap() {
+        test_roundtrip(BTreeMap::from([
+            ("a".to_string(), 1u32),
+            ("b".to_string(), 2),
+        ]));
+    }
+
+    #[test_log::test]
+    fn test_btreeset() {
+        test_roundtrip(BTreeSet::from(["a".to_string(), "b".to_string()]));
+    }
+
+    #[test_log::test]
+    fn test_systemtime() {
+        test_roundtrip(SystemTime::now());
     }
 }
