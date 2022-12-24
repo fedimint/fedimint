@@ -11,7 +11,7 @@ export FM_FED_SIZE=${1:-4}
 # pointless. It only gets us closer to the 108 character limit
 # for named unix sockets (https://stackoverflow.com/a/34833072),
 # so let's not do it.
-if [[ "$TMP" == *"/nix-shell."* ]]; then
+if [[ "${TMP:-}" == *"/nix-shell."* ]]; then
   export FM_TMP_DIR=${2-$TMP}
 else
   export FM_TMP_DIR=${2-"$(mktemp -d)"}
