@@ -1,11 +1,10 @@
 use cln_plugin::Error;
 use fedimint_api::task::TaskGroup;
-use fedimint_server::config::load_from_file;
 use ln_gateway::{
     client::{GatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
     cln::{build_cln_rpc, ClnRpcRef},
-    config::GatewayConfig,
     rpc::{GatewayRequest, GatewayRpcSender},
+    utils::read_gateway_config,
     LnGateway,
 };
 use tokio::sync::mpsc;
@@ -28,8 +27,7 @@ async fn main() -> Result<(), Error> {
 
     let ClnRpcRef { ln_rpc, work_dir } = build_cln_rpc(GatewayRpcSender::new(tx.clone())).await?;
 
-    let gw_cfg_path = work_dir.clone().join("gateway.config");
-    let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path).expect("Failed to parse config");
+    let gw_cfg = read_gateway_config(Some(work_dir.clone()))?;
 
     // Create federation client builder
     let client_builder: GatewayClientBuilder =
