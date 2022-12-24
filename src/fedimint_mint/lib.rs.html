@@ -1307,6 +1307,16 @@
 <a href="#1307" id="1307">1307</a>
 <a href="#1308" id="1308">1308</a>
 <a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1364,8 +1374,8 @@
 <span class="kw">pub mod </span>common;
 <span class="kw">pub mod </span>db;
 
-<span class="doccomment">/// By default, how many denomination sets of notes should change-making target for users
-</span><span class="kw">const </span>DEFAULT_TARGET_DENOMINATION_SETS: u16 = <span class="number">1</span>;
+<span class="doccomment">/// By default, the maximum notes per denomination when change-making for users
+</span><span class="kw">const </span>DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = <span class="number">3</span>;
 
 <span class="doccomment">/// Data structures taking into account different amount tiers
 
@@ -1480,7 +1490,7 @@
                             })
                             .collect(),
                         fee_consensus: FeeConsensus::default(),
-                        max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                        max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
                     },
                     private: MintConfigPrivate {
                         tbs_sks: params
@@ -1553,7 +1563,7 @@
                     .collect(),
                 fee_consensus: Default::default(),
                 threshold: peers.threshold(),
-                max_target_denomination_sets: DEFAULT_TARGET_DENOMINATION_SETS,
+                max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },
         };
 
@@ -1775,6 +1785,14 @@
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
+        <span class="kw">if </span>output.max_tier_len() &gt; <span class="self">self</span>.cfg.consensus.max_notes_per_denomination.into() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::ExceededMaxNotes(
+                <span class="self">self</span>.cfg.consensus.max_notes_per_denomination,
+                output.max_tier_len(),
+            ))
+            .into_module_error_other();
+        }
+
         <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = output.iter_items().find_map(|(amount, <span class="kw">_</span>)| {
             <span class="kw">if </span><span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount).is_none() {
                 <span class="prelude-val">Some</span>(amount)
@@ -2387,6 +2405,8 @@
     </span>InvalidAmountTier(Amount),
     <span class="attr">#[error(<span class="string">&quot;One of the coins had an invalid signature&quot;</span>)]
     </span>InvalidSignature,
+    <span class="attr">#[error(<span class="string">&quot;Exceeded maximum notes per denomination {0}, found {1}&quot;</span>)]
+    </span>ExceededMaxNotes(u16, usize),
 }
 
 <span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>MintError {
@@ -2604,7 +2624,7 @@
                     .consensus
                     .peer_tbs_pks,
                 fee_consensus: FeeConsensus::default(),
-                max_target_denomination_sets: <span class="number">0</span>,
+                max_notes_per_denomination: <span class="number">0</span>,
             },
             private: MintConfigPrivate {
                 tbs_sks: mint_server_cfg1[<span class="number">0</span>]
@@ -2617,4 +2637,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (8a97b4812 2022-12-22)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (af3e06f1b 2022-12-23)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>

@@ -122,7 +122,6 @@
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -151,8 +150,7 @@
     <span class="doccomment">/// Number of signers required
     </span><span class="kw">pub </span>threshold: usize,
     <span class="doccomment">/// The maximum amount of change a client can request
-    /// TODO implement this restriction
-    </span><span class="kw">pub </span>max_target_denomination_sets: u16,
+    </span><span class="kw">pub </span>max_notes_per_denomination: u16,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
@@ -166,7 +164,7 @@
     <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;tbs::PublicKeyShare&gt;&gt;,
-    <span class="kw">pub </span>target_denomination_sets: u16,
+    <span class="kw">pub </span>max_notes_per_denomination: u16,
 }
 
 <span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>MintClientConfig {}
@@ -203,7 +201,7 @@
             tbs_pks: Tiered::from_iter(pub_key.into_iter()),
             fee_consensus: <span class="self">self</span>.consensus.fee_consensus.clone(),
             peer_tbs_pks: <span class="self">self</span>.consensus.peer_tbs_pks.clone(),
-            target_denomination_sets: <span class="self">self</span>.consensus.max_target_denomination_sets,
+            max_notes_per_denomination: <span class="self">self</span>.consensus.max_notes_per_denomination,
         })
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
         .into()
@@ -249,4 +247,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (8a97b4812 2022-12-22)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (af3e06f1b 2022-12-23)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
