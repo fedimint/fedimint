@@ -202,6 +202,16 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     test(2, |fed, user_send, bitcoin, _, _| async move {
         let dummy_user = user_send.new_user_with_peers(peers(&[0])).await;
         let user_receive = user_send.new_user_with_peers(peers(&[0])).await;
+        user_send
+            .client
+            .mint_client()
+            .set_notes_per_denomination(1)
+            .await;
+        user_receive
+            .client
+            .mint_client()
+            .set_notes_per_denomination(1)
+            .await;
 
         fed.mine_spendable_utxo(&dummy_user, &*bitcoin, Amount::from_sat(1000))
             .await;
@@ -228,6 +238,15 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         user_send
             .assert_coin_amounts(vec![msats(1), msats(2)])
             .await;
+
+        // verify error occurs if we issue too many of one denomination
+        user_receive
+            .client
+            .mint_client()
+            .set_notes_per_denomination(10)
+            .await;
+        let notes = user_receive.client.coins().await;
+        assert_matches!(user_receive.client.reissue(notes, rng()).await, Err(_));
     })
     .await
 }

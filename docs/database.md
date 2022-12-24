@@ -83,6 +83,7 @@ The Database is split into different key spaces based on prefixing that can be u
 | Coin                   | `0x20` | amount (8 bytes), nonce (32 bytes) | `SpendableCoin`              |
 | OutputFinalizationData | `0x21` | issuance_id (32 bytes)             | `NoteIssuanceRequests`       |
 | PendingCoins           | `0x27` | mint tx id (sha256 payment hash)   | `TieredMulti<SpendableCoin>` |
+| NotesPerDenomination   | `0x2b` | determines how many notes to issue | `u16`                        |
 
 ### WalletClient
 | Name                    | Prefix | Key        | Value                        |

@@ -29,7 +29,7 @@ use thiserror::Error;
 use tracing::{debug, trace, warn};
 
 use crate::api::ApiError;
-use crate::mint::db::{NextECashNoteIndexKey, PendingCoinsKey};
+use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingCoinsKey};
 use crate::utils::ClientContext;
 use crate::{ChildId, DerivableSecret, MintModuleDecoder};
 
@@ -192,11 +192,7 @@ impl MintClient {
     /// Adds the final amounts of `change` to the tx before submitting it
     /// Allows for multiple `change` outputs
     pub async fn finalize_change(&self, tx: &mut Transaction, change: Vec<Amount>) {
-        let mut dbtx = self
-            .context
-            .db
-            .begin_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx = self.start_dbtx().await;
 
         // remove the spent ecash from the DB
         let mut input_ecash: Vec<(Amount, SpendableNote)> = vec![];
@@ -219,8 +215,9 @@ impl MintClient {
         }
 
         let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
+        let notes_per_denomination = self.notes_per_denomination(&mut dbtx).await;
         for amount in change {
-            let (issuances, nonces) = self.create_ecash(amount).await;
+            let (issuances, nonces) = self.create_ecash(amount, notes_per_denomination).await;
             let out_idx = tx.outputs.len();
             tx.outputs.push(Output::Mint(MintOutput(nonces)));
             change_outputs.push((out_idx, issuances));
@@ -251,10 +248,26 @@ impl MintClient {
         dbtx.commit_tx().await.expect("DB Error");
     }
 
+    pub async fn set_notes_per_denomination(&self, notes: u16) {
+        let mut dbtx = self.start_dbtx().await;
+        dbtx.insert_entry(&NotesPerDenominationKey, &notes)
+            .await
+            .expect("DB error");
+        dbtx.commit_tx().await.expect("DB error");
+    }
+
+    async fn notes_per_denomination(&self, dbtx: &mut DatabaseTransaction<'_>) -> u16 {
+        dbtx.get_value(&NotesPerDenominationKey)
+            .await
+            .expect("DB Error")
+            .unwrap_or(self.config.max_notes_per_denomination - 1)
+    }
+
     /// Generates unsigned ecash, along with the private keys that can spend it
     async fn create_ecash(
         &self,
         amount: Amount,
+        notes_per_denomination: u16,
     ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
@@ -262,7 +275,7 @@ impl MintClient {
             amount,
             &self.coins().await,
             &self.config.tbs_pks,
-            self.config.target_denomination_sets,
+            notes_per_denomination,
         );
         for (amt, num) in denominations.iter() {
             for _ in 0..*num {
@@ -404,7 +417,8 @@ impl MintClient {
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
     {
-        let (finalization, coins) = self.create_ecash(amount).await;
+        let notes_per_denomination = self.notes_per_denomination(dbtx).await;
+        let (finalization, coins) = self.create_ecash(amount, notes_per_denomination).await;
         let out_point = create_tx(coins).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .await
@@ -797,7 +811,11 @@ mod tests {
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
                 &ConfigGenParams::new().attach(MintConfigGenParams {
-                    mint_amounts: vec![Amount::from_sats(1), Amount::from_sats(10)],
+                    mint_amounts: vec![
+                        Amount::from_sats(1),
+                        Amount::from_sats(10),
+                        Amount::from_sats(20),
+                    ],
                 }),
                 &MintConfigGenerator,
             )
@@ -969,7 +987,7 @@ mod tests {
                 tbs_pks: Tiered::from_iter([]),
                 fee_consensus: Default::default(),
                 peer_tbs_pks: BTreeMap::default(),
-                target_denomination_sets: 0,
+                max_notes_per_denomination: 0,
             },
             context: Arc::new(ClientContext {
                 db: db.into(),

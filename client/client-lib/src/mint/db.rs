@@ -14,6 +14,7 @@ pub enum DbKeyPrefix {
     OutputFinalizationData = 0x21,
     PendingCoins = 0x27,
     NextECashNoteIndex = 0x2a,
+    NotesPerDenomination = 0x2b,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -95,4 +96,13 @@ impl DatabaseKeyPrefixConst for NextECashNoteIndexKey {
     const DB_PREFIX: u8 = DbKeyPrefix::NextECashNoteIndex as u8;
     type Key = Self;
     type Value = u64;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct NotesPerDenominationKey;
+
+impl DatabaseKeyPrefixConst for NotesPerDenominationKey {
+    const DB_PREFIX: u8 = 0;
+    type Key = Self;
+    type Value = u16;
 }
