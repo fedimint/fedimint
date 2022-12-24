@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use anyhow::bail;
 use anyhow::format_err;
 use bitcoin::Network;
-use fedimint_api::config::TypedClientModuleConfig;
 use fedimint_api::config::TypedServerModuleConfig;
 use fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
+use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
@@ -82,6 +82,19 @@ impl Default for FeeConsensus {
     }
 }
 
+impl TypedServerModuleConsensusConfig for WalletConfigConsensus {
+    fn to_client_config(&self) -> ClientModuleConfig {
+        serde_json::to_value(&WalletClientConfig {
+            peg_in_descriptor: self.peg_in_descriptor.clone(),
+            network: self.network,
+            fee_consensus: self.fee_consensus.clone(),
+            finality_delay: self.finality_delay,
+        })
+        .expect("Serialization can't fail")
+        .into()
+    }
+}
+
 impl TypedServerModuleConfig for WalletConfig {
     type Local = WalletConfigLocal;
     type Private = WalletConfigPrivate;
@@ -97,17 +110,6 @@ impl TypedServerModuleConfig for WalletConfig {
 
     fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
         (self.local, self.private, self.consensus)
-    }
-
-    fn to_client_config(&self) -> ClientModuleConfig {
-        serde_json::to_value(&WalletClientConfig {
-            peg_in_descriptor: self.consensus.peg_in_descriptor.clone(),
-            network: self.consensus.network,
-            fee_consensus: self.consensus.fee_consensus.clone(),
-            finality_delay: self.consensus.finality_delay,
-        })
-        .expect("Serialization can't fail")
-        .into()
     }
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {

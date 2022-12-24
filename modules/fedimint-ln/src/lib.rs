@@ -14,7 +14,6 @@ pub mod common;
 pub mod config;
 pub mod contracts;
 pub mod db;
-
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Sub;
 
@@ -23,6 +22,7 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
@@ -49,7 +49,7 @@ use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
 use crate::common::LightningModuleDecoder;
-use crate::config::{LightningConfigConsensus, LightningConfigPrivate, LightningModuleConfig};
+use crate::config::{LightningConfig, LightningConfigConsensus, LightningConfigPrivate};
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
@@ -82,7 +82,7 @@ use crate::db::{
 /// [Incoming]: contracts::incoming::IncomingContract
 #[derive(Debug)]
 pub struct LightningModule {
-    cfg: LightningModuleConfig,
+    cfg: LightningConfig,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -241,7 +241,7 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
 
                 (
                     peer,
-                    LightningModuleConfig {
+                    LightningConfig {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             threshold: peers.threshold(),
@@ -276,7 +276,7 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
 
         let (pks, sks) = g1[&()].threshold_crypto();
 
-        let server = LightningModuleConfig {
+        let server = LightningConfig {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: pks,
                 threshold: peers.threshold(),
@@ -292,13 +292,14 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
         Ok(config
-            .to_typed::<LightningModuleConfig>()?
+            .to_typed::<LightningConfig>()?
+            .consensus
             .to_client_config())
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config
-            .to_typed::<LightningModuleConfig>()?
+            .to_typed::<LightningConfig>()?
             .validate_config(identity)
     }
 }
@@ -876,7 +877,7 @@ impl ServerModulePlugin for LightningModule {
 }
 
 impl LightningModule {
-    pub fn new(cfg: LightningModuleConfig) -> Self {
+    pub fn new(cfg: LightningConfig) -> Self {
         LightningModule { cfg }
     }
 

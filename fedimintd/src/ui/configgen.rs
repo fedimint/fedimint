@@ -188,7 +188,12 @@ fn trusted_dealer_gen(
         })
         .collect();
 
-    let client_config = server_config.values().next().unwrap().to_client_config();
+    let client_config = server_config
+        .values()
+        .next()
+        .unwrap()
+        .consensus
+        .to_client_config();
 
     (server_config, client_config)
 }

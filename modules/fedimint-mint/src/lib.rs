@@ -8,6 +8,7 @@ use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey};
 use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
     scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
@@ -252,7 +253,10 @@ impl FederationModuleConfigGen for MintConfigGenerator {
     }
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
-        Ok(config.to_typed::<MintConfig>()?.to_client_config())
+        Ok(config
+            .to_typed::<MintConfig>()?
+            .consensus
+            .to_client_config())
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
@@ -1099,7 +1103,7 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use fedimint_api::config::{
-        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConfig,
+        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
     use fedimint_api::module::FederationModuleConfigGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
@@ -1125,6 +1129,7 @@ mod test {
         let client_cfg = mint_cfg[&PeerId::from(0)]
             .to_typed::<MintConfig>()
             .unwrap()
+            .consensus
             .to_client_config();
 
         (mint_cfg.into_values().collect(), client_cfg)

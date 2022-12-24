@@ -5,7 +5,7 @@ use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     BitcoindRpcCfg, ClientConfig, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node,
-    ServerModuleConfig, TypedServerModuleConfig,
+    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -13,11 +13,11 @@ use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnect
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
-use fedimint_core::modules::ln::config::LightningModuleConfig;
+use fedimint_core::modules::ln::config::{LightningConfig, LightningConfigConsensus};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
-use fedimint_core::modules::mint::config::MintConfig;
+use fedimint_core::modules::mint::config::{MintConfig, MintConfigConsensus};
 use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
-use fedimint_wallet::config::WalletConfig;
+use fedimint_wallet::config::{WalletConfig, WalletConfigConsensus};
 use fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
@@ -122,6 +122,45 @@ pub struct ServerConfigParams {
     pub modules: ConfigGenParams,
 }
 
+impl ServerConfigConsensus {
+    pub fn to_client_config(&self) -> ClientConfig {
+        let nodes = self
+            .peers
+            .values()
+            .map(|peer| Node {
+                url: peer.api_addr.clone(),
+                name: peer.name.clone(),
+            })
+            .collect();
+
+        let modules = vec![
+            self.get_client_config::<MintConfigConsensus>("mint"),
+            self.get_client_config::<WalletConfigConsensus>("wallet"),
+            self.get_client_config::<LightningConfigConsensus>("ln"),
+        ];
+
+        ClientConfig {
+            federation_name: self.federation_name.clone(),
+            epoch_pk: self.epoch_pk_set.public_key(),
+            nodes,
+            modules: modules.into_iter().collect(),
+        }
+    }
+
+    fn get_client_config<T: TypedServerModuleConsensusConfig>(
+        &self,
+        name: &str,
+    ) -> (String, ClientModuleConfig) {
+        let json = self
+            .modules
+            .get(name)
+            .unwrap_or_else(|| panic!("Module {name} not found"));
+        let config: T = serde_json::from_value(json.clone()).expect("Cannot parse JSON");
+
+        (name.to_string(), config.to_client_config())
+    }
+}
+
 impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key setup
     #[allow(clippy::too_many_arguments)]
@@ -199,43 +238,6 @@ impl ServerConfig {
             .cloned()
     }
 
-    pub fn to_client_config(&self) -> ClientConfig {
-        let nodes = self
-            .consensus
-            .peers
-            .values()
-            .map(|peer| Node {
-                url: peer.api_addr.clone(),
-                name: peer.name.clone(),
-            })
-            .collect();
-
-        let modules = vec![
-            self.get_client_config::<MintConfig>("mint"),
-            self.get_client_config::<WalletConfig>("wallet"),
-            self.get_client_config::<LightningModuleConfig>("ln"),
-        ];
-
-        ClientConfig {
-            federation_name: self.consensus.federation_name.clone(),
-            epoch_pk: self.consensus.epoch_pk_set.public_key(),
-            nodes,
-            modules: modules.into_iter().collect(),
-        }
-    }
-
-    fn get_client_config<T: TypedServerModuleConfig>(
-        &self,
-        name: &str,
-    ) -> (String, ClientModuleConfig) {
-        let cfg = self
-            .get_module_config::<T>(name)
-            .expect("valid client config should not fail")
-            .to_client_config();
-
-        (name.to_string(), cfg)
-    }
-
     pub fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
         let peers = self.consensus.peers.clone();
         let consensus = self.consensus.clone();
@@ -259,7 +261,7 @@ impl ServerConfig {
             .validate_config(identity)?;
         self.get_module_config::<MintConfig>("mint")?
             .validate_config(identity)?;
-        self.get_module_config::<LightningModuleConfig>("ln")?
+        self.get_module_config::<LightningConfig>("ln")?
             .validate_config(identity)?;
 
         Ok(())

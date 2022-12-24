@@ -18,6 +18,7 @@ use bitcoin::{
 };
 use bitcoin::{PackedLockTime, Sequence};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
     BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
@@ -310,7 +311,10 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
     }
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
-        Ok(config.to_typed::<WalletConfig>()?.to_client_config())
+        Ok(config
+            .to_typed::<WalletConfig>()?
+            .consensus
+            .to_client_config())
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
