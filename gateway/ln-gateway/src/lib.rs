@@ -61,11 +61,11 @@ impl LnGateway {
     pub async fn new(
         config: GatewayConfig,
         client_builder: GatewayClientBuilder,
-        // TODO: consider encapsulating message channel within LnGateway
-        sender: mpsc::Sender<GatewayRequest>,
-        receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
+        // Create message channels
+        let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
+
         let ln_gw = Self {
             config: config.clone(),
             actors: Mutex::new(HashMap::new()),
