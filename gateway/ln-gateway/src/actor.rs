@@ -11,7 +11,11 @@ use mint_client::{FederationId, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
-use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
+use crate::{
+    rpc::{ln_rpc_client::LnRpcClient, FederationInfo},
+    utils::retry,
+    LnGatewayError, Result,
+};
 
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
@@ -71,7 +75,7 @@ impl GatewayActor {
     #[instrument(skip_all, fields(%contract_id))]
     pub async fn pay_invoice(
         &self,
-        ln_rpc: Arc<dyn LnRpc>,
+        ln_rpc: Arc<LnRpcClient>,
         contract_id: ContractId,
     ) -> Result<OutPoint> {
         debug!("Fetching contract");
@@ -157,12 +161,12 @@ impl GatewayActor {
 
     pub async fn buy_preimage_external(
         &self,
-        ln_rpc: Arc<dyn LnRpc>,
+        ln_rpc: Arc<LnRpcClient>,
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
         match ln_rpc
-            .pay(
+            .pay_invoice(
                 invoice,
                 payment_params.max_delay,
                 payment_params.max_fee_percent(),
@@ -175,7 +179,7 @@ impl GatewayActor {
             }
             Err(e) => {
                 warn!("LN payment failed, aborting");
-                Err(LnGatewayError::CouldNotRoute(e))
+                Err(e)
             }
         }
     }

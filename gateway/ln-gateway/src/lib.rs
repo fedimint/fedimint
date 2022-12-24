@@ -13,6 +13,7 @@ pub mod gwlightningrpc {
 use std::{
     borrow::Cow,
     collections::HashMap,
+    net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -27,6 +28,7 @@ use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     FederationId, GatewayClient,
 };
+use rpc::{ln_rpc_client::LnRpcClient, FederationInfo};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
@@ -35,7 +37,7 @@ use crate::{
     actor::GatewayActor,
     client::GatewayClientBuilder,
     config::GatewayConfig,
-    ln::{LightningError, LnRpc},
+    ln::LightningError,
     rpc::{
         rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
         DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
@@ -48,7 +50,7 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 pub struct LnGateway {
     config: GatewayConfig,
     actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
-    ln_rpc: Arc<dyn LnRpc>,
+    ln_rpc: Mutex<Option<Arc<LnRpcClient>>>,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
     client_builder: GatewayClientBuilder,
@@ -58,7 +60,6 @@ pub struct LnGateway {
 impl LnGateway {
     pub async fn new(
         config: GatewayConfig,
-        ln_rpc: Arc<dyn LnRpc>,
         client_builder: GatewayClientBuilder,
         // TODO: consider encapsulating message channel within LnGateway
         sender: mpsc::Sender<GatewayRequest>,
@@ -66,18 +67,40 @@ impl LnGateway {
         task_group: TaskGroup,
     ) -> Self {
         let ln_gw = Self {
-            config,
+            config: config.clone(),
             actors: Mutex::new(HashMap::new()),
-            ln_rpc,
+            ln_rpc: Mutex::new(None),
             sender,
             receiver,
             client_builder,
             task_group,
         };
 
+        ln_gw
+            .create_lightning_rpc_client(config.lnrpc_bind_address)
+            .await;
+
         ln_gw.load_federation_actors().await;
 
         ln_gw
+    }
+
+    async fn create_lightning_rpc_client(&self, address: SocketAddr) {
+        let ln_rpc = Arc::new(
+            LnRpcClient::new(address)
+                .await
+                .expect("Failed to create Lightning RPC client"),
+        );
+
+        self.ln_rpc.lock().await.replace(ln_rpc);
+    }
+
+    async fn get_ln_rpc_client(&self) -> Arc<LnRpcClient> {
+        self.ln_rpc
+            .lock()
+            .await
+            .clone()
+            .expect("Missing lightning RPC client")
     }
 
     async fn load_federation_actors(&self) {
@@ -122,10 +145,23 @@ impl LnGateway {
                 .expect("Failed to create actor"),
         );
 
-        self.actors.lock().await.insert(
-            FederationId(client.config().client_config.federation_name).hash(),
-            actor.clone(),
-        );
+        let FederationInfo {
+            federation_id,
+            mint_pubkey,
+        } = actor
+            .get_info()
+            .expect("Failed to get federation info from new actor");
+
+        self.get_ln_rpc_client()
+            .await
+            .subscribe_intercept_htlcs(mint_pubkey)
+            .await
+            .expect("Failed to subscribe to intercept HTLCs");
+
+        self.actors
+            .lock()
+            .await
+            .insert(federation_id.hash(), actor.clone());
         Ok(actor)
     }
 
@@ -136,8 +172,9 @@ impl LnGateway {
         })?;
 
         let node_pub_key = self
-            .ln_rpc
-            .pubkey()
+            .get_ln_rpc_client()
+            .await
+            .get_pub_key()
             .await
             .expect("Failed to get node pubkey from Lightning node");
 
@@ -210,7 +247,9 @@ impl LnGateway {
         } = payload;
 
         let actor = self.select_actor(federation_id).await?;
-        let outpoint = actor.pay_invoice(self.ln_rpc.clone(), contract_id).await?;
+        let outpoint = actor
+            .pay_invoice(self.get_ln_rpc_client().await.clone(), contract_id)
+            .await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
