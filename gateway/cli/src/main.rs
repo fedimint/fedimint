@@ -31,10 +31,12 @@ pub enum Commands {
     /// Ganerate gateway configuration
     /// NOTE: This command can only be used on a local gateway
     GenerateConfig {
+        /// Address to which the LN rpc webserver will bind
+        lnrpc_bind_address: SocketAddr,
         /// Address to which the API webserver will bind
-        bind_address: SocketAddr,
+        webserver_bind_address: SocketAddr,
         /// URL under which the API will be reachable
-        announce_address: Url,
+        api_announce_address: Url,
         /// The gateway configuration directory
         out_dir: PathBuf,
     },
@@ -77,8 +79,9 @@ async fn main() {
 
     match cli.command {
         Commands::GenerateConfig {
-            bind_address: address,
-            announce_address,
+            lnrpc_bind_address,
+            webserver_bind_address,
+            api_announce_address,
             mut out_dir,
         } => {
             // Recursively create config directory if it doesn't exist
@@ -91,10 +94,15 @@ async fn main() {
             serde_json::to_writer_pretty(
                 cfg_file,
                 &GatewayConfig {
-                    bind_address: address,
-                    announce_address,
-                    // TODO: Generate a strong random password
-                    password: source_password(cli.rpcpassword),
+                    /* LN RPC config */
+                    lnrpc_bind_address,
+                    lnd_rpc_connect: None,
+
+                    /* Webserver config */
+                    webserver_bind_address,
+                    webserver_password: source_password(cli.rpcpassword), // TODO: Generate a strong random password
+                    api_announce_address,
+
                     // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
                     default_federation: FederationId("Hals_trusty_mint".into()),
                 },

@@ -139,7 +139,11 @@ impl LnGateway {
 
         let gw_client_cfg = self
             .client_builder
-            .create_config(connect, node_pub_key, self.config.announce_address.clone())
+            .create_config(
+                connect,
+                node_pub_key,
+                self.config.api_announce_address.clone(),
+            )
             .await
             .expect("Failed to create gateway client config");
 
@@ -256,8 +260,8 @@ impl LnGateway {
         let sender = GatewayRpcSender::new(self.sender.clone());
         tg.spawn("Gateway Webserver", move |server_ctrl| async move {
             let mut webserver = tokio::spawn(run_webserver(
-                cfg.password.clone(),
-                cfg.bind_address,
+                cfg.webserver_password.clone(),
+                cfg.webserver_bind_address,
                 sender,
             ));
 

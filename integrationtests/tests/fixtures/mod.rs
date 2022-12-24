@@ -405,9 +405,13 @@ impl GatewayTest {
         let ln_rpc = Arc::clone(&adapter);
 
         let gw_cfg = GatewayConfig {
-            bind_address: bind_addr,
-            announce_address: announce_addr,
-            password: "abc".into(),
+            lnrpc_bind_address: bind_addr, // TODO: Use a nunique lnrpc address
+            lnd_rpc_connect: None,
+
+            webserver_bind_address: bind_addr,
+            webserver_password: "abc".into(),
+            api_announce_address: announce_addr,
+
             default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };
 
