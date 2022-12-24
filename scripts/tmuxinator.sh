@@ -7,8 +7,8 @@ if [[ -n "${TMUX:-}" ]]; then
   exit 1
 fi
 
-if [[ -z "$IN_NIX_SHELL" ]]; then
-  echo "It is recommended to run this command from a Nix dev shell. Use `nix develop` first"
+if [[ -z "${IN_NIX_SHELL:-}" ]]; then
+  echo "It is recommended to run this command from a Nix dev shell. Use 'nix develop' first"
   sleep 3
 fi
 
