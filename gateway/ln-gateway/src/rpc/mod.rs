@@ -1,3 +1,4 @@
+pub mod lnrpc_client;
 pub mod rpc_client;
 pub mod rpc_server;
 
@@ -208,4 +209,9 @@ pub fn serde_hex_serialize<T: bitcoin::consensus::Encodable, S: Serializer>(
     } else {
         s.serialize_bytes(&bytes)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HtlcInterceptPayload {
+    pub invoice_amount: Amount,
 }
