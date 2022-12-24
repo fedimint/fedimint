@@ -988,6 +988,7 @@
 <a href="#988" id="988">988</a>
 <a href="#989" id="989">989</a>
 <a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1004,7 +1005,6 @@
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>contracts;
 <span class="kw">pub mod </span>db;
-
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::Sub;
 
@@ -1013,6 +1013,7 @@
 <span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
@@ -1039,7 +1040,7 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::common::LightningModuleDecoder;
-<span class="kw">use </span><span class="kw">crate</span>::config::{LightningConfigConsensus, LightningConfigPrivate, LightningModuleConfig};
+<span class="kw">use </span><span class="kw">crate</span>::config::{LightningConfig, LightningConfigConsensus, LightningConfigPrivate};
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{
     incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
@@ -1072,7 +1073,7 @@
 /// [Incoming]: contracts::incoming::IncomingContract
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LightningModule {
-    cfg: LightningModuleConfig,
+    cfg: LightningConfig,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -1231,7 +1232,7 @@
 
                 (
                     peer,
-                    LightningModuleConfig {
+                    LightningConfig {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             threshold: peers.threshold(),
@@ -1266,7 +1267,7 @@
 
         <span class="kw">let </span>(pks, sks) = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
 
-        <span class="kw">let </span>server = LightningModuleConfig {
+        <span class="kw">let </span>server = LightningConfig {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: pks,
                 threshold: peers.threshold(),
@@ -1282,13 +1283,14 @@
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
         <span class="prelude-val">Ok</span>(config
-            .to_typed::&lt;LightningModuleConfig&gt;()<span class="question-mark">?
-            </span>.to_client_config())
+            .to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?
+            </span>.consensus
+            .to_client_config())
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config
-            .to_typed::&lt;LightningModuleConfig&gt;()<span class="question-mark">?
+            .to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?
             </span>.validate_config(identity)
     }
 }
@@ -1866,7 +1868,7 @@
 }
 
 <span class="kw">impl </span>LightningModule {
-    <span class="kw">pub fn </span>new(cfg: LightningModuleConfig) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(cfg: LightningConfig) -&gt; <span class="self">Self </span>{
         LightningModule { cfg }
     }
 

@@ -457,7 +457,7 @@
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/config&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, _v: ()| -&gt; ClientConfig {
-                <span class="prelude-val">Ok</span>(fedimint.cfg.to_client_config())
+                <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.to_client_config())
             }
         },
     ]

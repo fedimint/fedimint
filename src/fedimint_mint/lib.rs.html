@@ -1317,6 +1317,11 @@
 <a href="#1317" id="1317">1317</a>
 <a href="#1318" id="1318">1318</a>
 <a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1327,6 +1332,7 @@
 <span class="kw">use </span>db::{ECashUserBackupSnapshot, EcashBackupKey};
 <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
     scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
@@ -1571,7 +1577,10 @@
     }
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="prelude-val">Ok</span>(config.to_typed::&lt;MintConfig&gt;()<span class="question-mark">?</span>.to_client_config())
+        <span class="prelude-val">Ok</span>(config
+            .to_typed::&lt;MintConfig&gt;()<span class="question-mark">?
+            </span>.consensus
+            .to_client_config())
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
@@ -2418,7 +2427,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span>fedimint_api::config::{
-        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConfig,
+        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
     <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
@@ -2444,6 +2453,7 @@
         <span class="kw">let </span>client_cfg = mint_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
             .to_typed::&lt;MintConfig&gt;()
             .unwrap()
+            .consensus
             .to_client_config();
 
         (mint_cfg.into_values().collect(), client_cfg)

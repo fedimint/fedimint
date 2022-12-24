@@ -682,6 +682,8 @@
 <a href="#682" id="682">682</a>
 <a href="#683" id="683">683</a>
 <a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::{IpAddr, SocketAddr};
 
@@ -689,7 +691,7 @@
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
     BitcoindRpcCfg, ClientConfig, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node,
-    ServerModuleConfig, TypedServerModuleConfig,
+    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
@@ -697,11 +699,11 @@
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
-<span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleConfig;
+<span class="kw">use </span>fedimint_core::modules::ln::config::{LightningConfig, LightningConfigConsensus};
 <span class="kw">use </span>fedimint_core::modules::ln::LightningModuleConfigGen;
-<span class="kw">use </span>fedimint_core::modules::mint::config::MintConfig;
+<span class="kw">use </span>fedimint_core::modules::mint::config::{MintConfig, MintConfigConsensus};
 <span class="kw">use </span>fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
-<span class="kw">use </span>fedimint_wallet::config::WalletConfig;
+<span class="kw">use </span>fedimint_wallet::config::{WalletConfig, WalletConfigConsensus};
 <span class="kw">use </span>fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -806,6 +808,45 @@
     </span><span class="kw">pub </span>modules: ConfigGenParams,
 }
 
+<span class="kw">impl </span>ServerConfigConsensus {
+    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
+        <span class="kw">let </span>nodes = <span class="self">self
+            </span>.peers
+            .values()
+            .map(|peer| Node {
+                url: peer.api_addr.clone(),
+                name: peer.name.clone(),
+            })
+            .collect();
+
+        <span class="kw">let </span>modules = <span class="macro">vec!</span>[
+            <span class="self">self</span>.get_client_config::&lt;MintConfigConsensus&gt;(<span class="string">&quot;mint&quot;</span>),
+            <span class="self">self</span>.get_client_config::&lt;WalletConfigConsensus&gt;(<span class="string">&quot;wallet&quot;</span>),
+            <span class="self">self</span>.get_client_config::&lt;LightningConfigConsensus&gt;(<span class="string">&quot;ln&quot;</span>),
+        ];
+
+        ClientConfig {
+            federation_name: <span class="self">self</span>.federation_name.clone(),
+            epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
+            nodes,
+            modules: modules.into_iter().collect(),
+        }
+    }
+
+    <span class="kw">fn </span>get_client_config&lt;T: TypedServerModuleConsensusConfig&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        name: <span class="kw-2">&amp;</span>str,
+    ) -&gt; (String, ClientModuleConfig) {
+        <span class="kw">let </span>json = <span class="self">self
+            </span>.modules
+            .get(name)
+            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;Module {name} not found&quot;</span>));
+        <span class="kw">let </span>config: T = serde_json::from_value(json.clone()).expect(<span class="string">&quot;Cannot parse JSON&quot;</span>);
+
+        (name.to_string(), config.to_client_config())
+    }
+}
+
 <span class="kw">impl </span>ServerConfig {
     <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key setup
     </span><span class="attr">#[allow(clippy::too_many_arguments)]
@@ -883,43 +924,6 @@
             .cloned()
     }
 
-    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
-        <span class="kw">let </span>nodes = <span class="self">self
-            </span>.consensus
-            .peers
-            .values()
-            .map(|peer| Node {
-                url: peer.api_addr.clone(),
-                name: peer.name.clone(),
-            })
-            .collect();
-
-        <span class="kw">let </span>modules = <span class="macro">vec!</span>[
-            <span class="self">self</span>.get_client_config::&lt;MintConfig&gt;(<span class="string">&quot;mint&quot;</span>),
-            <span class="self">self</span>.get_client_config::&lt;WalletConfig&gt;(<span class="string">&quot;wallet&quot;</span>),
-            <span class="self">self</span>.get_client_config::&lt;LightningModuleConfig&gt;(<span class="string">&quot;ln&quot;</span>),
-        ];
-
-        ClientConfig {
-            federation_name: <span class="self">self</span>.consensus.federation_name.clone(),
-            epoch_pk: <span class="self">self</span>.consensus.epoch_pk_set.public_key(),
-            nodes,
-            modules: modules.into_iter().collect(),
-        }
-    }
-
-    <span class="kw">fn </span>get_client_config&lt;T: TypedServerModuleConfig&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        name: <span class="kw-2">&amp;</span>str,
-    ) -&gt; (String, ClientModuleConfig) {
-        <span class="kw">let </span>cfg = <span class="self">self
-            </span>.get_module_config::&lt;T&gt;(name)
-            .expect(<span class="string">&quot;valid client config should not fail&quot;</span>)
-            .to_client_config();
-
-        (name.to_string(), cfg)
-    }
-
     <span class="kw">pub fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>peers = <span class="self">self</span>.consensus.peers.clone();
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
@@ -943,7 +947,7 @@
             </span>.validate_config(identity)<span class="question-mark">?</span>;
         <span class="self">self</span>.get_module_config::&lt;MintConfig&gt;(<span class="string">&quot;mint&quot;</span>)<span class="question-mark">?
             </span>.validate_config(identity)<span class="question-mark">?</span>;
-        <span class="self">self</span>.get_module_config::&lt;LightningModuleConfig&gt;(<span class="string">&quot;ln&quot;</span>)<span class="question-mark">?
+        <span class="self">self</span>.get_module_config::&lt;LightningConfig&gt;(<span class="string">&quot;ln&quot;</span>)<span class="question-mark">?
             </span>.validate_config(identity)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())

@@ -1571,6 +1571,10 @@
 <a href="#1571" id="1571">1571</a>
 <a href="#1572" id="1572">1572</a>
 <a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1591,6 +1595,7 @@
 };
 <span class="kw">use </span>bitcoin::{PackedLockTime, Sequence};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
     BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
@@ -1883,7 +1888,10 @@
     }
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="prelude-val">Ok</span>(config.to_typed::&lt;WalletConfig&gt;()<span class="question-mark">?</span>.to_client_config())
+        <span class="prelude-val">Ok</span>(config
+            .to_typed::&lt;WalletConfig&gt;()<span class="question-mark">?
+            </span>.consensus
+            .to_client_config())
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {

@@ -86,14 +86,22 @@
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig};
+<span class="kw">use </span>fedimint_api::config::{
+    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
+};
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>LightningModuleConfig {
+</span><span class="kw">pub struct </span>LightningConfig {
     <span class="doccomment">/// Contains all configuration that will be encrypted such as private key material
     </span><span class="kw">pub </span>private: LightningConfigPrivate,
     <span class="doccomment">/// Contains all configuration that needs to be the same for every server
@@ -125,7 +133,18 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="kw">impl </span>TypedServerModuleConfig <span class="kw">for </span>LightningModuleConfig {
+<span class="kw">impl </span>TypedServerModuleConsensusConfig <span class="kw">for </span>LightningConfigConsensus {
+    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
+        serde_json::to_value(<span class="kw-2">&amp;</span>LightningModuleClientConfig {
+            threshold_pub_key: <span class="self">self</span>.threshold_pub_keys.public_key(),
+            fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
+        })
+        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
+        .into()
+    }
+}
+
+<span class="kw">impl </span>TypedServerModuleConfig <span class="kw">for </span>LightningConfig {
     <span class="kw">type </span>Local = ();
     <span class="kw">type </span>Private = LightningConfigPrivate;
     <span class="kw">type </span>Consensus = LightningConfigConsensus;
@@ -136,15 +155,6 @@
 
     <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
         ((), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
-    }
-
-    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
-        serde_json::to_value(<span class="kw-2">&amp;</span>LightningModuleClientConfig {
-            threshold_pub_key: <span class="self">self</span>.consensus.threshold_pub_keys.public_key(),
-            fee_consensus: <span class="self">self</span>.consensus.fee_consensus.clone(),
-        })
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
-        .into()
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
