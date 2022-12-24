@@ -11,3 +11,4 @@
 
 pub mod actor;
 pub mod gateway;
+pub mod lnrpc_client;

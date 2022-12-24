@@ -180,6 +180,8 @@ impl LnGateway {
                 .expect("Failed to create actor"),
         );
 
+        // TODO: Subscribe for HTLC intercept on behalf of this federation
+
         self.actors.lock().await.insert(
             client.config().client_config.federation_id.to_string(),
             actor.clone(),
