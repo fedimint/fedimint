@@ -1,6 +1,5 @@
 pub mod actor;
 pub mod client;
-pub mod cln;
 pub mod config;
 pub mod ln;
 pub mod rpc;
@@ -23,7 +22,7 @@ use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
-use fedimint_server::modules::ln::contracts::Preimage;
+// use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     FederationId, GatewayClient,
@@ -31,7 +30,7 @@ use mint_client::{
 use rpc::{ln_rpc_client::LnRpcClient, FederationInfo};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 use crate::{
     actor::GatewayActor,
@@ -41,7 +40,7 @@ use crate::{
     rpc::{
         rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
         DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
-        ReceivePaymentPayload, WithdrawPayload,
+        WithdrawPayload,
     },
 };
 
@@ -224,21 +223,21 @@ impl LnGateway {
         })
     }
 
-    async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
-        let ReceivePaymentPayload { htlc_accepted } = payload;
+    // async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
+    //     let ReceivePaymentPayload { htlc_accepted } = payload;
 
-        let invoice_amount = htlc_accepted.htlc.amount;
-        let payment_hash = htlc_accepted.htlc.payment_hash;
-        debug!("Incoming htlc for payment hash {}", payment_hash);
+    //     let invoice_amount = htlc_accepted.htlc.amount;
+    //     let payment_hash = htlc_accepted.htlc.payment_hash;
+    //     debug!("Incoming htlc for payment hash {}", payment_hash);
 
-        // FIXME: Issue 664: We should avoid having a special reference to a federation
-        // all requests, including `ReceivePaymentPayload`, should contain the federation id
-        // TODO: Parse federation id from routing hint in htlc_accepted message
-        self.select_actor(self.config.default_federation.clone())
-            .await?
-            .buy_preimage_internal(&payment_hash, &invoice_amount)
-            .await
-    }
+    //     // FIXME: Issue 664: We should avoid having a special reference to a federation
+    //     // all requests, including `ReceivePaymentPayload`, should contain the federation id
+    //     // TODO: Parse federation id from routing hint in htlc_accepted message
+    //     self.select_actor(self.config.default_federation.clone())
+    //         .await?
+    //         .buy_preimage_internal(&payment_hash, &invoice_amount)
+    //         .await
+    // }
 
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
         let PayInvoicePayload {
@@ -338,11 +337,11 @@ impl LnGateway {
                             .handle(|payload| self.handle_connect_federation(payload))
                             .await;
                     }
-                    GatewayRequest::ReceivePayment(inner) => {
-                        inner
-                            .handle(|payload| self.handle_receive_invoice_msg(payload))
-                            .await;
-                    }
+                    // GatewayRequest::ReceivePayment(inner) => {
+                    //     inner
+                    //         .handle(|payload| self.handle_receive_invoice_msg(payload))
+                    //         .await;
+                    // }
                     GatewayRequest::PayInvoice(inner) => {
                         inner
                             .handle(|payload| self.handle_pay_invoice_msg(payload))
