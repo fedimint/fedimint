@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-api/src/encoding/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ed67f58bef457aa5.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-a19f8302ea709214.css"><link rel="stylesheet" disabled href="../../../static.files/dark-f1e56666dd272622.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-7291d283d92e041c.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-4a084badb5778746.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_api/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-api/src/encoding/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e9bf0babdb577010.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-76b292ff51febc48.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e337ab595a667ca1.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-40f4c2ddda9cf0e9.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-4a084badb5778746.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_api/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -631,6 +631,41 @@
 <a href="#631" id="631">631</a>
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for consensus critical
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
@@ -641,7 +676,7 @@
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
-<span class="kw">use </span>std::io::{Error, Read, Write};
+<span class="kw">use </span>std::io::{<span class="self">self</span>, Error, Read, Write};
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::format_err;
@@ -705,8 +740,8 @@
 <span class="doccomment">/// Data which can be encoded in a consensus-consistent way
 </span><span class="kw">pub trait </span>Decodable: Sized {
     <span class="doccomment">/// Decode an object with a well-defined format
-    </span><span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-        d: <span class="kw-2">&amp;mut </span>D,
+    </span><span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+        r: <span class="kw-2">&amp;mut </span>R,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;;
 }
@@ -974,21 +1009,6 @@
     }
 }
 
-<span class="attr">#[test]
-</span><span class="kw">fn </span>encode_decode_systemtime() {
-    <span class="kw">let </span>t = SystemTime::now();
-
-    <span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[];
-
-    t.consensus_encode(<span class="kw-2">&amp;mut </span>buf).unwrap();
-
-    <span class="macro">assert_eq!</span>(
-        t,
-        Decodable::consensus_decode::&lt;<span class="kw">_</span>&gt;(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
-            .unwrap()
-    );
-}
-
 <span class="kw">impl </span>Decodable <span class="kw">for </span>lightning_invoice::Invoice {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
@@ -1091,21 +1111,6 @@
     }
 }
 
-<span class="attr">#[test]
-</span><span class="kw">fn </span>encode_decode_btreemap() {
-    <span class="kw">let </span>t = BTreeMap::from([(<span class="string">&quot;a&quot;</span>.to_string(), <span class="number">1u32</span>), (<span class="string">&quot;b&quot;</span>.to_string(), <span class="number">2</span>)]);
-
-    <span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[];
-
-    t.consensus_encode(<span class="kw-2">&amp;mut </span>buf).unwrap();
-
-    <span class="macro">assert_eq!</span>(
-        t,
-        Decodable::consensus_decode::&lt;<span class="kw">_</span>&gt;(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
-            .unwrap()
-    );
-}
-
 <span class="kw">impl</span>&lt;K&gt; Encodable <span class="kw">for </span>BTreeSet&lt;K&gt;
 <span class="kw">where
     </span>K: Encodable,
@@ -1140,19 +1145,60 @@
     }
 }
 
-<span class="attr">#[test]
-</span><span class="kw">fn </span>encode_decode_btreeset() {
-    <span class="kw">let </span>t = BTreeSet::from([<span class="string">&quot;a&quot;</span>.to_string(), <span class="string">&quot;b&quot;</span>.to_string()]);
+<span class="doccomment">/// A wrapper counting bytes written
+</span><span class="kw">struct </span>CountWrite&lt;<span class="lifetime">&#39;a</span>, W&gt; {
+    inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>W,
+    count: usize,
+}
 
-    <span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[];
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, W&gt; CountWrite&lt;<span class="lifetime">&#39;a</span>, W&gt; {
+    <span class="kw">fn </span>new(inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>W) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ inner, count: <span class="number">0 </span>}
+    }
+}
 
-    t.consensus_encode(<span class="kw-2">&amp;mut </span>buf).unwrap();
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, W&gt; io::Write <span class="kw">for </span>CountWrite&lt;<span class="lifetime">&#39;a</span>, W&gt;
+<span class="kw">where
+    </span>W: io::Write,
+{
+    <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; io::Result&lt;usize&gt; {
+        <span class="kw">let </span>count = <span class="self">self</span>.inner.write(buf)<span class="question-mark">?</span>;
+        <span class="self">self</span>.count += count;
+        <span class="prelude-val">Ok</span>(count)
+    }
 
-    <span class="macro">assert_eq!</span>(
-        t,
-        Decodable::consensus_decode::&lt;<span class="kw">_</span>&gt;(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
-            .unwrap()
-    );
+    <span class="kw">fn </span>flush(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;()&gt; {
+        <span class="self">self</span>.inner.flush()
+    }
+}
+<span class="doccomment">/// Wrappers for `T` that are `De-Serializable`, while we need them in `Encodable` contex
+</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+</span><span class="kw">pub struct </span>SerdeEncodable&lt;T&gt;(T);
+
+<span class="kw">impl</span>&lt;T&gt; Encodable <span class="kw">for </span>SerdeEncodable&lt;T&gt;
+<span class="kw">where
+    </span>T: serde::Serialize,
+{
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>count_writer = CountWrite::new(writer);
+        bincode::serialize_into(<span class="kw-2">&amp;mut </span>count_writer, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
+            .map_err(|e| std::io::Error::new(io::ErrorKind::Other, e))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(count_writer.count)
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Decodable <span class="kw">for </span>SerdeEncodable&lt;T&gt;
+<span class="kw">where
+    </span>T: <span class="kw">for</span>&lt;<span class="lifetime">&#39;de</span>&gt; serde::Deserialize&lt;<span class="lifetime">&#39;de</span>&gt;,
+{
+    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+        r: <span class="kw-2">&amp;mut </span>R,
+        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(
+            bincode::deserialize_from(r).map_err(|e| DecodeError(e.into()))<span class="question-mark">?</span>,
+        ))
+    }
 }
 
 <span class="attr">#[cfg(test)]
@@ -1160,6 +1206,7 @@
     <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::io::Cursor;
 
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
     <span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
 
@@ -1263,6 +1310,29 @@
         <span class="kw">let </span>invoice = invoice_str.parse::&lt;lightning_invoice::Invoice&gt;().unwrap();
         test_roundtrip(invoice);
     }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_serde_encodable() {
+        test_roundtrip(SerdeEncodable(<span class="number">6usize</span>));
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_btreemap() {
+        test_roundtrip(BTreeMap::from([
+            (<span class="string">&quot;a&quot;</span>.to_string(), <span class="number">1u32</span>),
+            (<span class="string">&quot;b&quot;</span>.to_string(), <span class="number">2</span>),
+        ]));
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_btreeset() {
+        test_roundtrip(BTreeSet::from([<span class="string">&quot;a&quot;</span>.to_string(), <span class="string">&quot;b&quot;</span>.to_string()]));
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>test_systemtime() {
+        test_roundtrip(SystemTime::now());
+    }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (af3e06f1b 2022-12-23)" data-search-js="search-444266647c4dba98.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (46160e6fa 2022-12-24)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
