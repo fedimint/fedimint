@@ -165,6 +165,7 @@ fn trusted_dealer_gen(
                     max_connections: 1000,
                 },
                 private: ServerConfigPrivate {
+                    admin_key: SerdeSecret(threshold_crypto::SecretKey::random()),
                     tls_key: tls_keys[&id].1.clone(),
                     hbbft_sks: SerdeSecret(
                         netinf

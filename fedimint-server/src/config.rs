@@ -48,6 +48,8 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
+    /// The secret key guardian should use to sign remote requests
+    pub admin_key: SerdeSecret<hbbft::crypto::SecretKey>,
     /// Secret key for TLS communication, required for peer authentication
     #[serde(with = "serde_tls_key")]
     pub tls_key: rustls::PrivateKey,
@@ -168,6 +170,7 @@ impl ServerConfig {
         code_version: &str,
         params: ServerConfigParams,
         identity: PeerId,
+        admin_key: hbbft::crypto::SecretKey,
         hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
         hbbft_pk_set: hbbft::crypto::PublicKeySet,
         epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
@@ -175,6 +178,7 @@ impl ServerConfig {
         modules: BTreeMap<String, ServerModuleConfig>,
     ) -> Self {
         let private = ServerConfigPrivate {
+            admin_key: threshold_crypto::serde_impl::SerdeSecret(admin_key),
             tls_key: params.tls.our_private_key.clone(),
             hbbft_sks,
             epoch_sks,
@@ -301,6 +305,7 @@ impl ServerConfig {
                     code_version,
                     params[&id].clone(),
                     id,
+                    threshold_crypto::SecretKey::random(),
                     SerdeSecret(netinf.secret_key_share().unwrap().clone()),
                     netinf.public_key_set().clone(),
                     SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
@@ -380,6 +385,7 @@ impl ServerConfig {
             code_version,
             params.clone(),
             *our_id,
+            threshold_crypto::SecretKey::random(),
             SerdeSecret(hbbft_sks),
             hbbft_pks,
             SerdeSecret(epoch_sks),
