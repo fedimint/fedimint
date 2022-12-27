@@ -995,6 +995,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-derive-secret"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fedimint-api",
+ "hex",
+ "hkdf",
+ "ring",
+ "secp256k1-zkp",
+ "tbs",
+]
+
+[[package]]
 name = "fedimint-ln"
 version = "0.1.0"
 dependencies = [
@@ -2389,6 +2402,7 @@ dependencies = [
  "bitcoin_hashes 0.11.0",
  "fedimint-api",
  "fedimint-core",
+ "fedimint-derive-secret",
  "fedimint-rocksdb",
  "fedimint-testing",
  "futures",

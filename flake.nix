@@ -481,6 +481,7 @@
           dirs = [
             "client/client-lib"
             "crypto/aead"
+            "crypto/derive-secret"
             "crypto/hkdf"
             "crypto/tbs"
             "fedimintd"
@@ -508,6 +509,7 @@
           bin = "ln-gateway";
           dirs = [
             "crypto/aead"
+            "crypto/derive-secret"
             "crypto/tbs"
             "crypto/hkdf"
             "client/client-lib"
@@ -534,6 +536,7 @@
           bin = "gateway-cli";
           dirs = [
             "crypto/aead"
+            "crypto/derive-secret"
             "crypto/tbs"
             "crypto/hkdf"
             "client/client-lib"
@@ -562,6 +565,7 @@
           dirs = [
             "client/client-lib"
             "client/cli"
+            "crypto/derive-secret"
             "crypto/aead"
             "crypto/tbs"
             "crypto/hkdf"
@@ -587,6 +591,7 @@
           dirs = [
             "client/client-lib"
             "crypto/aead"
+            "crypto/derive-secret"
             "crypto/tbs"
             "crypto/hkdf"
             "fedimint-api"
@@ -610,6 +615,7 @@
             "client/cli"
             "client/client-lib"
             "crypto/aead"
+            "crypto/derive-secret"
             "crypto/tbs"
             "crypto/hkdf"
             "gateway/ln-gateway"
