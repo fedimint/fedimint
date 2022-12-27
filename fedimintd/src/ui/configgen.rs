@@ -5,6 +5,7 @@ use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
 use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
+use fedimint_derive_secret::SeedPhrase;
 use fedimint_server::config::{
     gen_cert_and_key, Peer as ServerPeer, ServerConfig, ServerConfigConsensus, ServerConfigLocal,
     ServerConfigPrivate,
@@ -165,7 +166,7 @@ fn trusted_dealer_gen(
                     max_connections: 1000,
                 },
                 private: ServerConfigPrivate {
-                    admin_key: SerdeSecret(threshold_crypto::SecretKey::random()),
+                    admin_secret: SeedPhrase::random(),
                     tls_key: tls_keys[&id].1.clone(),
                     hbbft_sks: SerdeSecret(
                         netinf

@@ -1,12 +1,17 @@
 //! Scheme for deriving deterministic secret keys
 
+use core::fmt;
 use std::fmt::Formatter;
 
 use fedimint_api::encoding::{Decodable, Encodable};
 use hkdf::hashes::Sha512;
 use hkdf::Hkdf;
 use ring::aead;
-use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
+use secp256k1_zkp::{
+    rand::{rngs::OsRng, RngCore},
+    KeyPair, Secp256k1, Signing,
+};
+use serde::{Deserialize, Serialize};
 use tbs::Scalar;
 
 const CHILD_TAG: &[u8; 8] = b"childkey";
@@ -18,6 +23,25 @@ const CHACHA20_POLY1305: &[u8; 8] = b"c20p1305";
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
 pub struct ChildId(pub u64);
 
+/// A seed phrase the user can back up on paper or via other means
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SeedPhrase(
+    // TODO: Actually use BIP39 seed phrase
+    #[serde(with = "hex::serde")] Vec<u8>,
+);
+
+impl fmt::Debug for SeedPhrase {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "SeedPhrase([redacted])")
+    }
+}
+impl SeedPhrase {
+    pub fn random() -> Self {
+        let mut bytes = [0u8; 32];
+        OsRng.fill_bytes(&mut bytes);
+        Self(bytes.to_vec())
+    }
+}
 /// Secret key that allows deriving child secret keys
 #[derive(Clone)]
 pub struct DerivableSecret {

@@ -953,6 +953,7 @@ dependencies = [
  "hkdf",
  "ring",
  "secp256k1-zkp",
+ "serde",
  "tbs",
 ]
 
@@ -1041,6 +1042,7 @@ dependencies = [
  "fedimint-api",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-derive-secret",
  "fedimint-wallet",
  "futures",
  "hbbft",
@@ -1178,6 +1180,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-derive-secret",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet",

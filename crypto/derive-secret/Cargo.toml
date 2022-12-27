@@ -19,4 +19,5 @@ hex = "0.4.3"
 hkdf = { path = "../../crypto/hkdf" }
 ring = "0.16.20"
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
+serde = { version = "1.0.149", features = [ "derive" ] }
 tbs = { path = "../../crypto/tbs" }
