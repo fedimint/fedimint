@@ -2,7 +2,7 @@ pub mod lnrpc_client;
 pub mod rpc_client;
 pub mod rpc_server;
 
-use std::io::Cursor;
+use std::{io::Cursor, net::SocketAddr};
 
 use anyhow::{anyhow, Error};
 use bitcoin::{Address, Transaction, XOnlyPublicKey};
@@ -52,6 +52,11 @@ impl GatewayRpcSender {
             })
             .map_err(|e| e.into())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConnectLnPayload {
+    pub address: SocketAddr,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -113,6 +118,7 @@ pub struct GatewayInfo {
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
+    ConnectLightning(GatewayRequestInner<ConnectLnPayload>),
     ConnectFederation(GatewayRequestInner<ConnectFedPayload>),
     // ReceivePayment(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
@@ -149,6 +155,7 @@ macro_rules! impl_gateway_request_trait {
 }
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
+impl_gateway_request_trait!(ConnectLnPayload, (), GatewayRequest::ConnectLightning);
 impl_gateway_request_trait!(ConnectFedPayload, (), GatewayRequest::ConnectFederation);
 // impl_gateway_request_trait!(
 //     ReceivePaymentPayload,

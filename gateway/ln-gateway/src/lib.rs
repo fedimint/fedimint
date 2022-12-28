@@ -26,6 +26,7 @@ use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     FederationId, GatewayClient,
 };
+use rpc::ConnectLnPayload;
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, warn};
@@ -82,6 +83,7 @@ impl LnGateway {
     }
 
     /// Create a lightning rpc client that connects to some gateway lightning rpc at the address provided
+    /// This will replace any existing lightning rpc clients already connected
     pub async fn connect_lnrpc_client(&self, address: SocketAddr) -> Result<LnRpcClient> {
         let ln_rpc = self
             .lnrpc_factory
@@ -94,6 +96,13 @@ impl LnGateway {
         self.ln_rpc.lock().await.replace(ln_rpc.clone());
 
         Ok(ln_rpc)
+    }
+
+    async fn handle_connect_lnrpc(&self, payload: ConnectLnPayload) -> Result<()> {
+        if let Err(e) = self.connect_lnrpc_client(payload.address).await {
+            error!("Failed to connect to lnrpc server: {}", e);
+        }
+        Ok(())
     }
 
     async fn get_lnrpc_client(&self) -> LnRpcClient {
@@ -163,7 +172,7 @@ impl LnGateway {
         Ok(actor)
     }
 
-    // Webserver handler for requests to register a federation
+    // Webserver handler for requests to connect a federation
     async fn handle_connect_federation(&self, payload: ConnectFedPayload) -> Result<()> {
         let connect: WsFederationConnect = serde_json::from_str(&payload.connect).map_err(|e| {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
@@ -330,6 +339,11 @@ impl LnGateway {
                 match msg {
                     GatewayRequest::Info(inner) => {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
+                    }
+                    GatewayRequest::ConnectLightning(inner) => {
+                        inner
+                            .handle(|payload| self.handle_connect_lnrpc(payload))
+                            .await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
                         inner

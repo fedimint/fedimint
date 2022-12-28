@@ -8,8 +8,8 @@ use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::instrument;
 
 use super::{
-    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayRpcSender,
-    InfoPayload, WithdrawPayload,
+    BalancePayload, ConnectFedPayload, ConnectLnPayload, DepositAddressPayload, DepositPayload,
+    GatewayRpcSender, InfoPayload, WithdrawPayload,
 };
 use crate::LnGatewayError;
 
@@ -28,6 +28,7 @@ pub async fn run_webserver(
         .route("/address", post(address))
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
+        .route("/connect_ln", post(connect_ln))
         .route("/connect_fed", post(connect_fed))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
@@ -104,6 +105,17 @@ async fn withdraw(
 async fn pay_invoice(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<PayInvoicePayload>,
+) -> Result<impl IntoResponse, LnGatewayError> {
+    rpc.send(payload).await?;
+    Ok(())
+}
+
+/// Connect a new lightning rpc.
+/// This replaces any existing lnrpc connection.
+#[instrument(skip_all, err)]
+async fn connect_ln(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<ConnectLnPayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     rpc.send(payload).await?;
     Ok(())
