@@ -4,7 +4,7 @@ use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
-    config::GatewayConfig,
+    config::{ClnRpcConfig, GatewayConfig, LndRpcConfig},
     rpc::{
         rpc_client::RpcClient, BalancePayload, ConnectFedPayload, ConnectLnPayload,
         DepositAddressPayload, DepositPayload, WithdrawPayload,
@@ -28,15 +28,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    // Ganerate lnrpc configuration
+    GenerateLnrpcConfig {
+        /// The lnrpc configuration directory
+        out_dir: PathBuf,
+        lnrpc_bind_address: SocketAddr,
+        node_host: Option<String>,
+        node_port: Option<u32>,
+        tls_cert_path: Option<String>,
+        macaroon_path: Option<String>,
+    },
     /// Ganerate gateway configuration
     /// NOTE: This command can only be used on a local gateway
-    GenerateConfig {
+    GenerateGatewayConfig {
+        /// The gateway configuration directory
+        out_dir: PathBuf,
         /// Address to which the API webserver will bind
         api_bind_address: SocketAddr,
         /// URL under which the API will be reachable
         api_announce_address: Url,
-        /// The gateway configuration directory
-        out_dir: PathBuf,
     },
     /// Display CLI version hash
     VersionHash,
@@ -81,7 +91,43 @@ async fn main() {
     let client = RpcClient::new(cli.address);
 
     match cli.command {
-        Commands::GenerateConfig {
+        Commands::GenerateLnrpcConfig {
+            lnrpc_bind_address,
+            node_host,
+            node_port,
+            tls_cert_path,
+            macaroon_path,
+            mut out_dir,
+        } => {
+            // Recursively create config directory if it doesn't exist
+            std::fs::create_dir_all(&out_dir).expect("Failed to create config directory");
+            // Create config file
+            out_dir.push("lnrpc.config");
+
+            let cfg_file =
+                std::fs::File::create(out_dir).expect("Failed to create gateway config file");
+            if node_host.is_some()
+                && node_port.is_some()
+                && tls_cert_path.is_some()
+                && macaroon_path.is_some()
+            {
+                serde_json::to_writer_pretty(
+                    cfg_file,
+                    &LndRpcConfig {
+                        lnrpc_bind_address,
+                        node_host: node_host.unwrap(),
+                        node_port: node_port.unwrap(),
+                        tls_cert_path: tls_cert_path.unwrap(),
+                        macaroon_path: macaroon_path.unwrap(),
+                    },
+                )
+                .expect("Failed to write LND lnrpc configs to file");
+            } else {
+                serde_json::to_writer_pretty(cfg_file, &ClnRpcConfig { lnrpc_bind_address })
+                    .expect("Failed to write CLN lnrpc configs to file");
+            }
+        }
+        Commands::GenerateGatewayConfig {
             api_bind_address,
             api_announce_address,
             mut out_dir,

@@ -27,16 +27,20 @@ windows:
           - fg
         - ln1:
           - sleep 5 # wait for bitcoind and federation
-          - gateway-cli generate-config 127.0.0.1:8080 'http://127.0.0.1:8080' $FM_CFG_DIR #generate gateway config
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/ln_gateway --fedimint-cfg=$FM_CFG_DIR &
+          - gateway-cli generate-lnrpc-config $FM_LN1_DIR/.gateway 127.0.0.1:9590 #generate gateway config
+          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/cln-rpc --gateway-cfg=$FM_LN1_DIR/.gateway &
           - echo $! >> $FM_PID_FILE
           - fg
         - ln2:
           - sleep 5 # wait for bitcoind and federation
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 &
+          - gateway-cli generate-lnrpc-config $FM_LN2_DIR/.gateway 127.0.0.1:9591 #generate gateway config
+          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 --plugin=$FM_BIN_DIR/cln-rpc --gateway-cfg=$FM_LN2_DIR/.gateway &
           - echo $! >> $FM_PID_FILE
           - fg
+        - gateway:
+          - sleep 1
+          - gateway-cli generate-gateway-config $FM_CFG_DIR 127.0.0.1:8080 'http://127.0.0.1:8080' #generate gateway config
+          - $FM_BIN_DIR/gatewayd -d $FM_CFG_DIR
         - federation:
           - sleep 1 # wait for bitcoind
           - ./scripts/start-fed.sh
-

@@ -16,8 +16,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use anyhow::anyhow;
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
@@ -105,12 +108,13 @@ impl LnGateway {
         Ok(())
     }
 
-    async fn get_lnrpc_client(&self) -> LnRpcClient {
-        self.ln_rpc
-            .lock()
-            .await
-            .clone()
-            .expect("Lightning RPC client not initialized")
+    async fn get_lnrpc_client(&self) -> Result<LnRpcClient> {
+        match self.ln_rpc.lock().await.clone() {
+            Some(client) => Ok(client),
+            None => Err(LnGatewayError::Other(anyhow!(
+                "No Lightning RPC client connected"
+            ))),
+        }
     }
 
     async fn load_federation_actors(&self) {
@@ -137,7 +141,10 @@ impl LnGateway {
             .await
             .get(&federation_id.hash())
             .cloned()
-            .ok_or(LnGatewayError::UnknownFederation)
+            .ok_or(LnGatewayError::Other(anyhow!(
+                "Tried accessing an unknown federation with id : {}",
+                federation_id.0
+            )))
     }
 
     /// Connect a federation to the gateway.
@@ -160,7 +167,7 @@ impl LnGateway {
             .expect("Failed to get federation info from new actor");
 
         self.get_lnrpc_client()
-            .await
+            .await?
             .subscribe_intercept_htlcs(mint_pubkey)
             .await
             .expect("Failed to subscribe to intercept HTLCs");
@@ -180,7 +187,7 @@ impl LnGateway {
 
         let node_pub_key = self
             .get_lnrpc_client()
-            .await
+            .await?
             .get_pubkey()
             .await
             .expect("Failed to get node pubkey from Lightning node");
@@ -255,7 +262,7 @@ impl LnGateway {
 
         let actor = self.select_actor(federation_id).await?;
         let outpoint = actor
-            .pay_invoice(self.get_lnrpc_client().await.clone(), contract_id)
+            .pay_invoice(self.get_lnrpc_client().await?.clone(), contract_id)
             .await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
@@ -401,8 +408,6 @@ pub enum LnGatewayError {
     ClientError(#[from] ClientError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
-    #[error("Actor not found")]
-    UnknownFederation,
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }

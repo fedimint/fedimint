@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use cln::{model, ClnRpc};
-use cln_plugin::{anyhow, Builder, Error, Plugin};
+use cln_plugin::{anyhow, options, Builder, Error, Plugin};
 use fedimint_api::{task::TaskGroup, Amount};
 use fedimint_server::config::load_from_file;
 use ln_gateway::{
@@ -11,7 +11,6 @@ use ln_gateway::{
         GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest, PayInvoiceResponse,
         SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
     },
-    utils::try_read_gateway_dir,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
@@ -26,16 +25,17 @@ use tracing::error;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let service = ClnRpcService::new()
+        .await
+        .expect("Failed to create cln rpc service");
+    let dir = service.dir.clone();
+
     // Read configurations
-    let dir = try_read_gateway_dir()?;
     let gw_cfg_path = dir.join("lnrpc.config");
     let ClnRpcConfig { lnrpc_bind_address } = load_from_file(&gw_cfg_path)
         .map_err(|_| ClnRpcError::ConfigurationError)
         .expect("Failed to parse config");
 
-    let service = ClnRpcService::new()
-        .await
-        .expect("Failed to create cln rpc service");
     let srv = GatewayLightningServer::new(service);
 
     Server::builder()
@@ -101,6 +101,7 @@ pub struct ClnRpcService {
     // CLN rpc plugin.
     client: Arc<Mutex<ClnRpc>>,
     task_group: TaskGroup,
+    pub dir: PathBuf,
 }
 
 impl ClnRpcService {
@@ -109,6 +110,12 @@ impl ClnRpcService {
         let (sender, receiver) = mpsc::channel::<HtlcAccepted>(100);
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
+            .option(options::ConfigOption::new(
+                "gateway-cfg",
+                // FIXME: cln_plugin doesn't support parameters without defaults
+                options::Value::String("default-dont-use".into()),
+                "gateway config directory",
+            ))
             .hook("htlc_accepted", |plugin, value| async move {
                 /// Handle core-lightning "htlc_accepted" events by attempting to buy this preimage from the federation
                 /// and completing the payment
@@ -154,11 +161,25 @@ impl ClnRpcService {
             let socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
             let client = ClnRpc::new(socket).await.expect("connect to ln_socket");
 
+
+            let dir = match plugin.option("gateway-cfg") {
+                Some(options::Value::String(workdir)) => {
+                    // FIXME: cln_plugin doesn't yet support optional parameters
+                    if &workdir == "default-dont-use" {
+                        panic!("gateway-cfg option missing")
+                    } else {
+                        PathBuf::from(workdir)
+                    }
+                }
+                _ => unreachable!(),
+            };
+
             Ok(Self {
                 client: Arc::new(Mutex::new(client)),
                 task_group: TaskGroup::new(),
                 sender,
                 receiver,
+                dir,
             })
         } else {
             // TODO: Accurately define LightningError when building the plugin fails
