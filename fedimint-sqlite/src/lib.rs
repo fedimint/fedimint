@@ -37,6 +37,16 @@ impl SqliteDb {
             .await
             .expect("Error while creating the key-value table");
 
+        sqlx::query("CREATE INDEX IF NOT EXISTS key_index ON kv(key);")
+            .execute(&db)
+            .await
+            .expect("Error while creating the key index");
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS hex_index ON kv(hex(key));")
+            .execute(&db)
+            .await
+            .expect("Error while creating the key index");
+
         Ok(SqliteDb(db))
     }
 }

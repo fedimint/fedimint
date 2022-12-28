@@ -215,7 +215,9 @@ impl MintClient {
         let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
         let notes_per_denomination = self.notes_per_denomination(&mut dbtx).await;
         for amount in change {
-            let (issuances, nonces) = self.create_ecash(amount, notes_per_denomination, &mut dbtx).await;
+            let (issuances, nonces) = self
+                .create_ecash(amount, notes_per_denomination, &mut dbtx)
+                .await;
             let out_idx = tx.outputs.len();
             tx.outputs.push(Output::Mint(MintOutput(nonces)));
             change_outputs.push((out_idx, issuances));
@@ -415,7 +417,9 @@ impl MintClient {
         Fut: futures::Future<Output = OutPoint>,
     {
         let notes_per_denomination = self.notes_per_denomination(dbtx).await;
-        let (finalization, coins) = self.create_ecash(amount, notes_per_denomination, dbtx).await;
+        let (finalization, coins) = self
+            .create_ecash(amount, notes_per_denomination, dbtx)
+            .await;
         let out_point = create_tx(coins).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .await
