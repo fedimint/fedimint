@@ -1,7 +1,6 @@
 pub mod actor;
 pub mod client;
 pub mod config;
-pub mod ln;
 pub mod rpc;
 pub mod utils;
 
@@ -27,7 +26,6 @@ use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     FederationId, GatewayClient,
 };
-use rpc::{ln_rpc_client::LnRpcClient, FederationInfo};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, warn};
@@ -36,11 +34,11 @@ use crate::{
     actor::GatewayActor,
     client::GatewayClientBuilder,
     config::GatewayConfig,
-    ln::LightningError,
     rpc::{
-        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
-        WithdrawPayload,
+        lnrpc_client::{LnRpcClient, LnRpcClientFactory},
+        rpc_server::run_webserver,
+        BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, FederationInfo,
+        GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, WithdrawPayload,
     },
 };
 
@@ -49,16 +47,18 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 pub struct LnGateway {
     config: GatewayConfig,
     actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
-    ln_rpc: Mutex<Option<Arc<LnRpcClient>>>,
+    ln_rpc: Mutex<Option<LnRpcClient>>,
+    lnrpc_factory: LnRpcClientFactory,
+    client_builder: GatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
-    client_builder: GatewayClientBuilder,
     task_group: TaskGroup,
 }
 
 impl LnGateway {
     pub async fn new(
         config: GatewayConfig,
+        lnrpc_factory: LnRpcClientFactory,
         client_builder: GatewayClientBuilder,
         task_group: TaskGroup,
     ) -> Self {
@@ -71,35 +71,40 @@ impl LnGateway {
             ln_rpc: Mutex::new(None),
             sender,
             receiver,
+            lnrpc_factory,
             client_builder,
             task_group,
         };
 
-        ln_gw
-            .create_lightning_rpc_client(config.lnrpc_bind_address)
-            .await;
+        // Boot: Create and connect a lightning rpc client with address from config
+        let _ = ln_gw.connect_lnrpc_client(config.lnrpc_bind_address).await;
 
         ln_gw.load_federation_actors().await;
 
         ln_gw
     }
 
-    async fn create_lightning_rpc_client(&self, address: SocketAddr) {
-        let ln_rpc = Arc::new(
-            LnRpcClient::new(address)
-                .await
-                .expect("Failed to create Lightning RPC client"),
-        );
+    /// Create a lightning rpc client that connects to some gateway lightning rpc at the address provided
+    pub async fn connect_lnrpc_client(&self, address: SocketAddr) -> Result<LnRpcClient> {
+        let ln_rpc = self
+            .lnrpc_factory
+            .create(address, self.task_group.clone())
+            .await
+            .expect("Failed to create Lightning RPC client");
 
-        self.ln_rpc.lock().await.replace(ln_rpc);
+        // TODO: Test connection to lnrpc server and return error if it fails
+
+        self.ln_rpc.lock().await.replace(ln_rpc.clone());
+
+        Ok(ln_rpc)
     }
 
-    async fn get_ln_rpc_client(&self) -> Arc<LnRpcClient> {
+    async fn get_lnrpc_client(&self) -> LnRpcClient {
         self.ln_rpc
             .lock()
             .await
             .clone()
-            .expect("Missing lightning RPC client")
+            .expect("Lightning RPC client not initialized")
     }
 
     async fn load_federation_actors(&self) {
@@ -129,11 +134,8 @@ impl LnGateway {
             .ok_or(LnGatewayError::UnknownFederation)
     }
 
-    /// Register a federation to the gateway.
-    ///
-    /// # Returns
-    ///
-    /// A `GatewayActor` that can be used to execute gateway functions for the federation
+    /// Connect a federation to the gateway.
+    /// Returns a `GatewayActor` that can be used to execute gateway functions for the federation
     pub async fn connect_federation(
         &self,
         client: Arc<GatewayClient>,
@@ -151,7 +153,7 @@ impl LnGateway {
             .get_info()
             .expect("Failed to get federation info from new actor");
 
-        self.get_ln_rpc_client()
+        self.get_lnrpc_client()
             .await
             .subscribe_intercept_htlcs(mint_pubkey)
             .await
@@ -171,9 +173,9 @@ impl LnGateway {
         })?;
 
         let node_pub_key = self
-            .get_ln_rpc_client()
+            .get_lnrpc_client()
             .await
-            .get_pub_key()
+            .get_pubkey()
             .await
             .expect("Failed to get node pubkey from Lightning node");
 
@@ -247,7 +249,7 @@ impl LnGateway {
 
         let actor = self.select_actor(federation_id).await?;
         let outpoint = actor
-            .pay_invoice(self.get_ln_rpc_client().await.clone(), contract_id)
+            .pay_invoice(self.get_lnrpc_client().await.clone(), contract_id)
             .await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
@@ -386,8 +388,6 @@ impl Drop for LnGateway {
 pub enum LnGatewayError {
     #[error("Federation client operation error: {0:?}")]
     ClientError(#[from] ClientError),
-    #[error("Our LN node could not route the payment: {0:?}")]
-    CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
     #[error("Actor not found")]

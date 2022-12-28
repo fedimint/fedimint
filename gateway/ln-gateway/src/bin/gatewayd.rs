@@ -1,6 +1,7 @@
 use fedimint_api::task::TaskGroup;
 use ln_gateway::{
     client::{GatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
+    rpc::lnrpc_client::{LnRpcClientFactory, NetworkLnRpcClientFactory},
     utils::{read_gateway_config, try_read_gateway_dir},
     LnGateway,
 };
@@ -31,9 +32,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let client_builder: GatewayClientBuilder =
         StandardGatewayClientBuilder::new(dir.clone(), RocksDbFactory.into()).into();
 
-    // Create gateway instance
+    // Create task group for controlled shutdown of the gateway
     let task_group = TaskGroup::new();
-    let gateway = LnGateway::new(config, client_builder, task_group.clone()).await;
+
+    // Create a lightning rpc client factory
+    let lnrpc_factory: LnRpcClientFactory = NetworkLnRpcClientFactory::default().into();
+
+    // Create gateway instance
+    let gateway = LnGateway::new(config, lnrpc_factory, client_builder, task_group.clone()).await;
 
     if let Err(e) = gateway.run().await {
         task_group.shutdown_join_all().await?;

@@ -16,7 +16,6 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
 use cln_rpc::ClnRpc;
-use fake::FakeLightningTest;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::{
@@ -32,7 +31,6 @@ use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::BitcoindRpc;
-use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
 use fedimint_mint::{Mint, MintOutput};
 use fedimint_server::config::ServerConfigParams;
@@ -44,7 +42,10 @@ use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{all_decoders, consensus, EpochMessage, FedimintServer};
-use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
+use fedimint_testing::{
+    btc::{fixtures::FakeBitcoinTest, BitcoinTest},
+    ln::fixtures::{FakeLightningTest, FakeLnRpcClientFactory, RealLightningTest},
+};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::SpendableUTXO;
@@ -59,7 +60,7 @@ use ln_gateway::{
     actor::GatewayActor,
     client::{GatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
     config::GatewayConfig,
-    rpc::GatewayRequest,
+    rpc::lnrpc_client::{LnRpcClientFactory, NetworkLnRpcClientFactory},
     LnGateway,
 };
 use mint_client::{
@@ -68,18 +69,17 @@ use mint_client::{
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
-use real::{RealBitcoinTest, RealLightningTest};
+use real::RealBitcoinTest;
 use tokio::sync::Mutex;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
-use crate::fixtures::utils::LnRpcAdapter;
+use self::lnrpc::LnRpcClientAdapter;
 use crate::ConsensusItem;
 
-mod fake;
+mod lnrpc;
 mod real;
-mod utils;
 
 static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
@@ -177,14 +177,18 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let bitcoin = RealBitcoinTest::new(&wallet_config.local.btc_rpc);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
-            let lightning =
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
+            let lightning: Box<dyn LightningTest> = Box::new(
+                RealLightningTest::new(socket_gateway.clone(), socket_other.clone())
+                    .await
+                    .into(),
+            );
+
+            // TODO: Spawn a real lnrpc server with a known address
             let gateway_lightning_rpc = Mutex::new(
                 ClnRpc::new(socket_gateway.clone())
                     .await
                     .expect("connect to ln_socket"),
             );
-            let lightning_rpc_adapter = LnRpcAdapter::new(Box::new(gateway_lightning_rpc));
 
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
@@ -204,10 +208,10 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
-                lightning_rpc_adapter,
+                NetworkLnRpcClientFactory::default().into(),
                 client_config.clone(),
-                lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
+                task_group.clone(),
             )
             .await;
 
@@ -216,7 +220,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 user,
                 bitcoin: Box::new(bitcoin),
                 gateway,
-                lightning: Box::new(lightning),
+                lightning,
                 task_group,
             })
         }
@@ -227,8 +231,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
-            let lightning = FakeLightningTest::new();
-            let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
+
             let net = MockNetwork::new();
             let net_ref = &net;
             let connect_gen =
@@ -250,19 +253,22 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
-                ln_rpc_adapter,
+                FakeLnRpcClientFactory::default().into(),
                 client_config.clone(),
-                lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
+                task_group.clone(),
             )
             .await;
+
+            let lightning: Box<dyn LightningTest> =
+                Box::new(FakeLightningTest::new(task_group.clone()).into());
 
             Ok(Fixtures {
                 fed,
                 user,
                 bitcoin: Box::new(bitcoin),
                 gateway,
-                lightning: Box::new(lightning),
+                lightning,
                 task_group,
             })
         }
@@ -361,33 +367,50 @@ pub trait LightningTest {
 
 pub struct GatewayTest {
     pub actor: Arc<GatewayActor>,
-    pub adapter: Arc<LnRpcAdapter>,
-    pub keys: LightningGateway,
+    pub adapter: LnRpcClientAdapter,
+    // pub keys: LightningGateway,
     pub user: UserTest<GatewayClientConfig>,
     pub client: Arc<GatewayClient>,
 }
 
 impl GatewayTest {
     async fn new(
-        ln_client_adapter: LnRpcAdapter,
+        lnrpc_factory: LnRpcClientFactory,
         client_config: ClientConfig,
-        node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
+        task_group: TaskGroup,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
 
-        let keys = LightningGateway {
-            mint_pub_key: kp.x_only_public_key().0,
-            node_pub_key,
-            api: Url::parse("http://example.com")
-                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
-        };
+        // let keys = LightningGateway {
+        //     mint_pub_key: kp.x_only_public_key().0,
+        //     node_pub_key,
+        //     api: Url::parse("http://example.com")
+        //         .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+        // };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
+        let lnrpc_bind_address = bind_addr; // TODO: Use a unique lnrpc address
         let announce_addr = Url::parse(format!("http://{}", bind_addr).as_str())
             .expect("Could not parse URL to generate GatewayClientConfig API endpoint");
+
+        // Create federation client builder for the gateway
+        let client_builder: GatewayClientBuilder =
+            StandardGatewayClientBuilder::new(PathBuf::new(), MemDbFactory.into()).into();
+
+        let lnrpc_client = lnrpc_factory
+            .create(lnrpc_bind_address.clone(), task_group.clone())
+            .await
+            .expect("Failed to create lnrpc client");
+
+        let node_pub_key = lnrpc_client
+            .get_pubkey()
+            .await
+            .expect("Failed to get node pubkey");
+        let adapter = LnRpcClientAdapter::new(lnrpc_client);
+
         let gw_client_cfg = GatewayClientConfig {
             client_config: client_config.clone(),
             redeem_key: kp,
@@ -396,16 +419,8 @@ impl GatewayTest {
             node_pub_key,
         };
 
-        // Create federation client builder for the gateway
-        let client_builder: GatewayClientBuilder =
-            StandardGatewayClientBuilder::new(PathBuf::new(), MemDbFactory.into()).into();
-
-        let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let adapter = Arc::new(ln_client_adapter);
-        let ln_rpc = Arc::clone(&adapter);
-
         let gw_cfg = GatewayConfig {
-            lnrpc_bind_address: bind_addr, // TODO: Use a nunique lnrpc address
+            lnrpc_bind_address,
             lnd_rpc_connect: None,
 
             webserver_bind_address: bind_addr,
@@ -415,15 +430,8 @@ impl GatewayTest {
             default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };
 
-        let gateway = LnGateway::new(
-            gw_cfg,
-            ln_rpc,
-            client_builder.clone(),
-            sender,
-            receiver,
-            TaskGroup::new(),
-        )
-        .await;
+        let gateway =
+            LnGateway::new(gw_cfg, lnrpc_factory, client_builder.clone(), task_group).await;
 
         let client = Arc::new(
             client_builder
@@ -436,6 +444,12 @@ impl GatewayTest {
             .connect_federation(client.clone())
             .await
             .expect("Could not connect federation");
+
+        let _ = gateway
+            .connect_lnrpc_client(lnrpc_bind_address)
+            .await
+            .expect("Could not connect lnrpc");
+
         // Note: We don't run the gateway in test scenarios
 
         // Create a user test from gateway federation client
@@ -444,7 +458,7 @@ impl GatewayTest {
         GatewayTest {
             actor,
             adapter,
-            keys,
+            // keys,
             user,
             client,
         }

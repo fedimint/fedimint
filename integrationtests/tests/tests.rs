@@ -420,7 +420,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         let claim_outpoint = tokio::join!(
             gateway
                 .actor
-                .pay_invoice(gateway.adapter.clone(), contract_id),
+                .pay_invoice(gateway.adapter.into(), contract_id),
             async {
                 // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
                 fed.await_consensus_epochs(4).await.unwrap();
@@ -487,7 +487,7 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
 
         let claim_outpoint = gateway
             .actor
-            .pay_invoice(gateway.adapter.clone(), contract_id)
+            .pay_invoice(gateway.adapter.into(), contract_id)
             .await
             .unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint coins, sign coins
@@ -557,7 +557,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         let response = tokio::join!(
             gateway
                 .actor
-                .pay_invoice(gateway.adapter.clone(), contract_id),
+                .pay_invoice(gateway.adapter.into(), contract_id),
             async {
                 // we should run 4 epocks to buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
                 // but we only run 1 epoch to simulate timeout in preimage decryption

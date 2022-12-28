@@ -14,6 +14,7 @@ service GatewayLightning {
 
   /* SubscribeInterceptHtlcs opens a stream that intercepts specific HTLCs to be
    * handled by the gateway  */
+  // TODO: Make this a bidirectional stream so we can respnd to the gateway with 'accept' or 'reject' HTLCs
   rpc SubscribeInterceptHtlcs(SubscribeInterceptHtlcsRequest)
       returns (stream SubscribeInterceptHtlcsResponse) {}
 }
@@ -65,4 +66,6 @@ message SubscribeInterceptHtlcsResponse {
 
   // The payment request of the invoice
   string payment_request = 6;
+
+  // TODO: declare amount denomination [sat, msat, etc.]
 }

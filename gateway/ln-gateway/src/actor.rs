@@ -12,7 +12,7 @@ use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    rpc::{ln_rpc_client::LnRpcClient, FederationInfo},
+    rpc::{lnrpc_client::LnRpcClient, FederationInfo},
     utils::retry,
     LnGatewayError, Result,
 };
@@ -75,7 +75,7 @@ impl GatewayActor {
     #[instrument(skip_all, fields(%contract_id))]
     pub async fn pay_invoice(
         &self,
-        ln_rpc: Arc<LnRpcClient>,
+        ln_rpc: LnRpcClient,
         contract_id: ContractId,
     ) -> Result<OutPoint> {
         debug!("Fetching contract");
@@ -161,7 +161,7 @@ impl GatewayActor {
 
     pub async fn buy_preimage_external(
         &self,
-        ln_rpc: Arc<LnRpcClient>,
+        ln_rpc: LnRpcClient,
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {

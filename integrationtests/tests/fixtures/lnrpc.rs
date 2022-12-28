@@ -1,25 +1,32 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::{secp256k1::PublicKey, XOnlyPublicKey};
 use fedimint_ln::contracts::Preimage;
-use ln_gateway::ln::{LightningError, LnRpc};
+use ln_gateway::{
+    rpc::{
+        lnrpc_client::{ILnRpcClient, LnRpcClient},
+        HtlcInterceptPayload,
+    },
+    Result,
+};
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::Mutex;
 
-/// A proxy for the underlying LnRpc which can be used to add behavoir to it using the "Decorator pattern"
-pub struct LnRpcAdapter {
+/// A proxy for the underlying LnRpcClient which can be used to add behavoir to it using the "Decorator pattern"
+#[derive(Debug)]
+pub struct LnRpcClientAdapter {
     /// The actual LnRpc that we add behavior to.
-    client: Box<dyn LnRpc>,
+    client: LnRpcClient,
     /// A pair of <Invoice> and <Count> where client.pay() will fail <Count> times for each <Invoice>
     fail_invoices: Arc<Mutex<HashMap<lightning_invoice::Invoice, u8>>>,
 }
 
-impl LnRpcAdapter {
-    pub fn new(client: Box<dyn LnRpc>) -> Self {
+impl LnRpcClientAdapter {
+    pub fn new(client: LnRpcClient) -> Self {
         let fail_invoices = Arc::new(Mutex::new(HashMap::new()));
 
-        LnRpcAdapter {
+        LnRpcClientAdapter {
             client,
             fail_invoices,
         }
@@ -33,17 +40,17 @@ impl LnRpcAdapter {
 }
 
 #[async_trait]
-impl LnRpc for LnRpcAdapter {
-    async fn pubkey(&self) -> Result<PublicKey, LightningError> {
-        self.client.pubkey().await
+impl ILnRpcClient for LnRpcClientAdapter {
+    async fn get_pubkey(&self) -> Result<PublicKey> {
+        self.client.get_pubkey().await
     }
 
-    async fn pay(
+    async fn pay_invoice(
         &self,
         invoice: lightning_invoice::Invoice,
         max_delay: u64,
         max_fee_percent: f64,
-    ) -> Result<Preimage, LightningError> {
+    ) -> Result<Preimage> {
         self.fail_invoices
             .lock()
             .await
@@ -53,10 +60,19 @@ impl LnRpc for LnRpcAdapter {
             });
         if let Some(counter) = self.fail_invoices.lock().await.get(&invoice) {
             if *counter > 0 {
-                return Err(LightningError(None));
+                return Err(anyhow::anyhow!("Failing invoice").into());
             }
         }
         self.fail_invoices.lock().await.remove(&invoice);
-        self.client.pay(invoice, max_delay, max_fee_percent).await
+        self.client
+            .pay_invoice(invoice, max_delay, max_fee_percent)
+            .await
+    }
+
+    async fn subscribe_intercept_htlcs(
+        &self,
+        mint_pub_key: XOnlyPublicKey,
+    ) -> Result<Receiver<HtlcInterceptPayload>> {
+        self.client.subscribe_intercept_htlcs(mint_pub_key).await
     }
 }

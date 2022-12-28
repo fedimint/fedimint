@@ -1,4 +1,4 @@
-pub mod ln_rpc_client;
+pub mod lnrpc_client;
 pub mod rpc_client;
 pub mod rpc_server;
 
@@ -6,6 +6,7 @@ use std::io::Cursor;
 
 use anyhow::{anyhow, Error};
 use bitcoin::{Address, Transaction, XOnlyPublicKey};
+use bitcoin_hashes::sha256::Hash;
 use fedimint_api::{Amount, TransactionId};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
@@ -208,4 +209,12 @@ pub fn serde_hex_serialize<T: bitcoin::consensus::Encodable, S: Serializer>(
     } else {
         s.serialize_bytes(&bytes)
     }
+}
+
+// HTLC intercept messaging
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HtlcInterceptPayload {
+    pub invoice_amount: Amount,
+    pub payment_hash: Hash,
 }

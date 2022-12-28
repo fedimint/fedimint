@@ -1166,14 +1166,20 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
+ "cln-rpc",
  "fedimint-api",
  "fedimint-bitcoind",
+ "fedimint-server",
  "fedimint-wallet",
  "futures",
+ "lightning",
+ "lightning-invoice",
+ "ln-gateway",
  "rand",
  "secp256k1-zkp",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

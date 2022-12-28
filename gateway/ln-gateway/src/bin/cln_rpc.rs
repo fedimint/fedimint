@@ -203,7 +203,7 @@ impl GatewayLightning for ClnRpcService {
             .lock()
             .await
             .call(cln::Request::Pay(model::PayRequest {
-                bolt11: invoice.to_string(),
+                bolt11: invoice,
                 amount_msat: None,
                 label: None,
                 riskfactor: None,
