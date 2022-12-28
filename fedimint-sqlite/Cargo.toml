@@ -1,0 +1,25 @@
+[package]
+name = "fedimint-sqlite"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "fedimint_sqlite"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+async-trait = "0.1"
+futures = "0.3.24"
+sqlx = { version = "0.6.2", features = ["runtime-tokio-native-tls", "sqlite"]}
+fedimint-api = { path = "../fedimint-api" }
+rand = "0.8"
+tracing = "0.1.37"
+
+[dev-dependencies]
+tempfile = "3.3.0"
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+
+[target.'cfg(not(target_family="wasm"))'.dependencies]
+tokio = { version = "1.22.0", features = ["rt", "rt-multi-thread", "sync", "time"] }

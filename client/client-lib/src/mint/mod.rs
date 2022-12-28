@@ -19,8 +19,6 @@ use fedimint_core::modules::mint::{
     BlindNonce, Mint, MintInput, MintOutput, MintOutputOutcome, Nonce, Note, OutputOutcome,
 };
 use fedimint_core::transaction::legacy::{Input, Output, Transaction};
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
@@ -217,7 +215,9 @@ impl MintClient {
         let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
         let notes_per_denomination = self.notes_per_denomination(&mut dbtx).await;
         for amount in change {
-            let (issuances, nonces) = self.create_ecash(amount, notes_per_denomination).await;
+            let (issuances, nonces) = self
+                .create_ecash(amount, notes_per_denomination, &mut dbtx)
+                .await;
             let out_idx = tx.outputs.len();
             tx.outputs.push(Output::Mint(MintOutput(nonces)));
             change_outputs.push((out_idx, issuances));
@@ -268,6 +268,7 @@ impl MintClient {
         &self,
         amount: Amount,
         notes_per_denomination: u16,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
@@ -279,7 +280,8 @@ impl MintClient {
         );
         for (amt, num) in denominations.iter() {
             for _ in 0..*num {
-                let (request, blind_nonce) = self.new_ecash_note(&self.context.secp, amt).await;
+                let (request, blind_nonce) =
+                    self.new_ecash_note(&self.context.secp, amt, dbtx).await;
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
         }
@@ -357,19 +359,15 @@ impl MintClient {
         )
     }
 
-    async fn new_note_secret(&self, amount: Amount) -> DerivableSecret {
-        let mut new_idx;
-        loop {
-            let mut dbtx = self.start_dbtx().await;
-            new_idx = self.get_next_note_index(&mut dbtx, amount).await;
-            dbtx.insert_entry(&NextECashNoteIndexKey(amount), &new_idx.next().as_u64())
-                .await
-                .expect("DB error");
-            if dbtx.commit_tx().await.is_ok() {
-                break;
-            }
-        }
-
+    async fn new_note_secret(
+        &self,
+        amount: Amount,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> DerivableSecret {
+        let new_idx = self.get_next_note_index(dbtx, amount).await;
+        dbtx.insert_entry(&NextECashNoteIndexKey(amount), &new_idx.next().as_u64())
+            .await
+            .expect("DB Error");
         Self::new_note_secret_static(&self.secret, amount, new_idx)
     }
 
@@ -394,8 +392,9 @@ impl MintClient {
         &self,
         ctx: &Secp256k1<C>,
         amount: Amount,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> (NoteIssuanceRequest, BlindNonce) {
-        let secret = self.new_note_secret(amount).await;
+        let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(ctx, secret)
     }
 
@@ -418,7 +417,9 @@ impl MintClient {
         Fut: futures::Future<Output = OutPoint>,
     {
         let notes_per_denomination = self.notes_per_denomination(dbtx).await;
-        let (finalization, coins) = self.create_ecash(amount, notes_per_denomination).await;
+        let (finalization, coins) = self
+            .create_ecash(amount, notes_per_denomination, dbtx)
+            .await;
         let out_point = create_tx(coins).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .await
@@ -488,34 +489,35 @@ impl MintClient {
             return Vec::new();
         }
 
-        let stream = active_issuances
-            .into_iter()
-            .map(|(out_point, _)| async move {
+        let mut results: Vec<Result<_>> = Vec::new();
+        for (out_point, _) in active_issuances.into_iter() {
+            loop {
                 let mut dbtx = self
                     .context
                     .db
                     .begin_transaction(ModuleDecoderRegistry::default())
                     .await;
-                loop {
-                    match self.fetch_coins(&mut dbtx, out_point).await {
-                        Ok(_) => {
-                            dbtx.commit_tx().await.expect("DB Error");
-                            return Ok(out_point);
-                        }
-                        // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                        Err(e) if e.is_retryable() => {
-                            trace!("Mint returned retryable error: {:?}", e);
-                            fedimint_api::task::sleep(Duration::from_secs(1)).await
-                        }
-                        Err(e) => {
-                            warn!("Mint returned error: {:?}", e);
-                            return Err(e);
-                        }
+                match self.fetch_coins(&mut dbtx, out_point).await {
+                    Ok(_) => {
+                        dbtx.commit_tx().await.expect("DB Error");
+                        results.push(Ok(out_point));
+                        break;
+                    }
+                    // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                    Err(e) if e.is_retryable() => {
+                        trace!("Mint returned retryable error: {:?}", e);
+                        fedimint_api::task::sleep(Duration::from_secs(1)).await
+                    }
+                    Err(e) => {
+                        warn!("Mint returned error: {:?}", e);
+                        results.push(Err(e));
+                        break;
                     }
                 }
-            })
-            .collect::<FuturesUnordered<_>>();
-        stream.collect::<Vec<Result<_>>>().await
+            }
+        }
+
+        results
     }
 }
 
@@ -1005,10 +1007,15 @@ mod tests {
                     |_| {
                         let client = client_copy.clone();
                         block_on(async {
-                            let (_, nonce) = client
-                                .new_ecash_note(secp256k1_zkp::SECP256K1, amount)
+                            let mut dbtx = client
+                                .context
+                                .db
+                                .begin_transaction(ModuleDecoderRegistry::default())
                                 .await;
-                            Some(nonce)
+                            let (_, nonce) = client
+                                .new_ecash_note(secp256k1_zkp::SECP256K1, amount, &mut dbtx)
+                                .await;
+                            dbtx.commit_tx().await.map(|_| nonce).ok()
                         })
                     }
                 })

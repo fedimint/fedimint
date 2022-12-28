@@ -198,7 +198,13 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .await;
 
-            let user_db = rocks(dir.clone()).into();
+            let user_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
+                let db_name = format!("client-{}", rng().next_u64());
+                sqlite(dir.clone(), db_name).await.into()
+            } else {
+                rocks(dir.clone()).into()
+            };
+
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
             user.client.await_consensus_block_height(0).await?;
@@ -351,6 +357,13 @@ async fn distributed_config(
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
     let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
     fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
+}
+
+async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
+    let connection_string = format!("sqlite://{}/{}.db", dir, db_name);
+    fedimint_sqlite::SqliteDb::open(connection_string.as_str())
+        .await
+        .unwrap()
 }
 
 #[async_trait]
