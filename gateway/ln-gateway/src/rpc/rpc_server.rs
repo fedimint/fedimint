@@ -28,7 +28,7 @@ pub async fn run_webserver(
         .route("/address", post(address))
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
-        .route("/connect", post(connect))
+        .route("/connect_fed", post(connect_fed))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -111,7 +111,7 @@ async fn pay_invoice(
 
 /// Connect a new federation
 #[instrument(skip_all, err)]
-async fn connect(
+async fn connect_fed(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<ConnectFedPayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
