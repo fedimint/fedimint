@@ -21,7 +21,6 @@ use url::Url;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_authentication() -> Result<()> {
-    let gw_lnrpc_port = portpicker::pick_unused_port().expect("Failed to pick lnrpc port");
     let gw_server_port = portpicker::pick_unused_port().expect("Failed to pick webserver port");
 
     let gw_bind_address = SocketAddr::from(([127, 0, 0, 1], gw_server_port));
@@ -32,14 +31,9 @@ async fn test_gateway_authentication() -> Result<()> {
     let federation_id = FederationId("test_fed".into());
 
     let cfg = GatewayConfig {
-        /* LN RPC config */
-        lnrpc_bind_address: SocketAddr::from(([127, 0, 0, 1], gw_lnrpc_port)),
-        lnd_rpc_connect: None,
-
-        /* Webserver config */
-        webserver_bind_address: gw_bind_address,
-        webserver_password: gw_password.clone(),
+        api_bind_address: gw_bind_address,
         api_announce_address: gw_announce_address.clone(),
+        webserver_password: gw_password.clone(),
 
         // Additional <temporary configs>
         default_federation: federation_id.clone(),

@@ -1,8 +1,10 @@
 use fedimint_api::task::TaskGroup;
+use fedimint_server::config::load_from_file;
 use ln_gateway::{
     client::{GatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
+    config::GatewayConfig,
     rpc::lnrpc_client::{LnRpcClientFactory, NetworkLnRpcClientFactory},
-    utils::{read_gateway_config, try_read_gateway_dir},
+    utils::try_read_gateway_dir,
     LnGateway,
 };
 use tracing::error;
@@ -26,7 +28,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Read configurations
     let dir = try_read_gateway_dir()?;
-    let config = read_gateway_config(Some(dir.clone()))?;
+    let gw_cfg_path = dir.join("gateway.config");
+    let config: GatewayConfig = load_from_file(&gw_cfg_path).expect("Failed to parse config");
 
     // Create federation client builder
     let client_builder: GatewayClientBuilder =

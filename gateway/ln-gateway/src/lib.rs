@@ -76,9 +76,6 @@ impl LnGateway {
             task_group,
         };
 
-        // Boot: Create and connect a lightning rpc client with address from config
-        let _ = ln_gw.connect_lnrpc_client(config.lnrpc_bind_address).await;
-
         ln_gw.load_federation_actors().await;
 
         ln_gw
@@ -305,7 +302,7 @@ impl LnGateway {
         tg.spawn("Gateway Webserver", move |server_ctrl| async move {
             let mut webserver = tokio::spawn(run_webserver(
                 cfg.webserver_password.clone(),
-                cfg.webserver_bind_address,
+                cfg.api_bind_address,
                 sender,
             ));
 

@@ -177,11 +177,6 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let bitcoin = RealBitcoinTest::new(&wallet_config.local.btc_rpc);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
-            let lightning: Box<dyn LightningTest> = Box::new(
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone())
-                    .await
-                    .into(),
-            );
 
             // TODO: Spawn a real lnrpc server with a known address
             let gateway_lightning_rpc = Mutex::new(
@@ -214,6 +209,12 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 task_group.clone(),
             )
             .await;
+
+            let lightning: Box<dyn LightningTest> = Box::new(
+                RealLightningTest::new(socket_gateway.clone(), socket_other.clone())
+                    .await
+                    .into(),
+            );
 
             Ok(Fixtures {
                 fed,
@@ -420,12 +421,9 @@ impl GatewayTest {
         };
 
         let gw_cfg = GatewayConfig {
-            lnrpc_bind_address,
-            lnd_rpc_connect: None,
-
-            webserver_bind_address: bind_addr,
-            webserver_password: "abc".into(),
+            api_bind_address: bind_addr,
             api_announce_address: announce_addr,
+            webserver_password: "abc".into(),
 
             default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };

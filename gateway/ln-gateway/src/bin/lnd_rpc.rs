@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use fedimint_api::task::TaskGroup;
+use fedimint_server::config::load_from_file;
 use ln_gateway::{
-    config::{GatewayConfig, LndRpcConfig},
+    config::LndRpcConfig,
     gwlightningrpc::{
         gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
         GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest, PayInvoiceResponse,
         SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
     },
-    utils::read_gateway_config,
+    utils::try_read_gateway_dir,
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -18,35 +19,30 @@ use tracing::error;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let GatewayConfig {
-        lnrpc_bind_address,
-        lnd_rpc_connect,
-        ..
-    } = read_gateway_config(None)?;
+    // Read configurations
+    let dir = try_read_gateway_dir()?;
+    let gw_cfg_path = dir.join("lnrpc.config");
+    let config: LndRpcConfig = load_from_file(&gw_cfg_path)
+        .map_err(|_| LndRpcError::ConfigurationError)
+        .expect("Failed to parse config");
 
-    match lnd_rpc_connect {
-        Some(connect) => {
-            let service = LndRpcService::new(connect)
-                .await
-                .expect("Failed to create lnd rpc service");
-            let srv = GatewayLightningServer::new(service);
+    let address = config.lnrpc_bind_address;
 
-            Server::builder()
-                .add_service(srv)
-                .serve(lnrpc_bind_address)
-                .await
-                .map_err(|_| LndRpcError::RpcServerError)?;
+    let service = LndRpcService::new(config)
+        .await
+        .expect("Failed to create lnd rpc service");
+    let srv = GatewayLightningServer::new(service);
 
-            println!(
-                "Gateway lightning rpc server listening on {}",
-                lnrpc_bind_address
-            );
-        }
-        None => {
-            error!("Missing LND rpc connection config");
-            Err(LndRpcError::ConfigurationError)?
-        }
-    }
+    Server::builder()
+        .add_service(srv)
+        .serve(address)
+        .await
+        .map_err(|_| LndRpcError::RpcServerError)?;
+
+    println!(
+        "LND gateway lightning rpc server listening at : {}",
+        address
+    );
 
     Ok(())
 }

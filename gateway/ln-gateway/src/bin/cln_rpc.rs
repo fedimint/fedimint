@@ -3,14 +3,15 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use cln::{model, ClnRpc};
 use cln_plugin::{anyhow, Builder, Error, Plugin};
 use fedimint_api::{task::TaskGroup, Amount};
+use fedimint_server::config::load_from_file;
 use ln_gateway::{
-    config::GatewayConfig,
+    config::ClnRpcConfig,
     gwlightningrpc::{
         gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
         GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest, PayInvoiceResponse,
         SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
     },
-    utils::read_gateway_config,
+    utils::try_read_gateway_dir,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
@@ -25,9 +26,12 @@ use tracing::error;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let GatewayConfig {
-        lnrpc_bind_address, ..
-    } = read_gateway_config(None)?;
+    // Read configurations
+    let dir = try_read_gateway_dir()?;
+    let gw_cfg_path = dir.join("lnrpc.config");
+    let ClnRpcConfig { lnrpc_bind_address } = load_from_file(&gw_cfg_path)
+        .map_err(|_| ClnRpcError::ConfigurationError)
+        .expect("Failed to parse config");
 
     let service = ClnRpcService::new()
         .await
@@ -41,7 +45,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .map_err(|_| ClnRpcError::RpcServerError(LightningError(Some(0))))?;
 
     println!(
-        "Gateway lightning rpc server listening on {}",
+        "CLN gateway lightning rpc server listening at : {}",
         lnrpc_bind_address
     );
 
