@@ -1048,6 +1048,13 @@
 <a href="#1048" id="1048">1048</a>
 <a href="#1049" id="1049">1049</a>
 <a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1069,8 +1076,6 @@
     BlindNonce, Mint, MintInput, MintOutput, MintOutputOutcome, Nonce, Note, OutputOutcome,
 };
 <span class="kw">use </span>fedimint_core::transaction::legacy::{Input, Output, Transaction};
-<span class="kw">use </span>futures::stream::FuturesUnordered;
-<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1267,7 +1272,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>change_outputs: Vec&lt;(usize, NoteIssuanceRequests)&gt; = <span class="macro">vec!</span>[];
         <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
         <span class="kw">for </span>amount <span class="kw">in </span>change {
-            <span class="kw">let </span>(issuances, nonces) = <span class="self">self</span>.create_ecash(amount, notes_per_denomination).<span class="kw">await</span>;
+            <span class="kw">let </span>(issuances, nonces) = <span class="self">self
+                </span>.create_ecash(amount, notes_per_denomination, <span class="kw-2">&amp;mut </span>dbtx)
+                .<span class="kw">await</span>;
             <span class="kw">let </span>out_idx = tx.outputs.len();
             tx.outputs.push(Output::Mint(MintOutput(nonces)));
             change_outputs.push((out_idx, issuances));
@@ -1318,6 +1325,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         notes_per_denomination: u16,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; (NoteIssuanceRequests, TieredMulti&lt;BlindNonce&gt;) {
         <span class="kw">let </span><span class="kw-2">mut </span>amount_requests: Vec&lt;((Amount, NoteIssuanceRequest), (Amount, BlindNonce))&gt; =
             Vec::new();
@@ -1329,7 +1337,8 @@
         );
         <span class="kw">for </span>(amt, num) <span class="kw">in </span>denominations.iter() {
             <span class="kw">for _ in </span><span class="number">0</span>..<span class="kw-2">*</span>num {
-                <span class="kw">let </span>(request, blind_nonce) = <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, amt).<span class="kw">await</span>;
+                <span class="kw">let </span>(request, blind_nonce) =
+                    <span class="self">self</span>.new_ecash_note(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, amt, dbtx).<span class="kw">await</span>;
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
         }
@@ -1407,19 +1416,15 @@
         )
     }
 
-    <span class="kw">async fn </span>new_note_secret(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; DerivableSecret {
-        <span class="kw">let </span><span class="kw-2">mut </span>new_idx;
-        <span class="kw">loop </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
-            new_idx = <span class="self">self</span>.get_next_note_index(<span class="kw-2">&amp;mut </span>dbtx, amount).<span class="kw">await</span>;
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.next().as_u64())
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;DB error&quot;</span>);
-            <span class="kw">if </span>dbtx.commit_tx().<span class="kw">await</span>.is_ok() {
-                <span class="kw">break</span>;
-            }
-        }
-
+    <span class="kw">async fn </span>new_note_secret(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; DerivableSecret {
+        <span class="kw">let </span>new_idx = <span class="self">self</span>.get_next_note_index(dbtx, amount).<span class="kw">await</span>;
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.next().as_u64())
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         <span class="self">Self</span>::new_note_secret_static(<span class="kw-2">&amp;</span><span class="self">self</span>.secret, amount, new_idx)
     }
 
@@ -1444,8 +1449,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
         amount: Amount,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; (NoteIssuanceRequest, BlindNonce) {
-        <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(amount).<span class="kw">await</span>;
+        <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(amount, dbtx).<span class="kw">await</span>;
         NoteIssuanceRequest::new(ctx, secret)
     }
 
@@ -1468,7 +1474,9 @@
         Fut: futures::Future&lt;Output = OutPoint&gt;,
     {
         <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(dbtx).<span class="kw">await</span>;
-        <span class="kw">let </span>(finalization, coins) = <span class="self">self</span>.create_ecash(amount, notes_per_denomination).<span class="kw">await</span>;
+        <span class="kw">let </span>(finalization, coins) = <span class="self">self
+            </span>.create_ecash(amount, notes_per_denomination, dbtx)
+            .<span class="kw">await</span>;
         <span class="kw">let </span>out_point = create_tx(coins).<span class="kw">await</span>;
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
             .<span class="kw">await
@@ -1538,35 +1546,36 @@
             <span class="kw">return </span>Vec::new();
         }
 
-        <span class="kw">let </span>stream = active_issuances
-            .into_iter()
-            .map(|(out_point, <span class="kw">_</span>)| <span class="kw">async move </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>results: Vec&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>&gt;&gt; = Vec::new();
+        <span class="kw">for </span>(out_point, <span class="kw">_</span>) <span class="kw">in </span>active_issuances.into_iter() {
+            <span class="kw">loop </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
                     </span>.context
                     .db
                     .begin_transaction(ModuleDecoderRegistry::default())
                     .<span class="kw">await</span>;
-                <span class="kw">loop </span>{
-                    <span class="kw">match </span><span class="self">self</span>.fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(out_point);
-                        }
-                        <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                        </span><span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
-                            <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, e);
-                            fedimint_api::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
-                        </span>}
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">warn!</span>(<span class="string">&quot;Mint returned error: {:?}&quot;</span>, e);
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(e);
-                        }
+                <span class="kw">match </span><span class="self">self</span>.fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                        results.push(<span class="prelude-val">Ok</span>(out_point));
+                        <span class="kw">break</span>;
+                    }
+                    <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                    </span><span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
+                        <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, e);
+                        fedimint_api::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
+                    </span>}
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Mint returned error: {:?}&quot;</span>, e);
+                        results.push(<span class="prelude-val">Err</span>(e));
+                        <span class="kw">break</span>;
                     }
                 }
-            })
-            .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
-        stream.collect::&lt;Vec&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>&gt;&gt;&gt;().<span class="kw">await
-    </span>}
+            }
+        }
+
+        results
+    }
 }
 
 <span class="kw">impl </span>Extend&lt;(Amount, NoteIssuanceRequest)&gt; <span class="kw">for </span>NoteIssuanceRequests {
@@ -2055,10 +2064,15 @@
                     |<span class="kw">_</span>| {
                         <span class="kw">let </span>client = client_copy.clone();
                         block_on(<span class="kw">async </span>{
-                            <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client
-                                .new_ecash_note(secp256k1_zkp::SECP256K1, amount)
+                            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client
+                                .context
+                                .db
+                                .begin_transaction(ModuleDecoderRegistry::default())
                                 .<span class="kw">await</span>;
-                            <span class="prelude-val">Some</span>(nonce)
+                            <span class="kw">let </span>(<span class="kw">_</span>, nonce) = client
+                                .new_ecash_note(secp256k1_zkp::SECP256K1, amount, <span class="kw-2">&amp;mut </span>dbtx)
+                                .<span class="kw">await</span>;
+                            dbtx.commit_tx().<span class="kw">await</span>.map(|<span class="kw">_</span>| nonce).ok()
                         })
                     }
                 })
