@@ -149,19 +149,28 @@ impl ServerModuleConfig {
     }
 }
 
+/// Consensus-critical part of a server side module config
 pub trait TypedServerModuleConsensusConfig: DeserializeOwned + Serialize {
+    /// Derive client side config for this module (type-erased)
     fn to_client_config(&self) -> ClientModuleConfig;
 }
 
+/// Module (server side) config
 pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
+    /// Local non-consensus, not security-sensitive settings
     type Local: DeserializeOwned + Serialize;
+    /// Private for this federation member data that are security sensitive and will be encrypted at rest
     type Private: DeserializeOwned + Serialize;
+    /// Shared consensus-critical config
     type Consensus: TypedServerModuleConsensusConfig;
 
+    /// Assemble from the three functionally distinct parts
     fn from_parts(local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self;
 
+    /// Split the config into its three functionally distinct parts
     fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus);
 
+    /// Turn the typed config into type-erased version
     fn to_erased(self) -> ServerModuleConfig {
         let (local, private, consensus) = self.to_parts();
 
@@ -172,9 +181,11 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
         }
     }
 
+    /// Validate the config
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()>;
 }
 
+/// Typed client side module config
 pub trait TypedClientModuleConfig: DeserializeOwned + Serialize {
     fn to_erased(&self) -> ClientModuleConfig {
         ClientModuleConfig(serde_json::to_value(self).expect("serialization can't fail"))
