@@ -29,11 +29,16 @@ use url::Url;
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
+use crate::MaybeEpochMessage;
 
 /// Maximum connection failures we consider for our back-off strategy
 const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
 
+/// How many unsent messages will be buffered before a connection is re-established
 const MAX_UNSENT_MESSAGES: usize = 4096;
+
+/// Messages for how many epochs the resend buffer will hold before the session is reset
+const MAX_BUFFERED_EPOCHS: u64 = 100;
 
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
@@ -120,7 +125,14 @@ enum PeerConnectionState<M> {
 
 impl<T: 'static> ReconnectPeerConnections<T>
 where
-    T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
+    T: std::fmt::Debug
+        + Clone
+        + Serialize
+        + DeserializeOwned
+        + MaybeEpochMessage
+        + Unpin
+        + Send
+        + Sync,
 {
     /// Creates a new `ReconnectPeerConnections` connection manager from a network config and a
     /// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for
@@ -227,7 +239,15 @@ impl PeerSlice for Target<PeerId> {
 #[async_trait]
 impl<T> IPeerConnections<T> for ReconnectPeerConnections<T>
 where
-    T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
+    T: std::fmt::Debug
+        + Serialize
+        + DeserializeOwned
+        + Clone
+        + MaybeEpochMessage
+        + Unpin
+        + Send
+        + Sync
+        + 'static,
 {
     #[must_use]
     async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()> {
@@ -266,7 +286,7 @@ where
 
 impl<M> PeerConnectionStateMachine<M>
 where
-    M: Debug + Clone,
+    M: Debug + Clone + MaybeEpochMessage,
 {
     async fn run(mut self, task_handle: &TaskHandle) {
         // Note: `state_transition` internally uses channel operations (`send` and `recv`)
@@ -301,7 +321,7 @@ where
 
 impl<M> CommonPeerConnectionState<M>
 where
-    M: Debug + Clone,
+    M: Debug + Clone + MaybeEpochMessage,
 {
     async fn state_transition_connected(
         &mut self,
@@ -474,9 +494,16 @@ where
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
+                let buffer_ready = self.message_buffer.buffered_epochs() < MAX_BUFFERED_EPOCHS;
                 match maybe_msg {
-                    Some(msg) => {
+                    Some(msg)if buffer_ready  => {
                         self.message_buffer.queue_message(msg);
+                        PeerConnectionState::Disconnected(disconnected)
+                    }
+                    Some(_) => {
+                        // FIXME: only begin buffering again once we have a new connection
+                        // Drop buffer if it gets too big, now the peer will have to rejoin consensus
+                        self.message_buffer = Default::default();
                         PeerConnectionState::Disconnected(disconnected)
                     }
                     None => {
@@ -530,7 +557,7 @@ where
 
 impl<M> PeerConnection<M>
 where
-    M: Debug + Clone + Send + Sync + 'static,
+    M: Debug + Clone + MaybeEpochMessage + Send + Sync + 'static,
 {
     fn new(
         id: PeerId,
@@ -612,10 +639,12 @@ mod tests {
     use fedimint_api::task::TaskGroup;
     use fedimint_api::PeerId;
     use futures::Future;
+    use serde::{Deserialize, Serialize};
 
     use crate::net::connect::mock::MockNetwork;
     use crate::net::connect::Connector;
     use crate::net::peers::{IPeerConnections, NetworkConfig, ReconnectPeerConnections};
+    use crate::MaybeEpochMessage;
 
     async fn timeout<F, T>(f: F) -> Option<T>
     where
@@ -626,6 +655,15 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn test_connect() {
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct TestMessage(u64);
+
+        impl MaybeEpochMessage for TestMessage {
+            fn message_epoch(&self) -> Option<u64> {
+                None
+            }
+        }
+
         let task_group = TaskGroup::new();
 
         {
@@ -653,23 +691,29 @@ mod tests {
                     peers: peers_ref.clone(),
                 };
                 let connect = net_ref.connector(cfg.identity).into_dyn();
-                ReconnectPeerConnections::<u64>::new(cfg, connect, &mut task_group).await
+                ReconnectPeerConnections::<TestMessage>::new(cfg, connect, &mut task_group).await
             };
 
             let mut peers_a = build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
             let mut peers_b = build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
 
-            peers_a.send(&[PeerId::from(2)], 42).await.unwrap();
+            peers_a
+                .send(&[PeerId::from(2)], TestMessage(42))
+                .await
+                .unwrap();
             let recv = timeout(peers_b.receive()).await.unwrap().unwrap();
             assert_eq!(recv.0, PeerId::from(1));
-            assert_eq!(recv.1, 42);
+            assert_eq!(recv.1 .0, 42);
 
-            peers_a.send(&[PeerId::from(3)], 21).await.unwrap();
+            peers_a
+                .send(&[PeerId::from(3)], TestMessage(21))
+                .await
+                .unwrap();
 
             let mut peers_c = build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
             let recv = timeout(peers_c.receive()).await.unwrap().unwrap();
             assert_eq!(recv.0, PeerId::from(1));
-            assert_eq!(recv.1, 21);
+            assert_eq!(recv.1 .0, 21);
         }
 
         task_group.shutdown().await;
