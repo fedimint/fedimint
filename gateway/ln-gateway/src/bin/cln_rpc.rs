@@ -1,7 +1,8 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use bitcoin::XOnlyPublicKey;
 use cln::{model, ClnRpc};
-use cln_plugin::{anyhow, options, Builder, Error, Plugin};
+use cln_plugin::{options, Builder, Plugin};
 use fedimint_api::{task::TaskGroup, Amount};
 use fedimint_server::config::load_from_file;
 use ln_gateway::{
@@ -96,18 +97,15 @@ pub struct ClnRpcClient {}
 
 #[allow(dead_code)]
 pub struct ClnRpcService {
-    sender: mpsc::Sender<HtlcAccepted>,
-    receiver: mpsc::Receiver<HtlcAccepted>,
-    // CLN rpc plugin.
     client: Arc<Mutex<ClnRpc>>,
+    interceptor: Arc<Mutex<ClnHtlcInterceptor>>,
     task_group: TaskGroup,
     pub dir: PathBuf,
 }
 
 impl ClnRpcService {
     pub async fn new() -> Result<Self, ClnRpcError> {
-        // Create message channels
-        let (sender, receiver) = mpsc::channel::<HtlcAccepted>(100);
+        let interceptor = Arc::new(Mutex::new(ClnHtlcInterceptor::new()));
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
@@ -116,51 +114,26 @@ impl ClnRpcService {
                 options::Value::String("default-dont-use".into()),
                 "gateway config directory",
             ))
-            .hook("htlc_accepted", |plugin, value| async move {
-                /// Handle core-lightning "htlc_accepted" events by attempting to buy this preimage from the federation
-                /// and completing the payment
-                async fn htlc_accepted_hook(
-                    _plugin: Plugin<mpsc::Sender<HtlcAccepted>>,
-                    value: serde_json::Value,
-                ) -> Result<serde_json::Value, Error> {
-                    let HtlcAccepted { htlc, ..}= serde_json::from_value(value)?;
-
-                    println!("CLN HTLC Intercepted------------");
-                    println!(
-                        "amount: {:?}\ncltv_expiry: {}\ncltv_expiry_relative: {}\npayment_hash: {:?}\n",
-                        htlc.amount, htlc.cltv_expiry, htlc.cltv_expiry_relative, htlc.payment_hash
-                    );
-
-                    // TODO: Filter and send intercepted HTLCs to the gateway for processing.
-                    // For now, we just log them and continue to the next hop
-                    Ok(json!({ "result": "continue" }))
-                }
-
-                // This callback needs to be `Sync`, so we use tokio::spawn
-                let handle = tokio::spawn(async move {
-                    // FIXME: Test this potential fix for Issue 1018: Gateway channel force closures
-                    //
-                    // Timeout processing of intecepted HTLC after 30 seconds
-                    // If the HTLC is not resolved, we continue and forward it to the next hop
-                    tokio::time::timeout(Duration::from_secs(30), htlc_accepted_hook(plugin, value))
-                        .await
-                        .unwrap_or_else(|_| Err(anyhow!("htlc_accepted timeout")))
-                        .or_else(|e| {
-                            error!("htlc_accepted error {:?}", e);
-                            // cln_plugin doesn't handle errors very well ... tell it to proceed normally
-                            Ok(json!({ "result": "continue" }))
-                        })
-                });
-                handle.await?
-            })
+            .hook(
+                "htlc_accepted",
+                |plugin: Plugin<Arc<Mutex<ClnHtlcInterceptor>>>, value: serde_json::Value| async move {
+                    // This callback needs to be `Sync`, so we use tokio::spawn
+                    let handle = tokio::spawn(async move {
+                        // Handle core-lightning "htlc_accepted" events
+                        // by passing the HTLC to the interceptor in the plugin state
+                        let payload: HtlcAccepted = serde_json::from_value(value)?;
+                        Ok(plugin.state().lock().await.intercept_htlc(payload).await)
+                    });
+                    handle.await?
+                },
+            )
             .dynamic() // Allow reloading the plugin
-            .start(sender.clone())
+            .start(interceptor.clone())
             .await?
         {
             let config = plugin.configuration();
             let socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
             let client = ClnRpc::new(socket).await.expect("connect to ln_socket");
-
 
             let dir = match plugin.option("gateway-cfg") {
                 Some(options::Value::String(workdir)) => {
@@ -177,8 +150,7 @@ impl ClnRpcService {
             Ok(Self {
                 client: Arc::new(Mutex::new(client)),
                 task_group: TaskGroup::new(),
-                sender,
-                receiver,
+                interceptor,
                 dir,
             })
         } else {
@@ -267,9 +239,23 @@ impl GatewayLightning for ClnRpcService {
 
     async fn subscribe_intercept_htlcs(
         &self,
-        _request: tonic::Request<SubscribeInterceptHtlcsRequest>,
+        request: tonic::Request<SubscribeInterceptHtlcsRequest>,
     ) -> Result<tonic::Response<Self::SubscribeInterceptHtlcsStream>, Status> {
-        Err(Status::unimplemented("not implemented"))
+        let SubscribeInterceptHtlcsRequest { mint_pub_key } = request.into_inner();
+
+        let mint_pubkey = XOnlyPublicKey::from_slice(&mint_pub_key).map_err(|_| {
+            error!("Invalid mint pubkey. HTLC intercept subscription failed");
+            Status::invalid_argument("Invalid mint pubkey. HTLC intercept subscription failed")
+        })?;
+
+        let receiver = self
+            .interceptor
+            .lock()
+            .await
+            .add_htlc_subscriber(mint_pubkey)
+            .await;
+
+        Ok(tonic::Response::new(ReceiverStream::new(receiver)))
     }
 }
 
@@ -284,4 +270,42 @@ pub enum ClnRpcError {
     RpcServerError(LightningError),
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
+}
+
+/// Functional structure to filter intercepted HTLCs into subscription streams.
+/// Used as a CLN plugin
+struct ClnHtlcInterceptor {
+    subscriptions: Mutex<
+        HashMap<XOnlyPublicKey, mpsc::Sender<Result<SubscribeInterceptHtlcsResponse, Status>>>,
+    >,
+}
+
+impl ClnHtlcInterceptor {
+    fn new() -> Self {
+        Self {
+            subscriptions: Mutex::new(HashMap::new()),
+        }
+    }
+
+    async fn intercept_htlc(&self, _payload: HtlcAccepted) -> serde_json::Value {
+        // TODO:
+        // Match intercepted htlc against any of the subscriptions
+        // If there is a match, send the htlc to the subscription stream,
+        // and wait for response from the subscriber
+
+        // For now, we just request the htlc to be continued
+        json!({ "result": "continue" })
+    }
+
+    async fn add_htlc_subscriber(
+        &mut self,
+        mint_pubkey: XOnlyPublicKey,
+    ) -> mpsc::Receiver<Result<SubscribeInterceptHtlcsResponse, Status>> {
+        let (sender, receiver) =
+            mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, Status>>(100);
+        self.subscriptions.lock().await.insert(mint_pubkey, sender);
+        receiver
+    }
+
+    // TODO: Add a method to remove a HTLC subscriber
 }
