@@ -278,14 +278,14 @@ async fn run_dkg(
             .await;
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
-    let module_config_gens: ModuleConfigGens = vec![
+    let module_config_gens: ModuleConfigGens = BTreeMap::from([
         (
             "wallet",
             Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen>,
         ),
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),
-    ];
+    ]);
 
     ServerConfig::distributed_gen(
         CODE_VERSION,

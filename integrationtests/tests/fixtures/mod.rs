@@ -154,14 +154,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test", "127.0.0.1:18443");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
-    let module_config_gens: ModuleConfigGens = vec![
+    let module_config_gens: ModuleConfigGens = BTreeMap::from([
         (
             "wallet",
             Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen>,
         ),
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),
-    ];
+    ]);
 
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {

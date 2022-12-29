@@ -161,7 +161,7 @@ impl ServerConfigConsensus {
     }
 }
 
-pub type ModuleConfigGens = Vec<(&'static str, Arc<dyn FederationModuleConfigGen>)>;
+pub type ModuleConfigGens = BTreeMap<&'static str, Arc<dyn FederationModuleConfigGen>>;
 
 impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key setup
@@ -283,7 +283,7 @@ impl ServerConfig {
 
         let peer0 = &params[&PeerId::from(0)];
 
-        let module_configs: Vec<_> = module_config_gens
+        let module_configs: BTreeMap<_, _> = module_config_gens
             .iter()
             .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &peer0.modules)))
             .collect();

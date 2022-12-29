@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::{fs, sync::Arc};
 
@@ -81,14 +82,14 @@ fn main() {
                 &federation_name,
                 &bitcoind_rpc,
             );
-            let module_config_gens: ModuleConfigGens = vec![
+            let module_config_gens: ModuleConfigGens = BTreeMap::from([
                 (
                     "wallet",
                     Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen>,
                 ),
                 ("mint", Arc::new(MintConfigGenerator)),
                 ("ln", Arc::new(LightningModuleConfigGen)),
-            ];
+            ]);
 
             let server_cfg = ServerConfig::trusted_dealer_gen(
                 CODE_VERSION,
