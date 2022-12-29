@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -14,11 +15,10 @@ use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::{LightningConfig, LightningConfigConsensus};
-use fedimint_core::modules::ln::LightningModuleConfigGen;
 use fedimint_core::modules::mint::config::{MintConfig, MintConfigConsensus};
-use fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
+use fedimint_core::modules::mint::MintConfigGenParams;
 use fedimint_wallet::config::{WalletConfig, WalletConfigConsensus};
-use fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
+use fedimint_wallet::WalletConfigGenParams;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
@@ -161,6 +161,8 @@ impl ServerConfigConsensus {
     }
 }
 
+pub type ModuleConfigGens = Vec<(&'static str, Arc<dyn FederationModuleConfigGen>)>;
+
 impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key setup
     #[allow(clippy::too_many_arguments)]
@@ -271,6 +273,7 @@ impl ServerConfig {
         code_version: &str,
         peers: &[PeerId],
         params: &HashMap<PeerId, ServerConfigParams>,
+        module_config_gens: ModuleConfigGens,
         mut rng: impl RngCore + CryptoRng,
     ) -> BTreeMap<PeerId, Self> {
         let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
@@ -279,15 +282,6 @@ impl ServerConfig {
             .expect("Could not generate HBBFT netinfo");
 
         let peer0 = &params[&PeerId::from(0)];
-
-        let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
-            (
-                "wallet",
-                Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
-            ),
-            ("mint", Box::new(MintConfigGenerator)),
-            ("ln", Box::new(LightningModuleConfigGen)),
-        ];
 
         let module_configs: Vec<_> = module_config_gens
             .iter()
@@ -323,6 +317,7 @@ impl ServerConfig {
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ServerConfigParams,
+        module_config_gens: ModuleConfigGens,
         mut rng: impl RngCore + CryptoRng,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<Self>> {
@@ -332,6 +327,7 @@ impl ServerConfig {
                 code_version,
                 peers,
                 &HashMap::from([(*our_id, params.clone())]),
+                module_config_gens,
                 rng,
             );
             return Ok(Ok(server[our_id].clone()));
@@ -350,15 +346,6 @@ impl ServerConfig {
         };
         let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
         let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
-
-        let module_config_gens: Vec<(&'static str, Box<dyn FederationModuleConfigGen>)> = vec![
-            (
-                "wallet",
-                Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
-            ),
-            ("mint", Box::new(MintConfigGenerator)),
-            ("ln", Box::new(LightningModuleConfigGen)),
-        ];
 
         let mut module_cfgs: BTreeMap<String, ServerModuleConfig> = Default::default();
 

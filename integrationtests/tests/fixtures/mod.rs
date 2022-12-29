@@ -25,6 +25,7 @@ use fedimint_api::core::{
 };
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
+use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::{timeout, TaskGroup};
 use fedimint_api::OutPoint;
@@ -32,11 +33,11 @@ use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::BitcoindRpc;
-use fedimint_ln::LightningGateway;
 use fedimint_ln::LightningModule;
-use fedimint_mint::{Mint, MintOutput};
-use fedimint_server::config::ServerConfigParams;
+use fedimint_ln::{LightningGateway, LightningModuleConfigGen};
+use fedimint_mint::{Mint, MintConfigGenerator, MintOutput};
 use fedimint_server::config::{connect, ServerConfig};
+use fedimint_server::config::{ModuleConfigGens, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
@@ -47,9 +48,9 @@ use fedimint_server::{all_decoders, consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
-use fedimint_wallet::SpendableUTXO;
 use fedimint_wallet::Wallet;
 use fedimint_wallet::WalletConsensusItem;
+use fedimint_wallet::{SpendableUTXO, WalletConfigGenerator};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
@@ -153,13 +154,28 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test", "127.0.0.1:18443");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
+    let module_config_gens: ModuleConfigGens = vec![
+        (
+            "wallet",
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen>,
+        ),
+        ("mint", Arc::new(MintConfigGenerator)),
+        ("ln", Arc::new(LightningModuleConfigGen)),
+    ];
+
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
-            let (server_config, client_config) =
-                distributed_config("", &peers, params, max_evil, &mut task_group)
-                    .await
-                    .expect("distributed config should not be canceled");
+            let (server_config, client_config) = distributed_config(
+                "",
+                &peers,
+                params,
+                module_config_gens,
+                max_evil,
+                &mut task_group,
+            )
+            .await
+            .expect("distributed config should not be canceled");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config: WalletConfig = server_config
@@ -228,7 +244,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config = ServerConfig::trusted_dealer_gen("", &peers, &params, OsRng);
+            let server_config =
+                ServerConfig::trusted_dealer_gen("", &peers, &params, module_config_gens, OsRng);
             let client_config = server_config[&PeerId::from(0)].consensus.to_client_config();
 
             let bitcoin = FakeBitcoinTest::new();
@@ -307,6 +324,7 @@ async fn distributed_config(
     code_version: &str,
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
+    module_config_gens: ModuleConfigGens,
     _max_evil: usize,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
@@ -315,6 +333,7 @@ async fn distributed_config(
         let peers = peers.to_vec();
 
         let mut task_group = task_group.clone();
+        let module_config_gens = module_config_gens.clone();
 
         async move {
             let our_params = params[peer].clone();
@@ -333,6 +352,7 @@ async fn distributed_config(
                 peer,
                 &peers,
                 &our_params,
+                module_config_gens,
                 rng,
                 &mut task_group,
             );

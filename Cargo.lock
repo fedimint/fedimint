@@ -1247,6 +1247,8 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-ln",
+ "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet",
