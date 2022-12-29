@@ -1,14 +1,21 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::Parser;
 use fedimint_api::db::Database;
+use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_core::all_decoders;
 use fedimint_core::modules::ln::LightningModule;
+use fedimint_ln::LightningModuleConfigGen;
+use fedimint_mint::MintConfigGenerator;
+use fedimint_server::config::ModuleConfigGens;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::Wallet;
+use fedimint_wallet::WalletConfigGenerator;
 use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
 use fedimintd::*;
@@ -85,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("Error opening DB")
         .into();
     let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-        &cfg.get_module_config::<WalletConfig>("wallet")?
+        &cfg.get_module_config_typed::<WalletConfig>("wallet")?
             .local
             .btc_rpc,
         task_group.make_handle(),
@@ -96,10 +103,19 @@ async fn main() -> anyhow::Result<()> {
 
     task_group.install_kill_handler();
 
-    let mint = fedimint_core::modules::mint::Mint::new(cfg.get_module_config("mint")?);
+    let module_config_gens: ModuleConfigGens = BTreeMap::from([
+        (
+            "wallet",
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+        ),
+        ("mint", Arc::new(MintConfigGenerator)),
+        ("ln", Arc::new(LightningModuleConfigGen)),
+    ]);
+
+    let mint = fedimint_core::modules::mint::Mint::new(cfg.get_module_config_typed("mint")?);
 
     let wallet = Wallet::new_with_bitcoind(
-        cfg.get_module_config("wallet")?,
+        cfg.get_module_config_typed("wallet")?,
         db.clone(),
         btc_rpc,
         &mut task_group,
@@ -108,9 +124,9 @@ async fn main() -> anyhow::Result<()> {
     .await
     .expect("Couldn't create wallet");
 
-    let ln = LightningModule::new(cfg.get_module_config("ln")?);
+    let ln = LightningModule::new(cfg.get_module_config_typed("ln")?);
 
-    let mut consensus = FedimintConsensus::new(cfg.clone(), db);
+    let mut consensus = FedimintConsensus::new(cfg.clone(), db, module_config_gens);
     consensus.register_module(mint.into());
     consensus.register_module(ln.into());
     consensus.register_module(wallet.into());

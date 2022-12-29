@@ -17,6 +17,7 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use bitcoin::{PackedLockTime, Sequence};
+use config::WalletConfigConsensus;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
@@ -26,6 +27,7 @@ use fedimint_api::config::{
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
+use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -315,6 +317,13 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
             .to_typed::<WalletConfig>()?
             .consensus
             .to_client_config())
+    }
+
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        Ok(serde_json::from_value::<WalletConfigConsensus>(config)?.to_client_config())
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {

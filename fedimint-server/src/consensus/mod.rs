@@ -25,7 +25,7 @@ use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
-use crate::config::ServerConfig;
+use crate::config::{ModuleConfigGens, ServerConfig};
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
@@ -73,6 +73,8 @@ pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
+    pub module_config_gens: ModuleConfigGens,
+
     pub modules: ServerModuleRegistry,
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
@@ -99,10 +101,11 @@ struct FundingVerifier {
 }
 
 impl FedimintConsensus {
-    pub fn new(cfg: ServerConfig, db: Database) -> Self {
+    pub fn new(cfg: ServerConfig, db: Database, module_config_gens: ModuleConfigGens) -> Self {
         Self {
             rng_gen: Box::new(OsRngGen),
             cfg,
+            module_config_gens,
             modules: ServerModuleRegistry::default(),
             db,
             transaction_notify: Arc::new(Notify::new()),

@@ -157,7 +157,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let module_config_gens: ModuleConfigGens = BTreeMap::from([
         (
             "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen>,
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
         ),
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),
@@ -170,7 +170,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 "",
                 &peers,
                 params,
-                module_config_gens,
+                module_config_gens.clone(),
                 max_evil,
                 &mut task_group,
             )
@@ -183,7 +183,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 .last()
                 .unwrap()
                 .1
-                .get_module_config("wallet")
+                .get_module_config_typed("wallet")
                 .unwrap();
             let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
                 &wallet_config.local.btc_rpc,
@@ -210,6 +210,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
+                module_config_gens,
                 &mut task_group,
             )
             .await;
@@ -244,9 +245,16 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config =
-                ServerConfig::trusted_dealer_gen("", &peers, &params, module_config_gens, OsRng);
-            let client_config = server_config[&PeerId::from(0)].consensus.to_client_config();
+            let server_config = ServerConfig::trusted_dealer_gen(
+                "",
+                &peers,
+                &params,
+                module_config_gens.clone(),
+                OsRng,
+            );
+            let client_config = server_config[&PeerId::from(0)]
+                .consensus
+                .to_client_config(&module_config_gens);
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
@@ -263,6 +271,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &bitcoin_rpc,
                 &connect_gen,
+                module_config_gens,
                 &mut task_group,
             )
             .await;
@@ -370,7 +379,7 @@ async fn distributed_config(
 
     Ok((
         configs.into_iter().collect(),
-        config.consensus.to_client_config(),
+        config.consensus.to_client_config(&module_config_gens),
     ))
 }
 
@@ -958,6 +967,7 @@ impl FederationTest {
         database_gen: &impl Fn() -> Database,
         bitcoin_gen: &impl Fn() -> BitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
+        module_config_gens: ModuleConfigGens,
         task_group: &mut TaskGroup,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
@@ -965,10 +975,10 @@ impl FederationTest {
             let db = database_gen();
             let mut task_group = task_group.clone();
 
-            let mint = Mint::new(cfg.get_module_config("mint").unwrap());
+            let mint = Mint::new(cfg.get_module_config_typed("mint").unwrap());
 
             let wallet = Wallet::new_with_bitcoind(
-                cfg.get_module_config("wallet").unwrap(),
+                cfg.get_module_config_typed("wallet").unwrap(),
                 db.clone(),
                 btc_rpc.clone(),
                 &mut task_group.clone(),
@@ -977,9 +987,10 @@ impl FederationTest {
             .await
             .expect("Couldn't create wallet");
 
-            let ln = LightningModule::new(cfg.get_module_config("ln").unwrap());
+            let ln = LightningModule::new(cfg.get_module_config_typed("ln").unwrap());
 
-            let mut consensus = FedimintConsensus::new(cfg.clone(), db.clone());
+            let mut consensus =
+                FedimintConsensus::new(cfg.clone(), db.clone(), module_config_gens.clone());
             consensus.register_module(mint.into());
             consensus.register_module(wallet.into());
             consensus.register_module(ln.into());
@@ -1009,7 +1020,7 @@ impl FederationTest {
 
         // Consumes the empty epoch 0 outcome from all servers
         let cfg = server_config.iter().last().unwrap().1.clone();
-        let wallet = cfg.get_module_config("wallet").unwrap();
+        let wallet = cfg.get_module_config_typed("wallet").unwrap();
         let last_consensus = Rc::new(RefCell::new(Batch {
             epoch: 0,
             contributions: BTreeMap::new(),

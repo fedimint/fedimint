@@ -116,7 +116,7 @@ impl FedimintServer {
         connector: PeerConnector<EpochMessage>,
         task_group: &mut TaskGroup,
     ) -> Self {
-        cfg.validate_config(&cfg.local.identity)
+        cfg.validate_config(&cfg.local.identity, &consensus.module_config_gens)
             .expect("invalid config");
 
         let connections =

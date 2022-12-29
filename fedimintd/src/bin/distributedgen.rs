@@ -138,6 +138,15 @@ async fn main() {
         )
         .init();
 
+    let module_config_gens: ModuleConfigGens = BTreeMap::from([
+        (
+            "wallet",
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+        ),
+        ("mint", Arc::new(MintConfigGenerator)),
+        ("ln", Arc::new(LightningModuleConfigGen)),
+    ]);
+
     let mut task_group = TaskGroup::new();
 
     let command: Command = Cli::parse().command;
@@ -189,7 +198,7 @@ async fn main() {
             };
 
             encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG));
-            write_nonprivate_configs(&server, dir_out_path);
+            write_nonprivate_configs(&server, dir_out_path, &module_config_gens);
         }
         Command::VersionHash => {
             println!("{}", CODE_VERSION);
@@ -281,7 +290,7 @@ async fn run_dkg(
     let module_config_gens: ModuleConfigGens = BTreeMap::from([
         (
             "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen>,
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
         ),
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),

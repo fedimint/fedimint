@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ConfigGenParams};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -121,14 +122,17 @@ fn trusted_dealer_gen(
         .attach(MintConfigGenParams {
             mint_amounts: params.amount_tiers.clone(),
         });
-    let module_config_gens: Vec<(&'static str, Box<_>)> = vec![
+    let module_config_gens: BTreeMap<
+        &'static str,
+        Arc<dyn FederationModuleConfigGen + Send + Sync>,
+    > = BTreeMap::from([
         (
             "wallet",
-            Box::new(WalletConfigGenerator) as Box<dyn FederationModuleConfigGen>,
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
         ),
-        ("mint", Box::new(MintConfigGenerator)),
-        ("ln", Box::new(LightningModuleConfigGen)),
-    ];
+        ("mint", Arc::new(MintConfigGenerator)),
+        ("ln", Arc::new(LightningModuleConfigGen)),
+    ]);
 
     let module_configs: Vec<_> = module_config_gens
         .iter()
@@ -193,7 +197,7 @@ fn trusted_dealer_gen(
         .next()
         .unwrap()
         .consensus
-        .to_client_config();
+        .to_client_config(&module_config_gens);
 
     (server_config, client_config)
 }

@@ -85,7 +85,8 @@ fn main() {
             let module_config_gens: ModuleConfigGens = BTreeMap::from([
                 (
                     "wallet",
-                    Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen>,
+                    Arc::new(WalletConfigGenerator)
+                        as Arc<dyn FederationModuleConfigGen + Send + Sync>,
                 ),
                 ("mint", Arc::new(MintConfigGenerator)),
                 ("ln", Arc::new(LightningModuleConfigGen)),
@@ -95,14 +96,14 @@ fn main() {
                 CODE_VERSION,
                 &peers,
                 &params,
-                module_config_gens,
+                module_config_gens.clone(),
                 rng,
             );
 
             for (id, server) in server_cfg {
                 let path = cfg_path.join(id.to_string());
                 fs::create_dir_all(path.clone()).expect("Could not create cfg dir");
-                write_nonprivate_configs(&server, path.clone());
+                write_nonprivate_configs(&server, path.clone(), &module_config_gens);
                 plaintext_json_write(&server.private, path.join(PRIVATE_CONFIG));
             }
         }

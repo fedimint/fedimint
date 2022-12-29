@@ -1,12 +1,12 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node,
-    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -14,10 +14,7 @@ use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnect
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
-use fedimint_core::modules::ln::config::{LightningConfig, LightningConfigConsensus};
-use fedimint_core::modules::mint::config::{MintConfig, MintConfigConsensus};
 use fedimint_core::modules::mint::MintConfigGenParams;
-use fedimint_wallet::config::{WalletConfig, WalletConfigConsensus};
 use fedimint_wallet::WalletConfigGenParams;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
@@ -123,7 +120,10 @@ pub struct ServerConfigParams {
 }
 
 impl ServerConfigConsensus {
-    pub fn to_client_config(&self) -> ClientConfig {
+    pub fn to_client_config_try(
+        &self,
+        module_config_gens: &ModuleConfigGens,
+    ) -> anyhow::Result<ClientConfig> {
         let nodes = self
             .peers
             .values()
@@ -133,35 +133,34 @@ impl ServerConfigConsensus {
             })
             .collect();
 
-        let modules = vec![
-            self.get_client_config::<MintConfigConsensus>("mint"),
-            self.get_client_config::<WalletConfigConsensus>("wallet"),
-            self.get_client_config::<LightningConfigConsensus>("ln"),
-        ];
-
-        ClientConfig {
+        Ok(ClientConfig {
             federation_name: self.federation_name.clone(),
             epoch_pk: self.epoch_pk_set.public_key(),
             nodes,
-            modules: modules.into_iter().collect(),
-        }
+            modules: self
+                .modules
+                .iter()
+                .map(|(k, v)| {
+                    Ok((
+                        k.clone(),
+                        module_config_gens
+                            .get(&k.as_str())
+                            .ok_or_else(|| anyhow::format_err!("module config gen not found: {k}"))?
+                            .to_client_config_from_consensus_value(v.clone())?,
+                    ))
+                })
+                .collect::<anyhow::Result<_>>()?,
+        })
     }
 
-    fn get_client_config<T: TypedServerModuleConsensusConfig>(
-        &self,
-        name: &str,
-    ) -> (String, ClientModuleConfig) {
-        let json = self
-            .modules
-            .get(name)
-            .unwrap_or_else(|| panic!("Module {name} not found"));
-        let config: T = serde_json::from_value(json.clone()).expect("Cannot parse JSON");
-
-        (name.to_string(), config.to_client_config())
+    pub fn to_client_config(&self, module_config_gens: &ModuleConfigGens) -> ClientConfig {
+        self.to_client_config_try(module_config_gens)
+            .expect("configuration mismatch")
     }
 }
 
-pub type ModuleConfigGens = BTreeMap<&'static str, Arc<dyn FederationModuleConfigGen>>;
+pub type ModuleConfigGens =
+    BTreeMap<&'static str, Arc<dyn FederationModuleConfigGen + Send + Sync>>;
 
 impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key setup
@@ -222,13 +221,24 @@ impl ServerConfig {
     }
 
     /// Constructs a module config by name
-    pub fn get_module_config<T: TypedServerModuleConfig>(&self, name: &str) -> anyhow::Result<T> {
+    pub fn get_module_config_typed<T: TypedServerModuleConfig>(
+        &self,
+        name: &str,
+    ) -> anyhow::Result<T> {
         let local = Self::get_or_error(&self.local.modules, name)?;
         let private = Self::get_or_error(&self.private.modules, name)?;
         let consensus = Self::get_or_error(&self.consensus.modules, name)?;
         let module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
+    }
+
+    /// Constructs a module config by name
+    pub fn get_module_config(&self, name: &str) -> anyhow::Result<ServerModuleConfig> {
+        let local = Self::get_or_error(&self.local.modules, name)?;
+        let private = Self::get_or_error(&self.private.modules, name)?;
+        let consensus = Self::get_or_error(&self.consensus.modules, name)?;
+        Ok(ServerModuleConfig::from(local, private, consensus))
     }
 
     fn get_or_error(
@@ -240,7 +250,11 @@ impl ServerConfig {
             .cloned()
     }
 
-    pub fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
+    pub fn validate_config(
+        &self,
+        identity: &PeerId,
+        module_config_gens: &ModuleConfigGens,
+    ) -> anyhow::Result<()> {
         let peers = self.consensus.peers.clone();
         let consensus = self.consensus.clone();
         let private = self.private.clone();
@@ -259,16 +273,26 @@ impl ServerConfig {
             bail!("Peer ids are not indexed from 0");
         }
 
-        self.get_module_config::<WalletConfig>("wallet")?
-            .validate_config(identity)?;
-        self.get_module_config::<MintConfig>("mint")?
-            .validate_config(identity)?;
-        self.get_module_config::<LightningConfig>("ln")?
-            .validate_config(identity)?;
+        for module_name in self
+            .local
+            .modules
+            .keys()
+            .collect::<BTreeSet<_>>()
+            .union(&self.consensus.modules.keys().collect::<BTreeSet<_>>())
+            .copied()
+            .collect::<BTreeSet<_>>()
+            .union(&self.private.modules.keys().collect::<BTreeSet<_>>())
+        {
+            module_config_gens
+                .get(module_name.as_str())
+                .ok_or_else(|| format_err!("module config gen not found {module_name}"))?
+                .validate_config(identity, self.get_module_config(module_name)?)?;
+        }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn trusted_dealer_gen(
         code_version: &str,
         peers: &[PeerId],
@@ -311,6 +335,7 @@ impl ServerConfig {
         server_config
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn distributed_gen(
         code_version: &str,
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,

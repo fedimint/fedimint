@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use fedimint_server::config::ServerConfig;
+use fedimint_server::config::{ModuleConfigGens, ServerConfig};
 use ring::aead::LessSafeKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -64,11 +64,15 @@ pub fn encrypted_json_read<T: Serialize + DeserializeOwned>(key: &LessSafeKey, p
 }
 
 /// Writes the server into plaintext json configuration files (private keys not serialized)
-pub fn write_nonprivate_configs(server: &ServerConfig, path: PathBuf) {
+pub fn write_nonprivate_configs(
+    server: &ServerConfig,
+    path: PathBuf,
+    module_config_gens: &ModuleConfigGens,
+) {
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG));
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG));
     plaintext_json_write(
-        &server.consensus.to_client_config(),
+        &server.consensus.to_client_config(module_config_gens),
         path.join(CLIENT_CONFIG),
     );
 }
