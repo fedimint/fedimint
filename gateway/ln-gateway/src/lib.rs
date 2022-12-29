@@ -234,6 +234,7 @@ impl LnGateway {
 
         Ok(GatewayInfo {
             federations,
+            lnrpc_connected: self.get_lnrpc_client().await.is_ok(),
             version_hash: env!("GIT_HASH").to_string(),
         })
     }

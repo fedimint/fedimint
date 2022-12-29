@@ -113,6 +113,7 @@ pub struct FederationInfo {
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
+    pub lnrpc_connected: bool,
 }
 
 #[derive(Debug)]
