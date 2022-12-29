@@ -3,7 +3,6 @@ pub mod db;
 pub mod ln;
 pub mod mint;
 pub mod query;
-pub mod secrets;
 pub mod transaction;
 pub mod utils;
 pub mod wallet;
@@ -54,6 +53,7 @@ use fedimint_core::{
     },
     transaction::legacy::{Input, Output},
 };
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use lightning::ln::PaymentSecret;
@@ -81,7 +81,6 @@ use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
 use crate::mint::MintClientError;
-use crate::secrets::{ChildId, DerivableSecret};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;

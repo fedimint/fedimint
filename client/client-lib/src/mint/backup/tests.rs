@@ -9,6 +9,7 @@ use fedimint_core::{
     },
     transaction::Transaction,
 };
+use fedimint_derive_secret::DerivableSecret;
 use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare};
 
 use super::{EcashRecoveryTracker, PlaintextEcashBackup};
@@ -17,7 +18,6 @@ use crate::{
         db::OutputFinalizationKey, MintClient, NoteIndex, NoteIssuanceRequest,
         NoteIssuanceRequests, SpendableNote,
     },
-    secrets::DerivableSecret,
     Client,
 };
 
