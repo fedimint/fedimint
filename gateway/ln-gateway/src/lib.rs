@@ -29,10 +29,10 @@ use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     FederationId, GatewayClient,
 };
-use rpc::ConnectLnPayload;
+use rpc::{ConnectLnPayload, HtlcInterceptPayload};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     actor::GatewayActor,
@@ -153,6 +153,8 @@ impl LnGateway {
         &self,
         client: Arc<GatewayClient>,
     ) -> Result<Arc<GatewayActor>> {
+        let lnrpc = self.get_lnrpc_client().await?;
+
         let actor = Arc::new(
             GatewayActor::new(client.clone())
                 .await
@@ -166,11 +168,39 @@ impl LnGateway {
             .get_info()
             .expect("Failed to get federation info from new actor");
 
-        self.get_lnrpc_client()
-            .await?
-            .subscribe_intercept_htlcs(mint_pubkey)
-            .await
-            .expect("Failed to subscribe to intercept HTLCs");
+        let new_actor = actor.clone();
+
+        // Spawn a task to handle HTLCs for this federation
+        // TODO: Move this process into the actor instance
+        let mut tg = self.task_group.clone();
+        tg.spawn(
+            "Subscribe Receive HTLCs into federation",
+            move |sub_ctrl| async move {
+                let mut receiver = lnrpc
+                    .subscribe_intercept_htlcs(mint_pubkey)
+                    .await
+                    .expect("Failed to subscribe to intercept HTLCs");
+
+                while let Ok(HtlcInterceptPayload {
+                    invoice_amount,
+                    payment_hash,
+                }) = receiver.try_recv()
+                {
+                    debug!("Incoming htlc for payment hash {}", payment_hash);
+                    new_actor
+                        .buy_preimage_internal(&payment_hash, &invoice_amount)
+                        .await
+                        .expect("Failed to handle HTLCs");
+
+                    if sub_ctrl.is_shutting_down() {
+                        info!("Shutting down HTLC handler");
+                        // TODO: Unsubscribe from HTLCs
+                        break;
+                    }
+                }
+            },
+        )
+        .await;
 
         self.actors
             .lock()
@@ -238,22 +268,6 @@ impl LnGateway {
             version_hash: env!("GIT_HASH").to_string(),
         })
     }
-
-    // async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
-    //     let ReceivePaymentPayload { htlc_accepted } = payload;
-
-    //     let invoice_amount = htlc_accepted.htlc.amount;
-    //     let payment_hash = htlc_accepted.htlc.payment_hash;
-    //     debug!("Incoming htlc for payment hash {}", payment_hash);
-
-    //     // FIXME: Issue 664: We should avoid having a special reference to a federation
-    //     // all requests, including `ReceivePaymentPayload`, should contain the federation id
-    //     // TODO: Parse federation id from routing hint in htlc_accepted message
-    //     self.select_actor(self.config.default_federation.clone())
-    //         .await?
-    //         .buy_preimage_internal(&payment_hash, &invoice_amount)
-    //         .await
-    // }
 
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
         let PayInvoicePayload {
@@ -358,11 +372,6 @@ impl LnGateway {
                             .handle(|payload| self.handle_connect_federation(payload))
                             .await;
                     }
-                    // GatewayRequest::ReceivePayment(inner) => {
-                    //     inner
-                    //         .handle(|payload| self.handle_receive_invoice_msg(payload))
-                    //         .await;
-                    // }
                     GatewayRequest::PayInvoice(inner) => {
                         inner
                             .handle(|payload| self.handle_pay_invoice_msg(payload))

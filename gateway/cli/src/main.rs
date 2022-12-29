@@ -145,9 +145,6 @@ async fn main() {
                     api_bind_address,
                     api_announce_address,
                     webserver_password: source_password(cli.rpcpassword), // TODO: Generate a strong random password
-
-                    // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
-                    default_federation: FederationId("Hals_trusty_mint".into()),
                 },
             )
             .expect("Failed to write gateway configs to file");

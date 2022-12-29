@@ -34,9 +34,6 @@ async fn test_gateway_authentication() -> Result<()> {
         api_bind_address: gw_bind_address,
         api_announce_address: gw_announce_address.clone(),
         webserver_password: gw_password.clone(),
-
-        // Additional <temporary configs>
-        default_federation: federation_id.clone(),
     };
 
     let Fixtures {

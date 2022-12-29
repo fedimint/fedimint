@@ -64,13 +64,6 @@ pub struct ConnectFedPayload {
     pub connect: String,
 }
 
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct ReceivePaymentPayload {
-//     // NOTE: On ReceivePayment signal from ln_rpc,
-//     // we extract the relevant federation id from the accepted htlc
-//     pub htlc_accepted: HtlcAccepted,
-// }
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfoPayload;
 
@@ -121,7 +114,6 @@ pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
     ConnectLightning(GatewayRequestInner<ConnectLnPayload>),
     ConnectFederation(GatewayRequestInner<ConnectFedPayload>),
-    // ReceivePayment(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),

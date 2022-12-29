@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 
-use mint_client::FederationId;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -12,10 +11,6 @@ pub struct GatewayConfig {
     pub webserver_password: String,
     /// URL under which the Gateway API will be reachable
     pub api_announce_address: Url,
-
-    // FIXME: Issue 664: We should avoid having a special reference to a federation
-    // all requests, including `ReceivePaymentPayload`, should contain the federation id
-    pub default_federation: FederationId,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

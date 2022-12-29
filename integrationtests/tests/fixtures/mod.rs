@@ -64,8 +64,8 @@ use ln_gateway::{
     LnGateway,
 };
 use mint_client::{
-    api::WsFederationApi, mint::SpendableNote, Client, FederationId, GatewayClient,
-    GatewayClientConfig, UserClient, UserClientConfig,
+    api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
+    UserClient, UserClientConfig,
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -424,8 +424,6 @@ impl GatewayTest {
             api_bind_address: bind_addr,
             api_announce_address: announce_addr,
             webserver_password: "abc".into(),
-
-            default_federation: FederationId(gw_client_cfg.client_config.federation_name.clone()),
         };
 
         let gateway =
