@@ -3,6 +3,8 @@ use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace};
 
+use crate::MaybeEpochMessage;
+
 /// Message queue to manage unsent and unacknowledged messages
 ///
 /// # Lifetime of a message
@@ -137,6 +139,29 @@ where
     /// Return the number of unsent messages
     pub fn unsent_len(&self) -> usize {
         self.unsent_messages as usize
+    }
+}
+
+impl<M: MaybeEpochMessage> MessageQueue<M> {
+    /// Returns the number of epochs the buffer has messages of. This assumes that the we send
+    /// messages in each epoch and the epoch only increases.
+    pub fn buffered_epochs(&self) -> u64 {
+        // We only have non-epoch messages during DKG and on re-joins. Both happen infrequently
+        // enough that this O(n) search for the lowest and highest epoch number in the buffer is
+        // sufficient
+        let maybe_oldest = self.queue.iter().find_map(|msg| msg.msg.message_epoch());
+        let maybe_newest = self
+            .queue
+            .iter()
+            .rev()
+            .find_map(|msg| msg.msg.message_epoch());
+        match (maybe_oldest, maybe_newest) {
+            (Some(oldest_epoch), Some(newest_epoch)) => {
+                assert!(oldest_epoch <= newest_epoch);
+                newest_epoch - oldest_epoch + 1
+            }
+            _ => 0,
+        }
     }
 }
 

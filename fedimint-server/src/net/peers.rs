@@ -34,8 +34,13 @@ use url::Url;
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
+use crate::MaybeEpochMessage;
 
+/// How many unsent messages will be buffered before a connection is re-established
 const MAX_UNSENT_MESSAGES: usize = 4096;
+
+/// Messages for how many epochs the resend buffer will hold before the session is reset
+const MAX_BUFFERED_EPOCHS: u64 = 100;
 
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
@@ -213,7 +218,14 @@ enum PeerConnectionState<M> {
 
 impl<T: 'static> ReconnectPeerConnections<T>
 where
-    T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
+    T: std::fmt::Debug
+        + Clone
+        + Serialize
+        + DeserializeOwned
+        + MaybeEpochMessage
+        + Unpin
+        + Send
+        + Sync,
 {
     /// Creates a new `ReconnectPeerConnections` connection manager from a
     /// network config and a [`Connector`](crate::net::connect::Connector).
@@ -334,7 +346,15 @@ impl PeerSlice for Target<PeerId> {
 #[async_trait]
 impl<T> IPeerConnections<T> for ReconnectPeerConnections<T>
 where
-    T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
+    T: std::fmt::Debug
+        + Serialize
+        + DeserializeOwned
+        + Clone
+        + MaybeEpochMessage
+        + Unpin
+        + Send
+        + Sync
+        + 'static,
 {
     #[must_use]
     async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()> {
@@ -373,7 +393,7 @@ where
 
 impl<M> PeerConnectionStateMachine<M>
 where
-    M: Debug + Clone,
+    M: Debug + Clone + MaybeEpochMessage,
 {
     async fn run(mut self, task_handle: &TaskHandle) {
         let peer = self.common.peer;
@@ -419,7 +439,7 @@ where
 
 impl<M> CommonPeerConnectionState<M>
 where
-    M: Debug + Clone,
+    M: Debug + Clone + MaybeEpochMessage,
 {
     async fn state_transition_connected(
         &mut self,
@@ -622,9 +642,16 @@ where
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
+                let buffer_ready = self.message_buffer.buffered_epochs() < MAX_BUFFERED_EPOCHS;
                 match maybe_msg {
-                    Some(msg) => {
+                    Some(msg)if buffer_ready  => {
                         self.message_buffer.queue_message(msg);
+                        PeerConnectionState::Disconnected(disconnected)
+                    }
+                    Some(_) => {
+                        // FIXME: only begin buffering again once we have a new connection
+                        // Drop buffer if it gets too big, now the peer will have to rejoin consensus
+                        self.message_buffer = Default::default();
                         PeerConnectionState::Disconnected(disconnected)
                     }
                     None => {
@@ -688,7 +715,7 @@ where
 
 impl<M> PeerConnection<M>
 where
-    M: Debug + Clone + Send + Sync + 'static,
+    M: Debug + Clone + MaybeEpochMessage + Send + Sync + 'static,
 {
     fn new(
         id: PeerId,
@@ -779,11 +806,13 @@ mod tests {
     use fedimint_core::task::TaskGroup;
     use fedimint_core::PeerId;
     use futures::Future;
+    use serde::{Deserialize, Serialize};
 
     use super::DelayCalculator;
     use crate::net::connect::mock::{MockNetwork, StreamReliability};
     use crate::net::connect::Connector;
     use crate::net::peers::{IPeerConnections, NetworkConfig, ReconnectPeerConnections};
+    use crate::MaybeEpochMessage;
 
     async fn timeout<F, T>(f: F) -> Option<T>
     where
@@ -794,6 +823,15 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn test_connect() {
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct TestMessage(u64);
+
+        impl MaybeEpochMessage for TestMessage {
+            fn message_epoch(&self) -> Option<u64> {
+                None
+            }
+        }
+
         let task_group = TaskGroup::new();
 
         {
@@ -823,7 +861,7 @@ mod tests {
                 let connect = net_ref
                     .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
                     .into_dyn();
-                ReconnectPeerConnections::<u64>::new(
+                ReconnectPeerConnections::<TestMessage>::new(
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,
@@ -837,15 +875,21 @@ mod tests {
             let (mut peers_b, peer_status_client_b) =
                 build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
 
-            peers_a.send(&[PeerId::from(2)], 42).await.unwrap();
+            peers_a
+                .send(&[PeerId::from(2)], TestMessage(42))
+                .await
+                .unwrap();
             let recv = timeout(peers_b.receive()).await.unwrap().unwrap();
             assert_eq!(recv.0, PeerId::from(1));
-            assert_eq!(recv.1, 42);
+            assert_eq!(recv.1 .0, 42);
             let status = peer_status_client_a.get_all_status().await;
             assert_eq!(status.len(), 2);
             assert!(status.values().all(|s| s.is_ok()));
 
-            peers_a.send(&[PeerId::from(3)], 21).await.unwrap();
+            peers_a
+                .send(&[PeerId::from(3)], TestMessage(21))
+                .await
+                .unwrap();
             let status = peer_status_client_b.get_all_status().await;
             assert_eq!(status.len(), 2);
             assert!(status.values().all(|s| s.is_ok()));
@@ -854,7 +898,7 @@ mod tests {
                 build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
             let recv = timeout(peers_c.receive()).await.unwrap().unwrap();
             assert_eq!(recv.0, PeerId::from(1));
-            assert_eq!(recv.1, 21);
+            assert_eq!(recv.1 .0, 21);
             let status = peer_status_client_c.get_all_status().await;
             assert_eq!(status.len(), 2);
             assert!(status.values().all(|s| s.is_ok()));

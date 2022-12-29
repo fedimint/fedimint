@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 
-use crate::PeerId;
+use crate::{MaybeEpochMessage, PeerId};
 
 /// TODO: Use proper ModuleId after modularization is complete
 pub type ModuleId = String;
@@ -31,6 +31,15 @@ pub const MAX_PEER_OUT_OF_ORDER_MESSAGES: u64 = 10000;
 pub struct ModuleMultiplexed<MuxKey, Msg> {
     pub key: MuxKey,
     pub msg: Msg,
+}
+
+impl<MuxKey, Msg> MaybeEpochMessage for ModuleMultiplexed<MuxKey, Msg>
+where
+    Msg: MaybeEpochMessage,
+{
+    fn message_epoch(&self) -> Option<u64> {
+        self.msg.message_epoch()
+    }
 }
 
 struct ModuleMultiplexerOutOfOrder<MuxKey, Msg> {
