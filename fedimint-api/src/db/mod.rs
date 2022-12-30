@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use serde::Serialize;
+use strum_macros::EnumIter;
 use thiserror::Error;
 use tracing::{trace, warn};
 
@@ -66,6 +69,52 @@ dyn_newtype_define! {
     /// A handle to a type-erased database implementation
     #[derive(Clone)]
     pub Database(Arc<IDatabase>)
+}
+
+#[repr(u8)]
+#[derive(Clone, EnumIter, Debug)]
+pub enum DbKeyPrefix {
+    DatabaseVersion = 0x50,
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct DatabaseVersionKey;
+
+impl DatabaseKeyPrefixConst for DatabaseVersionKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::DatabaseVersion as u8;
+    type Key = Self;
+    type Value = u64;
+}
+
+pub struct DatabaseMigrator {
+    source: Database,
+    target: Database,
+    migrations: BTreeMap<(u64, u64), Vec<fn(u64) -> Result<(), anyhow::Error>>>,
+}
+
+impl DatabaseMigrator {
+    pub async fn migrate(&self, current_version: u64) -> Result<(), anyhow::Error> {
+        // lookup the version of the database and compare it against the hardcoded version
+        let mut source_tx = self
+            .source
+            .begin_transaction(ModuleDecoderRegistry::default())
+            .await;
+        let db_version = source_tx
+            .get_value(&DatabaseVersionKey)
+            .await
+            .unwrap()
+            .unwrap();
+
+        if db_version != current_version {
+            let migration_version = (db_version, current_version);
+            let migrations = self.migrations.get(&migration_version).unwrap();
+            for migration in migrations {
+                migration(db_version)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Fedimint requires that the database implementation implement Snapshot Isolation.
@@ -400,9 +449,25 @@ mod tests {
     }
 
     #[derive(Debug, Encodable, Decodable)]
-    struct TestKey(u64);
+    struct TestKeyV1 {
+        value: u64,
+    }
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct TestKeyV2 {
+        value: u64,
+        new_string: String,
+    }
+
+    type TestKey = TestKeyV1;
 
     impl DatabaseKeyPrefixConst for TestKey {
+        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
+        type Key = Self;
+        type Value = TestVal;
+    }
+
+    impl DatabaseKeyPrefixConst for TestKeyV2 {
         const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
         type Key = Self;
         type Value = TestVal;
@@ -459,13 +524,13 @@ mod tests {
     pub async fn verify_insert_elements(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
+            .insert_entry(&TestKey { value: 1 }, &TestVal(2))
             .await
             .unwrap()
             .is_none());
 
         assert!(dbtx
-            .insert_entry(&TestKey(2), &TestVal(3))
+            .insert_entry(&TestKey { value: 2 }, &TestVal(3))
             .await
             .unwrap()
             .is_none());
@@ -475,8 +540,8 @@ mod tests {
 
     pub async fn verify_remove_nonexisting(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
-        let removed = dbtx.remove_entry(&TestKey(1)).await;
+        assert_eq!(dbtx.get_value(&TestKey { value: 1 }).await.unwrap(), None);
+        let removed = dbtx.remove_entry(&TestKey { value: 1 }).await;
         assert!(removed.is_ok());
 
         // Commit to surpress the warning message
@@ -487,17 +552,20 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
+            .insert_entry(&TestKey { value: 1 }, &TestVal(2))
             .await
             .unwrap()
             .is_none());
 
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), Some(TestVal(2)));
+        assert_eq!(
+            dbtx.get_value(&TestKey { value: 1 }).await.unwrap(),
+            Some(TestVal(2))
+        );
 
-        let removed = dbtx.remove_entry(&TestKey(1)).await;
+        let removed = dbtx.remove_entry(&TestKey { value: 1 }).await;
         assert!(removed.is_ok());
         assert_eq!(removed.unwrap(), Some(TestVal(2)));
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey { value: 1 }).await.unwrap(), None);
 
         // Commit to surpress the warning message
         dbtx.commit_tx().await.expect("DB Error");
@@ -507,12 +575,16 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
+            .insert_entry(&TestKey { value: 1 }, &TestVal(2))
             .await
             .unwrap()
             .is_none());
 
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), Some(TestVal(2)));
+        assert_eq!(dbtx.get_value(&TestKey{ value: 1 }).await.unwrap(), Some(TestVal(2)));
+        assert_eq!(
+            dbtx.get_value(&TestKey { value: 1 }).await.unwrap(),
+            Some(TestVal(2))
+        );
 
         // Commit to surpress the warning message
         dbtx.commit_tx().await.expect("DB Error");
@@ -522,14 +594,14 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
+            .insert_entry(&TestKey { value: 1 }, &TestVal(2))
             .await
             .unwrap()
             .is_none());
 
         // dbtx2 should not be able to see uncommitted changes
         let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
-        assert_eq!(dbtx2.get_value(&TestKey(1)).await.unwrap(), None);
+        assert_eq!(dbtx2.get_value(&TestKey { value: 1 }).await.unwrap(), None);
 
         // Commit to surpress the warning message
         dbtx.commit_tx().await.expect("DB Error");
@@ -538,11 +610,11 @@ mod tests {
     pub async fn verify_find_by_prefix(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert!(dbtx
-            .insert_entry(&TestKey(55), &TestVal(9999))
+            .insert_entry(&TestKey { value: 55 }, &TestVal(9999))
             .await
             .is_ok());
         assert!(dbtx
-            .insert_entry(&TestKey(54), &TestVal(8888))
+            .insert_entry(&TestKey { value: 54 }, &TestVal(8888))
             .await
             .is_ok());
 
@@ -562,11 +634,11 @@ mod tests {
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
             match res.as_ref().unwrap().0 {
-                TestKey(55) => {
+                TestKey { value: 55 } => {
                     assert!(res.unwrap().1.eq(&TestVal(9999)));
                     returned_keys += 1;
                 }
-                TestKey(54) => {
+                TestKey { value: 54 } => {
                     assert!(res.unwrap().1.eq(&TestVal(8888)));
                     returned_keys += 1;
                 }
@@ -603,7 +675,7 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
+            .insert_entry(&TestKey { value: 1 }, &TestVal(2))
             .await
             .unwrap()
             .is_none());
@@ -612,7 +684,7 @@ mod tests {
         // Verify dbtx2 can see committed transactions
         let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert_eq!(
-            dbtx2.get_value(&TestKey(1)).await.unwrap(),
+            dbtx2.get_value(&TestKey { value: 1 }).await.unwrap(),
             Some(TestVal(2))
         );
     }
@@ -621,34 +693,49 @@ mod tests {
         let mut dbtx_rollback = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx_rollback
-            .insert_entry(&TestKey(20), &TestVal(2000))
+            .insert_entry(&TestKey { value: 20 }, &TestVal(2000))
             .await
             .is_ok());
 
         dbtx_rollback.set_tx_savepoint().await;
 
         assert!(dbtx_rollback
-            .insert_entry(&TestKey(21), &TestVal(2001))
+            .insert_entry(&TestKey { value: 21 }, &TestVal(2001))
             .await
             .is_ok());
 
         assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await.unwrap(),
+            dbtx_rollback
+                .get_value(&TestKey { value: 20 })
+                .await
+                .unwrap(),
             Some(TestVal(2000))
         );
         assert_eq!(
-            dbtx_rollback.get_value(&TestKey(21)).await.unwrap(),
+            dbtx_rollback
+                .get_value(&TestKey { value: 21 })
+                .await
+                .unwrap(),
             Some(TestVal(2001))
         );
 
         dbtx_rollback.rollback_tx_to_savepoint().await;
 
         assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await.unwrap(),
+            dbtx_rollback
+                .get_value(&TestKey { value: 20 })
+                .await
+                .unwrap(),
             Some(TestVal(2000))
         );
 
-        assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await.unwrap(), None);
+        assert_eq!(
+            dbtx_rollback
+                .get_value(&TestKey { value: 21 })
+                .await
+                .unwrap(),
+            None
+        );
 
         // Commit to surpress the warning message
         dbtx_rollback.commit_tx().await.expect("DB Error");
@@ -656,28 +743,28 @@ mod tests {
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
-        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey { value: 100 }).await.unwrap(), None);
 
         let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx2
-            .insert_entry(&TestKey(100), &TestVal(101))
+            .insert_entry(&TestKey { value: 100 }, &TestVal(101))
             .await
             .is_ok());
 
-        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey { value: 100 }).await.unwrap(), None);
 
         dbtx2.commit_tx().await.expect("DB Error");
 
         // dbtx should still read None because it is operating over a snapshot
         // of the data when the transaction started
-        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey { value: 100 }).await.unwrap(), None);
 
         let mut returned_keys = 0;
         let expected_keys = 0;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
             match res.as_ref().unwrap().0 {
-                TestKey(100) => {
+                TestKey { value: 100 } => {
                     assert!(res.unwrap().1.eq(&TestVal(101)));
                     returned_keys += 1;
                 }
@@ -694,12 +781,12 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx
-            .insert_entry(&TestKey(100), &TestVal(101))
+            .insert_entry(&TestKey { value: 100 }, &TestVal(101))
             .await
             .is_ok());
 
         assert!(dbtx
-            .insert_entry(&TestKey(101), &TestVal(102))
+            .insert_entry(&TestKey { value: 101 }, &TestVal(102))
             .await
             .is_ok());
 
@@ -710,11 +797,11 @@ mod tests {
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
             match res.as_ref().unwrap().0 {
-                TestKey(100) => {
+                TestKey { value: 100 } => {
                     assert!(res.unwrap().1.eq(&TestVal(101)));
                     returned_keys += 1;
                 }
-                TestKey(101) => {
+                TestKey { value: 101 } => {
                     assert!(res.unwrap().1.eq(&TestVal(102)));
                     returned_keys += 1;
                 }
@@ -729,7 +816,7 @@ mod tests {
         let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx2
-            .insert_entry(&TestKey(102), &TestVal(103))
+            .insert_entry(&TestKey { value: 102 }, &TestVal(103))
             .await
             .is_ok());
 
@@ -738,11 +825,11 @@ mod tests {
         let mut returned_keys = 0;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
             match res.as_ref().unwrap().0 {
-                TestKey(100) => {
+                TestKey { value: 100 } => {
                     assert!(res.unwrap().1.eq(&TestVal(101)));
                     returned_keys += 1;
                 }
-                TestKey(101) => {
+                TestKey { value: 101 } => {
                     assert!(res.unwrap().1.eq(&TestVal(102)));
                     returned_keys += 1;
                 }
@@ -758,7 +845,7 @@ mod tests {
     pub async fn expect_write_conflict(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert!(dbtx
-            .insert_entry(&TestKey(100), &TestVal(101))
+            .insert_entry(&TestKey { value: 100 }, &TestVal(101))
             .await
             .is_ok());
         dbtx.commit_tx().await.expect("DB Error");
@@ -767,14 +854,14 @@ mod tests {
         let mut dbtx3 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx2
-            .insert_entry(&TestKey(100), &TestVal(102))
+            .insert_entry(&TestKey { value: 100 }, &TestVal(102))
             .await
             .is_ok());
 
         // Depending on if the database implementation supports optimistic or pessimistic transactions, this test should generate
         // an error here (pessimistic) or at commit time (optimistic)
         let res = dbtx3
-            .insert_entry(&TestKey(100), &TestVal(103))
+            .insert_entry(&TestKey{ value: 100 }, &TestVal(103))
             .await
             .is_ok();
 
@@ -815,7 +902,7 @@ mod tests {
 
         // If the wildcard character ('%') is not handled properly, this will make find_by_prefix return 5 results instead of 4
         assert!(dbtx
-            .insert_entry(&TestKey(101), &TestVal(100))
+            .insert_entry(&TestKey{value: 101 }, &TestVal(100))
             .await
             .is_ok());
 
@@ -840,12 +927,12 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx
-            .insert_entry(&TestKey(100), &TestVal(101))
+            .insert_entry(&TestKey{ value: 100 }, &TestVal(101))
             .await
             .is_ok());
 
         assert!(dbtx
-            .insert_entry(&TestKey(101), &TestVal(102))
+            .insert_entry(&TestKey{ value: 101 }, &TestVal(102))
             .await
             .is_ok());
 
@@ -863,11 +950,11 @@ mod tests {
         let expected_keys = 0;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
             match res.as_ref().unwrap().0 {
-                TestKey(100) => {
+                TestKey{ value: 100 } => {
                     assert!(res.unwrap().1.eq(&TestVal(101)));
                     returned_keys += 1;
                 }
-                TestKey(101) => {
+                TestKey{ value: 101 } => {
                     assert!(res.unwrap().1.eq(&TestVal(102)));
                     returned_keys += 1;
                 }
@@ -878,5 +965,32 @@ mod tests {
         }
 
         assert_eq!(returned_keys, expected_keys);
+    }
+
+    pub async fn verify_simple_migration(db: Database) {
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+
+        let mut i = 0;
+        while i < 100 {
+            assert!(dbtx
+                .insert_entry(&TestKey { value: i + 100 }, &TestVal(i + 101))
+                .await
+                .is_ok());
+            i = i + 1;
+        }
+
+        dbtx.commit_tx().await.expect("DB Error");
+
+        // Upgrade fedimint
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+        assert_eq!(
+            dbtx.get_value(&TestKeyV2 {
+                value: 100,
+                new_string: "fedimint".to_string()
+            })
+            .await
+            .unwrap(),
+            Some(TestVal(101))
+        );
     }
 }

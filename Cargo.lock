@@ -939,6 +939,8 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
  "tbs",
  "test-log",
  "thiserror",
