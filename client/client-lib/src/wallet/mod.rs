@@ -198,7 +198,6 @@ mod tests {
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
-    use fedimint_api::backup::SignedBackupRequest;
     use fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
     use fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     use fedimint_api::db::mem_impl::MemDatabase;
@@ -310,7 +309,7 @@ mod tests {
 
         async fn upload_ecash_backup(
             &self,
-            _request: &SignedBackupRequest,
+            _request: &fedimint_mint::SignedBackupRequest,
         ) -> crate::api::Result<()> {
             unimplemented!()
         }

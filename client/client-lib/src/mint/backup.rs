@@ -15,7 +15,6 @@ use std::{
 
 use anyhow::Result;
 use fedimint_api::{
-    backup::{BackupRequest, SignedBackupRequest},
     cancellable::{Cancellable, Cancelled},
     task::{TaskGroup, TaskHandle},
     NumPeers, PeerId,
@@ -24,6 +23,7 @@ use fedimint_core::{
     epoch::{ConsensusItem, SignedEpochOutcome},
     modules::mint::{MintInput, MintOutput, MintOutputConfirmation},
 };
+use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 use tokio::sync::mpsc;
 use tracing::{error, info};

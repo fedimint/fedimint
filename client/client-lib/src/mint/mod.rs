@@ -669,7 +669,6 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
-    use fedimint_api::backup::SignedBackupRequest;
     use fedimint_api::config::ConfigGenParams;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
@@ -790,7 +789,7 @@ mod tests {
 
         async fn upload_ecash_backup(
             &self,
-            _request: &SignedBackupRequest,
+            _request: &fedimint_mint::SignedBackupRequest,
         ) -> crate::api::Result<()> {
             unimplemented!()
         }
