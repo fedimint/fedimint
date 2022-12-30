@@ -202,7 +202,7 @@ impl std::fmt::Display for LightningOutputOutcome {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
-    pub mint_pub_key: secp256k1::XOnlyPublicKey,
+    pub mint_pub_key: secp256k1::PublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub api: Url,
 }

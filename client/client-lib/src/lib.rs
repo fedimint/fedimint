@@ -143,7 +143,7 @@ pub struct GatewayClientConfig {
 impl From<GatewayClientConfig> for LightningGateway {
     fn from(config: GatewayClientConfig) -> Self {
         LightningGateway {
-            mint_pub_key: config.redeem_key.x_only_public_key().0,
+            mint_pub_key: config.redeem_key.public_key(),
             node_pub_key: config.node_pub_key,
             api: config.api,
         }

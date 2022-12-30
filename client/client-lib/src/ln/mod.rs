@@ -532,7 +532,7 @@ mod tests {
                 .unwrap();
         let invoice_amt_msat = invoice.amount_milli_satoshis().unwrap();
         let gateway = {
-            let mint_pub_key = secp256k1_zkp::XOnlyPublicKey::from_slice(&[42; 32][..]).unwrap();
+            let mint_pub_key = secp256k1_zkp::PublicKey::from_slice(&[42; 32][..]).unwrap();
             let node_pub_key = secp256k1_zkp::PublicKey::from_slice(&[2; 33][..]).unwrap();
             LightningGateway {
                 mint_pub_key,
