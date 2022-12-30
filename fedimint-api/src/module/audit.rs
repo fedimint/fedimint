@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, ReadOnlyDatabaseTransaction};
+use crate::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
 
 #[derive(Default)]
 pub struct Audit {
@@ -22,7 +22,7 @@ impl Audit {
 
     pub async fn add_items<KP, F>(
         &mut self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         key_prefix: &KP,
         to_milli_sat: F,
     ) where

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::{DatabaseTransaction, PrefixIter, ReadOnlyDatabaseTransaction};
+use fedimint_api::db::{DatabaseTransaction, PrefixIter};
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 pub use rocksdb;
@@ -60,19 +60,6 @@ impl IDatabase for RocksDb {
         let mut tx = DatabaseTransaction::new(rocksdb_tx, decoders);
         tx.set_tx_savepoint().await;
         tx
-    }
-
-    async fn begin_readonly_transaction(
-        &self,
-        decoders: ModuleDecoderRegistry,
-    ) -> ReadOnlyDatabaseTransaction {
-        let mut optimistic_options = OptimisticTransactionOptions::default();
-        optimistic_options.set_snapshot(true);
-        let rocksdb_tx = RocksDbTransaction(
-            self.0
-                .transaction_opt(&WriteOptions::default(), &optimistic_options),
-        );
-        ReadOnlyDatabaseTransaction::new(rocksdb_tx, decoders)
     }
 }
 

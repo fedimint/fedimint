@@ -8,7 +8,7 @@ use std::time::Duration;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
-use fedimint_api::db::{DatabaseTransaction, ReadOnlyDatabaseTransaction};
+use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
@@ -187,13 +187,6 @@ impl MintClient {
             .await
     }
 
-    pub async fn start_readonly_dbtx(&self) -> ReadOnlyDatabaseTransaction<'_> {
-        self.context
-            .db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
-            .await
-    }
-
     /// Adds the final amounts of `change` to the tx before submitting it
     /// Allows for multiple `change` outputs
     pub async fn finalize_change(&self, tx: &mut Transaction, change: Vec<Amount>) {
@@ -328,7 +321,7 @@ impl MintClient {
     }
 
     pub async fn coins(&self) -> TieredMulti<SpendableNote> {
-        self.start_readonly_dbtx()
+        self.start_dbtx()
             .await
             .find_by_prefix(&CoinKeyPrefix)
             .await
@@ -342,7 +335,7 @@ impl MintClient {
     /// Get available spendable notes with a db transaction already opened
     pub async fn get_available_notes(
         &self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> TieredMulti<SpendableNote> {
         dbtx.find_by_prefix(&CoinKeyPrefix)
             .await
@@ -355,7 +348,7 @@ impl MintClient {
 
     pub async fn get_next_note_index(
         &self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         amount: Amount,
     ) -> NoteIndex {
         NoteIndex(
@@ -441,7 +434,7 @@ impl MintClient {
         let issuance = self
             .context
             .db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&OutputFinalizationKey(outpoint))
             .await
@@ -479,7 +472,7 @@ impl MintClient {
     pub async fn list_active_issuances(&self) -> Vec<(OutPoint, NoteIssuanceRequests)> {
         self.context
             .db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .await
@@ -1052,7 +1045,7 @@ mod tests {
         let last_idx = client
             .context
             .db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&NextECashNoteIndexKey(amount))
             .await

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use super::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
-    IDatabase, IDatabaseTransaction, ReadOnlyDatabaseTransaction,
+    IDatabase, IDatabaseTransaction,
 };
 use crate::db::PrefixIter;
 use crate::ModuleDecoderRegistry;
@@ -60,23 +60,6 @@ impl IDatabase for MemDatabase {
         let mut tx = DatabaseTransaction::new(memtx, decoders);
         tx.set_tx_savepoint().await;
         tx
-    }
-
-    async fn begin_readonly_transaction(
-        &self,
-        decoders: ModuleDecoderRegistry,
-    ) -> ReadOnlyDatabaseTransaction {
-        let db_copy = self.data.lock().unwrap().clone();
-        let memtx = MemTransaction {
-            operations: Vec::new(),
-            tx_data: db_copy.clone(),
-            db: self,
-            savepoint: db_copy,
-            num_pending_operations: 0,
-            num_savepoint_operations: 0,
-        };
-
-        ReadOnlyDatabaseTransaction::new(memtx, decoders)
     }
 }
 

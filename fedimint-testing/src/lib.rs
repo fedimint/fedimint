@@ -7,7 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
 use fedimint_api::db::mem_impl::MemDatabase;
-use fedimint_api::db::{Database, DatabaseTransaction, ReadOnlyDatabaseTransaction};
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::{
@@ -79,7 +79,7 @@ where
 
         async fn member_validate<M: ServerModulePlugin>(
             member: &M,
-            dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+            dbtx: &mut DatabaseTransaction<'_>,
             fake_ic: &FakeInterconnect,
             input: &M::Input,
         ) -> Result<TestInputMeta, ModuleError> {
@@ -96,8 +96,9 @@ where
 
         let mut results = vec![];
         for (_, member, db) in &self.members {
-            let mut dbtx = db.begin_readonly_transaction(self.decoders()).await;
+            let mut dbtx = db.begin_transaction(self.decoders()).await;
             results.push(member_validate(member, &mut dbtx, &fake_ic, input).await);
+            dbtx.commit_tx().await.expect("DB tx failed");
         }
 
         assert_all_equal_result(results.into_iter())
@@ -108,10 +109,7 @@ where
         for (_, member, db) in self.members.iter() {
             results.push(
                 member
-                    .validate_output(
-                        &mut db.begin_readonly_transaction(self.decoders()).await,
-                        output,
-                    )
+                    .validate_output(&mut db.begin_transaction(self.decoders()).await, output)
                     .await
                     .is_err(),
             );
@@ -143,7 +141,7 @@ where
         for (id, member, db) in &mut self.members {
             consensus.extend(
                 member
-                    .consensus_proposal(&mut db.begin_readonly_transaction(decoders.clone()).await)
+                    .consensus_proposal(&mut db.begin_transaction(decoders.clone()).await)
                     .await
                     .into_iter()
                     .map(|ci| (*id, ci)),
@@ -193,10 +191,7 @@ where
         for (_, member, db) in self.members.iter() {
             results.push(
                 member
-                    .output_status(
-                        &mut db.begin_readonly_transaction(self.decoders()).await,
-                        out_point,
-                    )
+                    .output_status(&mut db.begin_transaction(self.decoders()).await, out_point)
                     .await,
             );
         }

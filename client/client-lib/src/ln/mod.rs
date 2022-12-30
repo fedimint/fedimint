@@ -283,7 +283,7 @@ impl LnClient {
         let confirmed_invoice = self
             .context
             .db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction(ModuleDecoderRegistry::default())
             .await
             .get_value(&ConfirmedInvoiceKey(contract_id))
             .await
@@ -409,9 +409,7 @@ mod tests {
                 .await
                 .fetch_from_all(|m, db| async {
                     m.get_contract_account(
-                        &mut db
-                            .begin_readonly_transaction(ModuleDecoderRegistry::default())
-                            .await,
+                        &mut db.begin_transaction(ModuleDecoderRegistry::default()).await,
                         contract,
                     )
                     .await

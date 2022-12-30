@@ -14,7 +14,7 @@ use fedimint_api::config::{
     ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
-use fedimint_api::db::{DatabaseTransaction, ReadOnlyDatabaseTransaction};
+use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -342,7 +342,7 @@ impl ServerModulePlugin for Mint {
         &MintModuleDecoder
     }
 
-    async fn await_consensus_proposal(&self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>) {
+    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
         if self.consensus_proposal(dbtx).await.is_empty() {
             std::future::pending().await
         }
@@ -350,7 +350,7 @@ impl ServerModulePlugin for Mint {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<Self::ConsensusItem> {
         dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .await
@@ -406,7 +406,7 @@ impl ServerModulePlugin for Mint {
     async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
@@ -451,7 +451,7 @@ impl ServerModulePlugin for Mint {
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let meta = self
-            .validate_input(interconnect, dbtx.to_readonly(), cache, input)
+            .validate_input(interconnect, dbtx, cache, input)
             .await?;
 
         for (amount, coin) in input.iter_items() {
@@ -467,7 +467,7 @@ impl ServerModulePlugin for Mint {
 
     async fn validate_output(
         &self,
-        _dbtx: &mut ReadOnlyDatabaseTransaction,
+        _dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if output.max_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
@@ -501,7 +501,7 @@ impl ServerModulePlugin for Mint {
         output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx.to_readonly(), output).await?;
+        let amount = self.validate_output(dbtx, output).await?;
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
@@ -648,7 +648,7 @@ impl ServerModulePlugin for Mint {
 
     async fn output_status(
         &self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<Self::OutputOutcome> {
         let we_proposed = dbtx
@@ -677,7 +677,7 @@ impl ServerModulePlugin for Mint {
         }
     }
 
-    async fn audit(&self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>, audit: &mut Audit) {
+    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
         audit
             .add_items(dbtx, &MintAuditItemKeyPrefix, |k, v| match k {
                 MintAuditItemKey::Issuance(_) => -(v.msats as i64),
@@ -707,7 +707,7 @@ impl ServerModulePlugin for Mint {
                 "/recover",
                 async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
-                        .handle_recover_request(dbtx.to_readonly(), id).await)
+                        .handle_recover_request(&mut dbtx, id).await)
                 }
             },
         ]
@@ -752,7 +752,7 @@ impl Mint {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await.expect("DB error")

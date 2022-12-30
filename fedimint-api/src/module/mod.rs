@@ -15,7 +15,7 @@ use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModul
 use crate::core::{
     PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
 };
-use crate::db::{DatabaseTransaction, ReadOnlyDatabaseTransaction};
+use crate::db::DatabaseTransaction;
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
@@ -234,12 +234,12 @@ pub trait ServerModulePlugin: Debug + Sized {
     fn decoder(&self) -> &'static Self::Decoder;
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>);
+    async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut DatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<Self::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
@@ -268,7 +268,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     async fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -294,7 +294,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// and merely generate a warning.
     async fn validate_output(
         &self,
-        dbtx: &mut ReadOnlyDatabaseTransaction,
+        dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -331,7 +331,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut ReadOnlyDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<Self::OutputOutcome>;
 
@@ -339,7 +339,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     ///
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
-    async fn audit(&self, dbtx: &mut ReadOnlyDatabaseTransaction<'_>, audit: &mut Audit);
+    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///

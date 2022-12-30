@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use fedimint_api::db::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
-    PrefixIter, ReadOnlyDatabaseTransaction,
+    PrefixIter,
 };
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -62,19 +62,6 @@ impl IDatabase for SledDb {
         let mut tx = DatabaseTransaction::new(sled_tx, decoders);
         tx.set_tx_savepoint().await;
         tx
-    }
-
-    async fn begin_readonly_transaction(
-        &self,
-        decoders: ModuleDecoderRegistry,
-    ) -> ReadOnlyDatabaseTransaction {
-        let sled_tx = SledTransaction {
-            operations: Vec::new(),
-            db: self,
-            num_pending_operations: 0,
-            num_savepoint_operations: 0,
-        };
-        ReadOnlyDatabaseTransaction::new(sled_tx, decoders)
     }
 }
 

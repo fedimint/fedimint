@@ -60,10 +60,6 @@ pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + 
 #[async_trait]
 pub trait IDatabase: Debug + Send + Sync {
     async fn begin_transaction(&self, decoders: ModuleDecoderRegistry) -> DatabaseTransaction;
-    async fn begin_readonly_transaction(
-        &self,
-        decoders: ModuleDecoderRegistry,
-    ) -> ReadOnlyDatabaseTransaction;
 }
 
 dyn_newtype_define! {
@@ -138,17 +134,70 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
 // TODO: use macro again
 #[doc = " A handle to a type-erased database implementation"]
-pub struct ReadOnlyDatabaseTransaction<'a>(
-    Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
-    ModuleDecoderRegistry,
-);
+pub struct CommitTracker {
+    is_committed: bool,
+}
 
-impl<'a> ReadOnlyDatabaseTransaction<'a> {
+impl Drop for CommitTracker {
+    fn drop(&mut self) {
+        if !self.is_committed {
+            warn!("DatabaseTransaction has not called commit.");
+        }
+    }
+}
+
+#[doc = " A handle to a type-erased database implementation"]
+pub struct DatabaseTransaction<'a> {
+    tx: Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
+    decoders: ModuleDecoderRegistry,
+    commit_tracker: Option<CommitTracker>,
+}
+
+impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
+    type Target = dyn IDatabaseTransaction<'a> + Send + 'a;
+
+    fn deref(&self) -> &<Self as std::ops::Deref>::Target {
+        &*self.tx
+    }
+}
+
+impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
+    fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
+        &mut *self.tx
+    }
+}
+
+impl<'a> DatabaseTransaction<'a> {
     pub fn new<I: IDatabaseTransaction<'a> + Send + 'a>(
         dbtx: I,
         decoders: ModuleDecoderRegistry,
-    ) -> ReadOnlyDatabaseTransaction<'a> {
-        ReadOnlyDatabaseTransaction(Box::new(dbtx), decoders)
+    ) -> DatabaseTransaction<'a> {
+        DatabaseTransaction {
+            tx: Box::new(dbtx),
+            decoders,
+            commit_tracker: None,
+        }
+    }
+
+    fn set_commit_tracker(&mut self) {
+        match self.commit_tracker {
+            Some(_) => {}
+            None => {
+                self.commit_tracker = Some(CommitTracker {
+                    is_committed: false,
+                });
+            }
+        }
+    }
+
+    pub async fn commit_tx(self) -> Result<()> {
+        match self.commit_tracker {
+            Some(mut tracker) => {
+                tracker.is_committed = true;
+                return self.tx.commit_tx().await;
+            }
+            None => Ok(()),
+        }
     }
 
     pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
@@ -156,7 +205,7 @@ impl<'a> ReadOnlyDatabaseTransaction<'a> {
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.0.raw_get_bytes(&key_bytes).await? {
+        let value_bytes = match self.tx.raw_get_bytes(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -166,7 +215,7 @@ impl<'a> ReadOnlyDatabaseTransaction<'a> {
             std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(K::Value::from_bytes(&value_bytes, &self.1)?))
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
     }
 
     pub async fn find_by_prefix<KP>(
@@ -176,9 +225,9 @@ impl<'a> ReadOnlyDatabaseTransaction<'a> {
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
-        let decoders = self.1.clone();
+        let decoders = self.decoders.clone();
         let prefix_bytes = key_prefix.to_bytes();
-        self.0
+        self.tx
             .raw_find_by_prefix(&prefix_bytes)
             .await
             .map(move |res| {
@@ -194,87 +243,12 @@ impl<'a> ReadOnlyDatabaseTransaction<'a> {
                 })
             })
     }
-}
-
-pub struct CommitTracker {
-    is_committed: bool,
-}
-
-impl Drop for CommitTracker {
-    fn drop(&mut self) {
-        if !self.is_committed {
-            warn!("DatabaseTransaction has not called commit.");
-        }
-    }
-}
-
-#[doc = " A handle to a type-erased database implementation"]
-pub struct DatabaseTransaction<'a>(ReadOnlyDatabaseTransaction<'a>, CommitTracker);
-
-impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
-    type Target = dyn IDatabaseTransaction<'a> + Send + 'a;
-
-    fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-        &*self.0 .0
-    }
-}
-
-impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
-    fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
-        &mut *self.0 .0
-    }
-}
-
-impl<'a> DatabaseTransaction<'a> {
-    pub fn new<I: IDatabaseTransaction<'a> + Send + 'a>(
-        dbtx: I,
-        decoders: ModuleDecoderRegistry,
-    ) -> DatabaseTransaction<'a> {
-        DatabaseTransaction(
-            ReadOnlyDatabaseTransaction(Box::new(dbtx), decoders),
-            CommitTracker {
-                is_committed: false,
-            },
-        )
-    }
-
-    pub fn surpress_warning(&mut self) {
-        self.1.is_committed = true;
-    }
-
-    pub fn to_readonly(&mut self) -> &mut ReadOnlyDatabaseTransaction<'a> {
-        &mut self.0
-    }
-
-    pub async fn commit_tx(mut self) -> Result<()> {
-        let res = self.0 .0.commit_tx().await;
-        if res.is_ok() {
-            self.1.is_committed = true;
-        }
-        res
-    }
-
-    pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
-    where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
-    {
-        self.0.get_value(key).await
-    }
-
-    pub async fn find_by_prefix<'b, KP>(
-        &'b mut self,
-        key_prefix: &KP,
-    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value)>> + '_
-    where
-        KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + 'b,
-    {
-        self.0.find_by_prefix(key_prefix).await
-    }
 
     pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
+        self.set_commit_tracker();
         match self
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
@@ -285,7 +259,7 @@ impl<'a> DatabaseTransaction<'a> {
                     std::any::type_name::<K::Value>(),
                     old_val_bytes
                 );
-                Ok(Some(K::Value::from_bytes(&old_val_bytes, &self.0 .1)?))
+                Ok(Some(K::Value::from_bytes(&old_val_bytes, &self.decoders)?))
             }
             None => Ok(None),
         }
@@ -299,6 +273,7 @@ impl<'a> DatabaseTransaction<'a> {
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
+        self.set_commit_tracker();
         match self
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
@@ -318,19 +293,21 @@ impl<'a> DatabaseTransaction<'a> {
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
+        self.set_commit_tracker();
         let key_bytes = key.to_bytes();
         let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
 
-        Ok(Some(K::Value::from_bytes(&value_bytes, &self.0 .1)?))
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
     }
 
     pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
+        self.set_commit_tracker();
         self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
     }
 }
@@ -509,6 +486,9 @@ mod tests {
         assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
         let removed = dbtx.remove_entry(&TestKey(1)).await;
         assert!(removed.is_ok());
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_remove_existing(db: Database) {
@@ -526,6 +506,9 @@ mod tests {
         assert!(removed.is_ok());
         assert_eq!(removed.unwrap(), Some(TestVal(2)));
         assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_read_own_writes(db: Database) {
@@ -538,6 +521,9 @@ mod tests {
             .is_none());
 
         assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), Some(TestVal(2)));
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_prevent_dirty_reads(db: Database) {
@@ -550,10 +536,11 @@ mod tests {
             .is_none());
 
         // dbtx2 should not be able to see uncommitted changes
-        let mut dbtx2 = db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert_eq!(dbtx2.get_value(&TestKey(1)).await.unwrap(), None);
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
@@ -578,9 +565,7 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         // Verify finding by prefix returns the correct set of key pairs
-        let mut dbtx = db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         let mut returned_keys = 0;
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
@@ -633,9 +618,7 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         // Verify dbtx2 can see committed transactions
-        let mut dbtx2 = db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert_eq!(
             dbtx2.get_value(&TestKey(1)).await.unwrap(),
             Some(TestVal(2))
@@ -674,12 +657,13 @@ mod tests {
         );
 
         assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await.unwrap(), None);
+
+        // Commit to surpress the warning message
+        dbtx_rollback.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
-        let mut dbtx = db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
 
         let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
@@ -729,9 +713,7 @@ mod tests {
 
         dbtx.commit_tx().await.expect("DB Error");
 
-        let mut dbtx = db
-            .begin_readonly_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         let mut returned_keys = 0;
         let expected_keys = 2;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
