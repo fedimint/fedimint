@@ -20,6 +20,7 @@ mint-client = { path = "../client-lib" }
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
+fedimint-mint = { path = "../../modules/fedimint-mint" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 tokio = { version = "1.23.0", features = ["full"] }

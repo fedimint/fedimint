@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bitcoin::{secp256k1, Address};
-use fedimint_api::{backup::SignedBackupRequest, TransactionId};
+use fedimint_api::TransactionId;
 use fedimint_core::{
     epoch::SignedEpochOutcome,
     modules::{
@@ -97,7 +97,10 @@ impl IFederationApi for MockApi {
         unimplemented!()
     }
 
-    async fn upload_ecash_backup(&self, _request: &SignedBackupRequest) -> Result<(), ApiError> {
+    async fn upload_ecash_backup(
+        &self,
+        _request: &fedimint_mint::SignedBackupRequest,
+    ) -> Result<(), ApiError> {
         unimplemented!()
     }
 

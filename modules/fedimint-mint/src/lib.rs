@@ -4,9 +4,9 @@ use std::iter::FromIterator;
 use std::ops::Sub;
 
 use async_trait::async_trait;
+pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey};
-use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{

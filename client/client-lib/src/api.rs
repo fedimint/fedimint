@@ -6,7 +6,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin::{Address, Amount};
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::backup::SignedBackupRequest;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
@@ -90,7 +89,8 @@ pub trait IFederationApi: Debug + Send + Sync {
     async fn register_gateway(&self, gateway: LightningGateway) -> Result<()>;
 
     /// Upload ecash (encrypted) backup for mint to safekeep
-    async fn upload_ecash_backup(&self, request: &SignedBackupRequest) -> Result<()>;
+    async fn upload_ecash_backup(&self, request: &fedimint_mint::SignedBackupRequest)
+        -> Result<()>;
 
     /// Download ecash (encrypted) backup from mint to safekeep
     async fn download_ecash_backup(
@@ -378,7 +378,10 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
         }
     }
 
-    async fn upload_ecash_backup(&self, request: &SignedBackupRequest) -> Result<()> {
+    async fn upload_ecash_backup(
+        &self,
+        request: &fedimint_mint::SignedBackupRequest,
+    ) -> Result<()> {
         self.request(
             "/mint/backup",
             request,
