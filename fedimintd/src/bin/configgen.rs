@@ -1,9 +1,12 @@
-use std::fs;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::{fs, sync::Arc};
 
 use clap::{Parser, Subcommand};
-use fedimint_api::{Amount, NumPeers, PeerId};
-use fedimint_server::config::{ServerConfig, ServerConfigParams};
+use fedimint_api::{module::FederationModuleConfigGen, Amount, NumPeers, PeerId};
+use fedimint_core::modules::{ln::LightningModuleConfigGen, mint::MintConfigGenerator};
+use fedimint_server::config::{ModuleConfigGens, ServerConfig, ServerConfigParams};
+use fedimint_wallet::WalletConfigGenerator;
 use fedimintd::{plaintext_json_write, write_nonprivate_configs, CODE_VERSION, PRIVATE_CONFIG};
 use rand::rngs::OsRng;
 
@@ -79,13 +82,28 @@ fn main() {
                 &federation_name,
                 &bitcoind_rpc,
             );
+            let module_config_gens: ModuleConfigGens = BTreeMap::from([
+                (
+                    "wallet",
+                    Arc::new(WalletConfigGenerator)
+                        as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+                ),
+                ("mint", Arc::new(MintConfigGenerator)),
+                ("ln", Arc::new(LightningModuleConfigGen)),
+            ]);
 
-            let server_cfg = ServerConfig::trusted_dealer_gen(CODE_VERSION, &peers, &params, rng);
+            let server_cfg = ServerConfig::trusted_dealer_gen(
+                CODE_VERSION,
+                &peers,
+                &params,
+                module_config_gens.clone(),
+                rng,
+            );
 
             for (id, server) in server_cfg {
                 let path = cfg_path.join(id.to_string());
                 fs::create_dir_all(path.clone()).expect("Could not create cfg dir");
-                write_nonprivate_configs(&server, path.clone());
+                write_nonprivate_configs(&server, path.clone(), &module_config_gens);
                 plaintext_json_write(&server.private, path.join(PRIVATE_CONFIG));
             }
         }

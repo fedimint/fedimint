@@ -2,14 +2,21 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 use fedimint_api::cancellable::Cancellable;
+use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
-use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
+use fedimint_core::modules::ln::LightningModuleConfigGen;
+use fedimint_core::modules::mint::MintConfigGenerator;
+use fedimint_server::config::{
+    ModuleConfigGens, PeerServerParams, ServerConfig, ServerConfigParams,
+};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
+use fedimint_wallet::WalletConfigGenerator;
 use fedimintd::encrypt::*;
 use fedimintd::*;
 use itertools::Itertools;
@@ -131,6 +138,15 @@ async fn main() {
         )
         .init();
 
+    let module_config_gens: ModuleConfigGens = BTreeMap::from([
+        (
+            "wallet",
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+        ),
+        ("mint", Arc::new(MintConfigGenerator)),
+        ("ln", Arc::new(LightningModuleConfigGen)),
+    ]);
+
     let mut task_group = TaskGroup::new();
 
     let command: Command = Cli::parse().command;
@@ -182,7 +198,7 @@ async fn main() {
             };
 
             encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG));
-            write_nonprivate_configs(&server, dir_out_path);
+            write_nonprivate_configs(&server, dir_out_path, &module_config_gens);
         }
         Command::VersionHash => {
             println!("{}", CODE_VERSION);
@@ -270,12 +286,23 @@ async fn run_dkg(
         fedimint_server::config::connect(params.server_dkg.clone(), params.tls.clone(), task_group)
             .await;
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
+
+    let module_config_gens: ModuleConfigGens = BTreeMap::from([
+        (
+            "wallet",
+            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+        ),
+        ("mint", Arc::new(MintConfigGenerator)),
+        ("ln", Arc::new(LightningModuleConfigGen)),
+    ]);
+
     ServerConfig::distributed_gen(
         CODE_VERSION,
         &connections,
         &our_id,
         &peer_ids,
         &params,
+        module_config_gens,
         OsRng,
         task_group,
     )

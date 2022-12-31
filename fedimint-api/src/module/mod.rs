@@ -217,6 +217,12 @@ pub trait FederationModuleConfigGen {
 
     fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig>;
 
+    // TODO: There's a bit of confusion here between whole config as one value, `ServerModuleConfig`, and just consensus part
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<ClientModuleConfig>;
+
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 }
 

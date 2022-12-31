@@ -16,6 +16,7 @@ use fedimint_api::config::{
 use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
@@ -257,6 +258,13 @@ impl FederationModuleConfigGen for MintConfigGenerator {
             .to_typed::<MintConfig>()?
             .consensus
             .to_client_config())
+    }
+
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        Ok(serde_json::from_value::<MintConfigConsensus>(config)?.to_client_config())
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {

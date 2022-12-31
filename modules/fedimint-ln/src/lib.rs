@@ -297,6 +297,13 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
             .to_client_config())
     }
 
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        Ok(serde_json::from_value::<LightningConfigConsensus>(config)?.to_client_config())
+    }
+
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config
             .to_typed::<LightningConfig>()?
