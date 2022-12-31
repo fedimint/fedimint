@@ -67,6 +67,7 @@ pub trait IGatewayClientBuilder: Debug {
     async fn create_config(
         &self,
         connect: WsFederationConnect,
+        mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
     ) -> Result<GatewayClientConfig>;
@@ -115,6 +116,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
     async fn create_config(
         &self,
         connect: WsFederationConnect,
+        mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
     ) -> Result<GatewayClientConfig> {
@@ -134,6 +136,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         let kp_fed = KeyPair::new(&ctx, &mut rng);
 
         Ok(GatewayClientConfig {
+            mint_channel_id,
             client_config: client_cfg,
             redeem_key: kp_fed,
             timelock_delta: 10,

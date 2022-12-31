@@ -423,7 +423,10 @@ impl GatewayTest {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
 
+        let mint_channel_id: u64 = 0;
+
         let keys = LightningGateway {
+            mint_channel_id: mint_channel_id.clone(),
             mint_pub_key: kp.x_only_public_key().0,
             node_pub_key,
             api: Url::parse("http://example.com")
@@ -434,6 +437,7 @@ impl GatewayTest {
         let announce_addr = Url::parse(format!("http://{}", bind_addr).as_str())
             .expect("Could not parse URL to generate GatewayClientConfig API endpoint");
         let gw_client_cfg = GatewayClientConfig {
+            mint_channel_id,
             client_config: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,

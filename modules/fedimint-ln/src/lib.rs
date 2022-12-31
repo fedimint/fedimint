@@ -202,6 +202,10 @@ impl std::fmt::Display for LightningOutputOutcome {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
+    /// Channel identifier assigned to the mint by the gateway.
+    /// All clients in this federation should use this value as `short_channel_id`
+    /// when creating invoices to be settled by this gateway.
+    pub mint_channel_id: u64,
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub api: Url,

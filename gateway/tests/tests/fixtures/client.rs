@@ -46,6 +46,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
     async fn create_config(
         &self,
         _connect: WsFederationConnect,
+        mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
     ) -> Result<GatewayClientConfig, LnGatewayError> {
@@ -64,6 +65,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         let kp_fed = KeyPair::new(&ctx, &mut rng);
 
         Ok(GatewayClientConfig {
+            mint_channel_id,
             client_config,
             redeem_key: kp_fed,
             timelock_delta: 10,
