@@ -426,7 +426,7 @@ impl GatewayTest {
         let mint_channel_id: u64 = 0;
 
         let keys = LightningGateway {
-            mint_channel_id: mint_channel_id.clone(),
+            mint_channel_id,
             mint_pub_key: kp.x_only_public_key().0,
             node_pub_key,
             api: Url::parse("http://example.com")

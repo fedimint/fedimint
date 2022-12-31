@@ -845,7 +845,7 @@ impl Client<UserClientConfig> {
         // Route hint instructing payer how to route to gateway
         let gateway_route_hint = RouteHint(vec![RouteHintHop {
             src_node_id: gateway.node_pub_key,
-            short_channel_id: 8,
+            short_channel_id: gateway.mint_channel_id,
             fees: RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
