@@ -293,6 +293,7 @@
             perl
             pkgs.llvmPackages.bintools
             rocksdb
+            protobuf
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
@@ -320,6 +321,8 @@
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
           ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+          PROTOC = "${pkgs.protobuf}/bin/protoc";
+          PROTOC_INCLUDE = "${pkgs.protobuf}/include";
           CI = "true";
           HOME = "/tmp";
         };
