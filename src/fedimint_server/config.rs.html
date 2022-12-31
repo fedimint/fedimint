@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-749885d589dd4e13.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-d695502c06d5afea.css"><link rel="stylesheet" disabled href="../../static.files/dark-aa222ca57e08648b.css"><link rel="stylesheet" disabled href="../../static.files/ayu-d5b7bae5e01694db.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-4a084badb5778746.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-3cc3084b477498a6.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-4a084badb5778746.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -684,14 +684,27 @@
 <a href="#684" id="684">684</a>
 <a href="#685" id="685">685</a>
 <a href="#686" id="686">686</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::{IpAddr, SocketAddr};
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node,
-    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 <span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
@@ -699,12 +712,8 @@
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
-<span class="kw">use </span>fedimint_core::modules::ln::config::{LightningConfig, LightningConfigConsensus};
-<span class="kw">use </span>fedimint_core::modules::ln::LightningModuleConfigGen;
-<span class="kw">use </span>fedimint_core::modules::mint::config::{MintConfig, MintConfigConsensus};
-<span class="kw">use </span>fedimint_core::modules::mint::{MintConfigGenParams, MintConfigGenerator};
-<span class="kw">use </span>fedimint_wallet::config::{WalletConfig, WalletConfigConsensus};
-<span class="kw">use </span>fedimint_wallet::{WalletConfigGenParams, WalletConfigGenerator};
+<span class="kw">use </span>fedimint_core::modules::mint::MintConfigGenParams;
+<span class="kw">use </span>fedimint_wallet::WalletConfigGenParams;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -809,7 +818,10 @@
 }
 
 <span class="kw">impl </span>ServerConfigConsensus {
-    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
+    <span class="kw">pub fn </span>to_client_config_try(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_config_gens: <span class="kw-2">&amp;</span>ModuleConfigGens,
+    ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
         <span class="kw">let </span>nodes = <span class="self">self
             </span>.peers
             .values()
@@ -819,33 +831,34 @@
             })
             .collect();
 
-        <span class="kw">let </span>modules = <span class="macro">vec!</span>[
-            <span class="self">self</span>.get_client_config::&lt;MintConfigConsensus&gt;(<span class="string">&quot;mint&quot;</span>),
-            <span class="self">self</span>.get_client_config::&lt;WalletConfigConsensus&gt;(<span class="string">&quot;wallet&quot;</span>),
-            <span class="self">self</span>.get_client_config::&lt;LightningConfigConsensus&gt;(<span class="string">&quot;ln&quot;</span>),
-        ];
-
-        ClientConfig {
+        <span class="prelude-val">Ok</span>(ClientConfig {
             federation_name: <span class="self">self</span>.federation_name.clone(),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
             nodes,
-            modules: modules.into_iter().collect(),
-        }
+            modules: <span class="self">self
+                </span>.modules
+                .iter()
+                .map(|(k, v)| {
+                    <span class="prelude-val">Ok</span>((
+                        k.clone(),
+                        module_config_gens
+                            .get(<span class="kw-2">&amp;</span>k.as_str())
+                            .ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">&quot;module config gen not found: {k}&quot;</span>))<span class="question-mark">?
+                            </span>.to_client_config_from_consensus_value(v.clone())<span class="question-mark">?</span>,
+                    ))
+                })
+                .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>,
+        })
     }
 
-    <span class="kw">fn </span>get_client_config&lt;T: TypedServerModuleConsensusConfig&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        name: <span class="kw-2">&amp;</span>str,
-    ) -&gt; (String, ClientModuleConfig) {
-        <span class="kw">let </span>json = <span class="self">self
-            </span>.modules
-            .get(name)
-            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;Module {name} not found&quot;</span>));
-        <span class="kw">let </span>config: T = serde_json::from_value(json.clone()).expect(<span class="string">&quot;Cannot parse JSON&quot;</span>);
-
-        (name.to_string(), config.to_client_config())
+    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, module_config_gens: <span class="kw-2">&amp;</span>ModuleConfigGens) -&gt; ClientConfig {
+        <span class="self">self</span>.to_client_config_try(module_config_gens)
+            .expect(<span class="string">&quot;configuration mismatch&quot;</span>)
     }
 }
+
+<span class="kw">pub type </span>ModuleConfigGens =
+    BTreeMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, Arc&lt;<span class="kw">dyn </span>FederationModuleConfigGen + Send + Sync&gt;&gt;;
 
 <span class="kw">impl </span>ServerConfig {
     <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key setup
@@ -906,13 +919,24 @@
     }
 
     <span class="doccomment">/// Constructs a module config by name
-    </span><span class="kw">pub fn </span>get_module_config&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;T&gt; {
+    </span><span class="kw">pub fn </span>get_module_config_typed&lt;T: TypedServerModuleConfig&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        name: <span class="kw-2">&amp;</span>str,
+    ) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">let </span>local = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.local.modules, name)<span class="question-mark">?</span>;
         <span class="kw">let </span>private = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.private.modules, name)<span class="question-mark">?</span>;
         <span class="kw">let </span>consensus = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules, name)<span class="question-mark">?</span>;
         <span class="kw">let </span>module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
+    }
+
+    <span class="doccomment">/// Constructs a module config by name
+    </span><span class="kw">pub fn </span>get_module_config(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
+        <span class="kw">let </span>local = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.local.modules, name)<span class="question-mark">?</span>;
+        <span class="kw">let </span>private = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.private.modules, name)<span class="question-mark">?</span>;
+        <span class="kw">let </span>consensus = <span class="self">Self</span>::get_or_error(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules, name)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ServerModuleConfig::from(local, private, consensus))
     }
 
     <span class="kw">fn </span>get_or_error(
@@ -924,7 +948,11 @@
             .cloned()
     }
 
-    <span class="kw">pub fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">pub fn </span>validate_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        identity: <span class="kw-2">&amp;</span>PeerId,
+        module_config_gens: <span class="kw-2">&amp;</span>ModuleConfigGens,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>peers = <span class="self">self</span>.consensus.peers.clone();
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
         <span class="kw">let </span>private = <span class="self">self</span>.private.clone();
@@ -943,20 +971,31 @@
             <span class="macro">bail!</span>(<span class="string">&quot;Peer ids are not indexed from 0&quot;</span>);
         }
 
-        <span class="self">self</span>.get_module_config::&lt;WalletConfig&gt;(<span class="string">&quot;wallet&quot;</span>)<span class="question-mark">?
-            </span>.validate_config(identity)<span class="question-mark">?</span>;
-        <span class="self">self</span>.get_module_config::&lt;MintConfig&gt;(<span class="string">&quot;mint&quot;</span>)<span class="question-mark">?
-            </span>.validate_config(identity)<span class="question-mark">?</span>;
-        <span class="self">self</span>.get_module_config::&lt;LightningConfig&gt;(<span class="string">&quot;ln&quot;</span>)<span class="question-mark">?
-            </span>.validate_config(identity)<span class="question-mark">?</span>;
+        <span class="kw">for </span>module_name <span class="kw">in </span><span class="self">self
+            </span>.local
+            .modules
+            .keys()
+            .collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;()
+            .union(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules.keys().collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;())
+            .copied()
+            .collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;()
+            .union(<span class="kw-2">&amp;</span><span class="self">self</span>.private.modules.keys().collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;())
+        {
+            module_config_gens
+                .get(module_name.as_str())
+                .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;module config gen not found {module_name}&quot;</span>))<span class="question-mark">?
+                </span>.validate_config(identity, <span class="self">self</span>.get_module_config(module_name)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
+        }
 
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>trusted_dealer_gen(
+    <span class="attr">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">pub fn </span>trusted_dealer_gen(
         code_version: <span class="kw-2">&amp;</span>str,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>HashMap&lt;PeerId, ServerConfigParams&gt;,
+        module_config_gens: ModuleConfigGens,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; BTreeMap&lt;PeerId, <span class="self">Self</span>&gt; {
         <span class="kw">let </span>netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
@@ -966,16 +1005,7 @@
 
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
 
-        <span class="kw">let </span>module_config_gens: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;)&gt; = <span class="macro">vec!</span>[
-            (
-                <span class="string">&quot;wallet&quot;</span>,
-                Box::new(WalletConfigGenerator) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;,
-            ),
-            (<span class="string">&quot;mint&quot;</span>, Box::new(MintConfigGenerator)),
-            (<span class="string">&quot;ln&quot;</span>, Box::new(LightningModuleConfigGen)),
-        ];
-
-        <span class="kw">let </span>module_configs: Vec&lt;<span class="kw">_</span>&gt; = module_config_gens
+        <span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = module_config_gens
             .iter()
             .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>peer0.modules)))
             .collect();
@@ -1003,12 +1033,14 @@
         server_config
     }
 
-    <span class="kw">pub async fn </span>distributed_gen(
+    <span class="attr">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">pub async fn </span>distributed_gen(
         code_version: <span class="kw-2">&amp;</span>str,
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ServerConfigParams,
+        module_config_gens: ModuleConfigGens,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;<span class="self">Self</span>&gt;&gt; {
@@ -1018,6 +1050,7 @@
                 code_version,
                 peers,
                 <span class="kw-2">&amp;</span>HashMap::from([(<span class="kw-2">*</span>our_id, params.clone())]),
+                module_config_gens,
                 rng,
             );
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server[our_id].clone()));
@@ -1036,15 +1069,6 @@
         };
         <span class="kw">let </span>(hbbft_pks, hbbft_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
         <span class="kw">let </span>(epoch_pks, epoch_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
-
-        <span class="kw">let </span>module_config_gens: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;)&gt; = <span class="macro">vec!</span>[
-            (
-                <span class="string">&quot;wallet&quot;</span>,
-                Box::new(WalletConfigGenerator) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span>FederationModuleConfigGen&gt;,
-            ),
-            (<span class="string">&quot;mint&quot;</span>, Box::new(MintConfigGenerator)),
-            (<span class="string">&quot;ln&quot;</span>, Box::new(LightningModuleConfigGen)),
-        ];
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;String, ServerModuleConfig&gt; = Default::default();
 
@@ -1371,4 +1395,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (270c94e48 2022-12-28)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (ce85c9857 2022-12-30)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
