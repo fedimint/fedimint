@@ -1054,7 +1054,6 @@
 <a href="#1054" id="1054">1054</a>
 <a href="#1055" id="1055">1055</a>
 <a href="#1056" id="1056">1056</a>
-<a href="#1057" id="1057">1057</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1726,7 +1725,6 @@
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Address;
-    <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
@@ -1847,7 +1845,7 @@
 
         <span class="kw">async fn </span>upload_ecash_backup(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _request: <span class="kw-2">&amp;</span>SignedBackupRequest,
+            _request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
         ) -&gt; <span class="kw">crate</span>::api::Result&lt;()&gt; {
             <span class="macro">unimplemented!</span>()
         }

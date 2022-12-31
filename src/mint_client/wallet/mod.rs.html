@@ -474,7 +474,6 @@
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -675,7 +674,6 @@
     <span class="kw">use </span>bitcoin::hashes::sha256;
     <span class="kw">use </span>bitcoin::{Address, Txid};
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
     <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
     <span class="kw">use </span>fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
@@ -787,7 +785,7 @@
 
         <span class="kw">async fn </span>upload_ecash_backup(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _request: <span class="kw-2">&amp;</span>SignedBackupRequest,
+            _request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
         ) -&gt; <span class="kw">crate</span>::api::Result&lt;()&gt; {
             <span class="macro">unimplemented!</span>()
         }

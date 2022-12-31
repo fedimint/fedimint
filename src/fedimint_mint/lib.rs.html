@@ -1336,9 +1336,9 @@
 <span class="kw">use </span>std::ops::Sub;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">pub use </span>common::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{ECashUserBackupSnapshot, EcashBackupKey};
-<span class="kw">use </span>fedimint_api::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["MintModuleDecoder",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"macro":[["try",""]],"struct":[["BackupRequest",""],["MintModuleDecoder",""],["SignedBackupRequest",""],["__DeserializeWith",""],["__FieldVisitor",""],["__SerializeWith",""],["__Visitor",""]]};
