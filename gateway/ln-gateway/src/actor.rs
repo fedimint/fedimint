@@ -26,8 +26,7 @@ impl GatewayActor {
             || async {
                 Ok(client
                     .register_with_federation(client.config().into())
-                    .await
-                    .expect("Failed to connect with federation"))
+                    .await?)
             },
             Duration::from_secs(1),
             5,
