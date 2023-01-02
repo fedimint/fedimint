@@ -136,12 +136,13 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 #[doc = " A handle to a type-erased database implementation"]
 pub struct CommitTracker {
     is_committed: bool,
+    has_writes: bool,
 }
 
 impl Drop for CommitTracker {
     fn drop(&mut self) {
-        if !self.is_committed {
-            warn!("DatabaseTransaction has not called commit.");
+        if self.has_writes && !self.is_committed {
+            warn!("DatabaseTransaction has writes and has not called commit.");
         }
     }
 }
@@ -150,7 +151,7 @@ impl Drop for CommitTracker {
 pub struct DatabaseTransaction<'a> {
     tx: Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
     decoders: ModuleDecoderRegistry,
-    commit_tracker: Option<CommitTracker>,
+    commit_tracker: CommitTracker,
 }
 
 impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
@@ -175,29 +176,20 @@ impl<'a> DatabaseTransaction<'a> {
         DatabaseTransaction {
             tx: Box::new(dbtx),
             decoders,
-            commit_tracker: None,
+            commit_tracker: CommitTracker {
+                is_committed: false,
+                has_writes: false,
+            },
         }
     }
 
-    fn set_commit_tracker(&mut self) {
-        match self.commit_tracker {
-            Some(_) => {}
-            None => {
-                self.commit_tracker = Some(CommitTracker {
-                    is_committed: false,
-                });
-            }
+    pub async fn commit_tx(mut self) -> Result<()> {
+        if self.commit_tracker.has_writes {
+            self.commit_tracker.is_committed = true;
+            return self.tx.commit_tx().await;
         }
-    }
 
-    pub async fn commit_tx(self) -> Result<()> {
-        match self.commit_tracker {
-            Some(mut tracker) => {
-                tracker.is_committed = true;
-                return self.tx.commit_tx().await;
-            }
-            None => Ok(()),
-        }
+        Ok(())
     }
 
     pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
@@ -248,7 +240,7 @@ impl<'a> DatabaseTransaction<'a> {
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        self.set_commit_tracker();
+        self.commit_tracker.has_writes = true;
         match self
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
@@ -273,7 +265,7 @@ impl<'a> DatabaseTransaction<'a> {
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        self.set_commit_tracker();
+        self.commit_tracker.has_writes = true;
         match self
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
@@ -293,7 +285,7 @@ impl<'a> DatabaseTransaction<'a> {
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        self.set_commit_tracker();
+        self.commit_tracker.has_writes = true;
         let key_bytes = key.to_bytes();
         let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
             Some(value) => value,
@@ -307,7 +299,7 @@ impl<'a> DatabaseTransaction<'a> {
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
-        self.set_commit_tracker();
+        self.commit_tracker.has_writes = true;
         self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
     }
 }
