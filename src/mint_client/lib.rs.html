@@ -1422,6 +1422,7 @@
 <a href="#1422" id="1422">1422</a>
 <a href="#1423" id="1423">1423</a>
 <a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1515,7 +1516,8 @@
     wallet::WalletClient,
 };
 
-<span class="kw">const </span>TIMELOCK: u64 = <span class="number">100</span>;
+<span class="doccomment">/// Number of blocks until outgoing lightning contracts times out and user client can get refund
+</span><span class="kw">const </span>OUTGOING_LN_CONTRACT_TIMELOCK: u64 = <span class="number">500</span>;
 <span class="doccomment">/// Mint module&#39;s secret key derivation child id
 </span><span class="kw">pub const </span>MINT_SECRET_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
@@ -2131,7 +2133,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
         <span class="kw">let </span>consensus_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>absolute_timelock = consensus_height + TIMELOCK;
+        <span class="kw">let </span>absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
 
         <span class="kw">let </span>contract = <span class="self">self
             </span>.ln_client()
