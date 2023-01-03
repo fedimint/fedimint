@@ -91,7 +91,8 @@ use crate::{
     wallet::WalletClient,
 };
 
-const TIMELOCK: u64 = 100;
+/// Number of blocks until outgoing lightning contracts times out and user client can get refund
+const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 /// Mint module's secret key derivation child id
 pub const MINT_SECRET_CHILD_ID: ChildId = ChildId(0);
 
@@ -707,7 +708,7 @@ impl Client<UserClientConfig> {
         let mut tx = TransactionBuilder::default();
 
         let consensus_height = self.context.api.fetch_consensus_block_height().await?;
-        let absolute_timelock = consensus_height + TIMELOCK;
+        let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
 
         let contract = self
             .ln_client()

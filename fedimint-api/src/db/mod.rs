@@ -134,21 +134,37 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
 // TODO: use macro again
 #[doc = " A handle to a type-erased database implementation"]
-pub struct DatabaseTransaction<'a>(
-    Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
-    ModuleDecoderRegistry,
-);
+pub struct CommitTracker {
+    is_committed: bool,
+    has_writes: bool,
+}
+
+impl Drop for CommitTracker {
+    fn drop(&mut self) {
+        if self.has_writes && !self.is_committed {
+            warn!("DatabaseTransaction has writes and has not called commit.");
+        }
+    }
+}
+
+#[doc = " A handle to a type-erased database implementation"]
+pub struct DatabaseTransaction<'a> {
+    tx: Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
+    decoders: ModuleDecoderRegistry,
+    commit_tracker: CommitTracker,
+}
+
 impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
     type Target = dyn IDatabaseTransaction<'a> + Send + 'a;
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-        &*self.0
+        &*self.tx
     }
 }
 
 impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
     fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
-        &mut *self.0
+        &mut *self.tx
     }
 }
 
@@ -157,58 +173,23 @@ impl<'a> DatabaseTransaction<'a> {
         dbtx: I,
         decoders: ModuleDecoderRegistry,
     ) -> DatabaseTransaction<'a> {
-        DatabaseTransaction(Box::new(dbtx), decoders)
-    }
-
-    pub async fn commit_tx(self) -> Result<()> {
-        self.0.commit_tx().await
-    }
-}
-
-impl<'a> DatabaseTransaction<'a> {
-    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
-    where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
-    {
-        match self
-            .0
-            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
-            .await?
-        {
-            Some(old_val_bytes) => {
-                trace!(
-                    "insert_bytes: Decoding {} from bytes {:?}",
-                    std::any::type_name::<K::Value>(),
-                    old_val_bytes
-                );
-                Ok(Some(K::Value::from_bytes(&old_val_bytes, &self.1)?))
-            }
-            None => Ok(None),
+        DatabaseTransaction {
+            tx: Box::new(dbtx),
+            decoders,
+            commit_tracker: CommitTracker {
+                is_committed: false,
+                has_writes: false,
+            },
         }
     }
 
-    pub async fn insert_new_entry<K>(
-        &mut self,
-        key: &K,
-        value: &K::Value,
-    ) -> Result<Option<K::Value>>
-    where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
-    {
-        match self
-            .0
-            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
-            .await?
-        {
-            Some(_) => {
-                warn!(
-                    "Database overwriting element when expecting insertion of new entry. Key: {:?}",
-                    key
-                );
-                Ok(None)
-            }
-            None => Ok(None),
+    pub async fn commit_tx(mut self) -> Result<()> {
+        if self.commit_tracker.has_writes {
+            self.commit_tracker.is_committed = true;
+            return self.tx.commit_tx().await;
         }
+
+        Ok(())
     }
 
     pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
@@ -216,7 +197,7 @@ impl<'a> DatabaseTransaction<'a> {
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_get_bytes(&key_bytes).await? {
+        let value_bytes = match self.tx.raw_get_bytes(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -226,20 +207,7 @@ impl<'a> DatabaseTransaction<'a> {
             std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(K::Value::from_bytes(&value_bytes, &self.1)?))
-    }
-
-    pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
-    where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
-    {
-        let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(K::Value::from_bytes(&value_bytes, &self.1)?))
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
     }
 
     pub async fn find_by_prefix<KP>(
@@ -249,9 +217,10 @@ impl<'a> DatabaseTransaction<'a> {
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
-        let decoders = self.1.clone();
+        let decoders = self.decoders.clone();
         let prefix_bytes = key_prefix.to_bytes();
-        self.raw_find_by_prefix(&prefix_bytes)
+        self.tx
+            .raw_find_by_prefix(&prefix_bytes)
             .await
             .map(move |res| {
                 res.and_then(|(key_bytes, value_bytes)| {
@@ -267,10 +236,70 @@ impl<'a> DatabaseTransaction<'a> {
             })
     }
 
+    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        self.commit_tracker.has_writes = true;
+        match self
+            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .await?
+        {
+            Some(old_val_bytes) => {
+                trace!(
+                    "insert_bytes: Decoding {} from bytes {:?}",
+                    std::any::type_name::<K::Value>(),
+                    old_val_bytes
+                );
+                Ok(Some(K::Value::from_bytes(&old_val_bytes, &self.decoders)?))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn insert_new_entry<K>(
+        &mut self,
+        key: &K,
+        value: &K::Value,
+    ) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        self.commit_tracker.has_writes = true;
+        match self
+            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .await?
+        {
+            Some(_) => {
+                warn!(
+                    "Database overwriting element when expecting insertion of new entry. Key: {:?}",
+                    key
+                );
+                Ok(None)
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        self.commit_tracker.has_writes = true;
+        let key_bytes = key.to_bytes();
+        let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
+    }
+
     pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
+        self.commit_tracker.has_writes = true;
         self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
     }
 }
@@ -449,6 +478,9 @@ mod tests {
         assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
         let removed = dbtx.remove_entry(&TestKey(1)).await;
         assert!(removed.is_ok());
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_remove_existing(db: Database) {
@@ -466,6 +498,9 @@ mod tests {
         assert!(removed.is_ok());
         assert_eq!(removed.unwrap(), Some(TestVal(2)));
         assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_read_own_writes(db: Database) {
@@ -478,6 +513,9 @@ mod tests {
             .is_none());
 
         assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), Some(TestVal(2)));
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_prevent_dirty_reads(db: Database) {
@@ -492,6 +530,9 @@ mod tests {
         // dbtx2 should not be able to see uncommitted changes
         let mut dbtx2 = db.begin_transaction(ModuleDecoderRegistry::default()).await;
         assert_eq!(dbtx2.get_value(&TestKey(1)).await.unwrap(), None);
+
+        // Commit to surpress the warning message
+        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
@@ -608,6 +649,9 @@ mod tests {
         );
 
         assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await.unwrap(), None);
+
+        // Commit to surpress the warning message
+        dbtx_rollback.commit_tx().await.expect("DB Error");
     }
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
