@@ -125,6 +125,18 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         Box::new(rows)
     }
 
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        let mut str_prefix = "".to_string();
+        for prefix in key_prefix {
+            str_prefix = format!("{}{:02X?}", str_prefix, prefix);
+        }
+        str_prefix = format!("{}{}", str_prefix, "%");
+        let query = "DELETE FROM kv WHERE hex(key) LIKE ?";
+        let query_prepared = sqlx::query(query).bind(str_prefix);
+        self.0.execute(query_prepared).await?;
+        Ok(())
+    }
+
     async fn commit_tx(self: Box<Self>) -> Result<()> {
         self.0.commit().await.map_err(anyhow::Error::from)
     }
@@ -229,5 +241,13 @@ mod fedimint_sqlite_tests {
     async fn test_dbtx_sqlite_prefix() {
         fedimint_api::db::verify_string_prefix(open_temp_db("verify-string-prefix").await.into())
             .await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_by_prefix() {
+        fedimint_api::db::verify_remove_by_prefix(
+            open_temp_db("verify-remove_by_prefix").await.into(),
+        )
+        .await;
     }
 }

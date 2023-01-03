@@ -207,4 +207,9 @@ mod tests {
     async fn test_dbtx_phantom_entry() {
         fedimint_api::db::verify_phantom_entry(MemDatabase::new().into()).await;
     }
+
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_by_prefix() {
+        fedimint_api::db::verify_remove_by_prefix(MemDatabase::new().into()).await;
+    }
 }

@@ -835,4 +835,48 @@ mod tests {
 
         assert_eq!(returned_keys, expected_keys);
     }
+
+    pub async fn verify_remove_by_prefix(db: Database) {
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+
+        assert!(dbtx
+            .insert_entry(&TestKey(100), &TestVal(101))
+            .await
+            .is_ok());
+
+        assert!(dbtx
+            .insert_entry(&TestKey(101), &TestVal(102))
+            .await
+            .is_ok());
+
+        dbtx.commit_tx().await.expect("DB Error");
+
+        let mut remove_dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+        remove_dbtx
+            .remove_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .expect("DB Error");
+        remove_dbtx.commit_tx().await.expect("DB Error");
+
+        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+        let mut returned_keys = 0;
+        let expected_keys = 0;
+        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
+            match res.as_ref().unwrap().0 {
+                TestKey(100) => {
+                    assert!(res.unwrap().1.eq(&TestVal(101)));
+                    returned_keys += 1;
+                }
+                TestKey(101) => {
+                    assert!(res.unwrap().1.eq(&TestVal(102)));
+                    returned_keys += 1;
+                }
+                _ => {
+                    returned_keys += 1;
+                }
+            }
+        }
+
+        assert_eq!(returned_keys, expected_keys);
+    }
 }
