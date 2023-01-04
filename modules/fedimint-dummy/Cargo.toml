@@ -1,0 +1,24 @@
+[package]
+name = "fedimint-dummy"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-dummy is a dummy example fedimint module."
+license = "MIT"
+
+[lib]
+name = "fedimint_dummy"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+async-trait = "0.1"
+futures = "0.3"
+fedimint-api = { path = "../../fedimint-api" }
+rand = "0.8"
+rayon = "1.6.1"
+serde = { version = "1.0.149", features = [ "derive" ] }
+strum = "0.24"
+strum_macros = "0.24"
+impl-tools = "0.6.1"
+thiserror = "1.0.37"
