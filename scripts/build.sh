@@ -12,11 +12,13 @@ BASE_PORT=$((8173 + 10000))
 # pointless. It only gets us closer to the 108 character limit
 # for named unix sockets (https://stackoverflow.com/a/34833072),
 # so let's not do it.
+
 if [[ "${TMP:-}" == *"/nix-shell."* ]]; then
-  export FM_TMP_DIR=${2-$TMP}
+  FM_TMP_DIR="${2-$TMP}/fm-$(LC_ALL=C tr -dc A-Za-z0-9 </dev/urandom | head -c 4 || true)"
 else
-  export FM_TMP_DIR=${2-"$(mktemp -d)"}
+  FM_TMP_DIR="${2-"$(mktemp -d)"}"
 fi
+export FM_TMP_DIR
 export FM_TEST_FAST_WEAK_CRYPTO="1"
 
 echo "Setting up env variables in $FM_TMP_DIR"
