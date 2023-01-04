@@ -26,7 +26,7 @@ use tracing_subscriber::Layer;
 #[derive(Parser)]
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
-    #[arg(default_value = None)]
+    #[arg(env = "FM_PASSWORD")]
     pub password: Option<String>,
     #[arg(default_value = None)]
     pub ui_port: Option<u32>,

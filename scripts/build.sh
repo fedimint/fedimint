@@ -46,11 +46,12 @@ do
   mkdir $FM_CFG_DIR/server-$ID
   fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
   api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+  export FM_PASSWORD="pass$ID"
   if [ $ID -eq 0 ]; then
     # Test that the ports will default to $BASE_PORT and $BASE_PORT+1 if unspecified
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost --api-url ws://localhost --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID" --password "pass$ID"
+    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost --api-url ws://localhost --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
   else
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost:$fed_port --api-url ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID" --password "pass$ID"
+    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost:$fed_port --api-url ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
   fi
   CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
 done
@@ -59,9 +60,10 @@ echo "Running DKG with certs: $CERTS"
 
 for ((ID=0; ID<FM_FED_SIZE; ID++));
 do
+  export FM_PASSWORD="pass$ID"
   fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
   api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
-  $FM_BIN_DIR/distributedgen run  --bind-p2p 127.0.0.1:$fed_port --bind-api 127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS --password "pass$ID" &
+  $FM_BIN_DIR/distributedgen run  --bind-p2p 127.0.0.1:$fed_port --bind-api 127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS &
 done
 wait
 
