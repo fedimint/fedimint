@@ -9,24 +9,24 @@ POLL_INTERVAL=0.5
 export POLL_INTERVAL
 
 echo Setting up bitcoind ...
-btc_client createwallet default > /dev/null 2>&1
-mine_blocks 101 > /dev/null 2>&1
+btc_client createwallet default | show_verbose_output
+mine_blocks 101 | show_verbose_output
 
 # Wait for the lightning clients to start (ln1 and ln2 are started with a 5s delay after bitcoind and deferation start)
 # FIXME: After tackling https://github.com/fedimint/fedimint/issues/699, this can be removed
 await_block_sync
 
 echo Setting up lightning channel ...
-open_channel > /dev/null 2>&1
+open_channel | show_verbose_output
 
 echo Funding user e-cash wallet ...
-scripts/pegin.sh 10000.0 > /dev/null 2>&1
+scripts/pegin.sh 10000.0 | show_verbose_output
 
 echo Connecting federation to gateway
 gw_connect_fed
 
 echo Funding gateway e-cash wallet ...
-scripts/pegin.sh 20000.0 1 > /dev/null 2>&1
+scripts/pegin.sh 20000.0 1 | show_verbose_output
 
 echo Done!
 echo

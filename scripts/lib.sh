@@ -118,3 +118,13 @@ function get_raw_transaction() {
 function get_federation_name() {
     cat $FM_CFG_DIR/client.json | jq -r '.federation_name'
 }
+
+function show_verbose_output()
+{
+    if [[ $FM_VERBOSE_OUTPUT -ne 1 ]] 
+    then
+        cat > /dev/null 2>&1
+    else
+        cat
+    fi
+}

@@ -12,6 +12,9 @@ if [[ -z "${IN_NIX_SHELL:-}" ]]; then
   sleep 3
 fi
 
+# Flag to enable verbose build output from depndent processes (disabled by default)
+export FM_VERBOSE_OUTPUT=0
+
 source scripts/build.sh
 echo "Running in temporary directory $FM_TEST_DIR"
 
