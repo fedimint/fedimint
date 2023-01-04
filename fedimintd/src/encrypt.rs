@@ -46,10 +46,7 @@ pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Vec<u8> {
 pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
     let password = match password {
         None => rpassword::prompt_password("Enter a password to encrypt configs: ").unwrap(),
-        Some(password) => {
-            eprintln!("WARNING: Passing in a password from the command line may be less secure!");
-            password
-        }
+        Some(password) => password,
     };
 
     let salt_str = fs::read_to_string(salt_path).expect("Can't read salt file");

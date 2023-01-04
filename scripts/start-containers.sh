@@ -13,7 +13,8 @@ function generate_certs() {
     do
         mkdir -p $1/server-$ID
         base_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-        docker run -v $1/server-$ID:/var/fedimint $2 distributedgen create-cert --announce-address ws://server-$ID --out-dir /var/fedimint --base-port $base_port --name "Server-$ID" --password "pass$ID"
+        export FM_PASSWORD="pass$ID"
+        docker run -v $1/server-$ID:/var/fedimint $2 distributedgen create-cert --announce-address ws://server-$ID --out-dir /var/fedimint --base-port $base_port --name "Server-$ID"
         CERTS="$CERTS,$(cat $1/server-$ID/tls-cert)"
     done
     export CERTS=${CERTS:1}
@@ -29,7 +30,7 @@ function run_dkg() {
         next_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
         echo "  server-$ID:" >> $3
         echo "    image: $2" >> $3
-        echo "    command: distributedgen run --out-dir /var/fedimint --certs $CERTS --password "pass$ID" --bind_address 0.0.0.0 --bitcoind-rpc bitcoind:18443" >> $3
+        echo "    command: distributedgen run --out-dir /var/fedimint --certs $CERTS --bind_address 0.0.0.0 --bitcoind-rpc bitcoind:18443" >> $3
         echo "    ports:" >> $3
         echo "      - $base_port:$base_port" >> $3
         echo "      - $next_port:$next_port" >> $3
@@ -37,6 +38,7 @@ function run_dkg() {
         echo "      - $1/server-$ID:/var/fedimint" >> $3
         echo "    environment:" >> $3
         echo "      - CERTS=$CERTS" >> $3
+        echo "      - FM_PASSWORD=pass$ID" >> $3
         echo "" >> $3
     done
 

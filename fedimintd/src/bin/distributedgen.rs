@@ -57,7 +57,7 @@ enum Command {
         name: String,
 
         /// The password that encrypts the configs, will prompt if not passed in
-        #[arg(long = "password")]
+        #[arg(env = "FM_PASSWORD")]
         password: Option<String>,
     },
     /// All peers must run distributed key gen at the same time to create configs
@@ -101,7 +101,7 @@ enum Command {
         finality_delay: u32,
 
         /// The password that encrypts the configs, will prompt if not passed in
-        #[arg(long = "password")]
+        #[arg(env = "FM_PASSWORD")]
         password: Option<String>,
     },
 
@@ -116,7 +116,7 @@ enum Command {
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs, will prompt if not passed in
-        #[arg(long = "password")]
+        #[arg(env = "FM_PASSWORD")]
         password: Option<String>,
     },
 
@@ -131,7 +131,7 @@ enum Command {
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs, will prompt if not passed in
-        #[arg(long = "password")]
+        #[arg(env = "FM_PASSWORD")]
         password: Option<String>,
     },
 }
