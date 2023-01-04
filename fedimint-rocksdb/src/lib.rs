@@ -260,4 +260,12 @@ mod fedimint_rocksdb_tests {
         )
         .await;
     }
+
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_remove_by_prefix() {
+        fedimint_api::db::verify_remove_by_prefix(
+            open_temp_db("fcb-rocksdb-test-remove-by-prefix").into(),
+        )
+        .await;
+    }
 }
