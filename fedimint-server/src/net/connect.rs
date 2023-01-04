@@ -223,7 +223,7 @@ where
 }
 
 /// Parses the host and port from a url
-fn parse_host_port(url: Url) -> String {
+pub fn parse_host_port(url: Url) -> String {
     let host = url.host_str().expect("Expected host to exist");
     let port = url.port().expect("Expected port to exist");
 

@@ -36,7 +36,7 @@ use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::LightningModule;
 use fedimint_ln::{LightningGateway, LightningModuleConfigGen};
 use fedimint_mint::{Mint, MintConfigGenerator, MintOutput};
-use fedimint_server::config::{connect, ServerConfig};
+use fedimint_server::config::{connect, ServerConfig, DEFAULT_P2P_PORT};
 use fedimint_server::config::{ModuleConfigGens, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
@@ -82,7 +82,7 @@ mod fake;
 mod real;
 mod utils;
 
-static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
+static BASE_PORT: AtomicU16 = AtomicU16::new(DEFAULT_P2P_PORT);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
@@ -135,13 +135,13 @@ where
 }
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
-/// federation nodes starting at port 4000.
+/// federation nodes starting at port DEFAULT_P2P_PORT.
 pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
-    if base_port == 4000 {
+    if base_port == DEFAULT_P2P_PORT {
         tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env()
@@ -347,7 +347,7 @@ async fn distributed_config(
         async move {
             let our_params = params[peer].clone();
             let server_conn = connect(
-                our_params.server_dkg.clone(),
+                our_params.fed_network.clone(),
                 our_params.tls.clone(),
                 &mut task_group,
             )
