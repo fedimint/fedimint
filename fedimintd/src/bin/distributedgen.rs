@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -25,6 +26,7 @@ use ring::aead::LessSafeKey;
 use tokio_rustls::rustls;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+use url::Url;
 
 #[derive(Parser)]
 struct Cli {
@@ -42,13 +44,13 @@ enum Command {
         #[arg(long = "out-dir")]
         dir_out_path: PathBuf,
 
-        /// Our external address to announce to peers in our connection string
-        #[arg(long = "announce-address")]
-        announce_address: String,
+        /// Our API address for clients to connect to us
+        #[arg(long = "api-url")]
+        api_url: Url,
 
-        /// Our base port, ports may be used from base_port to base_port+10
-        #[arg(long = "base-port", default_value = "4000")]
-        base_port: u16,
+        /// Our external address for communicating with our peers
+        #[arg(long = "p2p-url")]
+        p2p_url: Url,
 
         /// Our node name, must be unique among peers
         #[arg(long = "name")]
@@ -64,6 +66,14 @@ enum Command {
         #[arg(long = "out-dir")]
         dir_out_path: PathBuf,
 
+        /// Address we bind to for exposing the API
+        #[arg(long = "bind-api", default_value = "127.0.0.1:8173")]
+        bind_api: SocketAddr,
+
+        /// Address we bind to for federation communication
+        #[arg(long = "bind-p2p", default_value = "127.0.0.1:8174")]
+        bind_p2p: SocketAddr,
+
         /// Federation name, same for all peers
         #[arg(long = "federation-name", default_value = "Hals_trusty_mint")]
         federation_name: String,
@@ -71,10 +81,6 @@ enum Command {
         /// Comma-separated list of connection certs from all peers (including ours)
         #[arg(long = "certs", value_delimiter = ',')]
         certs: Vec<String>,
-
-        /// Address we bind to for running key gen
-        #[arg(long = "bind_address", default_value = "127.0.0.1")]
-        bind_address: String,
 
         /// `bitcoind` json rpc endpoint
         #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
@@ -153,22 +159,23 @@ async fn main() {
     match command {
         Command::CreateCert {
             dir_out_path,
-            announce_address,
-            base_port,
+            p2p_url,
+            api_url,
             name,
             password,
         } => {
             let salt: [u8; 16] = rand::random();
             fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect("write error");
             let key = get_key(password, dir_out_path.join(SALT_FILE));
-            let config_str = gen_tls(&dir_out_path, announce_address, base_port, name, &key);
+            let config_str = gen_tls(&dir_out_path, p2p_url, api_url, name, &key);
             println!("{}", config_str);
         }
         Command::Run {
             dir_out_path,
             federation_name,
             certs,
-            bind_address,
+            bind_p2p,
+            bind_api,
             bitcoind_rpc,
             max_denomination,
             network,
@@ -178,7 +185,8 @@ async fn main() {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
             let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK));
             let server = if let Ok(v) = run_dkg(
-                bind_address,
+                bind_p2p,
+                bind_api,
                 &dir_out_path,
                 max_denomination,
                 federation_name,
@@ -244,7 +252,8 @@ fn salt_file_path_from_file_path(file_path: &Path) -> PathBuf {
 
 #[allow(clippy::too_many_arguments)]
 async fn run_dkg(
-    bind_address: String,
+    bind_p2p: SocketAddr,
+    bind_api: SocketAddr,
     dir_out_path: &Path,
     max_denomination: Amount,
     federation_name: String,
@@ -271,7 +280,8 @@ async fn run_dkg(
         .map(|(peer, _)| *peer)
         .expect("could not find our cert among peers");
     let params = ServerConfigParams::gen_params(
-        bind_address,
+        bind_p2p,
+        bind_api,
         pk,
         our_id,
         max_denomination,
@@ -282,9 +292,12 @@ async fn run_dkg(
         finality_delay,
     );
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
-    let server_conn =
-        fedimint_server::config::connect(params.server_dkg.clone(), params.tls.clone(), task_group)
-            .await;
+    let server_conn = fedimint_server::config::connect(
+        params.fed_network.clone(),
+        params.tls.clone(),
+        task_group,
+    )
+    .await;
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
     let module_config_gens: ModuleConfigGens = BTreeMap::from([
@@ -313,20 +326,21 @@ async fn run_dkg(
 fn parse_peer_params(url: String) -> PeerServerParams {
     let split: Vec<&str> = url.split('@').collect();
     assert_eq!(split.len(), 4, "Cannot parse cert string");
-    let base_port = split[1].parse().expect("could not parse base port");
+    let p2p_url = split[0].parse().expect("could not parse URL");
+    let api_url = split[1].parse().expect("could not parse URL");
     let hex_cert = hex::decode(split[3]).expect("cert was not hex encoded");
     PeerServerParams {
         cert: rustls::Certificate(hex_cert),
-        address: split[0].to_string(),
-        base_port,
+        p2p_url,
+        api_url,
         name: split[2].to_string(),
     }
 }
 
 fn gen_tls(
     dir_out_path: &Path,
-    address: String,
-    base_port: u16,
+    p2p_url: Url,
+    api_url: Url,
     name: String,
     key: &LessSafeKey,
 ) -> String {
@@ -335,7 +349,7 @@ fn gen_tls(
 
     rustls::ServerName::try_from(name.as_str()).expect("Valid DNS name");
     // TODO Base64 encode name, hash fingerprint cert_string
-    let cert_url = format!("{}@{}@{}@{}", address, base_port, name, hex::encode(cert.0));
+    let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, hex::encode(cert.0));
     fs::write(dir_out_path.join(TLS_CERT), &cert_url).unwrap();
     cert_url
 }

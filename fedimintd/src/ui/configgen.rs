@@ -158,10 +158,10 @@ fn trusted_dealer_gen(
                 },
                 local: ServerConfigLocal {
                     identity: id,
-                    hbbft_bind_addr: format!("0.0.0.0:{}", hbbft_base_port + id_u16)
+                    fed_bind: format!("0.0.0.0:{}", hbbft_base_port + id_u16)
                         .parse()
                         .expect("Could not parse address"),
-                    api_bind_addr: format!("0.0.0.0:{}", api_base_port + id_u16)
+                    api_bind: format!("0.0.0.0:{}", api_base_port + id_u16)
                         .parse()
                         .expect("Could not parse address"),
                     tls_cert: tls_keys[&id].0.clone(),

@@ -10,7 +10,7 @@ Tests cases begin by initializing test fixtures with the number of federation no
 let (fed, user, bitcoin, gateway, ln) = fixtures(2, &[sats(100), sats(1000)]).await;
 ```
 
-Initialization will spawn API and HBBFT consensus threads for federation nodes starting at port `4000` then give you access to the following:
+Initialization will spawn API and HBBFT consensus threads for federation nodes starting at port `8173` then give you access to the following:
 - `fed`- control and inspect federation nodes and consensus
 - `user`- calls functions in the user client API to simulate fedimint users
 - `bitcoin`- manipulate the shared Bitcoin network

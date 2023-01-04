@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{bail, format_err};
@@ -25,11 +25,18 @@ use tracing::info;
 use url::Url;
 
 use crate::fedimint_api::NumPeers;
-use crate::net::connect::Connector;
 use crate::net::connect::TlsConfig;
+use crate::net::connect::{parse_host_port, Connector};
 use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
+/// Default port for communication with peers when not specified (0x1FED)
+pub const DEFAULT_P2P_PORT: u16 = 8173;
+
+/// Default port for exposing the API when not specified
+pub const DEFAULT_API_PORT: u16 = 8174;
+
+/// The maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,10 +87,10 @@ pub struct ServerConfigConsensus {
 pub struct ServerConfigLocal {
     /// Our peer id (generally should not change)
     pub identity: PeerId,
-    /// Our bind address for running HBBFT
-    pub hbbft_bind_addr: SocketAddr,
+    /// Our bind address for communicating with peers
+    pub fed_bind: SocketAddr,
     /// Our bind address for our API endpoints
-    pub api_bind_addr: SocketAddr,
+    pub api_bind: SocketAddr,
     /// Our publicly known TLS cert
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
@@ -110,9 +117,8 @@ pub struct Peer {
 /// network config for a server
 pub struct ServerConfigParams {
     pub tls: TlsConfig,
-    pub hbbft: NetworkConfig,
-    pub api: NetworkConfig,
-    pub server_dkg: NetworkConfig,
+    pub fed_network: NetworkConfig,
+    pub api_network: NetworkConfig,
     pub federation_name: String,
 
     /// extra options for extra settings and modules
@@ -183,8 +189,8 @@ impl ServerConfig {
         };
         let local = ServerConfigLocal {
             identity,
-            hbbft_bind_addr: params.hbbft.bind_addr,
-            api_bind_addr: params.api.bind_addr,
+            fed_bind: params.fed_network.bind_addr,
+            api_bind: params.api_network.bind_addr,
             tls_cert: params.tls.our_certificate.clone(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
@@ -415,7 +421,7 @@ impl ServerConfig {
     pub fn network_config(&self) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.identity,
-            bind_addr: self.local.hbbft_bind_addr,
+            bind_addr: self.local.fed_bind,
             peers: self
                 .consensus
                 .peers
@@ -449,10 +455,11 @@ impl ServerConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct PeerServerParams {
     pub cert: rustls::Certificate,
-    pub address: String,
-    pub base_port: u16,
+    pub p2p_url: Url,
+    pub api_url: Url,
     pub name: String,
 }
 
@@ -471,7 +478,7 @@ impl ServerConfigParams {
     }
 
     pub fn peers(&self) -> BTreeMap<PeerId, Peer> {
-        self.hbbft
+        self.fed_network
             .peers
             .iter()
             .map(|(peer, hbbft)| {
@@ -481,16 +488,18 @@ impl ServerConfigParams {
                         tls_cert: self.tls.peer_certs[peer].clone(),
                         name: self.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
-                        api_addr: self.api.peers[peer].clone(),
+                        api_addr: self.api_network.peers[peer].clone(),
                     },
                 )
             })
             .collect::<BTreeMap<_, _>>()
     }
 
+    /// Generates the parameters necessary for running server config generation
     #[allow(clippy::too_many_arguments)]
     pub fn gen_params(
-        bind_address: String,
+        bind_p2p: SocketAddr,
+        bind_api: SocketAddr,
         key: rustls::PrivateKey,
         our_id: PeerId,
         max_denomination: Amount,
@@ -517,13 +526,14 @@ impl ServerConfigParams {
             peer_names,
         };
 
-        let bind_address = bind_address.parse().expect("Could not parse address");
-
         ServerConfigParams {
             tls,
-            hbbft: Self::gen_network(&bind_address, &our_id, 0, peers),
-            api: Self::gen_network(&bind_address, &our_id, 1, peers),
-            server_dkg: Self::gen_network(&bind_address, &our_id, 2, peers),
+            fed_network: Self::gen_network(&bind_p2p, &our_id, DEFAULT_P2P_PORT, peers, |params| {
+                params.p2p_url
+            }),
+            api_network: Self::gen_network(&bind_api, &our_id, DEFAULT_API_PORT, peers, |params| {
+                params.api_url
+            }),
             federation_name,
             modules: ConfigGenParams::new()
                 .attach(WalletConfigGenParams {
@@ -542,21 +552,24 @@ impl ServerConfigParams {
     }
 
     fn gen_network(
-        bind_address: &IpAddr,
+        bind_address: &SocketAddr,
         our_id: &PeerId,
-        offset: u16,
+        default_port: u16,
         peers: &BTreeMap<PeerId, PeerServerParams>,
+        extract_url: impl Fn(PeerServerParams) -> Url,
     ) -> NetworkConfig {
         NetworkConfig {
             identity: *our_id,
-            bind_addr: SocketAddr::new(*bind_address, peers[our_id].base_port + offset),
+            bind_addr: *bind_address,
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
-                    let connection = format!("{}:{}", params.address, params.base_port + offset)
-                        .parse()
-                        .expect("Could not parse address");
-                    (*peer, connection)
+                    let mut url = extract_url(params.clone());
+                    if url.port().is_none() {
+                        url.set_port(Some(default_port)).expect("Can set port");
+                    }
+
+                    (*peer, url)
                 })
                 .collect(),
         }
@@ -581,10 +594,14 @@ impl ServerConfigParams {
         let peer_params: BTreeMap<PeerId, PeerServerParams> = peers
             .iter()
             .map(|peer| {
+                let peer_port = base_port + u16::from(*peer) * 10;
+                let p2p_url = format!("ws://127.0.0.1:{}", peer_port);
+                let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
+
                 let params: PeerServerParams = PeerServerParams {
                     cert: keys[peer].0.clone(),
-                    address: "ws://127.0.0.1".to_string(),
-                    base_port: base_port + (u16::from(*peer) * 6),
+                    p2p_url: p2p_url.parse().expect("Should parse"),
+                    api_url: api_url.parse().expect("Should parse"),
                     name: format!("peer-{}", peer.to_usize()),
                 };
                 (*peer, params)
@@ -594,8 +611,12 @@ impl ServerConfigParams {
         peers
             .iter()
             .map(|peer| {
+                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url);
+                let bind_api = parse_host_port(peer_params[peer].clone().api_url);
+
                 let params: ServerConfigParams = Self::gen_params(
-                    "127.0.0.1".to_string(),
+                    bind_p2p.parse().expect("Should parse"),
+                    bind_api.parse().expect("Should parse"),
                     keys[peer].1.clone(),
                     *peer,
                     max_denomination,

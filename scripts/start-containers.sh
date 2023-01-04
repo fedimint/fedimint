@@ -3,6 +3,7 @@
 BUILD_IMAGES=${1:-0}
 FM_FED_SIZE=${2:-2}
 export DOCKER_DIR=${3-"$(mktemp -d)"}
+BASE_PORT=8173
 
 function generate_certs() {
     echo "Generating certificates..."
@@ -11,7 +12,7 @@ function generate_certs() {
     for ((ID=0; ID<FM_FED_SIZE; ID++));
     do
         mkdir -p $1/server-$ID
-        base_port=$(echo "4000 + $ID * 10" | bc -l)
+        base_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
         docker run -v $1/server-$ID:/var/fedimint $2 distributedgen create-cert --announce-address ws://server-$ID --out-dir /var/fedimint --base-port $base_port --name "Server-$ID" --password "pass$ID"
         CERTS="$CERTS,$(cat $1/server-$ID/tls-cert)"
     done
@@ -24,8 +25,8 @@ function run_dkg() {
 
     for ((ID=0; ID<FM_FED_SIZE; ID++));
     do
-        base_port=$(echo "4000 + $ID * 10" | bc -l)
-        next_port=$(echo "4000 + $ID * 10 + 1" | bc -l)
+        base_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+        next_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
         echo "  server-$ID:" >> $3
         echo "    image: $2" >> $3
         echo "    command: distributedgen run --out-dir /var/fedimint --certs $CERTS --password "pass$ID" --bind_address 0.0.0.0 --bitcoind-rpc bitcoind:18443" >> $3
@@ -60,8 +61,8 @@ function generate_docker_compose() {
     generate_bitcoind_container_def $3
 
     for ((ID=0; ID<FM_FED_SIZE; ID++)); do
-        base_port=$(echo "4000 + $ID * 10" | bc -l)
-        api_port=$(echo "4000 + $ID * 10 + 1" | bc -l)
+        base_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+        api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
         generate_fedimintd_container_def $ID $base_port $api_port $1 $2 $3
     done
 }

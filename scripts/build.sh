@@ -5,6 +5,7 @@ echo "Run with 'source ./scripts/build.sh [fed_size] [dir]"
 
 # allow for overriding arguments
 export FM_FED_SIZE=${1:-4}
+BASE_PORT=8173
 
 # If $TMP contains '/nix-shell.' it is already unique to the
 # nix shell instance, and appending more characters to it is
@@ -43,8 +44,14 @@ CERTS=""
 for ((ID=0; ID<FM_FED_SIZE; ID++));
 do
   mkdir $FM_CFG_DIR/server-$ID
-  base_port=$(echo "4000 + $ID * 10" | bc -l)
-  $FM_BIN_DIR/distributedgen create-cert --announce-address ws://localhost --out-dir $FM_CFG_DIR/server-$ID --base-port $base_port --name "Server-$ID" --password "pass$ID"
+  fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+  api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+  if [ $ID -eq 0 ]; then
+    # Test that the ports will default to $BASE_PORT and $BASE_PORT+1 if unspecified
+    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost --api-url ws://localhost --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID" --password "pass$ID"
+  else
+    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost:$fed_port --api-url ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID" --password "pass$ID"
+  fi
   CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
 done
 CERTS=${CERTS:1}
@@ -52,7 +59,9 @@ echo "Running DKG with certs: $CERTS"
 
 for ((ID=0; ID<FM_FED_SIZE; ID++));
 do
-  $FM_BIN_DIR/distributedgen run --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS --password "pass$ID" &
+  fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+  api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+  $FM_BIN_DIR/distributedgen run  --bind-p2p 127.0.0.1:$fed_port --bind-api 127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS --password "pass$ID" &
 done
 wait
 
