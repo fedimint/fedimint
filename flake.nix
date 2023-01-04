@@ -497,13 +497,7 @@
             "fedimint-rocksdb"
             "fedimint-server"
             "gateway/ln-gateway"
-            "modules/fedimint-ln"
-            "modules/fedimint-mint"
-            "modules/fedimint-wallet"
-            # remove this dependency after modularization is complete and circular dependencies are resolved
-            "modules/mint-client"
-            "modules/mint-common"
-            "modules/mint-server"
+            "modules"
           ];
         };
 
@@ -526,11 +520,7 @@
             "fedimint-server"
             "fedimint-build"
             "gateway/ln-gateway"
-            "modules/fedimint-mint"
-            "modules/fedimint-wallet"
-            "modules/mint-client"
-            "modules/mint-common"
-            "modules/mint-server"
+            "modules"
           ];
         };
 
@@ -554,11 +544,7 @@
             "fedimint-build"
             "gateway/cli"
             "gateway/ln-gateway"
-            "modules/fedimint-mint"
-            "modules/fedimint-wallet"
-            "modules/mint-client"
-            "modules/mint-common"
-            "modules/mint-server"
+            "modules"
           ];
         };
 
@@ -580,11 +566,7 @@
             "fedimint-rocksdb"
             "fedimint-sqlite"
             "fedimint-build"
-            "modules/fedimint-ln"
-            "modules/fedimint-mint"
-            "modules/fedimint-wallet"
-            "modules/mint-client"
-            "modules/mint-common"
+            "modules"
           ];
         };
 
@@ -604,11 +586,7 @@
             "fedimint-dbdump"
             "fedimint-rocksdb"
             "fedimint-sqlite"
-            "modules/fedimint-ln"
-            "modules/fedimint-mint"
-            "modules/fedimint-wallet"
-            "modules/mint-client"
-            "modules/mint-common"
+            "modules"
           ];
         };
 
@@ -627,9 +605,7 @@
             "fedimint-derive"
             "fedimint-server"
             "integrationtests"
-            "modules/fedimint-ln"
-            "modules/fedimint-mint"
-            "modules/fedimint-wallet"
+            "modules"
           ];
         };
 
