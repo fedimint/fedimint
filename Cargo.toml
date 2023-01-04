@@ -21,6 +21,7 @@ members = [
     "fedimint-sqlite",
     "client/cli",
     "client/client-lib",
+    "modules/fedimint-dummy",
     "modules/fedimint-mint",
     "modules/fedimint-ln",
     "modules/fedimint-wallet",
