@@ -198,7 +198,7 @@ mod tests {
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
-    use fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
+    use fedimint_api::config::ConfigGenParams;
     use fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -356,11 +356,6 @@ mod tests {
                 },
                 &ConfigGenParams::new().attach(WalletConfigGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
-                    bitcoin_rpc: BitcoindRpcCfg {
-                        btc_rpc_address: "localhst".to_string(),
-                        btc_rpc_user: "bitcoin".to_string(),
-                        btc_rpc_pass: "bitcoin".to_string(),
-                    },
                     finality_delay: 10,
                 }),
                 &WalletConfigGenerator,

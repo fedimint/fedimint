@@ -13,7 +13,6 @@ use fedimint_mint::MintConfigGenerator;
 use fedimint_server::config::ModuleConfigGens;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
-use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::Wallet;
 use fedimint_wallet::WalletConfigGenerator;
 use fedimintd::encrypt::*;
@@ -22,6 +21,7 @@ use fedimintd::*;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
+use url::Url;
 
 #[derive(Parser)]
 pub struct ServerOpts {
@@ -31,8 +31,11 @@ pub struct ServerOpts {
     #[arg(default_value = None)]
     pub ui_port: Option<u32>,
     #[cfg(feature = "telemetry")]
-    #[clap(long)]
+    #[arg(long)]
     pub with_telemetry: bool,
+
+    #[arg(long = "bitcoind-rpc", env = "FEDIMINT_BITCOIND_RPC")]
+    pub bitcoind_rpc: Url,
 }
 
 #[tokio::main]
@@ -92,9 +95,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("Error opening DB")
         .into();
     let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-        &cfg.get_module_config_typed::<WalletConfig>("wallet")?
-            .local
-            .btc_rpc,
+        &opts.bitcoind_rpc,
         task_group.make_handle(),
     )?;
 

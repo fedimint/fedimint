@@ -750,10 +750,3 @@ mod tests {
         keys
     }
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BitcoindRpcCfg {
-    pub btc_rpc_address: String,
-    pub btc_rpc_user: String,
-    pub btc_rpc_pass: String,
-}

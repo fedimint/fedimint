@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use fedimint_api::config::{BitcoindRpcCfg, ClientConfig, ConfigGenParams};
+use fedimint_api::config::{ClientConfig, ConfigGenParams};
 use fedimint_api::module::FederationModuleConfigGen;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::modules::ln::LightningModuleConfigGen;
@@ -22,7 +22,6 @@ use crate::CODE_VERSION;
 pub fn configgen(
     federation_name: String,
     guardians: Vec<Guardian>,
-    btc_rpc: BitcoindRpcCfg,
 ) -> (Vec<(Guardian, ServerConfig)>, ClientConfig) {
     let amount_tiers = (1..12)
         .map(|amount| Amount::from_sats(10 * amount))
@@ -34,7 +33,6 @@ pub fn configgen(
         federation_name,
         guardians: guardians.clone(),
         amount_tiers,
-        btc_rpc,
     };
     let (config_map, client_config) = trusted_dealer_gen(&peers, &params, rng);
     let server_configs = guardians
@@ -53,7 +51,6 @@ pub struct SetupConfigParams {
     pub federation_name: String,
     pub guardians: Vec<Guardian>,
     pub amount_tiers: Vec<fedimint_api::Amount>,
-    pub btc_rpc: BitcoindRpcCfg,
 }
 
 fn trusted_dealer_gen(
@@ -116,7 +113,6 @@ fn trusted_dealer_gen(
     let module_cfg_gen_params = ConfigGenParams::new()
         .attach(WalletConfigGenParams {
             network: bitcoin::network::constants::Network::Regtest,
-            bitcoin_rpc: params.btc_rpc.clone(),
             finality_delay: 10,
         })
         .attach(MintConfigGenParams {

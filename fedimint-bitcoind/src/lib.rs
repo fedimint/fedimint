@@ -3,22 +3,14 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
 use fedimint_api::{dyn_newtype_define, task::TaskHandle, Feerate};
-use thiserror::Error;
 use tracing::info;
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore_rpc;
-
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("Rpc error")]
-    Rpc(#[from] anyhow::Error),
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///

@@ -149,9 +149,9 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .init();
     }
+    let bitcoind_rpc = Url::parse("http://127.0.0.1:18443").expect("must parse correctly");
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let params =
-        ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test", "127.0.0.1:18443");
+    let params = ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_config_gens: ModuleConfigGens = BTreeMap::from([
@@ -178,19 +178,12 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             .expect("distributed config should not be canceled");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            let wallet_config: WalletConfig = server_config
-                .iter()
-                .last()
-                .unwrap()
-                .1
-                .get_module_config_typed("wallet")
-                .unwrap();
             let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-                &wallet_config.local.btc_rpc,
+                &bitcoind_rpc,
                 task_group.make_handle(),
             )
             .expect("Could not create bitcoinrpc");
-            let bitcoin = RealBitcoinTest::new(&wallet_config.local.btc_rpc);
+            let bitcoin = RealBitcoinTest::new(&bitcoind_rpc);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =

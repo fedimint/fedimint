@@ -37,10 +37,6 @@ enum Command {
         #[arg(long = "base-port", default_value = "17240")]
         base_port: u16,
 
-        /// `bitcoind` json rpc endpoint
-        #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
-        bitcoind_rpc: String,
-
         /// Max denomination of notes issued by the federation (in millisats)
         /// default = 1 BTC
         #[arg(long = "max_denomination", default_value = "100000000000")]
@@ -64,7 +60,6 @@ fn main() {
             base_port,
             max_denomination,
             federation_name,
-            bitcoind_rpc,
         } => {
             let rng = OsRng;
             // Recursively create config directory if it doesn't exist
@@ -80,7 +75,6 @@ fn main() {
                 max_denomination,
                 base_port,
                 &federation_name,
-                &bitcoind_rpc,
             );
             let module_config_gens: ModuleConfigGens = BTreeMap::from([
                 (

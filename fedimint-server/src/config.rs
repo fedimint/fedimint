@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
+    ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
@@ -505,7 +505,6 @@ impl ServerConfigParams {
         max_denomination: Amount,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        bitcoind_rpc: String,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
     ) -> ServerConfigParams {
@@ -538,11 +537,6 @@ impl ServerConfigParams {
             modules: ConfigGenParams::new()
                 .attach(WalletConfigGenParams {
                     network,
-                    bitcoin_rpc: BitcoindRpcCfg {
-                        btc_rpc_address: bitcoind_rpc,
-                        btc_rpc_user: "bitcoin".to_string(),
-                        btc_rpc_pass: "bitcoin".to_string(),
-                    },
                     finality_delay,
                 })
                 .attach(MintConfigGenParams {
@@ -581,7 +575,6 @@ impl ServerConfigParams {
         max_denomination: Amount,
         base_port: u16,
         federation_name: &str,
-        bitcoind_rpc: &str,
     ) -> HashMap<PeerId, ServerConfigParams> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
@@ -622,7 +615,6 @@ impl ServerConfigParams {
                     max_denomination,
                     &peer_params,
                     federation_name.to_string(),
-                    bitcoind_rpc.to_string(),
                     bitcoin::network::constants::Network::Regtest,
                     10,
                 );

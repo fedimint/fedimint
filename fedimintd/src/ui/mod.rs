@@ -9,7 +9,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use fedimint_api::config::{BitcoindRpcCfg, ClientConfig};
+use fedimint_api::config::ClientConfig;
 use fedimint_server::config::ServerConfig;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;
@@ -101,7 +101,6 @@ async fn add_guardian(
 #[allow(dead_code)]
 struct FedName {
     federation_name: String,
-    btc_rpc: String,
 }
 
 async fn deal(
@@ -110,25 +109,9 @@ async fn deal(
 ) -> Result<Redirect, (StatusCode, String)> {
     let mut state = state.write().unwrap();
     state.federation_name = form.federation_name;
-    state.btc_rpc = Some(form.btc_rpc.clone());
 
-    let parts: Vec<&str> = form.btc_rpc.split('@').collect();
-    let user_pass = parts[0].to_string();
-    let btc_rpc_address = parts[1].to_string();
-    let parts: Vec<&str> = user_pass.split(':').collect();
-    let btc_rpc_user = parts[0].to_string();
-    let btc_rpc_pass = parts[1].to_string();
-    let btc_rpc = BitcoindRpcCfg {
-        btc_rpc_address,
-        btc_rpc_user,
-        btc_rpc_pass,
-    };
-
-    let (server_configs, client_config) = configgen(
-        state.federation_name.clone(),
-        state.guardians.clone(),
-        btc_rpc,
-    );
+    let (server_configs, client_config) =
+        configgen(state.federation_name.clone(), state.guardians.clone());
     state.server_configs = Some(server_configs.clone());
     state.client_config = Some(client_config.clone());
 
@@ -272,7 +255,6 @@ struct State {
     sender: Sender<UiMessage>,
     server_configs: Option<Vec<(Guardian, ServerConfig)>>,
     client_config: Option<ClientConfig>,
-    btc_rpc: Option<String>,
 }
 type MutableState = Arc<RwLock<State>>;
 
@@ -303,7 +285,6 @@ pub async fn run_ui(cfg_path: PathBuf, sender: Sender<UiMessage>, port: u32) {
         sender,
         server_configs: None,
         client_config: None,
-        btc_rpc: None,
     }));
 
     let app = Router::new()

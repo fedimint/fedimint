@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use anyhow::bail;
 use anyhow::format_err;
 use bitcoin::Network;
+use fedimint_api::config::ClientModuleConfig;
 use fedimint_api::config::TypedServerModuleConfig;
-use fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
 use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Feerate, PeerId};
@@ -26,11 +26,7 @@ pub struct WalletConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WalletConfigLocal {
-    #[serde(flatten)]
-    /// Configuration for connecting to our Bitcoin node
-    pub btc_rpc: BitcoindRpcCfg,
-}
+pub struct WalletConfigLocal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigPrivate {
@@ -134,7 +130,6 @@ impl WalletConfig {
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
         threshold: usize,
-        btc_rpc: BitcoindRpcCfg,
         network: Network,
         finality_delay: u32,
     ) -> Self {
@@ -143,7 +138,7 @@ impl WalletConfig {
         );
 
         Self {
-            local: WalletConfigLocal { btc_rpc },
+            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,

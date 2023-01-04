@@ -21,8 +21,8 @@ use config::WalletConfigConsensus;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
-    ServerModuleConfig, TypedServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
@@ -247,7 +247,6 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
                         .collect(),
                     *sk,
                     peers.threshold(),
-                    params.bitcoin_rpc.clone(),
                     params.network,
                     params.finality_delay,
                 );
@@ -304,7 +303,6 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
             peer_peg_in_keys,
             sk,
             peers.threshold(),
-            params.bitcoin_rpc.clone(),
             params.network,
             params.finality_delay,
         );
@@ -334,7 +332,6 @@ impl FederationModuleConfigGen for WalletConfigGenerator {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletConfigGenParams {
     pub network: bitcoin::network::constants::Network,
-    pub bitcoin_rpc: BitcoindRpcCfg,
     pub finality_delay: u32,
 }
 
@@ -814,7 +811,7 @@ impl Wallet {
         let bitcoind_net = bitcoind_rpc
             .get_network()
             .await
-            .map_err(|e| WalletError::RpcError(e.into()))?;
+            .map_err(WalletError::RpcError)?;
         if bitcoind_net != cfg.consensus.network {
             return Err(WalletError::WrongNetwork(
                 cfg.consensus.network,

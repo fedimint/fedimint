@@ -961,8 +961,8 @@ dependencies = [
  "fedimint-api",
  "rand",
  "serde",
- "thiserror",
  "tracing",
+ "url",
 ]
 
 [[package]]
