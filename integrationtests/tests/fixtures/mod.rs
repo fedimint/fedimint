@@ -82,7 +82,7 @@ mod fake;
 mod real;
 mod utils;
 
-static BASE_PORT: AtomicU16 = AtomicU16::new(DEFAULT_P2P_PORT);
+static BASE_PORT: AtomicU16 = AtomicU16::new(DEFAULT_P2P_PORT + 10000);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
