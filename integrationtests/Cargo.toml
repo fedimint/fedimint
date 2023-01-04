@@ -19,7 +19,7 @@ bitcoincore-rpc = "0.16.0"
 cln-rpc = "0.1.1"
 futures = "0.3.24"
 itertools = "0.10.5"
-lightning-invoice = "0.20.0"
+lightning-invoice = "0.21.0"
 ln-gateway = { path = "../gateway/ln-gateway" }
 lightning = "0.0.112"
 fedimint-server = { path = "../fedimint-server" }

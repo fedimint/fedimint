@@ -19,7 +19,7 @@ fedimint-core = { path = "../../fedimint-core" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
 fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-mint = { path = "../../modules/fedimint-mint" }
-lightning-invoice = "0.20.0"
+lightning-invoice = "0.21.0"
 ln-gateway = { path = "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
 portpicker = "0.1.1"

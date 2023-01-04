@@ -27,7 +27,7 @@ cln-rpc = "0.1.1"
 cln-plugin = "0.1.1"
 futures = "0.3.24"
 hex = "0.4.3"
-lightning-invoice = "0.20.0"
+lightning-invoice = "0.21.0"
 fedimint-server = { path = "../../fedimint-server/" }
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
