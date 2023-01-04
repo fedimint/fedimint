@@ -230,7 +230,7 @@
                   (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
                   lib.any
                     (re: builtins.match re relPath != null)
-                    ([ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ] ++ builtins.concatLists (map (name: [ name "${name}/.*" ]) modules));
+                    ([ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*/proto/.*" ] ++ builtins.concatLists (map (name: [ name "${name}/.*" ]) modules));
               in
               # uncomment to debug:
                 # builtins.trace "${relPath}: ${lib.boolToString includePath}"
@@ -251,13 +251,13 @@
         #
         # Lile `filterWorkspaceFiles` but doesn't even need *.rs files
         # (because they are not used for building dependencies)
-        filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ] src;
+        filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*/proto/.*" ] src;
 
         # Filter only files relevant to building the workspace
-        filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ] src;
+        filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" ] src;
 
         # Like `filterWorkspaceFiles` but with `./scripts/` included
-        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" "scripts/.*" ] src;
+        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" ] src;
 
         filterSrcWithRegexes = regexes: src:
           let
@@ -293,6 +293,7 @@
             perl
             pkgs.llvmPackages.bintools
             rocksdb
+            protobuf
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
@@ -320,6 +321,8 @@
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
           ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+          PROTOC = "${pkgs.protobuf}/bin/protoc";
+          PROTOC_INCLUDE = "${pkgs.protobuf}/include";
           CI = "true";
           HOME = "/tmp";
         };
