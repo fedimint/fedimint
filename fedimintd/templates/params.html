@@ -14,19 +14,19 @@
           placeholder="Cypherpunk Federation">
         <div class="form-group">
           <label for="bind_api">Socket address to bind public API</label>
-          <input type="text" class="form-control" id="bind_api" name="bind_api" placeholder="0.0.0.0:8173" />
+          <input type="text" class="form-control" id="bind_api" name="bind_api" placeholder="127.0.0.1:8173" />
         </div>
         <div class="form-group">
           <label for="api_url">External Url for public API</label>
-          <input type="text" class="form-control" id="api_url" name="api_url" placeholder="ws://<your-ip>:8173" />
+          <input type="text" class="form-control" id="api_url" name="api_url" placeholder="wss://your-website.com" />
         </div>
         <div class="form-group">
           <label for="bind_p2p">Socket address to bind federation consensus</label>
-          <input type="text" class="form-control" id="bind_p2p" name="bind_p2p" placeholder="0.0.0.0:8174" />
+          <input type="text" class="form-control" id="bind_p2p" name="bind_p2p" placeholder="127.0.0.1:8174" />
         </div>
         <div class="form-group">
           <label for="p2p_url">External URL for federation consensus</label>
-          <input type="text" class="form-control" id="p2p_url" name="p2p_url" placeholder="ws://<your-ip>:8174" />
+          <input type="text" class="form-control" id="p2p_url" name="p2p_url" placeholder="wss://your-website.com" />
         </div>
         <div class="form-group">
           <label for="bitcoind_rpc">Bitcoin RPC Addr and Port</label>
@@ -42,7 +42,7 @@
           <label for="network1">Regtest</label>
           <input type="radio" id="network2" name="network" value="testnet">
           <label for="network2">Testnet</label>
-          <input type="radio" id="network3" name="mainnet" value="mainnet">
+          <input type="radio" id="network3" name="network" value="mainnet">
           <label for="network3">Mainnet</label>
         </div>
       </div>
