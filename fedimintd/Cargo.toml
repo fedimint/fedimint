@@ -76,7 +76,6 @@ axum-macros = "0.2.3"
 hyper = { version = "0.14", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
 qrcode-generator = "4.1.6"
-portpicker = "0.1.1"
 
 [build-dependencies]
 fedimint-build = { path = "../fedimint-build" }

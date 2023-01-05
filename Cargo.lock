@@ -1350,7 +1350,6 @@ dependencies = [
  "mint-client",
  "opentelemetry",
  "opentelemetry-jaeger",
- "portpicker",
  "qrcode-generator",
  "rand",
  "rayon",

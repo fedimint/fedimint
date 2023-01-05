@@ -135,7 +135,6 @@ async fn post_guardians(
     }
 
     // Actually run DKG
-    // FIXME: this won't work if password is None ... assumes shell environment
     let key = get_key(Some(state.password.clone()), state.cfg_path.join(SALT_FILE));
     let pk_bytes = encrypted_read(&key, state.cfg_path.join(TLS_PK));
     let max_denomination = Amount::from_msats(100000000000);
