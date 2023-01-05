@@ -199,7 +199,7 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 
 #[derive(Debug, Error)]
 pub enum ApiError {
-    #[error("client Rpc error: {0}")]
+    #[error("Client Rpc error: {0}")]
     RpcError(#[from] JsonRpcError),
     #[error("Decode error: {0}")]
     DecodeError(#[from] fedimint_api::encoding::DecodeError),
