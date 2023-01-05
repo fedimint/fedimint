@@ -156,7 +156,6 @@ async fn post_guardians(
         .spawn("admint UI running DKG", move |_| async move {
             tracing::info!("Running DKG");
             match run_dkg(
-                // FIXME: pass these in from fedimintd cli
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
