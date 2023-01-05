@@ -95,7 +95,7 @@ pub async fn run_dkg(
         ("ln", Arc::new(LightningModuleConfigGen)),
     ]);
 
-    ServerConfig::distributed_gen(
+    let result = ServerConfig::distributed_gen(
         CODE_VERSION,
         &connections,
         &our_id,
@@ -106,7 +106,11 @@ pub async fn run_dkg(
         task_group,
     )
     .await
-    .expect("failed to run DKG to generate configs")
+    .expect("failed to run DKG to generate configs");
+
+    drop(connections);
+
+    result
 }
 
 fn parse_peer_params(url: String) -> PeerServerParams {
