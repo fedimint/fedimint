@@ -150,57 +150,53 @@ async fn post_guardians(
     ]);
     let dir_out_path = state.cfg_path.clone();
     let fedimintd_sender = state.sender.clone();
-    let handle = tokio::runtime::Handle::current();
 
-    // TODO: figure out a better way to run DKG in background
-    std::thread::spawn(move || {
-        handle.block_on(async move {
-            tracing::info!("Running DKG");
-            let mut task_group = TaskGroup::new();
-            match run_dkg(
-                // FIXME: pass these in from fedimintd cli
-                params.bind_p2p,
-                params.bind_api,
-                &dir_out_path,
-                max_denomination,
-                params.federation_name,
-                connection_strings,
-                params.bitcoind_rpc,
-                params.network,
-                params.finality_delay,
-                rustls::PrivateKey(pk_bytes),
-                &mut task_group,
-            )
-            .await
-            {
-                Ok(server_config) => {
-                    tracing::info!("DKG succeeded");
-                    encrypted_json_write(
-                        &server_config.private,
-                        &key,
-                        dir_out_path.join(PRIVATE_CONFIG),
-                    );
-                    write_nonprivate_configs(&server_config, dir_out_path, &module_config_gens);
+    tokio::spawn(async move {
+        tracing::info!("Running DKG");
+        let mut task_group = TaskGroup::new();
+        match run_dkg(
+            // FIXME: pass these in from fedimintd cli
+            params.bind_p2p,
+            params.bind_api,
+            &dir_out_path,
+            max_denomination,
+            params.federation_name,
+            connection_strings,
+            params.bitcoind_rpc,
+            params.network,
+            params.finality_delay,
+            rustls::PrivateKey(pk_bytes),
+            &mut task_group,
+        )
+        .await
+        {
+            Ok(server_config) => {
+                tracing::info!("DKG succeeded");
+                encrypted_json_write(
+                    &server_config.private,
+                    &key,
+                    dir_out_path.join(PRIVATE_CONFIG),
+                );
+                write_nonprivate_configs(&server_config, dir_out_path, &module_config_gens);
 
-                    // Tell this route that DKG succeeded
-                    dkg_sender
-                        .send(UiMessage::DKGSuccess)
-                        .expect("failed to send over channel");
-                    // Tell this fedimintd that DKG succeeded
-                    fedimintd_sender
-                        .send(UiMessage::DKGSuccess)
-                        .await
-                        .expect("failed to send over channel");
-                }
-                Err(e) => {
-                    tracing::info!("DKG failed {:?}", e);
-                    dkg_sender
-                        // TODO: include the error in the message
-                        .send(UiMessage::DKGFailure)
-                        .expect("failed to send over channel");
-                }
-            };
-        });
+                // Tell this route that DKG succeeded
+                dkg_sender
+                    .send(UiMessage::DKGSuccess)
+                    .expect("failed to send over channel");
+                // Tell this fedimintd that DKG succeeded
+                fedimintd_sender
+                    .send(UiMessage::DKGSuccess)
+                    .await
+                    .expect("failed to send over channel");
+            }
+            Err(e) => {
+                tracing::info!("DKG failed {:?}", e);
+                dkg_sender
+                    // TODO: include the error in the message
+                    .send(UiMessage::DKGFailure)
+                    .expect("failed to send over channel");
+            }
+        };
     });
     match dkg_receiver.await.expect("failed to read over channel") {
         UiMessage::DKGSuccess => Ok(Redirect::to("/run".parse().unwrap())),
