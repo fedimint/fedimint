@@ -148,7 +148,7 @@ async fn post_guardians(
     let mut dkg_task_group = state.task_group.make_subgroup().await;
     state
         .task_group
-        .spawn("admint UI running DKG", move |_| async move {
+        .spawn("admin UI running DKG", move |_| async move {
             tracing::info!("Running DKG");
             match run_dkg(
                 params.bind_p2p,
