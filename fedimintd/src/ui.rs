@@ -178,7 +178,11 @@ async fn post_guardians(
                     dir_out_path.join(PRIVATE_CONFIG),
                 );
                 write_nonprivate_configs(&server_config, dir_out_path, &module_config_gens);
-
+                // Shut down DKG to prevent port collisions
+                task_group
+                    .shutdown_join_all()
+                    .await
+                    .expect("couldn't shut down DKG task group");
                 // Tell this route that DKG succeeded
                 dkg_sender
                     .send(UiMessage::DKGSuccess)
