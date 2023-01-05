@@ -44,7 +44,6 @@ use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use threshold_crypto::serde_impl::SerdeSecret;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
@@ -274,16 +273,16 @@ impl FederationModuleConfigGen for LightningModuleConfigGen {
             return Ok(Err(Cancelled));
         };
 
-        let (pks, sks) = g1[&()].threshold_crypto();
+        let keys = g1[&()].threshold_crypto();
 
         let server = LightningConfig {
             consensus: LightningConfigConsensus {
-                threshold_pub_keys: pks,
+                threshold_pub_keys: keys.public_key_set,
                 threshold: peers.threshold(),
                 fee_consensus: Default::default(),
             },
             private: LightningConfigPrivate {
-                threshold_sec_key: SerdeSecret(sks),
+                threshold_sec_key: keys.secret_key_share,
             },
         };
 
