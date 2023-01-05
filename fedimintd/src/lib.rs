@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::encrypt::{encrypted_read, encrypted_write};
 
+pub mod distributedgen;
 pub mod encrypt;
 pub mod ui;
 
@@ -38,7 +39,7 @@ pub const TLS_PK: &str = "tls-pk";
 /// TLS public cert
 pub const TLS_CERT: &str = "tls-cert";
 
-const JSON_EXT: &str = "json";
+pub const JSON_EXT: &str = "json";
 const ENCRYPTED_EXT: &str = "encrypt";
 
 /// Reads the server from the local, private, and consensus cfg files (private file encrypted)

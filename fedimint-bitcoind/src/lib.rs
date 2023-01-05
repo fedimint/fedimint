@@ -14,7 +14,7 @@ pub mod bitcoincore_rpc;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Rpc error")]
+    #[error("Bitcoind Rpc error {0}")]
     Rpc(#[from] anyhow::Error),
 }
 

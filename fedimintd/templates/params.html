@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %} Fedimint {% endblock %}
+
+{% block content %}
+<div class="container text-center mt-5">
+  <h3>Configure Federation</h3>
+  <form action="/post_federation_params" method="post">
+    <div class="form-group">
+      <label for="guardian_name">Your Name</label>
+      <input type="text" class="form-control" id="guardian_name" name="guardian_name" placeholder="Satoshi Nakamoto">
+      <div class="form-group">
+        <label for="federation_name">Federation Name</label>
+        <input type="text" class="form-control" id="federation_name" name="federation_name"
+          placeholder="Cypherpunk Federation">
+        <div class="form-group">
+          <label for="bind_api">Socket address to bind public API</label>
+          <input type="text" class="form-control" id="bind_api" name="bind_api" placeholder="127.0.0.1:8173" />
+        </div>
+        <div class="form-group">
+          <label for="api_url">External Url for public API</label>
+          <input type="text" class="form-control" id="api_url" name="api_url" placeholder="wss://your-website.com" />
+        </div>
+        <div class="form-group">
+          <label for="bind_p2p">Socket address to bind federation consensus</label>
+          <input type="text" class="form-control" id="bind_p2p" name="bind_p2p" placeholder="127.0.0.1:8174" />
+        </div>
+        <div class="form-group">
+          <label for="p2p_url">External URL for federation consensus</label>
+          <input type="text" class="form-control" id="p2p_url" name="p2p_url" placeholder="wss://your-website.com" />
+        </div>
+        <div class="form-group">
+          <label for="bitcoind_rpc">Bitcoin RPC Addr and Port</label>
+          <input type="text" class="form-control" id="bitcoind_rpc" name="bitcoind_rpc" placeholder="127.0.0.1:8332" />
+        </div>
+        <div class="form-group">
+          <label for="guardians_count" class="col-form-label">Number of Guardians Including You</label>
+          <input class="form-control" type="number" name="guardians_count" required placeholder="4" />
+        </div>
+        <div class="form-group">
+          <label for="network1" class="col-form-label">Choose network</label><br>
+          <input type="radio" id="network1" name="network" value="regtest">
+          <label for="network1">Regtest</label>
+          <input type="radio" id="network2" name="network" value="testnet">
+          <label for="network2">Testnet</label>
+          <input type="radio" id="network3" name="network" value="mainnet">
+          <label for="network3">Mainnet</label>
+        </div>
+      </div>
+      <button class="btn btn-primary mt-3" type="submit">Submit</button>
+  </form>
+</div>
+{% endblock %}

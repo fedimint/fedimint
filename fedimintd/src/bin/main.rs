@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -18,18 +19,24 @@ use fedimint_wallet::Wallet;
 use fedimint_wallet::WalletConfigGenerator;
 use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
+use fedimintd::ui::UiMessage;
 use fedimintd::*;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 
+use crate::{JSON_EXT, LOCAL_CONFIG};
+
 #[derive(Parser)]
 pub struct ServerOpts {
+    /// Path to folder containing federation config files
     pub cfg_path: PathBuf,
+    /// Password to encrypt sensitive config files
     #[arg(env = "FM_PASSWORD")]
     pub password: Option<String>,
-    #[arg(default_value = None)]
-    pub ui_port: Option<u32>,
+    /// Port to run admin UI on
+    #[arg(long = "ui-bind", default_value = None)]
+    pub ui_bind: Option<SocketAddr>,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
@@ -71,22 +78,47 @@ async fn main() -> anyhow::Result<()> {
         registry.init();
     }
 
-    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    let mut task_group = TaskGroup::new();
+    let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
-    if let Some(ui_port) = opts.ui_port {
-        // Spawn UI, wait for it to finish
-        tokio::spawn(run_ui(opts.cfg_path.clone(), sender, ui_port));
-        receiver
-            .recv()
-            .await
-            .expect("failed to receive setup message");
+    // Run admin UI if a socket address was given for it
+    if let Some(ui_bind) = opts.ui_bind {
+        // Make sure password is set
+        let password = match opts.password.clone() {
+            Some(password) => password,
+            None => {
+                eprintln!("fedimintd admin UI requires FM_PASSWORD environment variable to be set");
+                std::process::exit(1);
+            }
+        };
+
+        // Spawn admin UI
+        let cfg_path = opts.cfg_path.clone();
+        let ui_task_group = task_group.make_subgroup().await;
+        task_group
+            .spawn("admin-ui", move |_| async move {
+                run_ui(cfg_path, ui_sender, ui_bind, password, ui_task_group).await;
+            })
+            .await;
+
+        // If federation configs (e.g. local.json) missing, wait for admin UI to report DKG completion
+        let local_cfg_path = opts.cfg_path.join(LOCAL_CONFIG).with_extension(JSON_EXT);
+        if !std::path::Path::new(&local_cfg_path).exists() {
+            loop {
+                if let UiMessage::DKGSuccess = ui_receiver
+                    .recv()
+                    .await
+                    .expect("failed to receive setup message")
+                {
+                    break;
+                }
+            }
+        }
     }
 
     let salt_path = opts.cfg_path.join(SALT_FILE);
     let key = get_key(opts.password, salt_path);
     let cfg = read_server_configs(&key, opts.cfg_path.clone());
-
-    let mut task_group = TaskGroup::new();
 
     let db: Database = fedimint_rocksdb::RocksDb::open(opts.cfg_path.join(DB_FILE))
         .expect("Error opening DB")
