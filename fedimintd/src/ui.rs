@@ -109,7 +109,7 @@ async fn post_guardians(
     Extension(state): Extension<MutableState>,
     Form(form): Form<GuardiansForm>,
 ) -> Result<Redirect, (StatusCode, String)> {
-    let state = state.lock().await;
+    let mut state = state.lock().await;
     let params = state.params.clone().expect("invalid state");
     let mut connection_strings: Vec<String> =
         serde_json::from_str(&form.connection_strings).expect("not json");
@@ -151,57 +151,60 @@ async fn post_guardians(
     let dir_out_path = state.cfg_path.clone();
     let fedimintd_sender = state.sender.clone();
 
-    tokio::spawn(async move {
-        tracing::info!("Running DKG");
-        let mut task_group = TaskGroup::new();
-        match run_dkg(
-            // FIXME: pass these in from fedimintd cli
-            params.bind_p2p,
-            params.bind_api,
-            &dir_out_path,
-            max_denomination,
-            params.federation_name,
-            connection_strings,
-            params.bitcoind_rpc,
-            params.network,
-            params.finality_delay,
-            rustls::PrivateKey(pk_bytes),
-            &mut task_group,
-        )
-        .await
-        {
-            Ok(server_config) => {
-                tracing::info!("DKG succeeded");
-                encrypted_json_write(
-                    &server_config.private,
-                    &key,
-                    dir_out_path.join(PRIVATE_CONFIG),
-                );
-                write_nonprivate_configs(&server_config, dir_out_path, &module_config_gens);
-                // Shut down DKG to prevent port collisions
-                task_group
-                    .shutdown_join_all()
-                    .await
-                    .expect("couldn't shut down DKG task group");
-                // Tell this route that DKG succeeded
-                dkg_sender
-                    .send(UiMessage::DKGSuccess)
-                    .expect("failed to send over channel");
-                // Tell this fedimintd that DKG succeeded
-                fedimintd_sender
-                    .send(UiMessage::DKGSuccess)
-                    .await
-                    .expect("failed to send over channel");
-            }
-            Err(e) => {
-                tracing::info!("DKG failed {:?}", e);
-                dkg_sender
-                    // TODO: include the error in the message
-                    .send(UiMessage::DKGFailure)
-                    .expect("failed to send over channel");
-            }
-        };
-    });
+    let mut dkg_task_group = state.task_group.make_subgroup().await;
+    state
+        .task_group
+        .spawn("admint UI running DKG", move |_| async move {
+            tracing::info!("Running DKG");
+            match run_dkg(
+                // FIXME: pass these in from fedimintd cli
+                params.bind_p2p,
+                params.bind_api,
+                &dir_out_path,
+                max_denomination,
+                params.federation_name,
+                connection_strings,
+                params.bitcoind_rpc,
+                params.network,
+                params.finality_delay,
+                rustls::PrivateKey(pk_bytes),
+                &mut dkg_task_group,
+            )
+            .await
+            {
+                Ok(server_config) => {
+                    tracing::info!("DKG succeeded");
+                    encrypted_json_write(
+                        &server_config.private,
+                        &key,
+                        dir_out_path.join(PRIVATE_CONFIG),
+                    );
+                    write_nonprivate_configs(&server_config, dir_out_path, &module_config_gens);
+                    // Shut down DKG to prevent port collisions
+                    dkg_task_group
+                        .shutdown_join_all()
+                        .await
+                        .expect("couldn't shut down DKG task group");
+                    // Tell this route that DKG succeeded
+                    dkg_sender
+                        .send(UiMessage::DKGSuccess)
+                        .expect("failed to send over channel");
+                    // Tell this fedimintd that DKG succeeded
+                    fedimintd_sender
+                        .send(UiMessage::DKGSuccess)
+                        .await
+                        .expect("failed to send over channel");
+                }
+                Err(e) => {
+                    tracing::info!("DKG failed {:?}", e);
+                    dkg_sender
+                        // TODO: include the error in the message
+                        .send(UiMessage::DKGFailure)
+                        .expect("failed to send over channel");
+                }
+            };
+        })
+        .await;
     match dkg_receiver.await.expect("failed to read over channel") {
         UiMessage::DKGSuccess => Ok(Redirect::to("/run".parse().unwrap())),
         // TODO: flash a message that it failed
@@ -313,6 +316,7 @@ struct State {
     cfg_path: PathBuf,
     sender: Sender<UiMessage>,
     password: String,
+    task_group: TaskGroup,
 }
 type MutableState = Arc<Mutex<State>>;
 
@@ -327,12 +331,14 @@ pub async fn run_ui(
     sender: Sender<UiMessage>,
     bind_addr: SocketAddr,
     password: String,
+    task_group: TaskGroup,
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,
         cfg_path,
         sender,
         password,
+        task_group,
     }));
 
     let app = Router::new()

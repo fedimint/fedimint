@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
     let mut task_group = TaskGroup::new();
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
-    // Run admin ui if a socket address was given for it
+    // Run admin UI if a socket address was given for it
     if let Some(ui_bind) = opts.ui_bind {
         // Make sure password is set
         let password = match opts.password.clone() {
@@ -94,9 +94,10 @@ async fn main() -> anyhow::Result<()> {
 
         // Spawn admin UI
         let cfg_path = opts.cfg_path.clone();
+        let ui_task_group = task_group.make_subgroup().await;
         task_group
             .spawn("admin-ui", move |_| async move {
-                run_ui(cfg_path, ui_sender, ui_bind, password).await;
+                run_ui(cfg_path, ui_sender, ui_bind, password, ui_task_group).await;
             })
             .await;
 
