@@ -184,7 +184,6 @@ dyn_newtype_define!(
 impl<T> IServerModule for T
 where
     T: ServerModulePlugin + 'static + Sync,
-    <T as ServerModulePlugin>::Decoder: Sync + Send + 'static,
 {
     fn module_key(&self) -> ModuleKey {
         <Self as ServerModulePlugin>::module_key(self)
