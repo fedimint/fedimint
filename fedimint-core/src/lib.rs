@@ -1,8 +1,3 @@
-use fedimint_api::core::{Decoder, MODULE_KEY_LN, MODULE_KEY_MINT, MODULE_KEY_WALLET};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_ln::common::LightningModuleDecoder;
-use fedimint_mint::common::MintModuleDecoder;
-use fedimint_wallet::common::WalletModuleDecoder;
 use thiserror::Error;
 
 pub mod modules {
@@ -30,12 +25,4 @@ impl CoreError {
     pub fn is_retryable(&self) -> bool {
         matches!(self, CoreError::PendingPreimage)
     }
-}
-
-pub fn all_decoders() -> ModuleDecoderRegistry {
-    ModuleDecoderRegistry::new([
-        (MODULE_KEY_LN, Decoder::from_typed(&LightningModuleDecoder)),
-        (MODULE_KEY_MINT, Decoder::from_typed(&MintModuleDecoder)),
-        (MODULE_KEY_WALLET, Decoder::from_typed(&WalletModuleDecoder)),
-    ])
 }

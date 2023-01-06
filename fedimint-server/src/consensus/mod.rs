@@ -11,9 +11,10 @@ use fedimint_api::core::ModuleKey;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
+use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry};
 use fedimint_api::module::{ModuleError, TransactionItemAmount};
 use fedimint_api::server::{ServerModule, VerificationCache};
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
 use fedimint_core::outcome::TransactionStatus;
@@ -25,7 +26,7 @@ use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
-use crate::config::{ModuleConfigGens, ServerConfig};
+use crate::config::{ModuleInitRegistry, ServerConfig};
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
@@ -73,7 +74,7 @@ pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
-    pub module_config_gens: ModuleConfigGens,
+    pub module_inits: ModuleInitRegistry,
 
     pub modules: ServerModuleRegistry,
     /// KV Database into which all state is persisted to recover from in case of a crash
@@ -101,27 +102,44 @@ struct FundingVerifier {
 }
 
 impl FedimintConsensus {
-    pub fn new(cfg: ServerConfig, db: Database, module_config_gens: ModuleConfigGens) -> Self {
+    pub async fn new(
+        cfg: ServerConfig,
+        db: Database,
+        module_inits: ModuleInitRegistry,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            rng_gen: Box::new(OsRngGen),
+            modules: module_inits.init_all(&cfg, &db, task_group).await?,
+            cfg,
+            module_inits,
+            db,
+            transaction_notify: Arc::new(Notify::new()),
+        })
+    }
+
+    /// Like [`Self::new`], but when you want to initialize modules separately.
+    pub fn new_with_modules(
+        cfg: ServerConfig,
+        db: Database,
+        module_inits: ModuleInitRegistry,
+        modules: ModuleRegistry<ServerModule>,
+    ) -> Self {
         Self {
             rng_gen: Box::new(OsRngGen),
+            modules,
             cfg,
-            module_config_gens,
-            modules: ServerModuleRegistry::default(),
+            module_inits,
             db,
             transaction_notify: Arc::new(Notify::new()),
         }
     }
-
-    pub fn register_module(&mut self, module: ServerModule) -> &mut Self {
-        self.modules.register(module);
-        self
-    }
 }
 
 impl VerificationCaches {
-    fn get_cache(&self, modue_key: ModuleKey) -> &VerificationCache {
+    fn get_cache(&self, module_key: ModuleKey) -> &VerificationCache {
         self.caches
-            .get(&modue_key)
+            .get(&module_key)
             .expect("Verification caches were built for all modules")
     }
 }

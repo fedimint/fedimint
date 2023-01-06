@@ -5,6 +5,7 @@ use std::future::Future;
 use std::iter::repeat;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
@@ -25,26 +26,27 @@ use fedimint_api::core::{
 };
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
-use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_api::module::ModuleInit;
 use fedimint_api::net::peers::IMuxPeerConnections;
+use fedimint_api::server::ServerModule;
 use fedimint_api::task::{timeout, TaskGroup};
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::BitcoindRpc;
-use fedimint_ln::LightningModule;
 use fedimint_ln::{LightningGateway, LightningModuleConfigGen};
-use fedimint_mint::{Mint, MintConfigGenerator, MintOutput};
+use fedimint_mint::{MintConfigGenerator, MintOutput};
 use fedimint_server::config::{connect, ServerConfig, DEFAULT_P2P_PORT};
-use fedimint_server::config::{ModuleConfigGens, ServerConfigParams};
+use fedimint_server::config::{ModuleInitRegistry, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
-use fedimint_server::{all_decoders, consensus, EpochMessage, FedimintServer};
+use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
@@ -155,10 +157,10 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test", "127.0.0.1:18443");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
-    let module_config_gens: ModuleConfigGens = BTreeMap::from([
+    let module_inits = ModuleInitRegistry::from([
         (
             "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
         ),
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),
@@ -171,7 +173,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 "",
                 &peers,
                 params,
-                module_config_gens.clone(),
+                module_inits.clone(),
                 max_evil,
                 &mut task_group,
             )
@@ -211,7 +213,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
-                module_config_gens,
+                module_inits,
+                |_cfg: ServerConfig| Box::pin(async { BTreeMap::default() }),
                 &mut task_group,
             )
             .await;
@@ -246,19 +249,15 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config = ServerConfig::trusted_dealer_gen(
-                "",
-                &peers,
-                &params,
-                module_config_gens.clone(),
-                OsRng,
-            );
+            let server_config =
+                ServerConfig::trusted_dealer_gen("", &peers, &params, module_inits.clone(), OsRng);
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
-                .to_client_config(&module_config_gens);
+                .to_client_config(&module_inits);
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
+            let bitcoin_rpc_2: BitcoindRpc = bitcoin.clone().into();
             let lightning = FakeLightningTest::new();
             let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
             let net = MockNetwork::new();
@@ -272,8 +271,30 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &bitcoin_rpc,
                 &connect_gen,
-                module_config_gens,
-                &mut task_group,
+                module_inits,
+                // the things dealing with async makes us do...
+                // if you know how to make it better, please do --dpc
+                |cfg: ServerConfig| {
+                    Box::pin({
+                        let bitcoin_rpc_2 = bitcoin_rpc_2.clone();
+                        let mut task_group = task_group.clone();
+                        async move {
+                            BTreeMap::from([(
+                                "wallet",
+                                Wallet::new_with_bitcoind(
+                                    cfg.get_module_config_typed("wallet").unwrap(),
+                                    fed_db(),
+                                    bitcoin_rpc_2.clone(),
+                                    &mut task_group,
+                                )
+                                .await
+                                .expect("Couldn't create wallet")
+                                .into(),
+                            )])
+                        }
+                    })
+                },
+                &mut task_group.clone(),
             )
             .await;
 
@@ -334,7 +355,7 @@ async fn distributed_config(
     code_version: &str,
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
-    module_config_gens: ModuleConfigGens,
+    module_config_gens: ModuleInitRegistry,
     _max_evil: usize,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
@@ -560,6 +581,7 @@ pub struct FederationTest {
     max_balance_sheet: Rc<RefCell<i64>>,
     pub wallet: WalletConfig,
     pub cfg: ServerConfig,
+    decoders: ModuleDecoderRegistry,
 }
 
 struct ServerTest {
@@ -647,6 +669,7 @@ impl FederationTest {
             cfg: self.cfg.clone(),
             last_consensus: self.last_consensus.clone(),
             max_balance_sheet: self.max_balance_sheet.clone(),
+            decoders: self.decoders.clone(),
         }
     }
 
@@ -719,7 +742,7 @@ impl FederationTest {
         for server in &self.servers {
             block_on(async {
                 let svr = server.borrow_mut();
-                let mut dbtx = svr.database.begin_transaction(all_decoders()).await;
+                let mut dbtx = svr.database.begin_transaction(self.decoders.clone()).await;
 
                 dbtx.insert_new_entry(
                     &UTXOKey(input.outpoint()),
@@ -770,7 +793,7 @@ impl FederationTest {
             .receive_coins(amount, |tokens| async move {
                 for server in &self.servers {
                     let svr = server.borrow_mut();
-                    let mut dbtx = svr.database.begin_transaction(all_decoders()).await;
+                    let mut dbtx = svr.database.begin_transaction(self.decoders.clone()).await;
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![MintOutput(tokens.clone()).into()],
@@ -807,7 +830,7 @@ impl FederationTest {
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
             let svr = server.borrow();
-            let dbtx = block_on(svr.database.begin_transaction(all_decoders()));
+            let dbtx = block_on(svr.database.begin_transaction(self.decoders.clone()));
             block_on(fedimint_wallet::broadcast_pending_tx(
                 dbtx,
                 &svr.bitcoin_rpc,
@@ -859,7 +882,12 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
-        let mut dbtx = block_on(server.consensus.db.begin_transaction(all_decoders()));
+        let mut dbtx = block_on(
+            server
+                .consensus
+                .db
+                .begin_transaction(server.decoders.clone()),
+        );
         let height = block_on(wallet.consensus_height(&mut dbtx)).unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
@@ -972,7 +1000,11 @@ impl FederationTest {
         database_gen: &impl Fn() -> Database,
         bitcoin_gen: &impl Fn() -> BitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
-        module_config_gens: ModuleConfigGens,
+        module_inits: ModuleInitRegistry,
+        override_modules: impl Fn(
+            ServerConfig,
+        )
+            -> Pin<Box<dyn Future<Output = BTreeMap<&'static str, ServerModule>>>>,
         task_group: &mut TaskGroup,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
@@ -980,29 +1012,43 @@ impl FederationTest {
             let db = database_gen();
             let mut task_group = task_group.clone();
 
-            let mint = Mint::new(cfg.get_module_config_typed("mint").unwrap());
+            let decoders = module_inits.decoders();
 
-            let wallet = Wallet::new_with_bitcoind(
-                cfg.get_module_config_typed("wallet").unwrap(),
+            let mut override_modules = override_modules(cfg.clone()).await;
+
+            let mut modules = BTreeMap::new();
+
+            for (k, v) in module_inits.iter() {
+                if let Some(module) = override_modules.remove(k) {
+                    modules.insert(module.module_key(), module);
+                } else {
+                    let module = v
+                        .init(
+                            cfg.get_module_config(k).unwrap(),
+                            db.clone(),
+                            &mut task_group,
+                        )
+                        .await
+                        .unwrap();
+                    modules.insert(module.module_key(), module);
+                }
+            }
+
+            let consensus = FedimintConsensus::new_with_modules(
+                cfg.clone(),
                 db.clone(),
-                btc_rpc.clone(),
-                &mut task_group.clone(),
-                all_decoders(),
+                module_inits.clone(),
+                ModuleRegistry::from(modules),
+            );
+
+            let fedimint = FedimintServer::new_with(
+                cfg.clone(),
+                consensus,
+                connect_gen(cfg),
+                decoders.clone(),
+                &mut task_group,
             )
-            .await
-            .expect("Couldn't create wallet");
-
-            let ln = LightningModule::new(cfg.get_module_config_typed("ln").unwrap());
-
-            let mut consensus =
-                FedimintConsensus::new(cfg.clone(), db.clone(), module_config_gens.clone());
-            consensus.register_module(mint.into());
-            consensus.register_module(wallet.into());
-            consensus.register_module(ln.into());
-
-            let fedimint =
-                FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg), &mut task_group)
-                    .await;
+            .await;
 
             let cfg = cfg.clone();
             let consensus = fedimint.consensus.clone();
@@ -1038,6 +1084,7 @@ impl FederationTest {
             last_consensus,
             cfg,
             wallet,
+            decoders: module_inits.decoders(),
         }
     }
 }

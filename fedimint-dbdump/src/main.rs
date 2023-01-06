@@ -1,15 +1,17 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use docopt::Docopt;
 use erased_serde::Serialize;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
-use fedimint_core::all_decoders;
-use fedimint_ln::db as LightningRange;
-use fedimint_mint::db as MintRange;
+use fedimint_api::module::ModuleInit;
+use fedimint_ln::{db as LightningRange, LightningModuleConfigGen};
+use fedimint_mint::{db as MintRange, MintConfigGenerator};
 use fedimint_rocksdb::RocksDbReadOnly;
+use fedimint_server::config::ModuleInitRegistry;
 use fedimint_server::db as ConsensusRange;
-use fedimint_wallet::db as WalletRange;
+use fedimint_wallet::{db as WalletRange, WalletConfigGenerator};
 use mint_client::db as ClientRange;
 use mint_client::ln::db as ClientLightningRange;
 use mint_client::mint::db as ClientMintRange;
@@ -673,10 +675,19 @@ async fn main() {
         }
     };
 
+    let module_inits = ModuleInitRegistry::from([
+        (
+            "wallet",
+            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        ),
+        ("mint", Arc::new(MintConfigGenerator)),
+        ("ln", Arc::new(LightningModuleConfigGen)),
+    ]);
+
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
     let mut dbdump = DatabaseDump {
         serialized,
-        read_only: DatabaseTransaction::new(read_only, all_decoders()),
+        read_only: DatabaseTransaction::new(read_only, module_inits.decoders()),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == "All",

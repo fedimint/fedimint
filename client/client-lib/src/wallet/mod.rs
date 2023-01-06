@@ -199,7 +199,6 @@ mod tests {
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
     use fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
-    use fedimint_api::core::{Decoder, MODULE_KEY_WALLET};
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::task::TaskGroup;
@@ -209,7 +208,6 @@ mod tests {
     use fedimint_core::modules::ln::contracts::ContractId;
     use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
     use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
-    use fedimint_core::modules::wallet::common::WalletModuleDecoder;
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::{
         PegOut, PegOutFees, Wallet, WalletConfigGenParams, WalletConfigGenerator, WalletOutput,
@@ -322,10 +320,6 @@ mod tests {
         }
     }
 
-    fn wallet_decoders() -> ModuleDecoderRegistry {
-        ModuleDecoderRegistry::new([(MODULE_KEY_WALLET, Decoder::from_typed(&WalletModuleDecoder))])
-    }
-
     async fn new_mint_and_client(
         task_group: &mut TaskGroup,
     ) -> (
@@ -349,7 +343,6 @@ mod tests {
                             db,
                             btc_rpc_clone.clone().into(),
                             &mut task_group,
-                            wallet_decoders(),
                         )
                         .await?)
                     }

@@ -41,7 +41,6 @@ fedimint-server = { path = "../fedimint-server" }
 fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native"] }
 fedimint-mint= { path = "../modules/fedimint-mint" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
-fedimint-bitcoind = { path = "../fedimint-bitcoind", features = [ "bitcoincore-rpc" ]}
 opentelemetry = { version = "0.18.0", optional = true }
 opentelemetry-jaeger = { version = "0.17.0", optional = true }
 rand = "0.8"

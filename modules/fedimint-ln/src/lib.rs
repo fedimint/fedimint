@@ -27,16 +27,17 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
-use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_LN};
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, InputMeta, IntoModuleError,
-    ModuleError, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleInit,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
+use fedimint_api::server::ServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
 use fedimint_api::{OutPoint, ServerModulePlugin};
@@ -228,7 +229,20 @@ pub struct LightningVerificationCache;
 pub struct LightningModuleConfigGen;
 
 #[async_trait]
-impl FederationModuleConfigGen for LightningModuleConfigGen {
+impl ModuleInit for LightningModuleConfigGen {
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        _db: Database,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<ServerModule> {
+        Ok(LightningModule::new(cfg.to_typed()?).into())
+    }
+
+    fn decoder(&self) -> (ModuleKey, Decoder) {
+        (MODULE_KEY_LN, (&LightningModuleDecoder).into())
+    }
+
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],

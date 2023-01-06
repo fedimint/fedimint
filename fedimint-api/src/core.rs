@@ -306,6 +306,15 @@ impl Decoder {
     }
 }
 
+impl<T> From<&'static T> for Decoder
+where
+    T: PluginDecode + Send + Sync + 'static,
+{
+    fn from(value: &'static T) -> Self {
+        Decoder(value)
+    }
+}
+
 /// Something that can be an [`Input`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Input`] instead
