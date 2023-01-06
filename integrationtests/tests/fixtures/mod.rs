@@ -82,7 +82,8 @@ mod fake;
 mod real;
 mod utils;
 
-static BASE_PORT: AtomicU16 = AtomicU16::new(DEFAULT_P2P_PORT + 10000);
+const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 10000;
+static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
@@ -141,7 +142,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
-    if base_port == DEFAULT_P2P_PORT {
+    if base_port == BASE_PORT_INIT {
         tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env()
