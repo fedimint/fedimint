@@ -21,6 +21,7 @@ use tbs::hash::hash_bytes_to_curve;
 use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
+use threshold_crypto::serde_impl::SerdeSecret;
 use url::Url;
 
 use crate::cancellable::Cancellable;
@@ -39,9 +40,15 @@ pub struct Node {
 /// This includes global settings and client-side module configs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ClientConfig {
+    /// name of the federation
     pub federation_name: String,
+    /// API endpoints for each federation member
     pub nodes: Vec<Node>,
+    /// Threshold pubkey for authenticating configs
+    pub auth_pk: threshold_crypto::PublicKey,
+    /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
+    /// Configs from other client modules
     pub modules: BTreeMap<String, ClientModuleConfig>,
 }
 
@@ -592,6 +599,13 @@ pub struct DkgKeys<G> {
     pub secret_key_share: Scalar,
 }
 
+/// Our secret key share of a threshold key
+#[derive(Debug, Clone)]
+pub struct ThresholdKeys {
+    pub public_key_set: PublicKeySet,
+    pub secret_key_share: SerdeSecret<SecretKeyShare>,
+}
+
 impl DkgKeys<G2Projective> {
     pub fn tbs(self) -> (Poly<G2Projective, Scalar>, tbs::SecretKeyShare) {
         (
@@ -602,11 +616,13 @@ impl DkgKeys<G2Projective> {
 }
 
 impl DkgKeys<G1Projective> {
-    pub fn threshold_crypto(&self) -> (PublicKeySet, SecretKeyShare) {
-        (
-            PublicKeySet::from(Commitment::from(self.public_key_set.clone())),
-            SecretKeyShare::from_mut(&mut self.secret_key_share.clone()),
-        )
+    pub fn threshold_crypto(&self) -> ThresholdKeys {
+        ThresholdKeys {
+            public_key_set: PublicKeySet::from(Commitment::from(self.public_key_set.clone())),
+            secret_key_share: SerdeSecret(SecretKeyShare::from_mut(
+                &mut self.secret_key_share.clone(),
+            )),
+        }
     }
 }
 
@@ -689,7 +705,7 @@ impl SGroup for G1Projective {
 mod tests {
     use std::collections::{HashMap, VecDeque};
 
-    use fedimint_api::config::DkgStep;
+    use fedimint_api::config::{DkgStep, ThresholdKeys};
     use hbbft::crypto::group::Curve;
     use hbbft::crypto::{G1Projective, G2Projective};
     use rand::rngs::OsRng;
@@ -700,9 +716,15 @@ mod tests {
     #[test_log::test]
     fn test_dkg() {
         for (peer, keys) in run(G1Projective::generator()) {
-            let (pk, sk) = keys.threshold_crypto();
-            assert_eq!(pk.threshold(), 2);
-            assert_eq!(pk.public_key_share(peer.to_usize()), sk.public_key_share());
+            let ThresholdKeys {
+                public_key_set,
+                secret_key_share,
+            } = keys.threshold_crypto();
+            assert_eq!(public_key_set.threshold(), 2);
+            assert_eq!(
+                public_key_set.public_key_share(peer.to_usize()),
+                secret_key_share.public_key_share()
+            );
         }
 
         for (peer, keys) in run(G2Projective::generator()) {

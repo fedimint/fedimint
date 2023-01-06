@@ -6,7 +6,7 @@ use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ThresholdKeys, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -17,6 +17,7 @@ pub use fedimint_core::config::*;
 use fedimint_core::modules::mint::MintConfigGenParams;
 use fedimint_wallet::WalletConfigGenParams;
 use hbbft::crypto::serde_impl::SerdeSecret;
+use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -55,6 +56,9 @@ pub struct ServerConfigPrivate {
     /// Secret key for TLS communication, required for peer authentication
     #[serde(with = "serde_tls_key")]
     pub tls_key: rustls::PrivateKey,
+    /// Secret key for contributing to threshold auth key
+    #[serde(with = "serde_binary_human_readable")]
+    pub auth_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
     /// Secret key for contributing to HBBFT consensus
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
@@ -73,6 +77,9 @@ pub struct ServerConfigConsensus {
     pub code_version: String,
     /// Configurable federation name
     pub federation_name: String,
+    /// Public keys authenticating members of the federation and the configs
+    #[serde(with = "serde_binary_human_readable")]
+    pub auth_pk_set: hbbft::crypto::PublicKeySet,
     /// Public keys for HBBFT consensus from all peers
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
@@ -142,6 +149,7 @@ impl ServerConfigConsensus {
         Ok(ClientConfig {
             federation_name: self.federation_name.clone(),
             epoch_pk: self.epoch_pk_set.public_key(),
+            auth_pk: self.auth_pk_set.public_key(),
             nodes,
             modules: self
                 .modules
@@ -175,16 +183,16 @@ impl ServerConfig {
         code_version: &str,
         params: ServerConfigParams,
         identity: PeerId,
-        hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
-        hbbft_pk_set: hbbft::crypto::PublicKeySet,
-        epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
-        epoch_pk_set: hbbft::crypto::PublicKeySet,
+        auth_keys: ThresholdKeys,
+        epoch_keys: ThresholdKeys,
+        hbbft_keys: ThresholdKeys,
         modules: BTreeMap<String, ServerModuleConfig>,
     ) -> Self {
         let private = ServerConfigPrivate {
             tls_key: params.tls.our_private_key.clone(),
-            hbbft_sks,
-            epoch_sks,
+            auth_sks: auth_keys.secret_key_share,
+            hbbft_sks: hbbft_keys.secret_key_share,
+            epoch_sks: epoch_keys.secret_key_share,
             modules: Default::default(),
         };
         let local = ServerConfigLocal {
@@ -199,8 +207,9 @@ impl ServerConfig {
             code_version: code_version.to_string(),
             federation_name: params.federation_name.clone(),
             peers: params.peers(),
-            hbbft_pk_set,
-            epoch_pk_set,
+            auth_pk_set: auth_keys.public_key_set,
+            hbbft_pk_set: hbbft_keys.public_key_set,
+            epoch_pk_set: epoch_keys.public_key_set,
             modules: Default::default(),
         };
         let mut cfg = Self {
@@ -306,9 +315,11 @@ impl ServerConfig {
         module_config_gens: ModuleConfigGens,
         mut rng: impl RngCore + CryptoRng,
     ) -> BTreeMap<PeerId, Self> {
-        let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+        let netinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
-        let epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+        let epochinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+            .expect("Could not generate HBBFT netinfo");
+        let authinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
         let peer0 = &params[&PeerId::from(0)];
@@ -319,16 +330,14 @@ impl ServerConfig {
             .collect();
         let server_config: BTreeMap<_, _> = netinfo
             .iter()
-            .map(|(&id, netinf)| {
-                let epoch_keys = epochinfo.get(&id).unwrap();
+            .map(|(&id, _netinf)| {
                 let config = ServerConfig::from(
                     code_version,
                     params[&id].clone(),
                     id,
-                    SerdeSecret(netinf.secret_key_share().unwrap().clone()),
-                    netinf.public_key_set().clone(),
-                    SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
-                    epoch_keys.public_key_set().clone(),
+                    Self::extract_keys(authinfo.get(&id).expect("peer exists")),
+                    Self::extract_keys(epochinfo.get(&id).expect("peer exists")),
+                    Self::extract_keys(netinfo.get(&id).expect("peer exists")),
                     module_configs
                         .iter()
                         .map(|(name, cfgs)| (name.to_string(), cfgs[&id].clone()))
@@ -339,6 +348,13 @@ impl ServerConfig {
             .collect();
 
         server_config
+    }
+
+    fn extract_keys(info: &NetworkInfo<PeerId>) -> ThresholdKeys {
+        ThresholdKeys {
+            public_key_set: info.public_key_set().clone(),
+            secret_key_share: SerdeSecret(info.secret_key_share().unwrap().clone()),
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -367,6 +383,7 @@ impl ServerConfig {
 
         // hbbft uses a lower threshold of signing keys (f+1)
         let mut dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
+        dkg.add(KeyType::Auth, peers.threshold());
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
@@ -375,8 +392,9 @@ impl ServerConfig {
         } else {
             return Ok(Err(Cancelled));
         };
-        let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
-        let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
+        let auth_keys = keys[&KeyType::Auth].threshold_crypto();
+        let hbbft_keys = keys[&KeyType::Hbbft].threshold_crypto();
+        let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
         let mut module_cfgs: BTreeMap<String, ServerModuleConfig> = Default::default();
 
@@ -398,10 +416,9 @@ impl ServerConfig {
             code_version,
             params.clone(),
             *our_id,
-            SerdeSecret(hbbft_sks),
-            hbbft_pks,
-            SerdeSecret(epoch_sks),
-            epoch_pks,
+            auth_keys,
+            epoch_keys,
+            hbbft_keys,
             module_cfgs,
         );
 
@@ -411,10 +428,12 @@ impl ServerConfig {
     }
 }
 
+/// The types of keys to run distributed key generation for
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum KeyType {
     Hbbft,
     Epoch,
+    Auth,
 }
 
 impl ServerConfig {
