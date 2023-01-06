@@ -51,7 +51,7 @@ where
 }
 /// Backend side module interface
 ///
-/// Server side Fedimint mondule needs to implement this trait.
+/// Server side Fedimint module needs to implement this trait.
 #[async_trait]
 pub trait IServerModule: Debug {
     fn module_key(&self) -> ModuleKey;
