@@ -33,8 +33,10 @@ use crate::net::peers::MuxPeerConnections;
 use crate::PeerId;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct Node {
+pub struct ApiEndpoint {
+    /// The peer's API websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     pub url: Url,
+    /// human-readable name
     pub name: String,
 }
 
@@ -48,7 +50,7 @@ pub struct ClientConfig {
     // Stable and unique id of the federation
     pub federation_id: FederationId,
     /// API endpoints for each federation member
-    pub nodes: Vec<Node>,
+    pub nodes: Vec<ApiEndpoint>,
     /// Threshold pubkey for authenticating configs
     pub auth_pk: threshold_crypto::PublicKey,
     /// Threshold pubkey for authenticating epoch history
