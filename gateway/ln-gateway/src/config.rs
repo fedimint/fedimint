@@ -16,3 +16,9 @@ pub struct GatewayConfig {
     // all requests, including `ReceivePaymentPayload`, should contain the federation id
     pub default_federation: FederationId,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ClnRpcConfig {
+    /// Lightning RPC server bind address
+    pub lnrpc_bind_address: SocketAddr,
+}
