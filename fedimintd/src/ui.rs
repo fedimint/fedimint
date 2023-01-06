@@ -116,7 +116,7 @@ async fn post_guardians(
         .join(CONSENSUS_CONFIG)
         .with_extension(JSON_EXT);
     if std::path::Path::new(&consensus_path).exists() {
-        return Ok(Redirect::to("/run".parse().unwrap()));
+        return Ok(Redirect::to("/run"));
     }
 
     // Make vec of guardians
@@ -206,9 +206,9 @@ async fn post_guardians(
         })
         .await;
     match dkg_receiver.await.expect("failed to read over channel") {
-        UiMessage::DKGSuccess => Ok(Redirect::to("/run".parse().unwrap())),
+        UiMessage::DKGSuccess => Ok(Redirect::to("/run")),
         // TODO: flash a message that it failed
-        UiMessage::DKGFailure => Ok(Redirect::to("/add_guardians".parse().unwrap())),
+        UiMessage::DKGFailure => Ok(Redirect::to("/add_guardians")),
     }
 }
 
@@ -290,7 +290,7 @@ async fn post_federation_params(
         network: form.network,
     });
 
-    Ok(Redirect::to("/add_guardians".parse().unwrap()))
+    Ok(Redirect::to("/add_guardians"))
 }
 
 pub struct UIError(pub StatusCode, pub String);
@@ -322,10 +322,7 @@ async fn qr(Extension(state): Extension<MutableState>) -> impl IntoResponse {
     };
     let png_bytes: Vec<u8> =
         qrcode_generator::to_png_to_vec(connection_string, QrCodeEcc::Low, 1024).unwrap();
-    (
-        axum::response::Headers([(axum::http::header::CONTENT_TYPE, "image/png")]),
-        png_bytes,
-    )
+    ([(axum::http::header::CONTENT_TYPE, "image/png")], png_bytes)
 }
 
 // FIXME: this is so similar to ParamsForm ...

@@ -62,12 +62,12 @@ url = { version = "2.3.1", features = ["serde"] }
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 
 # setup dependencies
-askama = { version = "0.11.1", features = ["with-axum"] }
+askama = "0.11.1"
+askama_axum = "0.2.1"
+axum = { version = "0.6.2", default-features = false, features = [ "form", "tokio" ] }
+axum-macros = "0.3.1"
 http = "0.2"
 http-body = "0.4"
-askama_axum = "0.1.0"
-axum = { version = "0.4", default-features = false }
-axum-macros = "0.2.3"
 hyper = { version = "0.14", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
 qrcode-generator = "4.1.6"
