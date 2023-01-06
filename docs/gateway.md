@@ -62,7 +62,7 @@ Commands:
   help             Print this message or the help of the given subcommand(s)
 
 Options:
-  -a, --address <ADDRESS>          The address of the gateway webserver [default: http://127.0.0.1:8080]
+  -a, --address <ADDRESS>          The address of the gateway webserver [default: http://127.0.0.1:8175]
       --rpcpassword <RPCPASSWORD>  WARNING: Passing in a password from the command line may be less secure!
   -h, --help                       Print help information
   -V, --version                    Print version information

@@ -17,7 +17,7 @@ use url::Url;
 #[command(version)]
 struct Cli {
     /// The address of the gateway webserver
-    #[clap(short, long, default_value = "http://127.0.0.1:8080")]
+    #[clap(short, long, default_value = "http://127.0.0.1:8175")]
     address: Url,
     #[command(subcommand)]
     command: Commands,
