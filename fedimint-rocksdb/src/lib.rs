@@ -272,7 +272,8 @@ mod fedimint_rocksdb_tests {
     #[test_log::test(tokio::test)]
     async fn test_simple_db_migration() {
         fedimint_api::db::verify_simple_migration(
-            open_temp_db("fcb-rocksdb-test-simple-migration").into(),
+            open_temp_db("fcb-rocksdb-test-simple-migration-old-db").into(),
+            open_temp_db("fcb-rocksdb-test-simple-migration-new-db").into(),
         )
         .await;
     }

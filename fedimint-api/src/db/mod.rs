@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::Future;
 use serde::Serialize;
 use strum_macros::EnumIter;
 use thiserror::Error;
@@ -83,37 +84,81 @@ pub struct DatabaseVersionKey;
 impl DatabaseKeyPrefixConst for DatabaseVersionKey {
     const DB_PREFIX: u8 = DbKeyPrefix::DatabaseVersion as u8;
     type Key = Self;
-    type Value = u64;
+    type Value = String;
 }
 
-pub struct DatabaseMigrator {
+pub struct DatabaseMigrator<T>
+where
+    T: Future<Output = ()>,
+{
     source: Database,
     target: Database,
-    migrations: BTreeMap<(u64, u64), Vec<fn(u64) -> Result<(), anyhow::Error>>>,
+    migrations: BTreeMap<String, Vec<Box<dyn Fn(Database, Database) -> T>>>,
 }
 
-impl DatabaseMigrator {
-    pub async fn migrate(&self, current_version: u64) -> Result<(), anyhow::Error> {
-        // lookup the version of the database and compare it against the hardcoded version
-        let mut source_tx = self
+macro_rules! migrate_prefix {
+    ($source_dbtx:ident, $target_dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty) => {
+        let db_items = $source_dbtx.find_by_prefix(&$prefix_type).await;
+        for res in db_items {
+            match res {
+                Ok(pair) => {
+                    let new_key = pair.0.migrate();
+                    let new_value = pair.1.migrate();
+                    $target_dbtx
+                        .insert_new_entry(&new_key, &new_value)
+                        .await
+                        .expect("DB Error");
+                }
+                _ => {
+                    // Something went wrong when getting the key/value pairs
+                }
+            }
+        }
+    };
+}
+
+impl<T> DatabaseMigrator<T>
+where
+    T: Future<Output = ()>,
+{
+    pub async fn migrate(&self, current_version: String) {
+        let mut dbtx = self
             .source
             .begin_transaction(ModuleDecoderRegistry::default())
             .await;
-        let db_version = source_tx
-            .get_value(&DatabaseVersionKey)
-            .await
-            .unwrap()
-            .unwrap();
+        let version_opt = dbtx.get_value(&DatabaseVersionKey).await.expect("DB Error");
+        if version_opt.is_some() {
+            let version = version_opt.unwrap();
+            if version != current_version {
+                tracing::info!("Current database version {} is not equal to persisted version {}. Initiating DB migration...", current_version, version);
+                //println!("Current database version {} is not equal to persisted version {}. Initiating DB migration...", current_version, version);
 
-        if db_version != current_version {
-            let migration_version = (db_version, current_version);
-            let migrations = self.migrations.get(&migration_version).unwrap();
-            for migration in migrations {
-                migration(db_version)?;
+                let migrations_opt = self.migrations.get(&version);
+                if migrations_opt.is_some() {
+                    let migrations = migrations_opt.unwrap();
+                    for migration in migrations {
+                        migration(self.source.clone(), self.target.clone()).await;
+                    }
+                }
             }
         }
+    }
 
-        Ok(())
+    pub fn add_migration(
+        &mut self,
+        version: String,
+        migration: Box<dyn Fn(Database, Database) -> T>,
+    ) {
+        match self.migrations.get_mut(&version) {
+            None => {
+                let mut migrations = Vec::new();
+                migrations.push(migration);
+                self.migrations.insert(version, migrations);
+            }
+            Some(migrations) => {
+                migrations.push(migration);
+            }
+        }
     }
 }
 
@@ -434,9 +479,11 @@ impl DecodingError {
     }
 }
 
-mod tests {
+pub mod tests {
+    use std::collections::BTreeMap;
+
     use super::Database;
-    use crate::db::DatabaseKeyPrefixConst;
+    use crate::db::{DatabaseKeyPrefixConst, DatabaseMigrator, DatabaseVersionKey};
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
 
@@ -449,17 +496,35 @@ mod tests {
     }
 
     #[derive(Debug, Encodable, Decodable)]
-    struct TestKeyV1 {
-        value: u64,
+    pub struct TestKeyV1 {
+        pub value: u64,
+    }
+
+    impl TestKeyV1 {
+        pub fn migrate(&self) -> TestKeyV2 {
+            TestKeyV2 {
+                value: self.value,
+                new_string: "fedimint".to_string(),
+            }
+        }
     }
 
     #[derive(Debug, Encodable, Decodable)]
-    struct TestKeyV2 {
-        value: u64,
-        new_string: String,
+    struct DbPrefixTestPrefix;
+
+    impl DatabaseKeyPrefixConst for DbPrefixTestPrefix {
+        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
+        type Key = TestKey;
+        type Value = TestVal;
     }
 
-    type TestKey = TestKeyV1;
+    #[derive(Debug, Encodable, Decodable)]
+    pub struct TestKeyV2 {
+        pub value: u64,
+        pub new_string: String,
+    }
+
+    pub type TestKey = TestKeyV1;
 
     impl DatabaseKeyPrefixConst for TestKey {
         const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
@@ -470,15 +535,6 @@ mod tests {
     impl DatabaseKeyPrefixConst for TestKeyV2 {
         const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
         type Key = Self;
-        type Value = TestVal;
-    }
-
-    #[derive(Debug, Encodable, Decodable)]
-    struct DbPrefixTestPrefix;
-
-    impl DatabaseKeyPrefixConst for DbPrefixTestPrefix {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
-        type Key = TestKey;
         type Value = TestVal;
     }
 
@@ -519,7 +575,13 @@ mod tests {
     }
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-    struct TestVal(u64);
+    pub struct TestVal(u64);
+
+    impl TestVal {
+        pub fn migrate(&self) -> TestVal {
+            TestVal(self.0)
+        }
+    }
 
     pub async fn verify_insert_elements(db: Database) {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
@@ -580,7 +642,10 @@ mod tests {
             .unwrap()
             .is_none());
 
-        assert_eq!(dbtx.get_value(&TestKey{ value: 1 }).await.unwrap(), Some(TestVal(2)));
+        assert_eq!(
+            dbtx.get_value(&TestKey { value: 1 }).await.unwrap(),
+            Some(TestVal(2))
+        );
         assert_eq!(
             dbtx.get_value(&TestKey { value: 1 }).await.unwrap(),
             Some(TestVal(2))
@@ -861,7 +926,7 @@ mod tests {
         // Depending on if the database implementation supports optimistic or pessimistic transactions, this test should generate
         // an error here (pessimistic) or at commit time (optimistic)
         let res = dbtx3
-            .insert_entry(&TestKey{ value: 100 }, &TestVal(103))
+            .insert_entry(&TestKey { value: 100 }, &TestVal(103))
             .await
             .is_ok();
 
@@ -902,7 +967,7 @@ mod tests {
 
         // If the wildcard character ('%') is not handled properly, this will make find_by_prefix return 5 results instead of 4
         assert!(dbtx
-            .insert_entry(&TestKey{value: 101 }, &TestVal(100))
+            .insert_entry(&TestKey { value: 101 }, &TestVal(100))
             .await
             .is_ok());
 
@@ -927,12 +992,12 @@ mod tests {
         let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
 
         assert!(dbtx
-            .insert_entry(&TestKey{ value: 100 }, &TestVal(101))
+            .insert_entry(&TestKey { value: 100 }, &TestVal(101))
             .await
             .is_ok());
 
         assert!(dbtx
-            .insert_entry(&TestKey{ value: 101 }, &TestVal(102))
+            .insert_entry(&TestKey { value: 101 }, &TestVal(102))
             .await
             .is_ok());
 
@@ -950,11 +1015,11 @@ mod tests {
         let expected_keys = 0;
         for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
             match res.as_ref().unwrap().0 {
-                TestKey{ value: 100 } => {
+                TestKey { value: 100 } => {
                     assert!(res.unwrap().1.eq(&TestVal(101)));
                     returned_keys += 1;
                 }
-                TestKey{ value: 101 } => {
+                TestKey { value: 101 } => {
                     assert!(res.unwrap().1.eq(&TestVal(102)));
                     returned_keys += 1;
                 }
@@ -967,8 +1032,15 @@ mod tests {
         assert_eq!(returned_keys, expected_keys);
     }
 
-    pub async fn verify_simple_migration(db: Database) {
-        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+    pub async fn verify_simple_migration(old_db: Database, new_db: Database) {
+        let mut dbtx = old_db
+            .begin_transaction(ModuleDecoderRegistry::default())
+            .await;
+
+        assert!(dbtx
+            .insert_entry(&DatabaseVersionKey, &"1.0.0".to_string())
+            .await
+            .is_ok());
 
         let mut i = 0;
         while i < 100 {
@@ -982,15 +1054,56 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         // Upgrade fedimint
-        let mut dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
-        assert_eq!(
-            dbtx.get_value(&TestKeyV2 {
-                value: 100,
-                new_string: "fedimint".to_string()
-            })
+        let mut dbtx = new_db
+            .begin_transaction(ModuleDecoderRegistry::default())
+            .await;
+        assert!(dbtx
+            .insert_entry(&DatabaseVersionKey, &"1.0.1".to_string())
             .await
-            .unwrap(),
-            Some(TestVal(101))
+            .is_ok());
+        dbtx.commit_tx().await.expect("DB Error");
+
+        let mut migrator = DatabaseMigrator {
+            source: old_db.clone(),
+            target: new_db.clone(),
+            migrations: BTreeMap::new(),
+        };
+        migrator.add_migration(
+            "1.0.0".to_string(),
+            Box::new(|source, target| async move {
+                let mut source_dbtx = source
+                    .begin_transaction(ModuleDecoderRegistry::default())
+                    .await;
+                let mut target_dbtx = target
+                    .begin_transaction(ModuleDecoderRegistry::default())
+                    .await;
+                migrate_prefix!(
+                    source_dbtx,
+                    target_dbtx,
+                    DbPrefixTestPrefix,
+                    TestKeyV1,
+                    TestVal
+                );
+                target_dbtx.commit_tx().await.expect("DB Error");
+            }),
         );
+        migrator.migrate("1.0.1".to_string()).await;
+
+        let mut dbtx = new_db
+            .begin_transaction(ModuleDecoderRegistry::default())
+            .await;
+        let mut i = 0;
+        while i < 100 {
+            assert_eq!(
+                dbtx.get_value(&TestKeyV2 {
+                    value: i + 100,
+                    new_string: "fedimint".to_string()
+                })
+                .await
+                .unwrap(),
+                Some(TestVal(i + 101))
+            );
+            i = i + 1;
+        }
     }
 }
