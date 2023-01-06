@@ -71,7 +71,7 @@ askama = { version = "0.11.1", features = ["with-axum"] }
 http = "0.2"
 http-body = "0.4"
 askama_axum = "0.1.0"
-axum = { version = "0.4", default-features = false }
+axum = { version = "0.6", default-features = false }
 axum-macros = "0.2.3"
 hyper = { version = "0.14", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }

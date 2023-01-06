@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1.59"
-axum = "0.5.16"
+axum = "0.6.1"
 axum-macros = "0.2.3"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 clap = { version = "4.0.29", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
