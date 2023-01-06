@@ -34,7 +34,7 @@ pub trait ClientModulePlugin: Debug {
 pub trait IClientModule: Debug {
     fn module_key(&self) -> ModuleKey;
 
-    fn as_any(&self) -> &(dyn Any + 'static);
+    fn as_any(&self) -> &dyn Any;
 
     /// Return the type-erased decoder of the module
     fn decoder(&self) -> Decoder;
@@ -54,7 +54,7 @@ where
         <T as ClientModulePlugin>::MODULE_KEY
     }
 
-    fn as_any(&self) -> &(dyn Any + 'static) {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
