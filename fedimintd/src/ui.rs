@@ -29,7 +29,7 @@ use tokio::sync::Mutex;
 use tokio_rustls::rustls;
 use url::Url;
 
-use crate::distributedgen::{create_cert, run_dkg};
+use crate::distributedgen::{create_cert, parse_peer_params, run_dkg};
 use crate::encrypt::{encrypted_read, get_key};
 use crate::{
     encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG,
@@ -93,11 +93,6 @@ async fn add_guardians_page(Extension(state): Extension<MutableState>) -> AddGua
     }
 }
 
-fn parse_name_from_connection_string(connection_string: &str) -> String {
-    let parts = connection_string.split('@').collect::<Vec<&str>>();
-    parts[2].to_string()
-}
-
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
 pub struct GuardiansForm {
@@ -129,7 +124,7 @@ async fn post_guardians(
     let mut guardians = vec![params.guardian.clone()];
     for connection_string in connection_strings.clone().into_iter() {
         guardians.push(Guardian {
-            name: parse_name_from_connection_string(&connection_string),
+            name: parse_peer_params(connection_string.clone()).name,
             tls_connect_string: connection_string,
         });
     }
@@ -153,7 +148,7 @@ async fn post_guardians(
     let mut dkg_task_group = state.task_group.make_subgroup().await;
     state
         .task_group
-        .spawn("admint UI running DKG", move |_| async move {
+        .spawn("admin UI running DKG", move |_| async move {
             tracing::info!("Running DKG");
             match run_dkg(
                 params.bind_p2p,

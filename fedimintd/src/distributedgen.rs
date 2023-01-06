@@ -113,7 +113,7 @@ pub async fn run_dkg(
     result
 }
 
-fn parse_peer_params(url: String) -> PeerServerParams {
+pub fn parse_peer_params(url: String) -> PeerServerParams {
     let split: Vec<&str> = url.split('@').collect();
     assert_eq!(split.len(), 4, "Cannot parse cert string");
     let p2p_url = split[0].parse().expect("could not parse URL");
