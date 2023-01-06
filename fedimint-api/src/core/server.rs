@@ -19,7 +19,7 @@ use crate::module::{
 };
 
 pub trait ModuleVerificationCache: Debug {
-    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync);
+    fn as_any(&self) -> &(dyn Any + Send + Sync);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> VerificationCache;
 }
@@ -37,7 +37,7 @@ impl<T> ModuleVerificationCache for T
 where
     T: PluginVerificationCache + 'static,
 {
-    fn as_any(&self) -> &(dyn Any + 'static + Send + Sync) {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 
@@ -59,7 +59,7 @@ pub trait IServerModule: Debug {
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> Decoder;
 
-    fn as_any(&self) -> &(dyn Any + 'static);
+    fn as_any(&self) -> &dyn Any;
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>);
@@ -194,7 +194,7 @@ where
         Decoder::from_typed(ServerModulePlugin::decoder(self))
     }
 
-    fn as_any(&self) -> &(dyn Any + 'static) {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
