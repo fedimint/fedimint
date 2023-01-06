@@ -16,12 +16,12 @@ use std::{
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
-use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use fedimint_api::config::FederationId;
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
 use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
-    FederationId, GatewayClient,
+    GatewayClient,
 };
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
@@ -43,7 +43,7 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
 pub struct LnGateway {
     config: GatewayConfig,
-    actors: Mutex<HashMap<Sha256Hash, Arc<GatewayActor>>>,
+    actors: Mutex<HashMap<String, Arc<GatewayActor>>>,
     ln_rpc: Arc<dyn LnRpc>,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
@@ -98,7 +98,7 @@ impl LnGateway {
         self.actors
             .lock()
             .await
-            .get(&federation_id.hash())
+            .get(&federation_id.to_string())
             .cloned()
             .ok_or(LnGatewayError::UnknownFederation)
     }
@@ -119,7 +119,7 @@ impl LnGateway {
         );
 
         self.actors.lock().await.insert(
-            FederationId(client.config().client_config.federation_name).hash(),
+            client.config().client_config.federation_id.to_string(),
             actor.clone(),
         );
         Ok(actor)

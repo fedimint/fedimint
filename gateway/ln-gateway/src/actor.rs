@@ -7,7 +7,7 @@ use fedimint_server::modules::{
     ln::contracts::{ContractId, Preimage},
     wallet::txoproof::TxOutProof,
 };
-use mint_client::{FederationId, GatewayClient, PaymentParameters};
+use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
@@ -238,7 +238,7 @@ impl GatewayActor {
     pub fn get_info(&self) -> Result<FederationInfo> {
         let cfg = self.client.config();
         Ok(FederationInfo {
-            federation_id: FederationId(cfg.client_config.federation_name.clone()),
+            federation_id: cfg.client_config.federation_id.clone(),
             mint_pubkey: cfg.redeem_key.x_only_public_key().0,
         })
     }

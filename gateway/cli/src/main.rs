@@ -2,6 +2,7 @@ use std::{net::SocketAddr, path::PathBuf};
 
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
+use fedimint_api::config::FederationId;
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
     config::GatewayConfig,
@@ -10,7 +11,7 @@ use ln_gateway::{
         DepositPayload, WithdrawPayload,
     },
 };
-use mint_client::{utils::from_hex, FederationId};
+use mint_client::utils::from_hex;
 use url::Url;
 
 #[derive(Parser)]
@@ -96,7 +97,7 @@ async fn main() {
                     // TODO: Generate a strong random password
                     password: source_password(cli.rpcpassword),
                     // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
-                    default_federation: FederationId("Hals_trusty_mint".into()),
+                    default_federation: FederationId::dummy(),
                 },
             )
             .expect("Failed to write gateway configs to file");

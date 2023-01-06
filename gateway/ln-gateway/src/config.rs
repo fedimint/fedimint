@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use mint_client::FederationId;
+use fedimint_api::config::FederationId;
 use serde::{Deserialize, Serialize};
 use url::Url;
 

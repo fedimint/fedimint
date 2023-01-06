@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::io::Write;
 use std::ops::Mul;
+use std::str::FromStr;
 
 use anyhow::bail;
 use anyhow::format_err;
@@ -14,6 +16,7 @@ use hbbft::crypto::group::GroupEncoding;
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 use hbbft::pairing::group::Group;
+use hex::FromHexError;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -42,6 +45,8 @@ pub struct Node {
 pub struct ClientConfig {
     /// name of the federation
     pub federation_name: String,
+    // Stable and unique id of the federation
+    pub federation_id: FederationId,
     /// API endpoints for each federation member
     pub nodes: Vec<Node>,
     /// Threshold pubkey for authenticating configs
@@ -50,6 +55,42 @@ pub struct ClientConfig {
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules
     pub modules: BTreeMap<String, ClientModuleConfig>,
+}
+
+/// The federation id is a copy of the authentication threshold public key of the federation
+///
+/// Stable id so long as guardians membership does not change
+/// Unique id so long as guardians do not all collude
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+pub struct FederationId(pub threshold_crypto::PublicKey);
+
+/// Display as a hex encoding
+impl FederationId {
+    /// Non-unique dummy id for testing
+    pub fn dummy() -> Self {
+        Self(threshold_crypto::PublicKey::from(G1Projective::identity()))
+    }
+
+    fn from_bytes(bytes: [u8; 48]) -> Self {
+        Self(threshold_crypto::PublicKey::from_bytes(bytes).expect("Invalid pub-key"))
+    }
+}
+
+impl ToString for FederationId {
+    fn to_string(&self) -> String {
+        hex::encode(self.0.to_bytes())
+    }
+}
+
+impl FromStr for FederationId {
+    type Err = FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        hex::decode(s).and_then(|vec| match vec.try_into() {
+            Ok(bytes) => Ok(Self::from_bytes(bytes)),
+            Err(_) => Err(FromHexError::InvalidStringLength),
+        })
+    }
 }
 
 impl ClientConfig {

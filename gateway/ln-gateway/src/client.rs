@@ -6,6 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use fedimint_api::config::FederationId;
 use fedimint_api::{
     config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
@@ -15,7 +16,7 @@ use fedimint_server::config::load_from_file;
 use mint_client::{
     api::{WsFederationApi, WsFederationConnect},
     query::CurrentConsensus,
-    Client, FederationId, GatewayClientConfig,
+    Client, GatewayClientConfig,
 };
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
@@ -49,7 +50,7 @@ pub struct RocksDbFactory;
 
 impl IDbFactory for RocksDbFactory {
     fn create_database(&self, federation_id: FederationId, path: PathBuf) -> Result<Database> {
-        let db_path = path.join(format!("{}.db", federation_id.hash()));
+        let db_path = path.join(format!("{}.db", federation_id.to_string()));
         let db = fedimint_rocksdb::RocksDb::open(db_path)
             .expect("Error opening new rocks DB")
             .into();
@@ -102,7 +103,7 @@ impl StandardGatewayClientBuilder {
 #[async_trait]
 impl IGatewayClientBuilder for StandardGatewayClientBuilder {
     async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
-        let federation_id = FederationId(config.client_config.federation_name.clone());
+        let federation_id = config.client_config.federation_id.clone();
 
         let db = self
             .db_factory
@@ -143,8 +144,8 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
     }
 
     fn save_config(&self, config: GatewayClientConfig) -> Result<()> {
-        let hash = FederationId(config.client_config.federation_name.clone()).hash();
-        let path: PathBuf = self.work_dir.join(format!("{}.json", hash.clone()));
+        let id = config.client_config.federation_id.to_string();
+        let path: PathBuf = self.work_dir.join(format!("{}.json", id));
 
         if Path::new(&path).is_file() {
             if config
