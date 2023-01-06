@@ -115,9 +115,14 @@ pub fn sats(amount: u64) -> Amount {
     Amount::from_sats(amount)
 }
 
+/// `OutPoint` represents a globally unique output in a transaction
+///
+/// Hence, a transaction ID and the output index is required.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutPoint {
+    /// The referenced transaction ID
     pub txid: TransactionId,
+    /// As a transaction may have multiple outputs, this refers to the index of the output in a transaction
     pub out_idx: u64,
 }
 
