@@ -212,7 +212,7 @@ macro_rules! newtype_impl_display_passthrough {
 ///
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleKey`]s
-pub trait PluginDecode: Debug {
+pub trait PluginDecode: Debug + Send + Sync + 'static {
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
