@@ -71,8 +71,8 @@ impl FederationId {
         Self(threshold_crypto::PublicKey::from(G1Projective::identity()))
     }
 
-    fn from_bytes(bytes: [u8; 48]) -> Self {
-        Self(threshold_crypto::PublicKey::from_bytes(bytes).expect("Invalid pub-key"))
+    fn try_from_bytes(bytes: [u8; 48]) -> Option<Self> {
+        Some(Self(threshold_crypto::PublicKey::from_bytes(bytes).ok()?))
     }
 }
 
@@ -83,13 +83,15 @@ impl ToString for FederationId {
 }
 
 impl FromStr for FederationId {
-    type Err = FromHexError;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        hex::decode(s).and_then(|vec| match vec.try_into() {
-            Ok(bytes) => Ok(Self::from_bytes(bytes)),
-            Err(_) => Err(FromHexError::InvalidStringLength),
-        })
+        Self::try_from_bytes(
+            hex::decode(s)?
+                .try_into()
+                .map_err(|_| FromHexError::InvalidStringLength)?,
+        )
+        .ok_or_else::<anyhow::Error, _>(|| format_err!("Invalid FederationId pubkey"))
     }
 }
 
