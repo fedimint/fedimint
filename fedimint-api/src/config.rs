@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use anyhow::bail;
 use anyhow::format_err;
+use anyhow::Result;
 use bitcoin::secp256k1;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
@@ -16,7 +17,7 @@ use hbbft::crypto::group::GroupEncoding;
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 use hbbft::pairing::group::Group;
-use hex::FromHexError;
+
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -71,8 +72,10 @@ impl FederationId {
         Self(threshold_crypto::PublicKey::from(G1Projective::identity()))
     }
 
-    fn from_bytes(bytes: [u8; 48]) -> Self {
-        Self(threshold_crypto::PublicKey::from_bytes(bytes).expect("Invalid pub-key"))
+    fn from_bytes(bytes: [u8; 48]) -> Result<Self> {
+        threshold_crypto::PublicKey::from_bytes(bytes)
+            .map_err(anyhow::Error::from)
+            .map(Self)
     }
 }
 
@@ -83,13 +86,15 @@ impl ToString for FederationId {
 }
 
 impl FromStr for FederationId {
-    type Err = FromHexError;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        hex::decode(s).and_then(|vec| match vec.try_into() {
-            Ok(bytes) => Ok(Self::from_bytes(bytes)),
-            Err(_) => Err(FromHexError::InvalidStringLength),
-        })
+        let vec = hex::decode(s).map_err(anyhow::Error::from)?;
+
+        match vec.try_into() {
+            Ok(bytes) => Self::from_bytes(bytes),
+            Err(_) => Err(anyhow::anyhow!("Invalid federation id length")),
+        }
     }
 }
 
