@@ -534,6 +534,7 @@ mod tests {
             let mint_pub_key = secp256k1_zkp::XOnlyPublicKey::from_slice(&[42; 32][..]).unwrap();
             let node_pub_key = secp256k1_zkp::PublicKey::from_slice(&[2; 33][..]).unwrap();
             LightningGateway {
+                mint_channel_id: 0,
                 mint_pub_key,
                 node_pub_key,
                 api: Url::parse("http://example.com")

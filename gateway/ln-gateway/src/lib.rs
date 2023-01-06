@@ -9,7 +9,10 @@ pub mod utils;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -49,6 +52,7 @@ pub struct LnGateway {
     receiver: mpsc::Receiver<GatewayRequest>,
     client_builder: GatewayClientBuilder,
     task_group: TaskGroup,
+    channel_id_generator: AtomicU64,
 }
 
 impl LnGateway {
@@ -69,6 +73,7 @@ impl LnGateway {
             receiver,
             client_builder,
             task_group,
+            channel_id_generator: AtomicU64::new(0),
         };
 
         ln_gw.load_federation_actors().await;
@@ -78,6 +83,8 @@ impl LnGateway {
 
     async fn load_federation_actors(&self) {
         if let Ok(configs) = self.client_builder.load_configs() {
+            let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
+
             for config in configs {
                 let client = self
                     .client_builder
@@ -88,7 +95,13 @@ impl LnGateway {
                 if let Err(e) = self.connect_federation(Arc::new(client)).await {
                     error!("Failed to connect federation: {}", e);
                 }
+
+                if config.mint_channel_id > next_channel_id {
+                    next_channel_id = config.mint_channel_id + 1;
+                }
             }
+            self.channel_id_generator
+                .store(next_channel_id, Ordering::SeqCst);
         } else {
             warn!("Could not load any previous federation configs");
         }
@@ -137,9 +150,18 @@ impl LnGateway {
             .await
             .expect("Failed to get node pubkey from Lightning node");
 
+        // The gateway deterministically assigns a channel id (u64) to each federation connected.
+        // TODO: explicitly handle the case where the channel id overflows
+        let channel_id = self.channel_id_generator.fetch_add(1, Ordering::SeqCst);
+
         let gw_client_cfg = self
             .client_builder
-            .create_config(connect, node_pub_key, self.config.announce_address.clone())
+            .create_config(
+                connect,
+                channel_id,
+                node_pub_key,
+                self.config.announce_address.clone(),
+            )
             .await
             .expect("Failed to create gateway client config");
 

@@ -119,11 +119,16 @@ pub struct GatewayClientConfig {
     pub timelock_delta: u64,
     pub api: Url,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
+    /// Channel identifier assigned to the mint by the gateway.
+    /// All clients in this federation should use this value as `short_channel_id`
+    /// when creating invoices to be settled by this gateway.
+    pub mint_channel_id: u64,
 }
 
 impl From<GatewayClientConfig> for LightningGateway {
     fn from(config: GatewayClientConfig) -> Self {
         LightningGateway {
+            mint_channel_id: config.mint_channel_id,
             mint_pub_key: config.redeem_key.x_only_public_key().0,
             node_pub_key: config.node_pub_key,
             api: config.api,
@@ -821,7 +826,7 @@ impl Client<UserClientConfig> {
         // Route hint instructing payer how to route to gateway
         let gateway_route_hint = RouteHint(vec![RouteHintHop {
             src_node_id: gateway.node_pub_key,
-            short_channel_id: 8,
+            short_channel_id: gateway.mint_channel_id,
             fees: RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
