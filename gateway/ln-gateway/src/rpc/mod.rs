@@ -6,8 +6,7 @@ use std::io::Cursor;
 
 use anyhow::{anyhow, Error};
 use bitcoin::{Address, Transaction, XOnlyPublicKey};
-use fedimint_api::config::FederationId;
-use fedimint_api::{Amount, TransactionId};
+use fedimint_api::{config::FederationId, Amount, TransactionId};
 use fedimint_server::{modules::ln::contracts::Preimage, modules::wallet::txoproof::TxOutProof};
 use futures::Future;
 use mint_client::ln::PayInvoicePayload;
@@ -211,7 +210,83 @@ pub fn serde_hex_serialize<T: bitcoin::consensus::Encodable, S: Serializer>(
     }
 }
 
+// MIGRATION:
+//
+// Borrow and re-implement gateway channel messaging types in parallel to
+// the legacy implementations above which were originally designed
+// for gateway REST webserver communication
+
+#[derive(Debug)]
+pub enum GatewayChannelMessage {
+    ProcessHtlcChannel(GatewayChannelMessageInner<ProcessHtlcMessage>),
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct GatewayChannelMessageInner<R: GatewayChannelMessagingTrait> {
+    request: R,
+    sender: oneshot::Sender<Result<R::Response>>,
+}
+
+pub trait GatewayChannelMessagingTrait {
+    type Response;
+
+    fn to_enum(self, sender: oneshot::Sender<Result<Self::Response>>) -> GatewayChannelMessage;
+}
+
 #[derive(Debug, Serialize, Deserialize)]
-pub struct HtlcInterceptPayload {
-    pub invoice_amount: Amount,
+pub struct ProcessHtlcMessage {
+    pub amount_msat: Amount,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProcessHtlcResponse {
+    pub preimage: Preimage,
+}
+
+impl GatewayChannelMessagingTrait for ProcessHtlcMessage {
+    type Response = ProcessHtlcResponse;
+    fn to_enum(self, sender: oneshot::Sender<Result<Self::Response>>) -> GatewayChannelMessage {
+        GatewayChannelMessage::ProcessHtlcChannel(GatewayChannelMessageInner {
+            request: self,
+            sender,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GatewayMessageSender {
+    sender: mpsc::Sender<GatewayChannelMessage>,
+}
+
+/// A two-way message channel for [`GatewayChannelMessage`]s.
+///
+/// The channel consists of a long lived sender and receiver used to pass along the original message
+/// And a short lived (oneshot tx, rx) is used to receive a response in the opposite direction as the original message.
+impl GatewayMessageSender {
+    pub fn new(sender: mpsc::Sender<GatewayChannelMessage>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn send<R>(&self, message: R) -> std::result::Result<R::Response, Error>
+    where
+        R: GatewayChannelMessagingTrait,
+    {
+        let (sender, receiver) = oneshot::channel::<Result<R::Response>>();
+        let msg = message.to_enum(sender);
+
+        if let Err(e) = self.sender.send(msg).await {
+            error!("Failed to send message over channel: {}", e);
+            return Err(e.into());
+        }
+
+        receiver
+            .await
+            .unwrap_or_else(|_| {
+                Err(LnGatewayError::Other(anyhow!(
+                    "Failed to receive response over channel"
+                )))
+            })
+            .map_err(|e| e.into())
+    }
 }

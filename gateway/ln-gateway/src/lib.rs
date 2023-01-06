@@ -20,11 +20,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use bitcoin::Address;
-use fedimint_api::config::FederationId;
-use fedimint_api::{task::TaskGroup, Amount, TransactionId};
+use fedimint_api::{config::FederationId, task::TaskGroup, Amount, TransactionId};
 use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
