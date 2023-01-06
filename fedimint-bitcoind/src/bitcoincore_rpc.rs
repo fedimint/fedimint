@@ -18,7 +18,13 @@ pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg, task_handle: TaskHandle) -> Resul
         Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
     )
     .map_err(anyhow::Error::from)?;
-    let retry_client = RetryClient::new(Client(ErrorReporting::new(bitcoind_client)), task_handle);
+    let retry_client = RetryClient::new(
+        Client(ErrorReporting::new(
+            cfg.btc_rpc_address.clone(),
+            bitcoind_client,
+        )),
+        task_handle,
+    );
 
     Ok(retry_client.into())
 }
@@ -28,15 +34,17 @@ pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg, task_handle: TaskHandle) -> Resul
 /// In the future we might tweak which errors are worth reporting exactly.
 #[derive(Debug)]
 struct ErrorReporting<C> {
+    // TODO: Url
+    addr: String,
     inner: C,
 }
 
 impl<C> ErrorReporting<C> {
-    fn new(inner: C) -> Self
+    fn new(addr: String, inner: C) -> Self
     where
         C: RpcApi,
     {
-        Self { inner }
+        Self { addr, inner }
     }
 }
 
@@ -50,7 +58,10 @@ where
         args: &[Value],
     ) -> ::bitcoincore_rpc::Result<T> {
         self.inner.call(cmd, args).map_err(|e| {
-            warn!("bitcoind returned error on cmd '{}': {}", cmd, e);
+            warn!(
+                addr = self.addr,
+                "bitcoind returned error on cmd '{}': {}", cmd, e
+            );
             e
         })
     }
