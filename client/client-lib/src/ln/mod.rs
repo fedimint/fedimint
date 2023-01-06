@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use fedimint_api::config::FederationId;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::DatabaseTransaction;
@@ -37,7 +38,6 @@ use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::ClientContext;
-use crate::FederationId;
 
 #[derive(Debug)]
 pub struct LnClient {

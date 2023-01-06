@@ -8,7 +8,6 @@ pub mod utils;
 pub mod wallet;
 
 use std::fmt::{Debug, Formatter};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
@@ -107,24 +106,6 @@ pub struct PaymentParameters {
     pub max_send_amount: Amount,
     pub payment_hash: sha256::Hash,
     pub maybe_internal: bool,
-}
-
-// Placeholder struct for identifying federations across clients
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
-pub struct FederationId(pub String);
-
-impl FederationId {
-    pub fn hash(&self) -> sha256::Hash {
-        sha256::Hash::hash(self.0.as_bytes())
-    }
-}
-
-impl FromStr for FederationId {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Ok(FederationId(s.to_string()))
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -941,8 +922,7 @@ impl Client<UserClientConfig> {
     ) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
 
-        let federation_name = self.config().0.federation_name;
-        let payload = PayInvoicePayload::new(FederationId(federation_name), contract_id);
+        let payload = PayInvoicePayload::new(self.config.0.federation_id.clone(), contract_id);
 
         let future = reqwest::Client::new()
             .post(

@@ -1603,6 +1603,7 @@ dependencies = [
  "axum-macros",
  "bitcoin",
  "clap",
+ "fedimint-api",
  "fedimint-build",
  "fedimint-server",
  "ln-gateway",

@@ -2,14 +2,14 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, FederationId};
 use ln_gateway::{
     client::{DbFactory, IGatewayClientBuilder},
     LnGatewayError,
 };
 use mint_client::{
     api::{FederationApi, WsFederationConnect},
-    Client, FederationId, GatewayClient, GatewayClientConfig,
+    Client, GatewayClient, GatewayClientConfig,
 };
 use secp256k1::{PublicKey, Secp256k1};
 use url::Url;
@@ -33,7 +33,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         &self,
         config: GatewayClientConfig,
     ) -> Result<Client<GatewayClientConfig>, LnGatewayError> {
-        let federation_id = FederationId(config.client_config.federation_name.clone());
+        let federation_id = config.client_config.federation_id.clone();
 
         let api: FederationApi = MockApi::new().into();
         let db = self
@@ -52,10 +52,12 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         // TODO: use the connect info urls to get the federation name?
         // Simulate clients in the same federation by seeding the generated `client_config`
         // Using some of the info in provided web socket connect info
+        let auth_pk = threshold_crypto::SecretKey::random().public_key();
         let client_config = ClientConfig {
             federation_name: "".to_string(),
+            federation_id: FederationId(auth_pk),
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
-            auth_pk: threshold_crypto::SecretKey::random().public_key(),
+            auth_pk,
             nodes: [].into(),
             modules: [].into(),
         };

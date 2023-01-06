@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::Result;
+use fedimint_api::config::FederationId;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
@@ -16,7 +17,6 @@ use ln_gateway::{
     utils::retry,
 };
 use mint_client::api::WsFederationConnect;
-use mint_client::FederationId;
 use url::Url;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -26,7 +26,7 @@ async fn test_gateway_authentication() -> Result<()> {
     let gw_bind_address = SocketAddr::from(([127, 0, 0, 1], gw_port));
     let gw_announce_address =
         Url::parse(&format!("http://{}", gw_bind_address)).expect("Invalid gateway address");
-    let federation_id = FederationId("test_fed".into());
+    let federation_id = FederationId::dummy();
 
     let cfg = GatewayConfig {
         password: gw_password.clone(),

@@ -5,8 +5,8 @@ use std::sync::Arc;
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
-    ThresholdKeys, TypedServerModuleConfig,
+    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, FederationId, Node,
+    ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -148,6 +148,7 @@ impl ServerConfigConsensus {
 
         Ok(ClientConfig {
             federation_name: self.federation_name.clone(),
+            federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
             auth_pk: self.auth_pk_set.public_key(),
             nodes,
