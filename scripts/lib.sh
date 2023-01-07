@@ -115,8 +115,8 @@ function get_raw_transaction() {
     echo $TRANSACTION
 }
 
-function get_federation_name() {
-    cat $FM_CFG_DIR/client.json | jq -r '.federation_name'
+function get_federation_id() {
+    cat $FM_CFG_DIR/client.json | jq -r '.federation_id'
 }
 
 function show_verbose_output()
