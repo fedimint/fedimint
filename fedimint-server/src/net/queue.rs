@@ -168,24 +168,52 @@ impl<M: MaybeEpochMessage> MessageQueue<M> {
 #[cfg(test)]
 mod tests {
     use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
+    use crate::MaybeEpochMessage;
+
+    #[derive(Debug, Clone, Eq, PartialEq)]
+    struct TestMsg {
+        epoch: Option<u64>,
+        msg: u64,
+    }
+
+    impl MaybeEpochMessage for TestMsg {
+        fn message_epoch(&self) -> Option<u64> {
+            self.epoch
+        }
+    }
 
     #[test]
     fn test_queue() {
         let mut queue = MessageQueue::default();
 
+        queue.queue_message(TestMsg {
+            epoch: None,
+            msg: 0,
+        });
+        assert_eq!(queue.buffered_epochs(), 0);
+
         // Test queuing unsent
         for i in 0u64..10 {
-            queue.queue_message(42 * i);
-            assert_eq!(queue.next_id, MessageId(i + 2));
-            assert_eq!(queue.unsent_messages, i + 1);
+            queue.queue_message(TestMsg {
+                epoch: Some(i),
+                msg: 42 * i,
+            });
+            assert_eq!(queue.next_id, MessageId(i + 3));
+            assert_eq!(queue.unsent_messages, i + 2);
             assert_eq!(
                 queue.next_send_message().unwrap(),
                 &UniqueMessage {
                     id: MessageId(1),
-                    msg: 0
+                    msg: TestMsg {
+                        epoch: None,
+                        msg: 0
+                    }
                 }
             );
         }
+
+        assert_eq!(queue.unsent_len(), 11);
+        assert_eq!(queue.buffered_epochs(), 10);
 
         // Test sending
         queue.mark_sent(MessageId(1));
@@ -193,29 +221,66 @@ mod tests {
             queue.next_send_message().unwrap(),
             &UniqueMessage {
                 id: MessageId(2),
-                msg: 42
+                msg: TestMsg {
+                    epoch: Some(0),
+                    msg: 0
+                }
             }
         );
+        assert_eq!(queue.buffered_epochs(), 10);
+
         queue.mark_sent(MessageId(2));
         assert_eq!(
             queue.next_send_message().unwrap(),
             &UniqueMessage {
                 id: MessageId(3),
-                msg: 84
+                msg: TestMsg {
+                    epoch: Some(1),
+                    msg: 42
+                }
             }
         );
+        assert_eq!(queue.buffered_epochs(), 10);
+
+        queue.mark_sent(MessageId(3));
+        assert_eq!(
+            queue.next_send_message().unwrap(),
+            &UniqueMessage {
+                id: MessageId(4),
+                msg: TestMsg {
+                    epoch: Some(2),
+                    msg: 84
+                }
+            }
+        );
+        assert_eq!(queue.buffered_epochs(), 10);
 
         // Test ACK
         queue.ack(MessageId(1));
+        assert_eq!(queue.queue.len(), 10);
+        assert_eq!(queue.buffered_epochs(), 10);
+
+        queue.ack(MessageId(2));
         assert_eq!(queue.queue.len(), 9);
+        assert_eq!(queue.buffered_epochs(), 9);
+
+        queue.queue_message(TestMsg {
+            epoch: None,
+            msg: 0,
+        });
+        assert_eq!(queue.queue.len(), 10);
+        assert_eq!(queue.buffered_epochs(), 9);
 
         // Test resend
         queue.resend_all();
         assert_eq!(
             queue.next_send_message().unwrap(),
             &UniqueMessage {
-                id: MessageId(2),
-                msg: 42
+                id: MessageId(3),
+                msg: TestMsg {
+                    epoch: Some(1),
+                    msg: 42
+                }
             }
         );
     }
