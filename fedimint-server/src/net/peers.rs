@@ -203,8 +203,13 @@ struct CommonPeerConnectionState<M> {
 }
 
 struct DisconnectedPeerConnectionState {
+    /// Time at which we will try another connection attempt
     reconnect_at: Instant,
+    /// Number used to calculate time till next reconnect attempt
     failed_reconnect_counter: u64,
+    /// If a connection was dropped because of a full `message_buffer` we do not need to buffer any
+    /// messages till there is a new TCP connection.
+    session_active: bool,
 }
 
 struct ConnectedPeerConnectionState<M> {
@@ -571,6 +576,7 @@ where
         PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
             reconnect_at,
             failed_reconnect_counter: disconnect_count,
+            session_active: true,
         })
     }
 
@@ -642,17 +648,19 @@ where
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
-                let buffer_ready = self.message_buffer.buffered_epochs() < MAX_BUFFERED_EPOCHS;
+                let buffer_ready = (self.message_buffer.buffered_epochs() < MAX_BUFFERED_EPOCHS) && disconnected.session_active;
                 match maybe_msg {
-                    Some(msg)if buffer_ready  => {
+                    Some(msg) if buffer_ready  => {
                         self.message_buffer.queue_message(msg);
                         PeerConnectionState::Disconnected(disconnected)
                     }
                     Some(_) => {
-                        // FIXME: only begin buffering again once we have a new connection
                         // Drop buffer if it gets too big, now the peer will have to rejoin consensus
                         self.message_buffer = Default::default();
-                        PeerConnectionState::Disconnected(disconnected)
+                        PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
+                            session_active: false,
+                            ..disconnected
+                        })
                     }
                     None => {
                         debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
