@@ -574,7 +574,7 @@ where
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_group: &mut TaskGroup,
     ) -> PeerConnection<M> {
-        let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
+        let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1);
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
 
         futures::executor::block_on(task_group.spawn(
