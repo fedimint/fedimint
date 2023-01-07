@@ -5,8 +5,8 @@ use std::sync::Arc;
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, FederationId, Node,
-    ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
+    ApiEndpoint, BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner,
+    FederationId, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
 use fedimint_api::module::FederationModuleConfigGen;
@@ -71,8 +71,6 @@ pub struct ServerConfigPrivate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigConsensus {
-    /// Network addresses and certs for all peers
-    pub peers: BTreeMap<PeerId, Peer>,
     /// The version of the binary code running
     pub code_version: String,
     /// Configurable federation name
@@ -86,12 +84,16 @@ pub struct ServerConfigConsensus {
     /// Public keys for signing consensus epochs from all peers
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
+    /// Network addresses and names for all peer APIs
+    pub api: BTreeMap<PeerId, ApiEndpoint>,
     /// All configuration that needs to be the same for modules
     pub modules: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
+    /// Network addresses and certs for all p2p connections
+    pub p2p: BTreeMap<PeerId, PeerEndpoint>,
     /// Our peer id (generally should not change)
     pub identity: PeerId,
     /// Our bind address for communicating with peers
@@ -108,16 +110,12 @@ pub struct ServerConfigLocal {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Peer {
+pub struct PeerEndpoint {
     /// Certs for TLS communication, required for peer authentication
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
     /// The TLS network address and port, used for HBBFT consensus
     pub hbbft: Url,
-    /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
-    pub api_addr: Url,
-    /// human-readable name
-    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -137,21 +135,12 @@ impl ServerConfigConsensus {
         &self,
         module_config_gens: &ModuleConfigGens,
     ) -> anyhow::Result<ClientConfig> {
-        let nodes = self
-            .peers
-            .values()
-            .map(|peer| Node {
-                url: peer.api_addr.clone(),
-                name: peer.name.clone(),
-            })
-            .collect();
-
         Ok(ClientConfig {
             federation_name: self.federation_name.clone(),
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
             auth_pk: self.auth_pk_set.public_key(),
-            nodes,
+            nodes: self.api.values().cloned().collect(),
             modules: self
                 .modules
                 .iter()
@@ -197,6 +186,7 @@ impl ServerConfig {
             modules: Default::default(),
         };
         let local = ServerConfigLocal {
+            p2p: params.peers(),
             identity,
             fed_bind: params.fed_network.bind_addr,
             api_bind: params.api_network.bind_addr,
@@ -207,10 +197,10 @@ impl ServerConfig {
         let consensus = ServerConfigConsensus {
             code_version: code_version.to_string(),
             federation_name: params.federation_name.clone(),
-            peers: params.peers(),
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
+            api: params.api_nodes(),
             modules: Default::default(),
         };
         let mut cfg = Self {
@@ -271,7 +261,7 @@ impl ServerConfig {
         identity: &PeerId,
         module_config_gens: &ModuleConfigGens,
     ) -> anyhow::Result<()> {
-        let peers = self.consensus.peers.clone();
+        let peers = self.local.p2p.clone();
         let consensus = self.consensus.clone();
         let private = self.private.clone();
         let id = identity.to_usize();
@@ -443,8 +433,8 @@ impl ServerConfig {
             identity: self.local.identity,
             bind_addr: self.local.fed_bind,
             peers: self
-                .consensus
-                .peers
+                .local
+                .p2p
                 .iter()
                 .map(|(&id, peer)| (id, peer.hbbft.clone()))
                 .collect(),
@@ -456,14 +446,14 @@ impl ServerConfig {
             our_certificate: self.local.tls_cert.clone(),
             our_private_key: self.private.tls_key.clone(),
             peer_certs: self
-                .consensus
-                .peers
+                .local
+                .p2p
                 .iter()
                 .map(|(peer, cfg)| (*peer, cfg.tls_cert.clone()))
                 .collect(),
             peer_names: self
                 .consensus
-                .peers
+                .api
                 .iter()
                 .map(|(peer, cfg)| (*peer, cfg.name.to_string()))
                 .collect(),
@@ -497,18 +487,32 @@ impl ServerConfigParams {
         amounts
     }
 
-    pub fn peers(&self) -> BTreeMap<PeerId, Peer> {
+    pub fn peers(&self) -> BTreeMap<PeerId, PeerEndpoint> {
         self.fed_network
             .peers
             .iter()
             .map(|(peer, hbbft)| {
                 (
                     *peer,
-                    Peer {
+                    PeerEndpoint {
                         tls_cert: self.tls.peer_certs[peer].clone(),
-                        name: self.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
-                        api_addr: self.api_network.peers[peer].clone(),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
+    }
+
+    pub fn api_nodes(&self) -> BTreeMap<PeerId, ApiEndpoint> {
+        self.fed_network
+            .peers
+            .keys()
+            .map(|peer| {
+                (
+                    *peer,
+                    ApiEndpoint {
+                        name: self.tls.peer_names[peer].clone(),
+                        url: self.api_network.peers[peer].clone(),
                     },
                 )
             })

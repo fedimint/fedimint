@@ -128,7 +128,7 @@ impl FedimintServer {
             cfg.local.identity,
             cfg.private.hbbft_sks.inner().clone(),
             cfg.consensus.hbbft_pk_set.clone(),
-            cfg.consensus.peers.keys().copied(),
+            cfg.local.p2p.keys().copied(),
         );
 
         let hbbft: HoneyBadger<Vec<SerdeConsensusItem>, _> =
@@ -136,10 +136,10 @@ impl FedimintServer {
 
         let api_endpoints = cfg
             .consensus
-            .peers
+            .api
             .clone()
             .into_iter()
-            .map(|(id, peer)| (id, peer.api_addr));
+            .map(|(id, node)| (id, node.url));
         let api = Arc::new(WsFederationApi::new(api_endpoints.collect()));
 
         FedimintServer {
@@ -148,7 +148,7 @@ impl FedimintServer {
             consensus: Arc::new(consensus),
             cfg: cfg.clone(),
             api,
-            peers: cfg.consensus.peers.keys().cloned().collect(),
+            peers: cfg.local.p2p.keys().cloned().collect(),
             rejoin_at_epoch: None,
             run_empty_epochs: 0,
             last_processed_epoch: None,
@@ -294,7 +294,7 @@ impl FedimintServer {
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
     ) -> Cancellable<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
-        if self.cfg.consensus.peers.len() == 1 {
+        if self.cfg.local.p2p.len() == 1 {
             tokio::select! {
               () = self.consensus.transaction_notify.notified() => (),
               () = self.consensus.await_consensus_proposal() => (),
