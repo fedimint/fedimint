@@ -6,6 +6,10 @@ pub mod ln;
 pub mod rpc;
 pub mod utils;
 
+pub mod gatewaylnrpc {
+    tonic::include_proto!("gatewaylnrpc");
+}
+
 use std::{
     borrow::Cow,
     collections::HashMap,
