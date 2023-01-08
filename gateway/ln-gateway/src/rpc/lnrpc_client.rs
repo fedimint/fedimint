@@ -214,7 +214,16 @@ impl ILnRpcClient for NetworkLnRpcClient {
                         htlc_outcomes.push(outcome);
                     }
 
-                    // TODO: Send HTLC outcomes to gateway lightning rpc server
+                    if let Err(e) = client
+                        .complete_htlcs(Request::new(stream::iter(htlc_outcomes)))
+                        .await
+                    {
+                        // Note: This is a potential loss of funds for the gateway
+                        error!(
+                            "Failed to send request completing the processed HTLCs: {:?}",
+                            e
+                        );
+                    }
                 }
             },
         )
