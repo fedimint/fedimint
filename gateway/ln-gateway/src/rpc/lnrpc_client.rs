@@ -1,20 +1,22 @@
 use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
-use fedimint_api::{dyn_newtype_define, task::TaskGroup};
+use fedimint_api::{dyn_newtype_define, task::TaskGroup, Amount};
 use fedimint_server::modules::ln::contracts::Preimage;
 use futures::{stream, StreamExt};
 use lightning_invoice::Invoice;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tonic::{transport::Channel, Request};
-use tracing::error;
+use tracing::{error, info};
 
-use super::HtlcInterceptPayload;
+use super::{GatewayChannelMessage, GatewayMessageSender, ProcessHtlcMessage, ProcessHtlcResponse};
 use crate::{
     gatewaylnrpc::{
-        gateway_lightning_client::GatewayLightningClient, GetPubKeyRequest, GetPubKeyResponse,
-        PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+        complete_htlcs_request::{Action, Cancel, Settle},
+        gateway_lightning_client::GatewayLightningClient,
+        CompleteHtlcsRequest, GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest,
+        PayInvoiceResponse, SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
     },
     LightningError, LnGatewayError, Result,
 };
@@ -43,7 +45,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn subscribe_intercept_htlcs(
         &self,
         short_channel_id: u64,
-    ) -> Result<mpsc::Receiver<HtlcInterceptPayload>>;
+    ) -> Result<mpsc::Receiver<GatewayChannelMessage>>;
 }
 
 dyn_newtype_define!(
@@ -142,10 +144,9 @@ impl ILnRpcClient for NetworkLnRpcClient {
     async fn subscribe_intercept_htlcs(
         &self,
         short_channel_id: u64,
-    ) -> Result<mpsc::Receiver<HtlcInterceptPayload>> {
+    ) -> Result<mpsc::Receiver<GatewayChannelMessage>> {
         let mut client = self.client.lock().await.clone();
-
-        let mut response_stream = client
+        let mut stream = client
             .subscribe_intercept_htlcs(Request::new(SubscribeInterceptHtlcsRequest {
                 short_channel_id,
             }))
@@ -153,9 +154,71 @@ impl ILnRpcClient for NetworkLnRpcClient {
             .expect("Failed to subscribe intercept htlcs")
             .into_inner();
 
-        let (_, rx) = mpsc::channel::<HtlcInterceptPayload>(100);
+        // Spawn a task to listen for messages from the htlc stream.
+        // Adapt HTLC data from protobuf types to gateway types and send for processing.
+        let mut tg = self.task_group.clone();
+        let (tx, rx) = mpsc::channel::<GatewayChannelMessage>(100);
 
-        // TODO: Send intercepted HTLCs from stream to gateway actors for processing
+        tg.spawn(
+            "Subscribe to HTLC intercept stream",
+            move |subscription| async move {
+                loop {
+                    // Shutdown the task group when the stream is closed
+                    if subscription.is_shutting_down() {
+                        break;
+                    }
+
+                    let mut htlc_outcomes = Vec::<CompleteHtlcsRequest>::new();
+
+                    while let Some(SubscribeInterceptHtlcsResponse {
+                        outgoing_amount_msat,
+                        intercepted_htlc_id,
+                        ..
+                    }) = stream
+                        .message()
+                        .await
+                        .expect("Failed to get HTLC intercept message")
+                    {
+                        // TODO: Assert short channel id matches the one we subscribed to, or cancel processing of intercepted HTLC
+                        // TODO: Assert the offered fee derived from invoice amount and outgoing amount is acceptable or cancel processing of intercepted HTLC
+                        // TODO: Assert the HTLC expiry or cancel processing of intercepted HTLC
+
+                        let sender = GatewayMessageSender::new(tx.clone());
+
+                        let outcome = match sender
+                            .send(ProcessHtlcMessage {
+                                amount_msat: Amount::from_msats(outgoing_amount_msat),
+                            })
+                            .await
+                        {
+                            Ok(ProcessHtlcResponse { preimage }) => {
+                                info!("Successfully processed intercepted HTLC");
+                                CompleteHtlcsRequest {
+                                    action: Some(Action::Settle(Settle {
+                                        preimage: preimage.0.to_vec(),
+                                        intercepted_htlc_id,
+                                    })),
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to process intercepted HTLC: {:?}", e);
+                                CompleteHtlcsRequest {
+                                    action: Some(Action::Cancel(Cancel {
+                                        reason: e.to_string(),
+                                        intercepted_htlc_id,
+                                    })),
+                                }
+                            }
+                        };
+
+                        htlc_outcomes.push(outcome);
+                    }
+
+                    // TODO: Send HTLC outcomes to gateway lightning rpc server
+                }
+            },
+        )
+        .await;
 
         Ok(rx)
     }
