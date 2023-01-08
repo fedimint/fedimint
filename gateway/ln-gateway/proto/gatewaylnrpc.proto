@@ -14,10 +14,27 @@ service GatewayLightning {
   rpc PayInvoice(stream PayInvoiceRequest) returns (stream PayInvoiceResponse) {
   }
 
-  /* SubscribeInterceptHtlcs opens a stream that intercepts specific HTLCs to be
-   * handled by the gateway  */
+  /* SubscribeInterceptHtlcs opens a stream for a client to receive specific
+   * HTLCs that have a specific short channel id. For every HTLC intercepted and
+   * processed, the client should use `CompleteHtlcs` RPC to stream back a
+   * Success or Failure response.
+   *
+   * Recommendation:
+   * GatewayLightning implementations should respond with a channel stream
+   * over which intercepted HTLCs are continually sent to the client.
+   */
   rpc SubscribeInterceptHtlcs(SubscribeInterceptHtlcsRequest)
       returns (stream SubscribeInterceptHtlcsResponse) {}
+
+  /* CompleteHtlcs allows a client to stream Success or Failure responses
+   * for every HTLC that was intercepted and processed.
+   *
+   * Recommendation:
+   * GatewayLightning client implementations should consider batching HTLC
+   * responses back to server after processing.
+   */
+  rpc CompleteHtlcs(stream CompleteHtlcsRequest)
+      returns (stream CompleteHtlcsResponse) {}
 }
 
 message GetPubKeyRequest {}
@@ -40,21 +57,84 @@ message PayInvoiceResponse {
   bytes preimage = 1;
 }
 
+// Request to subscribe to HTLCs with a specific short channel id
+//
+// Send this request when the gateway just assigned a new channel id to a
+// newly connected federation. GatewayLightning should respond with a
+// stream over which intercepted HTLCs are continually sent to the client.
 message SubscribeInterceptHtlcsRequest {
-  // Subscribe to intercepted HTLCs with this short channel id
+  // The short channel id of HTLCs to intercept
   uint64 short_channel_id = 1;
 }
 
 message SubscribeInterceptHtlcsResponse {
-  // The payment hash of the invoice
+  // The HTLC payment hash.
+  // Value is not guaranteed to be unique per intercepted HTLC
   bytes payment_hash = 1;
 
-  // The amount of the invoice
-  uint64 amount = 2;
+  // The incoming HTLC amount in millisatoshi.
+  // This amount minus the `outgoing_amount_msat` is the fee paid for processing
+  // this intercepted HTLC
+  uint64 incoming_amount_msat = 2;
 
-  // The denomination units of the invoice
-  string units = 3;
+  // The outgoing HTLC amount in millisatoshi
+  // This is the amount we should forward to the Federation if we successfully
+  // process this intercepted HTLC
+  uint64 outgoing_amount_msat = 3;
 
-  // The expiry of the invoice
-  uint64 expiry = 4;
+  // The incoming HTLC expiry
+  // Determines block height when the node will automatically cancel and revert
+  // the intercepted HTLC to sender if it is not settled.
+  uint32 incoming_expiry = 4;
+
+  // Reserved for getting more details about intercepted HTLC
+  reserved 5 to 9;
+
+  // The short channel id of the HTLC.
+  // Use this value to confirm relevance of the intercepted HTLC
+  uint64 short_channel_id = 10;
+
+  // A unique identifier for every intercepted HTLC
+  // Used to identify an intercepted HTLC through processing and settlement
+  bytes intercepted_htlc_id = 11;
 }
+
+message CompleteHtlcsRequest {
+  message Settle {
+    // The preimage for settling an intercepted HTLC
+    bytes preimage = 1;
+
+    // A unique identifier for every intercepted HTLC
+    // Used to identify an intercepted HTLC through processing and settlement
+    bytes intercepted_htlc_id = 2;
+  }
+
+  message Cancel {
+    // The reason for the cancellation of an intercepted HTLC
+    string reason = 1;
+
+    // A unique identifier for every intercepted HTLC
+    // Used to identify an intercepted HTLC through processing and settlement
+    bytes intercepted_htlc_id = 2;
+  }
+
+  oneof action {
+    // Request to complete an intercepted HTLC with success result after
+    // processing
+    //
+    // Send this request when the gateway successfully processed intercepted
+    // HTLC GatewayLightning will settle/resolve the intercepted HTLC with
+    // reason provided.
+    Settle settle = 1;
+
+    // Request to complete an intercepted HTLC with failure result after
+    // processing
+    //
+    // Send this request when the gateway failed or canceled processing of
+    // intercepted HTLC. GatewayLightning will fail/cancel the intercepted HTLC
+    // with reason provided.
+    Cancel cancel = 2;
+  }
+}
+
+message CompleteHtlcsResponse {}
