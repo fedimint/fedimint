@@ -22,6 +22,7 @@ jobs:
             use-cross: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             build-in-pr: false
+            extra-cmd: brew install protobuf
           # - build: android
           #   runs-on: ubuntu-22.04
           #   target: aarch64-linux-android
@@ -47,6 +48,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+
+      - name: Extra command
+        if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.extra-cmd != ''
+        run: |
+          ${{ matrix.extra-cmd }}
 
       - name: Build
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
