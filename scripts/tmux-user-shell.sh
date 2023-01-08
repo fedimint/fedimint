@@ -2,19 +2,17 @@
 
 source ./scripts/lib.sh
 
-# First wait 1s for the federation (started itself with a 1s delay after bitcoind)
-sleep 2
-
 POLL_INTERVAL=0.5
 export POLL_INTERVAL
+
+# wait for cln, bitcoind and fedimint servers to start up
+await_bitcoin_rpc
+await_cln_rpc
+await_fedimint_block_sync
 
 echo Setting up bitcoind ...
 btc_client createwallet default | show_verbose_output
 mine_blocks 101 | show_verbose_output
-
-# Wait for the lightning clients to start (ln1 and ln2 are started with a 5s delay after bitcoind and deferation start)
-# FIXME: After tackling https://github.com/fedimint/fedimint/issues/699, this can be removed
-await_block_sync
 
 echo Setting up lightning channel ...
 open_channel | show_verbose_output
