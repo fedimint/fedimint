@@ -15,10 +15,6 @@ name = "fedimintd"
 path = "src/bin/main.rs"
 
 [[bin]]
-name = "configgen"
-path  = "src/bin/configgen.rs"
-
-[[bin]]
 name = "distributedgen"
 path  = "src/bin/distributedgen.rs"
 

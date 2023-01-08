@@ -144,32 +144,32 @@ You can start the binary(-ies) inside with the usual:
 
 ```
 $ docker run -it fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r fedimintd --help
-Usage: fedimintd <CFG_PATH> <DB_PATH>
+Usage: fedimintd [OPTIONS] <CFG_PATH> [PASSWORD]
 
 Arguments:
-  <CFG_PATH>
-  <DB_PATH>
+  <CFG_PATH>  Path to folder containing federation config files
+  [PASSWORD]  Password to encrypt sensitive config files [env: FM_PASSWORD=]
 
 Options:
-  -h, --help  Print help information
+      --ui-bind <UI_BIND>  Port to run admin UI on
+  -h, --help               Print help information
 ```
 
 Most commands will require access to some host mounted volumes and port bindings.
 For your convenience, here is an example:
 
-
 ```
-$ docker run -it -v $PWD/demo:/var/fedimint fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r configgen generate --out-dir /var/fedimint --num-nodes 3 --denominations 1,2,5
-Generating keys such that up to 0 peers may fail/be evil
-$ ls demo
-client.json  server-0.json  server-1.json  server-2.json
+$ docker run -it -v $PWD/demo:/var/fedimint -p 17240:17240 fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r configgen <command>
 ```
 
-`-v` will mount local directory `./demo` as `/var/fedimint` inside the container, so the `--out-dir /var/fedimint` writes the files to the host file-system
+`-v` will mount local directory `./demo` as `/var/fedimint` inside the container, so commands working on `/var/fedimint`
+write the files to the host file-system (e.g. config generation). `-p` is used to bind the host's port 17240 as the
+container's port 17240.
 
-```
-$ docker run -it -v $PWD/demo:/var/fedimint -p 17240:17240 fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r fedimintd  /var/fedimint/server-0.json /var/fedimint/server-0.db
-... output logs ...
-```
+To generate federation config and run the federation please see the integration tests and the `--help` output of
+`distributedgen` and `fedimintd`:
+* [Generate config](https://github.com/fedimint/fedimint/blob/master/scripts/build.sh#L44-L69)
+* [Start federation](https://github.com/fedimint/fedimint/blob/master/scripts/start-fed.sh#L10-L14)
 
-Again, `-v` is used to mount directory with the generated configs, while `-p` is used to bind the host's port 17240 as the container's port 17240.
+Note that you can also start a "fake" 1-of-1 "federation" that will allow you to test most aspects of Fedimint without
+having to run e.g. 4 instances.
