@@ -49,12 +49,7 @@ do
   fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
   api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
   export FM_PASSWORD="pass$ID"
-  if [ $ID -eq 0 ]; then
-    # Test that the ports will default to $BASE_PORT and $BASE_PORT+1 if unspecified
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost --api-url ws://localhost --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
-  else
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost:$fed_port --api-url ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
-  fi
+  $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost:$fed_port --api-url ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
   CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
 done
 CERTS=${CERTS:1}
