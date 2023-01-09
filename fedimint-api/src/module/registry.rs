@@ -16,10 +16,24 @@ impl<M> Default for ModuleRegistry<M> {
     }
 }
 
+impl<M> From<BTreeMap<ModuleKey, M>> for ModuleRegistry<M> {
+    fn from(value: BTreeMap<ModuleKey, M>) -> Self {
+        Self(value)
+    }
+}
+
 impl<M> ModuleRegistry<M> {
+    pub fn new(decoders: impl IntoIterator<Item = (ModuleKey, M)>) -> Self {
+        Self(decoders.into_iter().collect())
+    }
+
     /// Return an iterator over all modules
     pub fn modules(&self) -> impl Iterator<Item = &M> {
         self.0.values()
+    }
+
+    pub fn get_mut(&mut self, key: &ModuleKey) -> Option<&mut M> {
+        self.0.get_mut(key)
     }
 
     /// Return the server module belonging to the module identified by the supplied `module_key`

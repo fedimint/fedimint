@@ -77,6 +77,7 @@ pub struct FedimintServer {
     pub rejoin_at_epoch: Option<HashMap<u64, HashSet<PeerId>>>,
     pub run_empty_epochs: u64,
     pub last_processed_epoch: Option<SignedEpochOutcome>,
+    pub decoders: ModuleDecoderRegistry,
 }
 
 impl FedimintServer {
@@ -84,9 +85,10 @@ impl FedimintServer {
     pub async fn run(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<()> {
-        let server = FedimintServer::new(cfg.clone(), consensus, task_group).await;
+        let server = FedimintServer::new(cfg.clone(), consensus, decoders, task_group).await;
         let server_consensus = server.consensus.clone();
         task_group
             .spawn("api-server", |handle| {
@@ -102,21 +104,23 @@ impl FedimintServer {
     pub async fn new(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
     ) -> Self {
         let connector: PeerConnector<EpochMessage> =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
-        Self::new_with(cfg.clone(), consensus, connector, task_group).await
+        Self::new_with(cfg.clone(), consensus, connector, decoders, task_group).await
     }
 
     pub async fn new_with(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
         connector: PeerConnector<EpochMessage>,
+        decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
     ) -> Self {
-        cfg.validate_config(&cfg.local.identity, &consensus.module_config_gens)
+        cfg.validate_config(&cfg.local.identity, &consensus.module_inits)
             .expect("invalid config");
 
         let connections =
@@ -152,6 +156,7 @@ impl FedimintServer {
             rejoin_at_epoch: None,
             run_empty_epochs: 0,
             last_processed_epoch: None,
+            decoders,
         }
     }
 

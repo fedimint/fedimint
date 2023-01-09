@@ -9,7 +9,9 @@ use fedimint_api::config::{
     FederationId, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
-use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::db::Database;
+use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_api::module::ModuleInit;
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -133,7 +135,7 @@ pub struct ServerConfigParams {
 impl ServerConfigConsensus {
     pub fn to_client_config_try(
         &self,
-        module_config_gens: &ModuleConfigGens,
+        module_config_gens: &ModuleInitRegistry,
     ) -> anyhow::Result<ClientConfig> {
         Ok(ClientConfig {
             federation_name: self.federation_name.clone(),
@@ -157,14 +159,49 @@ impl ServerConfigConsensus {
         })
     }
 
-    pub fn to_client_config(&self, module_config_gens: &ModuleConfigGens) -> ClientConfig {
+    pub fn to_client_config(&self, module_config_gens: &ModuleInitRegistry) -> ClientConfig {
         self.to_client_config_try(module_config_gens)
             .expect("configuration mismatch")
     }
 }
+use impl_tools::autoimpl;
 
-pub type ModuleConfigGens =
-    BTreeMap<&'static str, Arc<dyn FederationModuleConfigGen + Send + Sync>>;
+// TODO: turn into newtype
+pub type DynModuleInit = Arc<dyn ModuleInit + Send + Sync>;
+
+// TODO: turn all registeries into `Registry<T>(BTreeMap<&'static str, T))` + type alias
+#[autoimpl(Deref using self.0)]
+#[derive(Clone)]
+pub struct ModuleInitRegistry(BTreeMap<&'static str, DynModuleInit>);
+
+impl<const N: usize> From<[(&'static str, DynModuleInit); N]> for ModuleInitRegistry {
+    fn from(value: [(&'static str, DynModuleInit); N]) -> Self {
+        Self(BTreeMap::from(value))
+    }
+}
+
+impl ModuleInitRegistry {
+    pub fn decoders(&self) -> ModuleDecoderRegistry {
+        ModuleDecoderRegistry::new(self.0.values().map(|v| v.decoder()))
+    }
+
+    pub async fn init_all(
+        &self,
+        cfg: &ServerConfig,
+        db: &Database,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::ServerModule>> {
+        let mut modules = BTreeMap::new();
+
+        for (k, v) in &self.0 {
+            let module = v
+                .init(cfg.get_module_config(k)?, db.clone(), task_group)
+                .await?;
+            modules.insert(module.module_key(), module);
+        }
+        Ok(ModuleRegistry::from(modules))
+    }
+}
 
 impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key setup
@@ -259,7 +296,7 @@ impl ServerConfig {
     pub fn validate_config(
         &self,
         identity: &PeerId,
-        module_config_gens: &ModuleConfigGens,
+        module_config_gens: &ModuleInitRegistry,
     ) -> anyhow::Result<()> {
         let peers = self.local.p2p.clone();
         let consensus = self.consensus.clone();
@@ -303,7 +340,7 @@ impl ServerConfig {
         code_version: &str,
         peers: &[PeerId],
         params: &HashMap<PeerId, ServerConfigParams>,
-        module_config_gens: ModuleConfigGens,
+        module_config_gens: ModuleInitRegistry,
         mut rng: impl RngCore + CryptoRng,
     ) -> BTreeMap<PeerId, Self> {
         let netinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
@@ -355,7 +392,7 @@ impl ServerConfig {
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ServerConfigParams,
-        module_config_gens: ModuleConfigGens,
+        module_config_gens: ModuleInitRegistry,
         mut rng: impl RngCore + CryptoRng,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<Self>> {
@@ -389,7 +426,7 @@ impl ServerConfig {
 
         let mut module_cfgs: BTreeMap<String, ServerModuleConfig> = Default::default();
 
-        for (name, gen) in module_config_gens {
+        for (name, gen) in module_config_gens.iter() {
             module_cfgs.insert(
                 name.to_string(),
                 if let Ok(cfgs) = gen

@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,12 +12,12 @@ use axum::{
 use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_api::config::ClientConfig;
-use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::module::ModuleInit;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_ln::LightningModuleConfigGen;
 use fedimint_mint::MintConfigGenerator;
-use fedimint_server::config::ModuleConfigGens;
+use fedimint_server::config::ModuleInitRegistry;
 use fedimint_wallet::WalletConfigGenerator;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;
@@ -134,10 +133,10 @@ async fn post_guardians(
     let pk_bytes = encrypted_read(&key, state.cfg_path.join(TLS_PK));
     let max_denomination = Amount::from_msats(100000000000);
     let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
-    let module_config_gens: ModuleConfigGens = BTreeMap::from([
+    let module_config_gens = ModuleInitRegistry::from([
         (
             "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
         ),
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),

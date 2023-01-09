@@ -24,18 +24,18 @@ use fedimint_api::config::{
     BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
+use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::{
-    api_endpoint, FederationModuleConfigGen, InputMeta, IntoModuleError, TransactionItemAmount,
+    api_endpoint, InputMeta, IntoModuleError, ModuleInit, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
+use fedimint_api::server::ServerModule;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_api::task::sleep;
 use fedimint_api::task::{TaskGroup, TaskHandle};
@@ -220,7 +220,20 @@ impl std::fmt::Display for WalletOutputOutcome {
 pub struct WalletConfigGenerator;
 
 #[async_trait]
-impl FederationModuleConfigGen for WalletConfigGenerator {
+impl ModuleInit for WalletConfigGenerator {
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        db: Database,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<ServerModule> {
+        Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
+    }
+
+    fn decoder(&self) -> (ModuleKey, Decoder) {
+        (MODULE_KEY_WALLET, (&WalletModuleDecoder).into())
+    }
+
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
@@ -786,26 +799,30 @@ impl ServerModulePlugin for Wallet {
 }
 
 impl Wallet {
-    // TODO: work around bitcoind_gen being a closure, maybe make clonable?
+    pub async fn new(
+        cfg: WalletConfig,
+        db: Database,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Wallet> {
+        let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
+            &cfg.local.btc_rpc,
+            task_group.make_handle(),
+        )?;
+
+        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group).await?)
+    }
+
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,
         db: Database,
         bitcoind: BitcoindRpc,
         task_group: &mut TaskGroup,
-        decoders: ModuleDecoderRegistry,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
         let broadcaster_db = db.clone();
-        let broadcast_decoder = decoders.clone();
         task_group
             .spawn("broadcast pending", |handle| async move {
-                run_broadcast_pending_tx(
-                    broadcaster_db,
-                    broadcaster_bitcoind_rpc,
-                    broadcast_decoder,
-                    &handle,
-                )
-                .await;
+                run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, &handle).await;
             })
             .await;
 
@@ -1476,14 +1493,17 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 }
 
 #[instrument(level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(
-    db: Database,
-    rpc: BitcoindRpc,
-    modules: ModuleDecoderRegistry,
-    tg_handle: &TaskHandle,
-) {
+pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(db.begin_transaction(modules.clone()).await, &rpc).await;
+        broadcast_pending_tx(
+            db.begin_transaction(
+                /* we do not expect any module-specific types here, so no decoders should be OK */
+                Default::default(),
+            )
+            .await,
+            &rpc,
+        )
+        .await;
         // FIXME: remove after modularization finishes
         #[cfg(not(target_family = "wasm"))]
         fedimint_api::task::sleep(Duration::from_secs(10)).await;

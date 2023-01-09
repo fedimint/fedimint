@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
@@ -6,12 +5,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use fedimint_api::module::FederationModuleConfigGen;
+use fedimint_api::module::ModuleInit;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_ln::LightningModuleConfigGen;
 use fedimint_mint::MintConfigGenerator;
-use fedimint_server::config::ModuleConfigGens;
+use fedimint_server::config::ModuleInitRegistry;
 use fedimint_wallet::WalletConfigGenerator;
 use fedimintd::distributedgen::{create_cert, run_dkg};
 use fedimintd::encrypt::*;
@@ -137,10 +136,10 @@ async fn main() {
         )
         .init();
 
-    let module_config_gens: ModuleConfigGens = BTreeMap::from([
+    let module_config_gens = ModuleInitRegistry::from([
         (
             "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn FederationModuleConfigGen + Send + Sync>,
+            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
         ),
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),

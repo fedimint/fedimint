@@ -13,13 +13,13 @@ use thiserror::Error;
 use crate::cancellable::Cancellable;
 use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
-    PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
+    Decoder, PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
 };
-use crate::db::DatabaseTransaction;
+use crate::db::{Database, DatabaseTransaction};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
-use crate::server::PluginVerificationCache;
+use crate::server::{PluginVerificationCache, ServerModule};
 use crate::task::TaskGroup;
 use crate::{Amount, OutPoint, PeerId};
 
@@ -198,8 +198,21 @@ where
     }
 }
 
+/// Logic responsible for module's initialization, config generation and validation
+///
+/// Once the module config is ready, the module can be instantiated via `[Self::init]`.
 #[async_trait]
-pub trait FederationModuleConfigGen {
+pub trait ModuleInit {
+    /// Initialize the [`ServerModule`] instance from its config
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        db: Database,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<ServerModule>;
+
+    fn decoder(&self) -> (ModuleKey, Decoder);
+
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],

@@ -13,17 +13,18 @@ use fedimint_api::config::{
     scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
-use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_MINT};
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, FederationModuleConfigGen, InputMeta, IntoModuleError,
-    ModuleError, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleInit,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
+use fedimint_api::server::ServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
@@ -134,7 +135,20 @@ pub struct VerificationCache {
 pub struct MintConfigGenerator;
 
 #[async_trait]
-impl FederationModuleConfigGen for MintConfigGenerator {
+impl ModuleInit for MintConfigGenerator {
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        _db: Database,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<ServerModule> {
+        Ok(Mint::new(cfg.to_typed()?).into())
+    }
+
+    fn decoder(&self) -> (ModuleKey, Decoder) {
+        (MODULE_KEY_MINT, (&MintModuleDecoder).into())
+    }
+
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
@@ -1113,7 +1127,7 @@ mod test {
     use fedimint_api::config::{
         ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
-    use fedimint_api::module::FederationModuleConfigGen;
+    use fedimint_api::module::ModuleInit;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 

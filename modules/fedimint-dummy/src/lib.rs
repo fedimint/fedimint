@@ -9,17 +9,17 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::ModuleKey;
-use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::core::{Decoder, ModuleKey};
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, FederationModuleConfigGen, InputMeta, ModuleError,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleInit, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
+use fedimint_api::server::ServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModulePlugin};
 use serde::{Deserialize, Serialize};
@@ -46,7 +46,20 @@ pub struct DummyVerificationCache;
 pub struct DummyConfigGenerator;
 
 #[async_trait]
-impl FederationModuleConfigGen for DummyConfigGenerator {
+impl ModuleInit for DummyConfigGenerator {
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        _db: Database,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<ServerModule> {
+        Ok(Dummy::new(cfg.to_typed()?).into())
+    }
+
+    fn decoder(&self) -> (ModuleKey, Decoder) {
+        (MODULE_KEY_DUMMY, (&DummyModuleDecoder).into())
+    }
+
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
