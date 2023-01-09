@@ -67,7 +67,7 @@ http = "0.2"
 http-body = "0.4"
 askama_axum = "0.1.0"
 axum = { version = "0.4", default-features = false }
-axum-macros = "0.2.3"
+axum-macros = "0.3.1"
 hyper = { version = "0.14", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
 qrcode-generator = "4.1.6"
