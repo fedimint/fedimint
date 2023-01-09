@@ -19,7 +19,22 @@ function open_channel() {
     until [[ $($FM_LN1 listpeers | jq -r ".peers[] | select(.id == \"$FM_LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
 }
 
-function await_block_sync() {
+function await_bitcoin_rpc() {
+    until $FM_BTC_CLIENT getblockchaininfo; do
+        sleep $POLL_INTERVAL
+    done
+}
+
+function await_cln_rpc() {
+    until [ -e $FM_LN1_DIR/regtest/lightning-rpc ]; do
+        sleep $POLL_INTERVAL
+    done
+    until [ -e $FM_LN2_DIR/regtest/lightning-rpc ]; do
+        sleep $POLL_INTERVAL
+    done
+}
+
+function await_fedimint_block_sync() {
   FINALITY_DELAY=$(get_finality_delay)
   EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALITY_DELAY ))"
   echo "Node at ${EXPECTED_BLOCK_HEIGHT}H"

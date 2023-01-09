@@ -24,7 +24,7 @@ if [ "$USE_GATEWAY" == 1 ]; then ADDR="$($FM_GATEWAY_CLI address "$FED_ID" | jq 
 TX_ID=$(send_bitcoin $ADDR $PEG_IN_AMOUNT)
 # wait for confirmation and wait for the fed to sync
 mine_blocks 11
-await_block_sync
+await_fedimint_block_sync
 #get the txoutproof and the raw transaction from the txid
 TXOUT_PROOF=$(get_txout_proof $TX_ID)
 TRANSACTION=$(get_raw_transaction $TX_ID)
