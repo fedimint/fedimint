@@ -231,8 +231,11 @@ pub struct ParamsForm {
     bitcoind_rpc: String,
     /// How many participants in federation consensus
     guardians_count: u32,
-    // Which bitcoin network the federation is using
+    /// Which bitcoin network the federation is using
     network: Network,
+    /// The number of confirmations a deposit transaction requires before accepted by the
+    /// federation
+    finality_delay: u32,
 }
 
 #[debug_handler]
@@ -263,7 +266,7 @@ async fn post_federation_params(
             name: form.guardian_name,
             tls_connect_string,
         },
-        finality_delay: 10,
+        finality_delay: form.finality_delay,
         network: form.network,
     });
 
