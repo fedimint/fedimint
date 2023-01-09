@@ -167,6 +167,10 @@ pub enum TransactionError {
 /// Old transaction definition used by old client.
 pub mod legacy {
     use bitcoin_hashes::Hash;
+    use fedimint_api::core::{
+        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    };
     use fedimint_api::encoding::{Decodable, Encodable};
     use fedimint_api::{ServerModulePlugin, TransactionId};
     use secp256k1_zkp::{schnorr, XOnlyPublicKey};
@@ -224,17 +228,17 @@ pub mod legacy {
             let erased_inputs = inputs
                 .iter()
                 .map(|input| match input.clone() {
-                    Input::Mint(i) => i.into(),
-                    Input::Wallet(i) => i.into(),
-                    Input::LN(i) => i.into(),
+                    Input::Mint(i) => (i, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
+                    Input::Wallet(i) => (i, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into(),
+                    Input::LN(i) => (i, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
                 })
                 .collect::<Vec<fedimint_api::core::Input>>();
             let erased_outputs = outputs
                 .iter()
                 .map(|output| match output.clone() {
-                    Output::Mint(o) => o.into(),
-                    Output::Wallet(o) => o.into(),
-                    Output::LN(o) => o.into(),
+                    Output::Mint(o) => (o, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
+                    Output::Wallet(o) => (o, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into(),
+                    Output::LN(o) => (o, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
                 })
                 .collect::<Vec<fedimint_api::core::Output>>();
 
@@ -288,18 +292,20 @@ pub mod legacy {
                     .inputs
                     .into_iter()
                     .map(|input| match input {
-                        Input::Mint(input) => input.into(),
-                        Input::Wallet(input) => input.into(),
-                        Input::LN(input) => input.into(),
+                        Input::Mint(input) => (input, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
+                        Input::Wallet(input) => (input, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into(),
+                        Input::LN(input) => (input, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
                     })
                     .collect(),
                 outputs: self
                     .outputs
                     .into_iter()
                     .map(|output| match output {
-                        Output::Mint(output) => output.into(),
-                        Output::Wallet(output) => output.into(),
-                        Output::LN(output) => output.into(),
+                        Output::Mint(output) => (output, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
+                        Output::Wallet(output) => {
+                            (output, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into()
+                        }
+                        Output::LN(output) => (output, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
                     })
                     .collect(),
                 signature: self.signature,

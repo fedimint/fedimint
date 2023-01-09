@@ -23,7 +23,7 @@ fn item_message(item: &ConsensusItem) -> String {
         ConsensusItem::EpochOutcomeSignatureShare(_) => "Outcome Signature".to_string(),
         // TODO: make this nice again
         ConsensusItem::Module(mci) => {
-            format!("Module CI: module={} ci={}", mci.module_key(), mci)
+            format!("Module CI: module={} ci={}", mci.module_instance_id(), mci)
         }
         ConsensusItem::Transaction(Transaction {
             inputs, outputs, ..

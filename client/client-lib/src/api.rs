@@ -7,6 +7,10 @@ use async_trait::async_trait;
 use bitcoin::{Address, Amount};
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::config::ClientConfig;
+use fedimint_api::core::{
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
@@ -306,7 +310,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
         self.request(
-            "/ln/account",
+            &format!("/module/{}/account", LEGACY_HARDCODED_INSTANCE_ID_LN),
             contract,
             Retry404::new(self.peers().one_honest()),
         )
@@ -315,7 +319,10 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {
         self.request(
-            "/wallet/block_height",
+            &format!(
+                "/module/{}/block_height",
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET
+            ),
             (),
             EventuallyConsistent::new(self.peers().one_honest()),
         )
@@ -328,7 +335,10 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
         amount: &Amount,
     ) -> Result<Option<PegOutFees>> {
         self.request(
-            "/wallet/peg_out_fees",
+            &format!(
+                "/module/{}/peg_out_fees",
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET
+            ),
             (address, amount.to_sat()),
             EventuallyConsistent::new(self.peers().one_honest()),
         )
@@ -337,7 +347,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
 
     async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
         self.request(
-            "/ln/offer",
+            &format!("/module/{}/offer", LEGACY_HARDCODED_INSTANCE_ID_LN),
             payment_hash,
             Retry404::new(self.peers().one_honest()),
         )
@@ -346,7 +356,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
 
     async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>> {
         self.request(
-            "/ln/list_gateways",
+            &format!("/module/{}/list_gateways", LEGACY_HARDCODED_INSTANCE_ID_LN),
             (),
             UnionResponses::new(self.peers().one_honest()),
         )
@@ -355,7 +365,10 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
 
     async fn register_gateway(&self, gateway: LightningGateway) -> Result<()> {
         self.request(
-            "/ln/register_gateway",
+            &format!(
+                "/module/{}/register_gateway",
+                LEGACY_HARDCODED_INSTANCE_ID_LN
+            ),
             gateway,
             CurrentConsensus::new(self.peers().threshold()),
         )
@@ -365,7 +378,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> Result<bool> {
         let res: Result<IncomingContractOffer> = self
             .request(
-                "/ln/offer",
+                &format!("/module/{}/offer", LEGACY_HARDCODED_INSTANCE_ID_LN),
                 payment_hash,
                 CurrentConsensus::new(self.peers().one_honest()),
             )
@@ -383,7 +396,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
         request: &fedimint_mint::SignedBackupRequest,
     ) -> Result<()> {
         self.request(
-            "/mint/backup",
+            &format!("/module/{}/backup", LEGACY_HARDCODED_INSTANCE_ID_MINT),
             request,
             CurrentConsensus::new(self.peers().threshold()),
         )
@@ -396,7 +409,7 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
     ) -> Result<Vec<ECashUserBackupSnapshot>> {
         Ok(self
             .request_complex(
-                "/mint/recover",
+                &format!("/module/{}/recover", LEGACY_HARDCODED_INSTANCE_ID_MINT),
                 id,
                 UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
                     self.peers().one_honest(),

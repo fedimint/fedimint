@@ -16,6 +16,7 @@ use std::{
 use anyhow::Result;
 use fedimint_api::{
     cancellable::{Cancellable, Cancelled},
+    core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
     task::{TaskGroup, TaskHandle},
     NumPeers, PeerId,
 };
@@ -801,7 +802,7 @@ impl EcashRecoveryTracker {
                 }
 
                 for input in &tx.inputs {
-                    if input.module_key() == MODULE_KEY_MINT {
+                    if input.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         let input = input
                             .as_any()
                             .downcast_ref::<MintInput>()
@@ -812,7 +813,7 @@ impl EcashRecoveryTracker {
                 }
 
                 for (out_idx, output) in tx.outputs.iter().enumerate() {
-                    if output.module_key() == MODULE_KEY_MINT {
+                    if output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         let output = output
                             .as_any()
                             .downcast_ref::<MintOutput>()
@@ -829,7 +830,7 @@ impl EcashRecoveryTracker {
                 }
             }
             ConsensusItem::Module(module_item) => {
-                if module_item.module_key() == MODULE_KEY_MINT {
+                if module_item.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                     let mint_item = module_item
                         .as_any()
                         .downcast_ref::<MintOutputConfirmation>()

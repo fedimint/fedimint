@@ -21,8 +21,8 @@ use fake::FakeLightningTest;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::{
-    ConsensusItem as PerModuleConsensusItem, PluginConsensusItem, MODULE_KEY_MINT,
-    MODULE_KEY_WALLET,
+    ConsensusItem as PerModuleConsensusItem, PluginConsensusItem,
+    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
@@ -74,7 +74,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
@@ -159,13 +159,10 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test", "127.0.0.1:18443");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
-    let module_inits = ModuleInitRegistry::from([
-        (
-            "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
-        ),
-        ("mint", Arc::new(MintConfigGenerator)),
-        ("ln", Arc::new(LightningModuleConfigGen)),
+    let module_inits = ModuleInitRegistry::from(vec![
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
 
     match env::var("FM_TEST_DISABLE_MOCKS") {
@@ -183,12 +180,13 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             .expect("distributed config should not be canceled");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            let wallet_config: WalletConfig = server_config
-                .iter()
-                .last()
-                .unwrap()
-                .1
-                .get_module_config_typed("wallet")
+            let peer_server_config = server_config.iter().last().unwrap().1;
+            let wallet_config: WalletConfig = peer_server_config
+                .get_module_config_typed(
+                    peer_server_config
+                        .get_module_id_by_kind("wallet")
+                        .expect("module of type wallet should be already configured"),
+                )
                 .unwrap();
             let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
                 &wallet_config.local.btc_rpc,
@@ -284,9 +282,17 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                             BTreeMap::from([(
                                 "wallet",
                                 Wallet::new_with_bitcoind(
+<<<<<<< HEAD
                                     cfg.get_module_config_typed("wallet").unwrap(),
                                     // wallet module does not need any module specific types
                                     fed_db(ModuleDecoderRegistry::default()),
+=======
+                                    cfg.get_module_config_typed(
+                                        cfg.get_module_id_by_kind("wallet").unwrap(),
+                                    )
+                                    .unwrap(),
+                                    fed_db(),
+>>>>>>> ce1ab918fe (Split `ModuleKey` into `ModuleInstanceId` & `ModuleKind`)
                                     bitcoin_rpc_2.clone(),
                                     &mut task_group,
                                 )
@@ -804,7 +810,11 @@ impl FederationTest {
                     let mut dbtx = svr.database.begin_transaction().await;
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
-                        outputs: vec![MintOutput(tokens.clone()).into()],
+                        outputs: vec![(
+                            MintOutput(tokens.clone()),
+                            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                        )
+                            .into()],
                         signature: None,
                     };
 
@@ -821,8 +831,16 @@ impl FederationTest {
                     svr.fedimint
                         .consensus
                         .modules
-                        .get(MODULE_KEY_MINT)
-                        .apply_output(&mut dbtx, &MintOutput(tokens.clone()).into(), out_point)
+                        .get(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+                        .apply_output(
+                            &mut dbtx,
+                            &(
+                                MintOutput(tokens.clone()),
+                                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                            )
+                                .into(),
+                            out_point,
+                        )
                         .await
                         .unwrap();
                     dbtx.commit_tx().await.expect("DB Error");
@@ -886,7 +904,7 @@ impl FederationTest {
         let wallet = server
             .consensus
             .modules
-            .get(MODULE_KEY_WALLET)
+            .get(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
@@ -898,7 +916,7 @@ impl FederationTest {
             match item {
                 // ignore items that get automatically generated
                 ConsensusItem::Module(mci) => {
-                    if mci.module_key() != MODULE_KEY_WALLET {
+                    if mci.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
                         return false;
                     }
 
@@ -1012,27 +1030,34 @@ impl FederationTest {
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
             let btc_rpc = bitcoin_gen();
+<<<<<<< HEAD
             let decoders = module_inits.decoders();
             let db = database_gen(decoders.clone());
+=======
+            let db = database_gen();
+>>>>>>> ce1ab918fe (Split `ModuleKey` into `ModuleInstanceId` & `ModuleKind`)
             let mut task_group = task_group.clone();
 
             let mut override_modules = override_modules(cfg.clone()).await;
 
             let mut modules = BTreeMap::new();
 
-            for (k, v) in module_inits.iter() {
-                if let Some(module) = override_modules.remove(k) {
-                    modules.insert(module.module_key(), module);
+            for (kind, gen) in module_inits.iter() {
+                let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
+                if let Some(module) = override_modules.remove(kind.as_str()) {
+                    info!(module_instance_id = id, kind = %kind, "Use overriden module");
+                    modules.insert(id, module);
                 } else {
-                    let module = v
+                    info!(module_instance_id = id, kind = %kind, "Init module");
+                    let module = gen
                         .init(
-                            cfg.get_module_config(k).unwrap(),
+                            cfg.get_module_config(id).unwrap(),
                             db.clone(),
                             &mut task_group,
                         )
                         .await
                         .unwrap();
-                    modules.insert(module.module_key(), module);
+                    modules.insert(id, module);
                 }
             }
 
@@ -1042,12 +1067,13 @@ impl FederationTest {
                 module_inits.clone(),
                 ModuleRegistry::from(modules),
             );
+            let decoders = consensus.decoders();
 
             let fedimint = FedimintServer::new_with(
                 cfg.clone(),
                 consensus,
                 connect_gen(cfg),
-                decoders.clone(),
+                decoders,
                 &mut task_group,
             )
             .await;
@@ -1073,7 +1099,9 @@ impl FederationTest {
 
         // Consumes the empty epoch 0 outcome from all servers
         let cfg = server_config.iter().last().unwrap().1.clone();
-        let wallet = cfg.get_module_config_typed("wallet").unwrap();
+        let wallet = cfg
+            .get_module_config_typed(cfg.get_module_id_by_kind("wallet").unwrap())
+            .unwrap();
         let last_consensus = Rc::new(RefCell::new(Batch {
             epoch: 0,
             contributions: BTreeMap::new(),
@@ -1084,9 +1112,9 @@ impl FederationTest {
             servers,
             max_balance_sheet,
             last_consensus,
+            decoders: module_inits.decoders(cfg.module_kinds_iter()).unwrap(),
             cfg,
             wallet,
-            decoders: module_inits.decoders(),
         }
     }
 }
@@ -1100,5 +1128,9 @@ pub fn assert_ci<M: PluginConsensusItem>(ci: &ConsensusItem) -> &M {
 }
 
 pub fn assert_module_ci<M: PluginConsensusItem>(mci: &PerModuleConsensusItem) -> &M {
+    debug!(
+        module_instance_id = mci.module_instance_id(),
+        "Checking module consensus item"
+    );
     mci.as_any().downcast_ref().unwrap()
 }

@@ -133,13 +133,10 @@ async fn post_guardians(
     let pk_bytes = encrypted_read(&key, state.data_dir.join(TLS_PK));
     let max_denomination = Amount::from_msats(100000000000);
     let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
-    let module_config_gens = ModuleInitRegistry::from([
-        (
-            "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
-        ),
-        ("mint", Arc::new(MintConfigGenerator)),
-        ("ln", Arc::new(LightningModuleConfigGen)),
+    let module_config_gens = ModuleInitRegistry::from(vec![
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
     let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();

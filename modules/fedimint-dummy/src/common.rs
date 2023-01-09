@@ -1,6 +1,6 @@
 use std::io;
 
-use fedimint_api::core::{ConsensusItem, Input, Output, OutputOutcome, PluginDecode};
+use fedimint_api::core::PluginDecode;
 use fedimint_api::encoding::{Decodable, DecodeError};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 
@@ -10,31 +10,30 @@ use crate::{DummyInput, DummyOutput, DummyOutputConfirmation, DummyOutputOutcome
 pub struct DummyModuleDecoder;
 
 impl PluginDecode for DummyModuleDecoder {
-    fn decode_input(mut d: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        Ok(Input::from(DummyInput::consensus_decode(
-            &mut d,
-            &ModuleDecoderRegistry::default(),
-        )?))
-    }
-    fn decode_output(mut d: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        Ok(Output::from(DummyOutput::consensus_decode(
-            &mut d,
-            &ModuleDecoderRegistry::default(),
-        )?))
+    type Input = DummyInput;
+    type Output = DummyOutput;
+    type OutputOutcome = DummyOutputOutcome;
+    type ConsensusItem = DummyOutputConfirmation;
+
+    fn decode_input(&self, mut d: &mut dyn io::Read) -> Result<DummyInput, DecodeError> {
+        DummyInput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
     }
 
-    fn decode_output_outcome(mut d: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        Ok(OutputOutcome::from(DummyOutputOutcome::consensus_decode(
-            &mut d,
-            &ModuleDecoderRegistry::default(),
-        )?))
+    fn decode_output(&self, mut d: &mut dyn io::Read) -> Result<DummyOutput, DecodeError> {
+        DummyOutput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
+    }
+
+    fn decode_output_outcome(
+        &self,
+        mut d: &mut dyn io::Read,
+    ) -> Result<DummyOutputOutcome, DecodeError> {
+        DummyOutputOutcome::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
     }
 
     fn decode_consensus_item(
+        &self,
         mut r: &mut dyn io::Read,
-    ) -> Result<fedimint_api::core::ConsensusItem, DecodeError> {
-        Ok(ConsensusItem::from(
-            DummyOutputConfirmation::consensus_decode(&mut r, &ModuleDecoderRegistry::default())?,
-        ))
+    ) -> Result<DummyOutputConfirmation, DecodeError> {
+        DummyOutputConfirmation::consensus_decode(&mut r, &ModuleDecoderRegistry::default())
     }
 }

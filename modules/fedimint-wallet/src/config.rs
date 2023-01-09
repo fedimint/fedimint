@@ -6,6 +6,7 @@ use bitcoin::Network;
 use fedimint_api::config::TypedServerModuleConfig;
 use fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
 use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
+use fedimint_api::core::ModuleKind;
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
@@ -65,7 +66,11 @@ pub struct WalletClientConfig {
     pub fee_consensus: FeeConsensus,
 }
 
-impl TypedClientModuleConfig for WalletClientConfig {}
+impl TypedClientModuleConfig for WalletClientConfig {
+    fn kind(&self) -> ModuleKind {
+        crate::KIND
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FeeConsensus {
@@ -84,14 +89,16 @@ impl Default for FeeConsensus {
 
 impl TypedServerModuleConsensusConfig for WalletConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        serde_json::to_value(&WalletClientConfig {
-            peg_in_descriptor: self.peg_in_descriptor.clone(),
-            network: self.network,
-            fee_consensus: self.fee_consensus.clone(),
-            finality_delay: self.finality_delay,
-        })
-        .expect("Serialization can't fail")
-        .into()
+        ClientModuleConfig::new(
+            crate::KIND,
+            serde_json::to_value(&WalletClientConfig {
+                peg_in_descriptor: self.peg_in_descriptor.clone(),
+                network: self.network,
+                fee_consensus: self.fee_consensus.clone(),
+                finality_delay: self.finality_delay,
+            })
+            .expect("Serialization can't fail"),
+        )
     }
 }
 
@@ -108,8 +115,8 @@ impl TypedServerModuleConfig for WalletConfig {
         }
     }
 
-    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
-        (self.local, self.private, self.consensus)
+    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
+        (crate::KIND, self.local, self.private, self.consensus)
     }
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {

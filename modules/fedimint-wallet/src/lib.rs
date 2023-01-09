@@ -24,7 +24,7 @@ use fedimint_api::config::{
     BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
+use fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
@@ -70,6 +70,8 @@ pub mod db;
 pub mod keys;
 pub mod tweakable;
 pub mod txoproof;
+
+const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
 
 pub const CONFIRMATION_TARGET: u16 = 10;
 
@@ -221,6 +223,14 @@ pub struct WalletConfigGenerator;
 
 #[async_trait]
 impl ModuleInit for WalletConfigGenerator {
+    fn decoder(&self) -> Decoder {
+        Decoder::from_typed(WalletModuleDecoder)
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        KIND
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -228,10 +238,6 @@ impl ModuleInit for WalletConfigGenerator {
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<ServerModule> {
         Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
-    }
-
-    fn decoder(&self) -> (ModuleKey, Decoder) {
-        (MODULE_KEY_WALLET, (&WalletModuleDecoder).into())
     }
 
     fn trusted_dealer_gen(
@@ -276,8 +282,9 @@ impl ModuleInit for WalletConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
+        module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
@@ -292,7 +299,11 @@ impl ModuleInit for WalletConfigGenerator {
         let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
 
         if let Err(Cancelled) = connections
-            .send(peers, MODULE_KEY_WALLET, DkgPeerMsg::PublicKey(our_key.key))
+            .send(
+                peers,
+                module_instance_id,
+                DkgPeerMsg::PublicKey(our_key.key),
+            )
             .await
         {
             return Ok(Err(Cancelled));
@@ -300,7 +311,7 @@ impl ModuleInit for WalletConfigGenerator {
 
         peer_peg_in_keys.insert(*our_id, our_key);
         while peer_peg_in_keys.len() < peers.len() {
-            match connections.receive(MODULE_KEY_WALLET).await {
+            match connections.receive(module_instance_id).await {
                 Ok((peer, DkgPeerMsg::PublicKey(key))) => {
                     peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
                 }
@@ -384,6 +395,8 @@ pub struct WalletVerificationCache;
 
 #[async_trait]
 impl ServerModulePlugin for Wallet {
+    const KIND: ModuleKind = KIND;
+
     type Decoder = WalletModuleDecoder;
     type Input = WalletInput;
     type Output = WalletOutput;
@@ -392,12 +405,8 @@ impl ServerModulePlugin for Wallet {
     type ConsensusItem = WalletConsensusItem;
     type VerificationCache = WalletVerificationCache;
 
-    fn module_key(&self) -> ModuleKey {
-        MODULE_KEY_WALLET
-    }
-
-    fn decoder(&self) -> &'static Self::Decoder {
-        &WalletModuleDecoder
+    fn decoder(&self) -> Self::Decoder {
+        WalletModuleDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
@@ -764,10 +773,6 @@ impl ServerModulePlugin for Wallet {
                 v.change.to_sat() as i64 * 1000
             })
             .await;
-    }
-
-    fn api_base_name(&self) -> &'static str {
-        "wallet"
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {

@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::core::client::ClientModulePlugin;
-use fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -150,12 +149,12 @@ pub struct SpendableNote {
 }
 
 impl ClientModulePlugin for MintClient {
+    const KIND: &'static str = "mint";
     type Decoder = <Mint as ServerModulePlugin>::Decoder;
     type Module = Mint;
-    const MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
 
-    fn decoder(&self) -> &'static Self::Decoder {
-        &MintModuleDecoder
+    fn decoder(&self) -> Self::Decoder {
+        MintModuleDecoder
     }
 
     fn input_amount(
@@ -663,6 +662,7 @@ mod tests {
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
     use fedimint_api::config::ConfigGenParams;
+    use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
@@ -707,13 +707,15 @@ mod tests {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
                 outputs: vec![SerdeOutputOutcome::from(
-                    &(mint
-                        .output_outcome(OutPoint {
+                    &((
+                        mint.output_outcome(OutPoint {
                             txid: tx,
                             out_idx: 0,
                         })
                         .await
-                        .unwrap()
+                        .unwrap(),
+                        LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                    )
                         .into()),
                 )],
             })
@@ -811,6 +813,7 @@ mod tests {
                     ],
                 }),
                 &MintConfigGenerator,
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
             )
             .await
             .unwrap(),

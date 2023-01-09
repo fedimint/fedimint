@@ -120,19 +120,17 @@ async fn main() -> anyhow::Result<()> {
 
     task_group.install_kill_handler();
 
-    let module_inits = ModuleInitRegistry::from([
-        (
-            "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
-        ),
-        ("mint", Arc::new(MintConfigGenerator)),
-        ("ln", Arc::new(LightningModuleConfigGen)),
+    let module_inits = ModuleInitRegistry::from(vec![
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
 
-    let decoders = module_inits.decoders();
+    let decoders = module_inits.decoders(cfg.module_kinds_iter())?;
 
     let db =
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).expect("Error opening DB");
+
     let db = Database::new(db, decoders.clone());
 
     let consensus = FedimintConsensus::new(cfg.clone(), db, module_inits, &mut task_group).await?;

@@ -18,7 +18,10 @@ use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::config::ClientConfig;
-use fedimint_api::core::{Decoder, MODULE_KEY_LN, MODULE_KEY_MINT, MODULE_KEY_WALLET};
+use fedimint_api::core::{
+    Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -192,8 +195,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config: self
                 .config
                 .as_ref()
-                .get_module::<LightningModuleClientConfig>("ln")
-                .expect("needs lightning module client config"),
+                .get_module_by_kind::<LightningModuleClientConfig>("ln")
+                .expect("needs lightning module client config")
+                .1,
             context: self.context.clone(),
         }
     }
@@ -203,8 +207,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config: self
                 .config
                 .as_ref()
-                .get_module::<MintClientConfig>("mint")
-                .expect("needs mint module client config"),
+                .get_module_by_kind::<MintClientConfig>("mint")
+                .expect("needs mint module client config")
+                .1,
             epoch_pk: self.config.as_ref().epoch_pk,
             context: self.context.clone(),
             secret: Self::mint_secret_static(&self.root_secret),
@@ -216,8 +221,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config: self
                 .config
                 .as_ref()
-                .get_module::<WalletClientConfig>("wallet")
-                .expect("needs wallet module client config"),
+                .get_module_by_kind::<WalletClientConfig>("wallet")
+                .expect("needs wallet module client config")
+                .1,
 
             context: self.context.clone(),
         }
@@ -420,8 +426,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let funding_amount = self
             .config
             .as_ref()
-            .get_module::<WalletClientConfig>("wallet")
+            .get_module_by_kind::<WalletClientConfig>("wallet")
             .expect("missing wallet module config")
+            .1
             .fee_consensus
             .peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
@@ -808,8 +815,9 @@ impl Client<UserClientConfig> {
         let invoice = InvoiceBuilder::new(network_to_currency(
             self.config
                 .0
-                .get_module::<WalletClientConfig>("wallet")
+                .get_module_by_kind::<WalletClientConfig>("wallet")
                 .expect("must have wallet config available")
+                .1
                 .network,
         ))
         .amount_milli_satoshis(amount.msats)
@@ -1241,9 +1249,18 @@ impl Debug for ClientSecret {
 /// modularized yet but we need the decoding functionality.
 pub fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::from_iter([
-        (MODULE_KEY_LN, Decoder::from_typed(&LightningModuleDecoder)),
-        (MODULE_KEY_WALLET, Decoder::from_typed(&WalletModuleDecoder)),
-        (MODULE_KEY_MINT, Decoder::from_typed(&MintModuleDecoder)),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_LN,
+            Decoder::from_typed(LightningModuleDecoder),
+        ),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            Decoder::from_typed(WalletModuleDecoder),
+        ),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            Decoder::from_typed(MintModuleDecoder),
+        ),
     ])
 }
 

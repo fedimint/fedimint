@@ -27,6 +27,7 @@ async fn test_account() {
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
         &LightningModuleConfigGen,
+        LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
     .unwrap();
@@ -77,6 +78,7 @@ async fn test_outgoing() {
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
         &LightningModuleConfigGen,
+        LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
     .unwrap();
@@ -176,6 +178,7 @@ async fn test_incoming() {
         |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
         &LightningModuleConfigGen,
+        LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
     .unwrap();

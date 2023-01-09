@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use fedimint_api::core::ModuleKey;
+use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
@@ -92,7 +92,7 @@ pub struct AcceptedTransaction {
 
 #[derive(Debug)]
 struct VerificationCaches {
-    caches: HashMap<ModuleKey, VerificationCache>,
+    caches: HashMap<ModuleInstanceId, VerificationCache>,
 }
 
 struct FundingVerifier {
@@ -137,7 +137,7 @@ impl FedimintConsensus {
 }
 
 impl VerificationCaches {
-    fn get_cache(&self, module_key: ModuleKey) -> &VerificationCache {
+    fn get_cache(&self, module_key: ModuleInstanceId) -> &VerificationCache {
         self.caches
             .get(&module_key)
             .expect("Verification caches were built for all modules")
@@ -177,7 +177,7 @@ impl FedimintConsensus {
         let mut dbtx = self.db.begin_transaction().await;
 
         for input in &transaction.inputs {
-            let module = self.modules.get(input.module_key());
+            let module = self.modules.get(input.module_instance_id());
 
             let cache = module.build_verification_cache(&[input.clone()]);
             let interconnect = self.build_interconnect();
@@ -194,7 +194,7 @@ impl FedimintConsensus {
         for output in &transaction.outputs {
             let amount = self
                 .modules
-                .get(output.module_key())
+                .get(output.module_instance_id())
                 .validate_output(&mut dbtx, output)
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
@@ -248,11 +248,11 @@ impl FedimintConsensus {
         // Begin consensus epoch
         {
             let per_module_cis: HashMap<
-                ModuleKey,
+                ModuleInstanceId,
                 Vec<(PeerId, fedimint_api::core::ConsensusItem)>,
             > = module_cis
                 .into_iter()
-                .into_group_map_by(|(_peer, mci)| mci.module_key());
+                .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
 
             let mut dbtx = self.db.begin_transaction().await;
             for (module_key, module_cis) in per_module_cis {
@@ -341,7 +341,7 @@ impl FedimintConsensus {
                 .save_epoch_history(outcome, &mut dbtx, &mut drop_peers, rejected_txs)
                 .await;
 
-            for module in self.modules.iter_modules() {
+            for (_, module) in self.modules.iter_modules() {
                 let module_drop_peers = module.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
                 drop_peers.extend(module_drop_peers);
             }
@@ -448,7 +448,7 @@ impl FedimintConsensus {
         let proposal_futures = self
             .modules
             .iter_modules()
-            .map(|module| {
+            .map(|(_, module)| {
                 Box::pin(async {
                     let mut dbtx = self.database_transaction().await;
                     module.await_consensus_proposal(&mut dbtx).await
@@ -480,10 +480,10 @@ impl FedimintConsensus {
             })
             .collect();
 
-        for module in self.modules.iter_modules() {
+        for (instance_id, module) in self.modules.iter_modules() {
             items.extend(
                 module
-                    .consensus_proposal(&mut dbtx)
+                    .consensus_proposal(&mut dbtx, instance_id)
                     .await
                     .into_iter()
                     .map(ConsensusItem::Module),
@@ -514,12 +514,12 @@ impl FedimintConsensus {
         for input in transaction.inputs.iter() {
             let meta = self
                 .modules
-                .get(input.module_key())
+                .get(input.module_instance_id())
                 .apply_input(
                     &self.build_interconnect(),
                     dbtx,
                     input,
-                    caches.get_cache(input.module_key()),
+                    caches.get_cache(input.module_instance_id()),
                 )
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
@@ -535,7 +535,7 @@ impl FedimintConsensus {
             };
             let amount = self
                 .modules
-                .get(output.module_key())
+                .get(output.module_instance_id())
                 .apply_output(dbtx, &output, out_point)
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
@@ -567,8 +567,8 @@ impl FedimintConsensus {
                 };
                 let outcome = self
                     .modules
-                    .get(output.module_key())
-                    .output_status(&mut dbtx, outpoint)
+                    .get(output.module_instance_id())
+                    .output_status(&mut dbtx, outpoint, output.module_instance_id())
                     .await
                     .expect("the transaction was processed, so should be known");
                 outputs.push((&outcome).into())
@@ -602,7 +602,7 @@ impl FedimintConsensus {
         let module_inputs = transactions
             .flat_map(|tx| tx.inputs.iter())
             .cloned()
-            .into_group_map_by(|input| input.module_key());
+            .into_group_map_by(|input| input.module_instance_id());
 
         // TODO: should probably run in parallel, but currently only the mint does anything at all
         let caches = module_inputs
@@ -619,7 +619,7 @@ impl FedimintConsensus {
     pub async fn audit(&self) -> Audit {
         let mut dbtx = self.database_transaction().await;
         let mut audit = Audit::default();
-        for module in self.modules.iter_modules() {
+        for (_, module) in self.modules.iter_modules() {
             module.audit(&mut dbtx, &mut audit).await
         }
         audit

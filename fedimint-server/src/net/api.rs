@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::server::ServerModule;
 use fedimint_api::{
     config::ClientConfig,
@@ -50,8 +51,8 @@ pub async fn run_server(
 
     attach_endpoints(&mut rpc_module, server_endpoints(), None);
 
-    for module in fedimint.modules.iter_modules() {
-        attach_endpoints_erased(&mut rpc_module, module);
+    for (id, module) in fedimint.modules.iter_modules() {
+        attach_endpoints_erased(&mut rpc_module, id, module);
     }
 
     debug!(addr = cfg.local.api_bind.to_string(), "Starting WSServer");
@@ -85,13 +86,13 @@ pub async fn run_server(
 fn attach_endpoints(
     rpc_module: &mut RpcModule<RpcHandlerCtx>,
     endpoints: Vec<ApiEndpoint<FedimintConsensus>>,
-    base_name: Option<&str>,
+    module_instance_id: Option<ModuleInstanceId>,
 ) {
     for endpoint in endpoints {
-        let path = if let Some(base_name) = base_name {
+        let path = if let Some(module_instance_id) = module_instance_id {
             // This memory leak is fine because it only happens on server startup
             // and path has to live till the end of program anyways.
-            Box::leak(format!("/{}{}", base_name, endpoint.path).into_boxed_str())
+            Box::leak(format!("/module/{}{}", module_instance_id, endpoint.path).into_boxed_str())
         } else {
             endpoint.path
         };
@@ -131,17 +132,16 @@ fn attach_endpoints(
 
 fn attach_endpoints_erased(
     rpc_module: &mut RpcModule<RpcHandlerCtx>,
+    module_instance: ModuleInstanceId,
     server_module: &ServerModule,
 ) {
-    let base_name = server_module.api_base_name();
     let endpoints = server_module.api_endpoints();
-    let module_key = server_module.module_key();
 
     for endpoint in endpoints {
         // This memory leak is fine because it only happens on server startup
         // and path has to live till the end of program anyways.
         let path: &'static _ =
-            Box::leak(format!("/{}{}", base_name, endpoint.path).into_boxed_str());
+            Box::leak(format!("/module/{}{}", module_instance, endpoint.path).into_boxed_str());
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
@@ -154,22 +154,26 @@ fn attach_endpoints_erased(
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe((handler)(fedimint.modules.get(module_key), dbtx, params))
-                    .catch_unwind()
-                    .await
-                    .map_err(|_| {
-                        error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            500,
-                            "API handler panicked",
-                            None::<()>,
-                        )))
-                    })?
-                    .map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, None::<()>,
-                        )))
-                    })
+                AssertUnwindSafe((handler)(
+                    fedimint.modules.get(module_instance),
+                    dbtx,
+                    params,
+                ))
+                .catch_unwind()
+                .await
+                .map_err(|_| {
+                    error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        500,
+                        "API handler panicked",
+                        None::<()>,
+                    )))
+                })?
+                .map_err(|e| {
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        e.code, e.message, None::<()>,
+                    )))
+                })
             })
             .expect("Failed to register async method");
     }

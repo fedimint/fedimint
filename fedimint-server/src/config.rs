@@ -6,9 +6,9 @@ use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     ApiEndpoint, BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner,
-    FederationId, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
+    FederationId, JsonWithKind, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_api::module::ModuleInit;
@@ -47,6 +47,12 @@ pub struct ServerConfig {
     pub private: ServerConfigPrivate,
 }
 
+impl ServerConfig {
+    pub fn module_kinds_iter(&self) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
+        self.consensus.module_kinds_iter()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
     /// Secret key for TLS communication, required for peer authentication
@@ -62,7 +68,7 @@ pub struct ServerConfigPrivate {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
     /// Secret material from modules
-    pub modules: BTreeMap<String, serde_json::Value>,
+    pub modules: BTreeMap<ModuleInstanceId, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +89,13 @@ pub struct ServerConfigConsensus {
     /// Network addresses and names for all peer APIs
     pub api: BTreeMap<PeerId, ApiEndpoint>,
     /// All configuration that needs to be the same for modules
-    pub modules: BTreeMap<String, serde_json::Value>,
+    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+}
+
+impl ServerConfigConsensus {
+    pub fn module_kinds_iter(&self) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
+        self.modules.iter().map(|(k, v)| (*k, v.kind()))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,7 +114,7 @@ pub struct ServerConfigLocal {
     /// How many API connections we will accept
     pub max_connections: u32,
     /// Non-consensus, non-private configuration from modules
-    pub modules: BTreeMap<String, serde_json::Value>,
+    pub modules: BTreeMap<ModuleInstanceId, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,13 +152,16 @@ impl ServerConfigConsensus {
             modules: self
                 .modules
                 .iter()
-                .map(|(k, v)| {
+                .map(|(module_instance_id, v)| {
+                    let kind = v.kind();
                     Ok((
-                        k.clone(),
+                        *module_instance_id,
                         module_config_gens
-                            .get(&k.as_str())
-                            .ok_or_else(|| anyhow::format_err!("module config gen not found: {k}"))?
-                            .to_client_config_from_consensus_value(v.clone())?,
+                            .get(kind)
+                            .ok_or_else(|| {
+                                anyhow::format_err!("module config gen not found: {kind:?}")
+                            })?
+                            .to_client_config_from_consensus_value(v.value().clone())?,
                     ))
                 })
                 .collect::<anyhow::Result<_>>()?,
@@ -166,17 +181,30 @@ pub type DynModuleInit = Arc<dyn ModuleInit + Send + Sync>;
 // TODO: turn all registeries into `Registry<T>(BTreeMap<&'static str, T))` + type alias
 #[autoimpl(Deref using self.0)]
 #[derive(Clone)]
-pub struct ModuleInitRegistry(BTreeMap<&'static str, DynModuleInit>);
+pub struct ModuleInitRegistry(BTreeMap<ModuleKind, DynModuleInit>);
 
-impl<const N: usize> From<[(&'static str, DynModuleInit); N]> for ModuleInitRegistry {
-    fn from(value: [(&'static str, DynModuleInit); N]) -> Self {
-        Self(BTreeMap::from(value))
+impl From<Vec<DynModuleInit>> for ModuleInitRegistry {
+    fn from(value: Vec<DynModuleInit>) -> Self {
+        Self(BTreeMap::from_iter(
+            value.into_iter().map(|i| (i.module_kind(), i)),
+        ))
     }
 }
 
 impl ModuleInitRegistry {
-    pub fn decoders(&self) -> ModuleDecoderRegistry {
-        ModuleDecoderRegistry::from_iter(self.0.values().map(|v| v.decoder()))
+    pub fn decoders<'a>(
+        &self,
+        module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+    ) -> anyhow::Result<ModuleDecoderRegistry> {
+        let mut modules = BTreeMap::new();
+        for (id, kind) in module_kinds {
+            let Some(init) = self.0.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind:?}")
+            };
+
+            modules.insert(id, init.decoder());
+        }
+        Ok(ModuleDecoderRegistry::from_iter(modules))
     }
 
     pub async fn init_all(
@@ -187,11 +215,16 @@ impl ModuleInitRegistry {
     ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::ServerModule>> {
         let mut modules = BTreeMap::new();
 
-        for (k, v) in &self.0 {
-            let module = v
-                .init(cfg.get_module_config(k)?, db.clone(), task_group)
+        for (module_id, module_cfg) in &cfg.consensus.modules {
+            let kind = module_cfg.kind();
+            let Some(init) = self.0.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind:?}")
+            };
+            info!(module_instance_id = *module_id, kind = %kind, "Init  module");
+            let module = init
+                .init(cfg.get_module_config(*module_id)?, db.clone(), task_group)
                 .await?;
-            modules.insert(module.module_key(), module);
+            modules.insert(*module_id, module);
         }
         Ok(ModuleRegistry::from(modules))
     }
@@ -207,7 +240,7 @@ impl ServerConfig {
         auth_keys: ThresholdKeys,
         epoch_keys: ThresholdKeys,
         hbbft_keys: ThresholdKeys,
-        modules: BTreeMap<String, ServerModuleConfig>,
+        modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
     ) -> Self {
         let private = ServerConfigPrivate {
             tls_key: params.tls.our_private_key.clone(),
@@ -243,7 +276,7 @@ impl ServerConfig {
         cfg
     }
 
-    pub fn add_modules(&mut self, modules: BTreeMap<String, ServerModuleConfig>) {
+    pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {
         for (name, config) in modules.into_iter() {
             let ServerModuleConfig {
                 local,
@@ -251,8 +284,8 @@ impl ServerConfig {
                 consensus,
             } = config;
 
-            self.local.modules.insert(name.clone(), local);
-            self.private.modules.insert(name.clone(), private);
+            self.local.modules.insert(name, local);
+            self.private.modules.insert(name, private);
             self.consensus.modules.insert(name, consensus);
         }
     }
@@ -260,30 +293,46 @@ impl ServerConfig {
     /// Constructs a module config by name
     pub fn get_module_config_typed<T: TypedServerModuleConfig>(
         &self,
-        name: &str,
+        id: ModuleInstanceId,
     ) -> anyhow::Result<T> {
-        let local = Self::get_or_error(&self.local.modules, name)?;
-        let private = Self::get_or_error(&self.private.modules, name)?;
-        let consensus = Self::get_or_error(&self.consensus.modules, name)?;
+        let local = Self::get_or_error(&self.local.modules, id)?;
+        let private = Self::get_or_error(&self.private.modules, id)?;
+        let consensus = Self::get_or_error(&self.consensus.modules, id)?;
         let module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
     }
+    pub fn get_module_id_by_kind(
+        &self,
+        kind: impl Into<ModuleKind>,
+    ) -> anyhow::Result<ModuleInstanceId> {
+        let kind = kind.into();
+        Ok(*self
+            .consensus
+            .modules
+            .iter()
+            .find(|(_, v)| v.is_kind(&kind))
+            .ok_or_else(|| format_err!("Module {kind} not found"))?
+            .0)
+    }
 
     /// Constructs a module config by name
-    pub fn get_module_config(&self, name: &str) -> anyhow::Result<ServerModuleConfig> {
-        let local = Self::get_or_error(&self.local.modules, name)?;
-        let private = Self::get_or_error(&self.private.modules, name)?;
-        let consensus = Self::get_or_error(&self.consensus.modules, name)?;
+    pub fn get_module_config(&self, id: ModuleInstanceId) -> anyhow::Result<ServerModuleConfig> {
+        let local = Self::get_or_error(&self.local.modules, id)?;
+        let private = Self::get_or_error(&self.private.modules, id)?;
+        let consensus = Self::get_or_error(&self.consensus.modules, id)?;
         Ok(ServerModuleConfig::from(local, private, consensus))
     }
 
-    fn get_or_error(
-        json: &BTreeMap<String, serde_json::Value>,
-        name: &str,
-    ) -> anyhow::Result<serde_json::Value> {
-        json.get(name)
-            .ok_or_else(|| format_err!("Module {name} not found"))
+    fn get_or_error<T>(
+        json: &BTreeMap<ModuleInstanceId, T>,
+        id: ModuleInstanceId,
+    ) -> anyhow::Result<T>
+    where
+        T: Clone,
+    {
+        json.get(&id)
+            .ok_or_else(|| format_err!("Module {id} not found"))
             .cloned()
     }
 
@@ -310,20 +359,18 @@ impl ServerConfig {
             bail!("Peer ids are not indexed from 0");
         }
 
-        for module_name in self
-            .local
+        for (module_id, module_kind) in self
+            .consensus
             .modules
-            .keys()
-            .collect::<BTreeSet<_>>()
-            .union(&self.consensus.modules.keys().collect::<BTreeSet<_>>())
-            .copied()
-            .collect::<BTreeSet<_>>()
-            .union(&self.private.modules.keys().collect::<BTreeSet<_>>())
+            .iter()
+            .map(|(id, config)| Ok((*id, config.kind())))
+            .collect::<anyhow::Result<BTreeSet<_>>>()?
+            .iter()
         {
             module_config_gens
-                .get(module_name.as_str())
-                .ok_or_else(|| format_err!("module config gen not found {module_name}"))?
-                .validate_config(identity, self.get_module_config(module_name)?)?;
+                .get(module_kind)
+                .ok_or_else(|| format_err!("module config gen not found {module_kind}"))?
+                .validate_config(identity, self.get_module_config(*module_id)?)?;
         }
 
         Ok(())
@@ -346,10 +393,18 @@ impl ServerConfig {
 
         let peer0 = &params[&PeerId::from(0)];
 
+        // We assume user wants one module instance for every module kind
         let module_configs: BTreeMap<_, _> = module_config_gens
             .iter()
-            .map(|(name, gen)| (name, gen.trusted_dealer_gen(peers, &peer0.modules)))
+            .enumerate()
+            .map(|(module_id, (_kind, gen))| {
+                (
+                    u16::try_from(module_id).expect("Can't fail"),
+                    gen.trusted_dealer_gen(peers, &peer0.modules),
+                )
+            })
             .collect();
+
         let server_config: BTreeMap<_, _> = netinfo
             .iter()
             .map(|(&id, _netinf)| {
@@ -362,7 +417,7 @@ impl ServerConfig {
                     Self::extract_keys(netinfo.get(&id).expect("peer exists")),
                     module_configs
                         .iter()
-                        .map(|(name, cfgs)| (name.to_string(), cfgs[&id].clone()))
+                        .map(|(module_id, cfgs)| (*module_id, cfgs[&id].clone()))
                         .collect(),
                 );
                 (id, config)
@@ -382,7 +437,7 @@ impl ServerConfig {
     #[allow(clippy::too_many_arguments)]
     pub async fn distributed_gen(
         code_version: &str,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ServerConfigParams,
@@ -409,7 +464,10 @@ impl ServerConfig {
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
-        let keys = if let Ok(v) = dkg.run_g1(MODULE_KEY_GLOBAL, connections, &mut rng).await {
+        let keys = if let Ok(v) = dkg
+            .run_g1(MODULE_INSTANCE_ID_GLOBAL, connections, &mut rng)
+            .await
+        {
             v
         } else {
             return Ok(Err(Cancelled));
@@ -418,13 +476,25 @@ impl ServerConfig {
         let hbbft_keys = keys[&KeyType::Hbbft].threshold_crypto();
         let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
-        let mut module_cfgs: BTreeMap<String, ServerModuleConfig> = Default::default();
+        let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
 
-        for (name, gen) in module_config_gens.iter() {
+        // NOTE: Currently we do not implement user-assisted module-kind to module-instance-id assignment
+        // We assume that user wants one instance of each module that was compiled in. This is how
+        // things were initially, where we consider "module as a code" as "module as an instance at runtime"
+        for (module_instance_id, (_kind, gen)) in module_config_gens.iter().enumerate() {
+            let module_instance_id = u16::try_from(module_instance_id)
+                .expect("64k module instances should be enough for everyone");
             module_cfgs.insert(
-                name.to_string(),
+                module_instance_id,
                 if let Ok(cfgs) = gen
-                    .distributed_gen(connections, our_id, peers, &params.modules, task_group)
+                    .distributed_gen(
+                        connections,
+                        our_id,
+                        module_instance_id,
+                        peers,
+                        &params.modules,
+                        task_group,
+                    )
                     .await?
                 {
                     cfgs

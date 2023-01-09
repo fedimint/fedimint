@@ -6,7 +6,10 @@ use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::core::MODULE_KEY_LN;
+use fedimint_api::core::{
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
@@ -49,7 +52,15 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
         fed.run_consensus_epochs(2).await; // peg-out tx + peg out signing epoch
 
         assert_matches!(
-            assert_ci(fed.last_consensus_items().first().unwrap()),
+            assert_ci(
+                fed.last_consensus_items()
+                    .iter()
+                    .find(|ci| {
+                        let ConsensusItem::Module(mci) = ci else { return false };
+                        mci.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET
+                    })
+                    .unwrap()
+            ),
             PegOutSignature(_)
         );
 
@@ -60,7 +71,16 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
             .await
             .unwrap();
         assert!(matches!(
-            assert_ci(fed.last_consensus_items().first().unwrap()),
+            assert_ci(
+                fed.last_consensus_items()
+                    .iter()
+                    .find(|ci| {
+                        let ConsensusItem::Module(mci) = ci else { return false };
+                        mci.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET
+                    })
+                    .unwrap()
+            
+            ),
             PegOutSignature(PegOutSignatureItem {
                 txid,
                 ..
@@ -328,11 +348,14 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .decrypt_share_no_verify(&SecretKey::random().public_key().encrypt(""));
         fed.subset_peers(&[3])
             .override_proposal(vec![ConsensusItem::Module(
-                LightningConsensusItem {
-                    contract_id,
-                    share: PreimageDecryptionShare(share),
-                }
-                .into(),
+                (
+                    LightningConsensusItem {
+                        contract_id,
+                        share: PreimageDecryptionShare(share),
+                    },
+                    LEGACY_HARDCODED_INSTANCE_ID_LN,
+                )
+                    .into(),
             )]);
         drop_peer_3_during_epoch(&fed).await.unwrap(); // preimage decryption
 
@@ -372,11 +395,14 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
             .await;
         let out_point = fed.database_add_coins_for_user(&user, sats(2000)).await;
         let bad_proposal = vec![ConsensusItem::Module(
-            MintOutputConfirmation {
-                out_point,
-                signatures: OutputConfirmationSignatures(TieredMulti::default()),
-            }
-            .into(),
+            (
+                MintOutputConfirmation {
+                    out_point,
+                    signatures: OutputConfirmationSignatures(TieredMulti::default()),
+                },
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            )
+                .into(),
         )];
 
         fed.subset_peers(&[3]).override_proposal(bad_proposal);
@@ -769,7 +795,9 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
             .last_consensus_items()
             .iter()
             .filter(|item| match item {
-                ConsensusItem::Module(mci) => mci.module_key() == MODULE_KEY_LN,
+                ConsensusItem::Module(mci) => {
+                    mci.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_LN
+                }
                 _ => false,
             })
             .count();

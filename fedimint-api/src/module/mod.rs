@@ -13,7 +13,8 @@ use thiserror::Error;
 use crate::cancellable::Cancellable;
 use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
-    Decoder, PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
+    Decoder, ModuleInstanceId, ModuleKind, PluginConsensusItem, PluginDecode, PluginInput,
+    PluginOutput, PluginOutputOutcome,
 };
 use crate::db::{Database, DatabaseTransaction};
 use crate::module::audit::Audit;
@@ -160,7 +161,7 @@ type HandlerFn<M> = Box<
 /// Definition of an API endpoint defined by a module `M`.
 pub struct ApiEndpoint<M> {
     /// Path under which the API endpoint can be reached. It should start with a `/`
-    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module_name/transaction`
+    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module/module_instance_id/transaction`
     /// depending on the module name returned by `[FedertionModule::api_base_name]`.
     pub path: &'static str,
     /// Handler for the API call that takes the following arguments:
@@ -203,6 +204,10 @@ where
 /// Once the module config is ready, the module can be instantiated via `[Self::init]`.
 #[async_trait]
 pub trait ModuleInit {
+    fn decoder(&self) -> Decoder;
+
+    fn module_kind(&self) -> ModuleKind;
+
     /// Initialize the [`ServerModule`] instance from its config
     async fn init(
         &self,
@@ -210,8 +215,6 @@ pub trait ModuleInit {
         db: Database,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<ServerModule>;
-
-    fn decoder(&self) -> (ModuleKey, Decoder);
 
     fn trusted_dealer_gen(
         &self,
@@ -223,6 +226,7 @@ pub trait ModuleInit {
         &self,
         connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
         our_id: &PeerId,
+        module_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
         task_group: &mut TaskGroup,
@@ -241,6 +245,8 @@ pub trait ModuleInit {
 
 #[async_trait]
 pub trait ServerModulePlugin: Debug + Sized {
+    const KIND: ModuleKind;
+
     type Decoder: PluginDecode;
     type Input: PluginInput;
     type Output: PluginOutput;
@@ -248,9 +254,12 @@ pub trait ServerModulePlugin: Debug + Sized {
     type ConsensusItem: PluginConsensusItem;
     type VerificationCache: PluginVerificationCache;
 
-    fn module_key(&self) -> ModuleKey;
+    fn module_kind() -> ModuleKind {
+        // Note: All modules should define kinds as &'static str, so this doesn't allocate
+        Self::KIND
+    }
 
-    fn decoder(&self) -> &'static Self::Decoder;
+    fn decoder(&self) -> Self::Decoder;
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut DatabaseTransaction<'_>);
@@ -359,12 +368,6 @@ pub trait ServerModulePlugin: Debug + Sized {
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str;
 
     /// Returns a list of custom API endpoints defined by the module. These are made available both
     /// to users as well as to other modules. They thus should be deterministic, only dependant on

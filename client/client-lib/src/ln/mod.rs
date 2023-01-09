@@ -9,7 +9,6 @@ use std::time::Duration;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::config::FederationId;
 use fedimint_api::core::client::ClientModulePlugin;
-use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
@@ -45,12 +44,12 @@ pub struct LnClient {
 }
 
 impl ClientModulePlugin for LnClient {
+    const KIND: &'static str = "ln";
     type Decoder = <LightningModule as ServerModulePlugin>::Decoder;
     type Module = LightningModule;
-    const MODULE_KEY: ModuleKey = MODULE_KEY_LN;
 
-    fn decoder(&self) -> &'static Self::Decoder {
-        &LightningModuleDecoder
+    fn decoder(&self) -> Self::Decoder {
+        LightningModuleDecoder
     }
 
     fn input_amount(
@@ -337,7 +336,9 @@ mod tests {
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
     use fedimint_api::config::ConfigGenParams;
-    use fedimint_api::core::OutputOutcome;
+    use fedimint_api::core::{
+        OutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    };
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::{Amount, OutPoint, TransactionId};
@@ -375,14 +376,15 @@ mod tests {
             let mint = self.mint.lock().await;
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![SerdeOutputOutcome::from(&OutputOutcome::from(
+                outputs: vec![SerdeOutputOutcome::from(&OutputOutcome::from((
                     mint.output_outcome(OutPoint {
                         txid: tx,
                         out_idx: 0,
                     })
                     .await
                     .unwrap(),
-                ))],
+                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                )))],
             })
         }
 
@@ -481,6 +483,7 @@ mod tests {
                 |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
                 &ConfigGenParams::new(),
                 &LightningModuleConfigGen,
+                LEGACY_HARDCODED_INSTANCE_ID_LN,
             )
             .await
             .unwrap(),
