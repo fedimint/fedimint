@@ -30,7 +30,7 @@ pub struct ServerOpts {
     #[arg(env = "FM_PASSWORD")]
     pub password: Option<String>,
     /// Port to run admin UI on
-    #[arg(long = "ui-bind", default_value = None)]
+    #[arg(long = "ui-bind", env = "FM_LISTEN_UI")]
     pub ui_bind: Option<SocketAddr>,
     #[cfg(feature = "telemetry")]
     #[clap(long)]

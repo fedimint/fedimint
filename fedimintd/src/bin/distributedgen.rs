@@ -33,7 +33,7 @@ enum Command {
     /// Creates a connection cert string that must be shared with all other peers
     CreateCert {
         /// Directory to output all the generated config files
-        #[arg(long = "out-dir")]
+        #[arg(long = "out-dir", env = "FM_DATA_DIR")]
         dir_out_path: PathBuf,
 
         /// Our API address for clients to connect to us
