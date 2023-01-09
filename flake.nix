@@ -733,7 +733,7 @@
                 config = {
                   Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
                   Env = [
-                    "FEDIMINT_DATA_DIR=/data"
+                    "FM_DATA_DIR=/data"
                   ];
                   Entrypoint = [
                     "${entrypointScript}/bin/entrypoint"
