@@ -379,6 +379,10 @@
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -386,6 +390,10 @@
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>rpc;
 <span class="kw">pub mod </span>utils;
+
+<span class="kw">pub mod </span>gatewaylnrpc {
+    <span class="macro">tonic::include_proto!</span>(<span class="string">&quot;gatewaylnrpc&quot;</span>);
+}
 
 <span class="kw">use </span>std::{
     borrow::Cow,
