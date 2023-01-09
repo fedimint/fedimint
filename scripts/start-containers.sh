@@ -12,9 +12,10 @@ function generate_certs() {
     for ((ID=0; ID<FM_FED_SIZE; ID++));
     do
         mkdir -p $1/server-$ID
-        base_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+        fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+        api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
         export FM_PASSWORD="pass$ID"
-        docker run -v $1/server-$ID:/var/fedimint $2 distributedgen create-cert --announce-address ws://server-$ID --out-dir /var/fedimint --base-port $base_port --name "Server-$ID"
+        docker run -v $1/server-$ID:/var/fedimint -e FM_PASSWORD=pass$ID $2 distributedgen create-cert --p2p-url ws://server-$ID:$fed_port --api-url ws://server-$ID:$api_port --out-dir /var/fedimint --name "Server-$ID"
         CERTS="$CERTS,$(cat $1/server-$ID/tls-cert)"
     done
     export CERTS=${CERTS:1}
@@ -26,14 +27,14 @@ function run_dkg() {
 
     for ((ID=0; ID<FM_FED_SIZE; ID++));
     do
-        base_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-        next_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+        fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+        api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
         echo "  server-$ID:" >> $3
         echo "    image: $2" >> $3
-        echo "    command: distributedgen run --out-dir /var/fedimint --certs $CERTS --bind_address 0.0.0.0 --bitcoind-rpc bitcoind:18443" >> $3
+        echo "    command: distributedgen run --bind-p2p 0.0.0.0:$fed_port --bind-api 0.0.0.0:$api_port --out-dir /var/fedimint --certs $CERTS --bitcoind-rpc bitcoind:18443" >> $3
         echo "    ports:" >> $3
-        echo "      - $base_port:$base_port" >> $3
-        echo "      - $next_port:$next_port" >> $3
+        echo "      - $fed_port:$fed_port" >> $3
+        echo "      - $api_port:$api_port" >> $3
         echo "    volumes:" >> $3
         echo "      - $1/server-$ID:/var/fedimint" >> $3
         echo "    environment:" >> $3
@@ -82,12 +83,14 @@ function generate_bitcoind_container_def() {
 function generate_fedimintd_container_def() {
     echo "  server-$1:" >> $6
     echo "    image: $5" >> $6
-    echo "    command: fedimintd /var/fedimint "pass$1"" >> $6
+    echo "    command: fedimintd /var/fedimint" >> $6
     echo "    ports:" >> $6
     echo "      - $2:$2" >> $6
     echo "      - $3:$3" >> $6
     echo "    volumes:" >> $6
     echo "      - $4/server-$1:/var/fedimint" >> $6
+    echo "    environment:" >> $6
+    echo "      - FM_PASSWORD=pass$1" >> $6
     echo "" >> $6
 }
 
@@ -116,3 +119,5 @@ run_dkg $DOCKER_DIR $container_image "$init/docker-compose.yaml"
 generate_docker_compose $DOCKER_DIR $container_image "$fed/docker-compose.yaml"
 cat "$fed/docker-compose.yaml"
 docker-compose -f "$fed/docker-compose.yaml" up -d
+export DOCKER_COMPOSE="$DOCKER_DIR/fed/docker-compose.yaml"
+echo "Stop federation with 'docker-compose -f $DOCKER_COMPOSE stop'"
