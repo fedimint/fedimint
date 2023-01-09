@@ -2361,6 +2361,7 @@ name = "ln-gateway"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "axum 0.5.17",
  "axum-macros",
