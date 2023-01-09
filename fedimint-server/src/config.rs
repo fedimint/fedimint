@@ -33,12 +33,6 @@ use crate::net::connect::{parse_host_port, Connector};
 use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
-/// Default port for communication with peers when not specified (0x1FED)
-pub const DEFAULT_P2P_PORT: u16 = 8173;
-
-/// Default port for exposing the API when not specified
-pub const DEFAULT_API_PORT: u16 = 8174;
-
 /// The maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 
@@ -589,12 +583,8 @@ impl ServerConfigParams {
 
         ServerConfigParams {
             tls,
-            fed_network: Self::gen_network(&bind_p2p, &our_id, DEFAULT_P2P_PORT, peers, |params| {
-                params.p2p_url
-            }),
-            api_network: Self::gen_network(&bind_api, &our_id, DEFAULT_API_PORT, peers, |params| {
-                params.api_url
-            }),
+            fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
+            api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
             federation_name,
             modules: ConfigGenParams::new()
                 .attach(WalletConfigGenParams {
@@ -615,7 +605,6 @@ impl ServerConfigParams {
     fn gen_network(
         bind_address: &SocketAddr,
         our_id: &PeerId,
-        default_port: u16,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         extract_url: impl Fn(PeerServerParams) -> Url,
     ) -> NetworkConfig {
@@ -625,11 +614,7 @@ impl ServerConfigParams {
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
-                    let mut url = extract_url(params.clone());
-                    if url.port().is_none() {
-                        url.set_port(Some(default_port)).expect("Can set port");
-                    }
-
+                    let url = extract_url(params.clone());
                     (*peer, url)
                 })
                 .collect(),

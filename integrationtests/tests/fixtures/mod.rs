@@ -38,7 +38,7 @@ use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::BitcoindRpc;
 use fedimint_ln::{LightningGateway, LightningModuleConfigGen};
 use fedimint_mint::{MintConfigGenerator, MintOutput};
-use fedimint_server::config::{connect, ServerConfig, DEFAULT_P2P_PORT};
+use fedimint_server::config::{connect, ServerConfig};
 use fedimint_server::config::{ModuleInitRegistry, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
@@ -84,6 +84,7 @@ mod fake;
 mod real;
 mod utils;
 
+const DEFAULT_P2P_PORT: u16 = 8173;
 const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 10000;
 static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
 
