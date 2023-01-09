@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["DbKeyPrefix",""]],"macro":[["try",""]],"struct":[["DbKeyPrefixIter","An iterator over the variants of [Self]"],["ExampleKey",""],["ExampleKeyPrefix",""]]};

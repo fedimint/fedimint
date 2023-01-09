@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":[["configgen",""],["trusted_dealer_gen",""]],"struct":[["SetupConfigParams",""]]};

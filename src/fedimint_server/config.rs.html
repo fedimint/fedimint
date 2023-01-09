@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-94f503864730768f.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-4a084badb5778746.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-04897efae0a76fcd.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-bc1b32400f872ddb.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -696,18 +696,102 @@
 <a href="#696" id="696">696</a>
 <a href="#697" id="697">697</a>
 <a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::net::{IpAddr, SocketAddr};
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, Node, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ApiEndpoint, BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner,
+    FederationId, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
-<span class="kw">use </span>fedimint_api::module::FederationModuleConfigGen;
+<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::module::ModuleInit;
 <span class="kw">use </span>fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
@@ -715,6 +799,7 @@
 <span class="kw">use </span>fedimint_core::modules::mint::MintConfigGenParams;
 <span class="kw">use </span>fedimint_wallet::WalletConfigGenParams;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
+<span class="kw">use </span>hbbft::NetworkInfo;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -723,12 +808,19 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::NumPeers;
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, Connector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::NetworkConfig;
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
 
-<span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
+<span class="doccomment">/// Default port for communication with peers when not specified (0x1FED)
+</span><span class="kw">pub const </span>DEFAULT_P2P_PORT: u16 = <span class="number">8173</span>;
+
+<span class="doccomment">/// Default port for exposing the API when not specified
+</span><span class="kw">pub const </span>DEFAULT_API_PORT: u16 = <span class="number">8174</span>;
+
+<span class="doccomment">/// The maximum open connections the API can handle
+</span><span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="doccomment">/// All the serializable configuration for the fedimint server
@@ -746,6 +838,9 @@
     <span class="doccomment">/// Secret key for TLS communication, required for peer authentication
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
     </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
+    <span class="doccomment">/// Secret key for contributing to threshold auth key
+    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>auth_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
     <span class="doccomment">/// Secret key for contributing to HBBFT consensus
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>hbbft_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
@@ -758,30 +853,35 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfigConsensus {
-    <span class="doccomment">/// Network addresses and certs for all peers
-    </span><span class="kw">pub </span>peers: BTreeMap&lt;PeerId, Peer&gt;,
     <span class="doccomment">/// The version of the binary code running
     </span><span class="kw">pub </span>code_version: String,
     <span class="doccomment">/// Configurable federation name
     </span><span class="kw">pub </span>federation_name: String,
+    <span class="doccomment">/// Public keys authenticating members of the federation and the configs
+    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>auth_pk_set: hbbft::crypto::PublicKeySet,
     <span class="doccomment">/// Public keys for HBBFT consensus from all peers
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>hbbft_pk_set: hbbft::crypto::PublicKeySet,
     <span class="doccomment">/// Public keys for signing consensus epochs from all peers
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
+    <span class="doccomment">/// Network addresses and names for all peer APIs
+    </span><span class="kw">pub </span>api: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
     <span class="doccomment">/// All configuration that needs to be the same for modules
     </span><span class="kw">pub </span>modules: BTreeMap&lt;String, serde_json::Value&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfigLocal {
+    <span class="doccomment">/// Network addresses and certs for all p2p connections
+    </span><span class="kw">pub </span>p2p: BTreeMap&lt;PeerId, PeerEndpoint&gt;,
     <span class="doccomment">/// Our peer id (generally should not change)
     </span><span class="kw">pub </span>identity: PeerId,
-    <span class="doccomment">/// Our bind address for running HBBFT
-    </span><span class="kw">pub </span>hbbft_bind_addr: SocketAddr,
+    <span class="doccomment">/// Our bind address for communicating with peers
+    </span><span class="kw">pub </span>fed_bind: SocketAddr,
     <span class="doccomment">/// Our bind address for our API endpoints
-    </span><span class="kw">pub </span>api_bind_addr: SocketAddr,
+    </span><span class="kw">pub </span>api_bind: SocketAddr,
     <span class="doccomment">/// Our publicly known TLS cert
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
@@ -792,25 +892,20 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>Peer {
+</span><span class="kw">pub struct </span>PeerEndpoint {
     <span class="doccomment">/// Certs for TLS communication, required for peer authentication
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
     <span class="doccomment">/// The TLS network address and port, used for HBBFT consensus
     </span><span class="kw">pub </span>hbbft: Url,
-    <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
-    </span><span class="kw">pub </span>api_addr: Url,
-    <span class="doccomment">/// human-readable name
-    </span><span class="kw">pub </span>name: String,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="doccomment">/// network config for a server
 </span><span class="kw">pub struct </span>ServerConfigParams {
     <span class="kw">pub </span>tls: TlsConfig,
-    <span class="kw">pub </span>hbbft: NetworkConfig,
-    <span class="kw">pub </span>api: NetworkConfig,
-    <span class="kw">pub </span>server_dkg: NetworkConfig,
+    <span class="kw">pub </span>fed_network: NetworkConfig,
+    <span class="kw">pub </span>api_network: NetworkConfig,
     <span class="kw">pub </span>federation_name: String,
 
     <span class="doccomment">/// extra options for extra settings and modules
@@ -820,21 +915,14 @@
 <span class="kw">impl </span>ServerConfigConsensus {
     <span class="kw">pub fn </span>to_client_config_try(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_config_gens: <span class="kw-2">&amp;</span>ModuleConfigGens,
+        module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry,
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-        <span class="kw">let </span>nodes = <span class="self">self
-            </span>.peers
-            .values()
-            .map(|peer| Node {
-                url: peer.api_addr.clone(),
-                name: peer.name.clone(),
-            })
-            .collect();
-
         <span class="prelude-val">Ok</span>(ClientConfig {
             federation_name: <span class="self">self</span>.federation_name.clone(),
+            federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
-            nodes,
+            auth_pk: <span class="self">self</span>.auth_pk_set.public_key(),
+            nodes: <span class="self">self</span>.api.values().cloned().collect(),
             modules: <span class="self">self
                 </span>.modules
                 .iter()
@@ -851,14 +939,49 @@
         })
     }
 
-    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, module_config_gens: <span class="kw-2">&amp;</span>ModuleConfigGens) -&gt; ClientConfig {
+    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry) -&gt; ClientConfig {
         <span class="self">self</span>.to_client_config_try(module_config_gens)
             .expect(<span class="string">&quot;configuration mismatch&quot;</span>)
     }
 }
+<span class="kw">use </span>impl_tools::autoimpl;
 
-<span class="kw">pub type </span>ModuleConfigGens =
-    BTreeMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, Arc&lt;<span class="kw">dyn </span>FederationModuleConfigGen + Send + Sync&gt;&gt;;
+<span class="comment">// TODO: turn into newtype
+</span><span class="kw">pub type </span>DynModuleInit = Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;;
+
+<span class="comment">// TODO: turn all registeries into `Registry&lt;T&gt;(BTreeMap&lt;&amp;&#39;static str, T))` + type alias
+</span><span class="attr">#[autoimpl(Deref using <span class="self">self</span>.<span class="number">0</span>)]
+#[derive(Clone)]
+</span><span class="kw">pub struct </span>ModuleInitRegistry(BTreeMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, DynModuleInit&gt;);
+
+<span class="kw">impl</span>&lt;<span class="kw">const </span>N: usize&gt; From&lt;[(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, DynModuleInit); N]&gt; <span class="kw">for </span>ModuleInitRegistry {
+    <span class="kw">fn </span>from(value: [(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, DynModuleInit); N]) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(BTreeMap::from(value))
+    }
+}
+
+<span class="kw">impl </span>ModuleInitRegistry {
+    <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
+        ModuleDecoderRegistry::new(<span class="self">self</span>.<span class="number">0</span>.values().map(|v| v.decoder()))
+    }
+
+    <span class="kw">pub async fn </span>init_all(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        cfg: <span class="kw-2">&amp;</span>ServerConfig,
+        db: <span class="kw-2">&amp;</span>Database,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; anyhow::Result&lt;ModuleRegistry&lt;fedimint_api::server::ServerModule&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+
+        <span class="kw">for </span>(k, v) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>{
+            <span class="kw">let </span>module = v
+                .init(cfg.get_module_config(k)<span class="question-mark">?</span>, db.clone(), task_group)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            modules.insert(module.module_key(), module);
+        }
+        <span class="prelude-val">Ok</span>(ModuleRegistry::from(modules))
+    }
+}
 
 <span class="kw">impl </span>ServerConfig {
     <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key setup
@@ -867,22 +990,23 @@
         code_version: <span class="kw-2">&amp;</span>str,
         params: ServerConfigParams,
         identity: PeerId,
-        hbbft_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-        hbbft_pk_set: hbbft::crypto::PublicKeySet,
-        epoch_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-        epoch_pk_set: hbbft::crypto::PublicKeySet,
+        auth_keys: ThresholdKeys,
+        epoch_keys: ThresholdKeys,
+        hbbft_keys: ThresholdKeys,
         modules: BTreeMap&lt;String, ServerModuleConfig&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>private = ServerConfigPrivate {
             tls_key: params.tls.our_private_key.clone(),
-            hbbft_sks,
-            epoch_sks,
+            auth_sks: auth_keys.secret_key_share,
+            hbbft_sks: hbbft_keys.secret_key_share,
+            epoch_sks: epoch_keys.secret_key_share,
             modules: Default::default(),
         };
         <span class="kw">let </span>local = ServerConfigLocal {
+            p2p: params.peers(),
             identity,
-            hbbft_bind_addr: params.hbbft.bind_addr,
-            api_bind_addr: params.api.bind_addr,
+            fed_bind: params.fed_network.bind_addr,
+            api_bind: params.api_network.bind_addr,
             tls_cert: params.tls.our_certificate.clone(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
@@ -890,9 +1014,10 @@
         <span class="kw">let </span>consensus = ServerConfigConsensus {
             code_version: code_version.to_string(),
             federation_name: params.federation_name.clone(),
-            peers: params.peers(),
-            hbbft_pk_set,
-            epoch_pk_set,
+            auth_pk_set: auth_keys.public_key_set,
+            hbbft_pk_set: hbbft_keys.public_key_set,
+            epoch_pk_set: epoch_keys.public_key_set,
+            api: params.api_nodes(),
             modules: Default::default(),
         };
         <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
@@ -951,9 +1076,9 @@
     <span class="kw">pub fn </span>validate_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         identity: <span class="kw-2">&amp;</span>PeerId,
-        module_config_gens: <span class="kw-2">&amp;</span>ModuleConfigGens,
+        module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>peers = <span class="self">self</span>.consensus.peers.clone();
+        <span class="kw">let </span>peers = <span class="self">self</span>.local.p2p.clone();
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
         <span class="kw">let </span>private = <span class="self">self</span>.private.clone();
         <span class="kw">let </span>id = identity.to_usize();
@@ -995,12 +1120,14 @@
         code_version: <span class="kw-2">&amp;</span>str,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>HashMap&lt;PeerId, ServerConfigParams&gt;,
-        module_config_gens: ModuleConfigGens,
+        module_config_gens: ModuleInitRegistry,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; BTreeMap&lt;PeerId, <span class="self">Self</span>&gt; {
-        <span class="kw">let </span>netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
+        <span class="kw">let </span>netinfo = NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
-        <span class="kw">let </span>epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
+        <span class="kw">let </span>epochinfo = NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
+            .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
+        <span class="kw">let </span>authinfo = NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
@@ -1011,16 +1138,14 @@
             .collect();
         <span class="kw">let </span>server_config: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = netinfo
             .iter()
-            .map(|(<span class="kw-2">&amp;</span>id, netinf)| {
-                <span class="kw">let </span>epoch_keys = epochinfo.get(<span class="kw-2">&amp;</span>id).unwrap();
+            .map(|(<span class="kw-2">&amp;</span>id, _netinf)| {
                 <span class="kw">let </span>config = ServerConfig::from(
                     code_version,
                     params[<span class="kw-2">&amp;</span>id].clone(),
                     id,
-                    SerdeSecret(netinf.secret_key_share().unwrap().clone()),
-                    netinf.public_key_set().clone(),
-                    SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
-                    epoch_keys.public_key_set().clone(),
+                    <span class="self">Self</span>::extract_keys(authinfo.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;peer exists&quot;</span>)),
+                    <span class="self">Self</span>::extract_keys(epochinfo.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;peer exists&quot;</span>)),
+                    <span class="self">Self</span>::extract_keys(netinfo.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;peer exists&quot;</span>)),
                     module_configs
                         .iter()
                         .map(|(name, cfgs)| (name.to_string(), cfgs[<span class="kw-2">&amp;</span>id].clone()))
@@ -1033,6 +1158,13 @@
         server_config
     }
 
+    <span class="kw">fn </span>extract_keys(info: <span class="kw-2">&amp;</span>NetworkInfo&lt;PeerId&gt;) -&gt; ThresholdKeys {
+        ThresholdKeys {
+            public_key_set: info.public_key_set().clone(),
+            secret_key_share: SerdeSecret(info.secret_key_share().unwrap().clone()),
+        }
+    }
+
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub async fn </span>distributed_gen(
         code_version: <span class="kw-2">&amp;</span>str,
@@ -1040,7 +1172,7 @@
         our_id: <span class="kw-2">&amp;</span>PeerId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ServerConfigParams,
-        module_config_gens: ModuleConfigGens,
+        module_config_gens: ModuleInitRegistry,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;<span class="self">Self</span>&gt;&gt; {
@@ -1059,6 +1191,7 @@
 
         <span class="comment">// hbbft uses a lower threshold of signing keys (f+1)
         </span><span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
+        dkg.add(KeyType::Auth, peers.threshold());
         dkg.add(KeyType::Epoch, peers.threshold());
 
         <span class="comment">// run DKG for epoch and hbbft keys
@@ -1067,12 +1200,13 @@
         } <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
         };
-        <span class="kw">let </span>(hbbft_pks, hbbft_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
-        <span class="kw">let </span>(epoch_pks, epoch_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
+        <span class="kw">let </span>auth_keys = keys[<span class="kw-2">&amp;</span>KeyType::Auth].threshold_crypto();
+        <span class="kw">let </span>hbbft_keys = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
+        <span class="kw">let </span>epoch_keys = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;String, ServerModuleConfig&gt; = Default::default();
 
-        <span class="kw">for </span>(name, gen) <span class="kw">in </span>module_config_gens {
+        <span class="kw">for </span>(name, gen) <span class="kw">in </span>module_config_gens.iter() {
             module_cfgs.insert(
                 name.to_string(),
                 <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfgs) = gen
@@ -1090,10 +1224,9 @@
             code_version,
             params.clone(),
             <span class="kw-2">*</span>our_id,
-            SerdeSecret(hbbft_sks),
-            hbbft_pks,
-            SerdeSecret(epoch_sks),
-            epoch_pks,
+            auth_keys,
+            epoch_keys,
+            hbbft_keys,
             module_cfgs,
         );
 
@@ -1103,20 +1236,22 @@
     }
 }
 
-<span class="attr">#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+<span class="doccomment">/// The types of keys to run distributed key generation for
+</span><span class="attr">#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>KeyType {
     Hbbft,
     Epoch,
+    Auth,
 }
 
 <span class="kw">impl </span>ServerConfig {
     <span class="kw">pub fn </span>network_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkConfig {
         NetworkConfig {
             identity: <span class="self">self</span>.local.identity,
-            bind_addr: <span class="self">self</span>.local.hbbft_bind_addr,
+            bind_addr: <span class="self">self</span>.local.fed_bind,
             peers: <span class="self">self
-                </span>.consensus
-                .peers
+                </span>.local
+                .p2p
                 .iter()
                 .map(|(<span class="kw-2">&amp;</span>id, peer)| (id, peer.hbbft.clone()))
                 .collect(),
@@ -1128,14 +1263,14 @@
             our_certificate: <span class="self">self</span>.local.tls_cert.clone(),
             our_private_key: <span class="self">self</span>.private.tls_key.clone(),
             peer_certs: <span class="self">self
-                </span>.consensus
-                .peers
+                </span>.local
+                .p2p
                 .iter()
                 .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.tls_cert.clone()))
                 .collect(),
             peer_names: <span class="self">self
                 </span>.consensus
-                .peers
+                .api
                 .iter()
                 .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.name.to_string()))
                 .collect(),
@@ -1147,10 +1282,11 @@
     }
 }
 
-<span class="kw">pub struct </span>PeerServerParams {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>PeerServerParams {
     <span class="kw">pub </span>cert: rustls::Certificate,
-    <span class="kw">pub </span>address: String,
-    <span class="kw">pub </span>base_port: u16,
+    <span class="kw">pub </span>p2p_url: Url,
+    <span class="kw">pub </span>api_url: Url,
     <span class="kw">pub </span>name: String,
 }
 
@@ -1168,27 +1304,43 @@
         amounts
     }
 
-    <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, Peer&gt; {
-        <span class="self">self</span>.hbbft
+    <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, PeerEndpoint&gt; {
+        <span class="self">self</span>.fed_network
             .peers
             .iter()
             .map(|(peer, hbbft)| {
                 (
                     <span class="kw-2">*</span>peer,
-                    Peer {
+                    PeerEndpoint {
                         tls_cert: <span class="self">self</span>.tls.peer_certs[peer].clone(),
-                        name: <span class="self">self</span>.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
-                        api_addr: <span class="self">self</span>.api.peers[peer].clone(),
                     },
                 )
             })
             .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
     }
 
-    <span class="attr">#[allow(clippy::too_many_arguments)]
+    <span class="kw">pub fn </span>api_nodes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, ApiEndpoint&gt; {
+        <span class="self">self</span>.fed_network
+            .peers
+            .keys()
+            .map(|peer| {
+                (
+                    <span class="kw-2">*</span>peer,
+                    ApiEndpoint {
+                        name: <span class="self">self</span>.tls.peer_names[peer].clone(),
+                        url: <span class="self">self</span>.api_network.peers[peer].clone(),
+                    },
+                )
+            })
+            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+    }
+
+    <span class="doccomment">/// Generates the parameters necessary for running server config generation
+    </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>gen_params(
-        bind_address: String,
+        bind_p2p: SocketAddr,
+        bind_api: SocketAddr,
         key: rustls::PrivateKey,
         our_id: PeerId,
         max_denomination: Amount,
@@ -1215,13 +1367,14 @@
             peer_names,
         };
 
-        <span class="kw">let </span>bind_address = bind_address.parse().expect(<span class="string">&quot;Could not parse address&quot;</span>);
-
         ServerConfigParams {
             tls,
-            hbbft: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">0</span>, peers),
-            api: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">1</span>, peers),
-            server_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_address, <span class="kw-2">&amp;</span>our_id, <span class="number">2</span>, peers),
+            fed_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, DEFAULT_P2P_PORT, peers, |params| {
+                params.p2p_url
+            }),
+            api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, DEFAULT_API_PORT, peers, |params| {
+                params.api_url
+            }),
             federation_name,
             modules: ConfigGenParams::new()
                 .attach(WalletConfigGenParams {
@@ -1240,21 +1393,24 @@
     }
 
     <span class="kw">fn </span>gen_network(
-        bind_address: <span class="kw-2">&amp;</span>IpAddr,
+        bind_address: <span class="kw-2">&amp;</span>SocketAddr,
         our_id: <span class="kw-2">&amp;</span>PeerId,
-        offset: u16,
+        default_port: u16,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
+        extract_url: <span class="kw">impl </span>Fn(PeerServerParams) -&gt; Url,
     ) -&gt; NetworkConfig {
         NetworkConfig {
             identity: <span class="kw-2">*</span>our_id,
-            bind_addr: SocketAddr::new(<span class="kw-2">*</span>bind_address, peers[our_id].base_port + offset),
+            bind_addr: <span class="kw-2">*</span>bind_address,
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
-                    <span class="kw">let </span>connection = <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, params.address, params.base_port + offset)
-                        .parse()
-                        .expect(<span class="string">&quot;Could not parse address&quot;</span>);
-                    (<span class="kw-2">*</span>peer, connection)
+                    <span class="kw">let </span><span class="kw-2">mut </span>url = extract_url(params.clone());
+                    <span class="kw">if </span>url.port().is_none() {
+                        url.set_port(<span class="prelude-val">Some</span>(default_port)).expect(<span class="string">&quot;Can set port&quot;</span>);
+                    }
+
+                    (<span class="kw-2">*</span>peer, url)
                 })
                 .collect(),
         }
@@ -1279,10 +1435,14 @@
         <span class="kw">let </span>peer_params: BTreeMap&lt;PeerId, PeerServerParams&gt; = peers
             .iter()
             .map(|peer| {
+                <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">10</span>;
+                <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, peer_port);
+                <span class="kw">let </span>api_url = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, peer_port + <span class="number">1</span>);
+
                 <span class="kw">let </span>params: PeerServerParams = PeerServerParams {
                     cert: keys[peer].<span class="number">0</span>.clone(),
-                    address: <span class="string">&quot;ws://127.0.0.1&quot;</span>.to_string(),
-                    base_port: base_port + (u16::from(<span class="kw-2">*</span>peer) * <span class="number">6</span>),
+                    p2p_url: p2p_url.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
+                    api_url: api_url.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
                     name: <span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize()),
                 };
                 (<span class="kw-2">*</span>peer, params)
@@ -1292,8 +1452,12 @@
         peers
             .iter()
             .map(|peer| {
+                <span class="kw">let </span>bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url);
+                <span class="kw">let </span>bind_api = parse_host_port(peer_params[peer].clone().api_url);
+
                 <span class="kw">let </span>params: ServerConfigParams = <span class="self">Self</span>::gen_params(
-                    <span class="string">&quot;127.0.0.1&quot;</span>.to_string(),
+                    bind_p2p.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
+                    bind_api.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
                     keys[peer].<span class="number">1</span>.clone(),
                     <span class="kw-2">*</span>peer,
                     max_denomination,
@@ -1395,4 +1559,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (c7572670a 2023-01-03)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (cc47b0699 2023-01-08)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
