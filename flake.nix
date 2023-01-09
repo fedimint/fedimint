@@ -715,75 +715,94 @@
             crossTargets;
 
 
-          container = {
-            fedimintd = pkgs.dockerTools.buildLayeredImage {
-              name = "fedimintd";
-              contents = [ fedimintd pkgs.bash pkgs.coreutils ];
-              config = {
-                Cmd = [
-                  "${fedimintd}/bin/fedimintd"
-                ];
-                ExposedPorts = {
-                  "${builtins.toString 17240}/tcp" = { };
-                  "${builtins.toString 17340}/tcp" = { };
-                  "${builtins.toString 17440}/tcp" = { };
-                };
-              };
-            };
-
-            ln-gateway-clightning =
-              let
-                # Will be placed in `/config-example.cfg` by `fakeRootCommands` below
-                config-example = pkgs.writeText "config-example.conf" ''
-                  network=signet
-                  # bitcoin-datadir=/var/lib/bitcoind
-
-                  always-use-proxy=false
-                  bind-addr=0.0.0.0:9735
-                  bitcoin-rpcconnect=127.0.0.1
-                  bitcoin-rpcport=8332
-                  bitcoin-rpcuser=public
-                  rpc-file-mode=0660
-                  log-timestamps=false
-
-                  plugin=${ln-gateway}/bin/ln_gateway
-                  fedimint-cfg=/var/fedimint/fedimint-gw
-
-                  announce-addr=104.244.73.68:9735
-                  alias=fm-signet.sirion.io
-                  large-channels
-                  experimental-offers
-                  fee-base=0
-                  fee-per-satoshi=100
+          container =
+            let
+              entrypointScript =
+                pkgs.writeShellScriptBin "entrypoint" ''
+                  exec bash "${./misc/fedimintd-container-entrypoint.sh}" "$@"
                 '';
-              in
-              pkgs.dockerTools.buildLayeredImage {
-                name = "ln-gateway-clightning";
-                contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils gateway-cli ];
+            in
+            {
+              fedimintd = pkgs.dockerTools.buildLayeredImage {
+                name = "fedimintd";
+                contents = [
+                  fedimintd
+                  pkgs.bash
+                  pkgs.coreutils
+                ];
                 config = {
-                  Cmd = [
-                    "${ln-gateway}/bin/ln_gateway"
+                  Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
+                  Env = [
+                    "FEDIMINT_DATA_DIR=/data"
                   ];
+                  Entrypoint = [
+                    "${entrypointScript}/bin/entrypoint"
+                  ];
+                  WorkDir = "/data";
+                  Volumes = {
+                    "/data" = { };
+                  };
                   ExposedPorts = {
-                    "${builtins.toString 9735}/tcp" = { };
+                    "${builtins.toString 8173}/tcp" = { };
+                    "${builtins.toString 8174}/tcp" = { };
+                    "${builtins.toString 8175}/tcp" = { };
                   };
                 };
-                enableFakechroot = true;
-                fakeRootCommands = ''
-                  ln -s ${config-example} /config-example.cfg
-                '';
               };
 
-            fedimint-cli = pkgs.dockerTools.buildLayeredImage {
-              name = "fedimint-cli";
-              contents = [ fedimint-cli pkgs.bash pkgs.coreutils ];
-              config = {
-                Cmd = [
-                  "${fedimint-cli}/bin/fedimint-cli"
-                ];
+              ln-gateway-clightning =
+                let
+                  # Will be placed in `/config-example.cfg` by `fakeRootCommands` below
+                  config-example = pkgs.writeText "config-example.conf" ''
+                    network=signet
+                    # bitcoin-datadir=/var/lib/bitcoind
+
+                    always-use-proxy=false
+                    bind-addr=0.0.0.0:9735
+                    bitcoin-rpcconnect=127.0.0.1
+                    bitcoin-rpcport=8332
+                    bitcoin-rpcuser=public
+                    rpc-file-mode=0660
+                    log-timestamps=false
+
+                    plugin=${ln-gateway}/bin/ln_gateway
+                    fedimint-cfg=/var/fedimint/fedimint-gw
+
+                    announce-addr=104.244.73.68:9735
+                    alias=fm-signet.sirion.io
+                    large-channels
+                    experimental-offers
+                    fee-base=0
+                    fee-per-satoshi=100
+                  '';
+                in
+                pkgs.dockerTools.buildLayeredImage {
+                  name = "ln-gateway-clightning";
+                  contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils gateway-cli ];
+                  config = {
+                    Cmd = [
+                      "${ln-gateway}/bin/ln_gateway"
+                    ];
+                    ExposedPorts = {
+                      "${builtins.toString 9735}/tcp" = { };
+                    };
+                  };
+                  enableFakechroot = true;
+                  fakeRootCommands = ''
+                    ln -s ${config-example} /config-example.cfg
+                  '';
+                };
+
+              fedimint-cli = pkgs.dockerTools.buildLayeredImage {
+                name = "fedimint-cli";
+                contents = [ fedimint-cli pkgs.bash pkgs.coreutils ];
+                config = {
+                  Cmd = [
+                    "${fedimint-cli}/bin/fedimint-cli"
+                  ];
+                };
               };
             };
-          };
         };
 
         checks = {
