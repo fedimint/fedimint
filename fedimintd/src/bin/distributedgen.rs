@@ -37,12 +37,12 @@ enum Command {
         dir_out_path: PathBuf,
 
         /// Our API address for clients to connect to us
-        #[arg(long = "api-url")]
-        api_url: Url,
+        #[arg(long = "url-p2p")]
+        url_api: Url,
 
         /// Our external address for communicating with our peers
-        #[arg(long = "p2p-url")]
-        p2p_url: Url,
+        #[arg(long = "url-p2p")]
+        url_p2p: Url,
 
         /// Our node name, must be unique among peers
         #[arg(long = "name")]
@@ -59,12 +59,12 @@ enum Command {
         dir_out_path: PathBuf,
 
         /// Address we bind to for federation communication
-        #[arg(long = "bind-p2p", default_value = "127.0.0.1:8173")]
-        bind_p2p: SocketAddr,
+        #[arg(long = "listen-p2p", default_value = "127.0.0.1:8173")]
+        listen_p2p: SocketAddr,
 
         /// Address we bind to for exposing the API
-        #[arg(long = "bind-api", default_value = "127.0.0.1:8174")]
-        bind_api: SocketAddr,
+        #[arg(long = "listen-api", default_value = "127.0.0.1:8174")]
+        listen_api: SocketAddr,
 
         /// Federation name, same for all peers
         #[arg(long = "federation-name", default_value = "Hals_trusty_mint")]
@@ -151,20 +151,20 @@ async fn main() {
     match command {
         Command::CreateCert {
             dir_out_path,
-            p2p_url,
-            api_url,
+            url_p2p,
+            url_api,
             name,
             password,
         } => {
-            let config_str = create_cert(dir_out_path, p2p_url, api_url, name, password);
+            let config_str = create_cert(dir_out_path, url_p2p, url_api, name, password);
             println!("{}", config_str);
         }
         Command::Run {
             dir_out_path,
             federation_name,
             certs,
-            bind_p2p,
-            bind_api,
+            listen_p2p,
+            listen_api,
             bitcoind_rpc,
             max_denomination,
             network,
@@ -174,8 +174,8 @@ async fn main() {
             let key = get_key(password, dir_out_path.join(SALT_FILE));
             let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK));
             let server = if let Ok(v) = run_dkg(
-                bind_p2p,
-                bind_api,
+                listen_p2p,
+                listen_api,
                 &dir_out_path,
                 max_denomination,
                 federation_name,

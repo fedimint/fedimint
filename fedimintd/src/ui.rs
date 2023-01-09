@@ -150,8 +150,8 @@ async fn post_guardians(
         .spawn("admin UI running DKG", move |_| async move {
             tracing::info!("Running DKG");
             match run_dkg(
-                params.bind_p2p,
-                params.bind_api,
+                params.listen_p2p,
+                params.listen_api,
                 &dir_out_path,
                 max_denomination,
                 params.federation_name,
@@ -220,13 +220,13 @@ pub struct ParamsForm {
     /// Federation name, same for all peers
     federation_name: String,
     /// Our API address for clients to connect to us
-    api_url: Url,
+    url_api: Url,
     /// Our external address for communicating with our peers
-    p2p_url: Url,
+    url_p2p: Url,
     /// Address we bind to for exposing the API
-    bind_api: SocketAddr,
+    listen_api: SocketAddr,
     /// Address we bind to for federation communication
-    bind_p2p: SocketAddr,
+    listen_p2p: SocketAddr,
     /// `bitcoind` json rpc endpoint
     bitcoind_rpc: String,
     /// How many participants in federation consensus
@@ -248,8 +248,8 @@ async fn post_federation_params(
     // FIXME: this should return Result
     let tls_connect_string = create_cert(
         state.cfg_path.clone(),
-        form.p2p_url.clone(),
-        form.api_url.clone(),
+        form.url_p2p.clone(),
+        form.url_api.clone(),
         form.guardian_name.clone(),
         Some(state.password.clone()),
     );
@@ -260,8 +260,8 @@ async fn post_federation_params(
         // TODO: check that bitcoinrpc actually works here
         bitcoind_rpc: form.bitcoind_rpc,
         num_guardians: form.guardians_count,
-        bind_api: form.bind_api,
-        bind_p2p: form.bind_p2p,
+        listen_api: form.listen_api,
+        listen_p2p: form.listen_p2p,
         guardian: Guardian {
             name: form.guardian_name,
             tls_connect_string,
@@ -302,8 +302,8 @@ struct FederationParameters {
     bitcoind_rpc: String,
     finality_delay: u32,
     network: Network,
-    bind_api: SocketAddr,
-    bind_p2p: SocketAddr,
+    listen_api: SocketAddr,
+    listen_p2p: SocketAddr,
 }
 
 struct State {
@@ -324,7 +324,7 @@ pub enum UiMessage {
 pub async fn run_ui(
     cfg_path: PathBuf,
     sender: Sender<UiMessage>,
-    bind_addr: SocketAddr,
+    listen_ui: SocketAddr,
     password: String,
     task_group: TaskGroup,
 ) {
@@ -346,7 +346,7 @@ pub async fn run_ui(
         .route("/qr", get(qr))
         .layer(Extension(state));
 
-    axum::Server::bind(&bind_addr)
+    axum::Server::bind(&listen_ui)
         .serve(app.into_make_service())
         .await
         .unwrap();

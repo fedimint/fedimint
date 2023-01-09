@@ -25,21 +25,21 @@ use crate::*;
 
 pub fn create_cert(
     dir_out_path: PathBuf,
-    p2p_url: Url,
-    api_url: Url,
+    url_p2p: Url,
+    url_api: Url,
     guardian_name: String,
     password: Option<String>,
 ) -> String {
     let salt: [u8; 16] = rand::random();
     fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect("write error");
     let key = get_key(password, dir_out_path.join(SALT_FILE));
-    gen_tls(&dir_out_path, p2p_url, api_url, guardian_name, &key)
+    gen_tls(&dir_out_path, url_p2p, url_api, guardian_name, &key)
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_dkg(
-    bind_p2p: SocketAddr,
-    bind_api: SocketAddr,
+    listen_p2p: SocketAddr,
+    listen_api: SocketAddr,
     dir_out_path: &Path,
     max_denomination: Amount,
     federation_name: String,
@@ -66,8 +66,8 @@ pub async fn run_dkg(
         .map(|(peer, _)| *peer)
         .expect("could not find our cert among peers");
     let params = ServerConfigParams::gen_params(
-        bind_p2p,
-        bind_api,
+        listen_p2p,
+        listen_api,
         pk,
         our_id,
         max_denomination,
@@ -116,21 +116,21 @@ pub async fn run_dkg(
 pub fn parse_peer_params(url: String) -> PeerServerParams {
     let split: Vec<&str> = url.split('@').collect();
     assert_eq!(split.len(), 4, "Cannot parse cert string");
-    let p2p_url = split[0].parse().expect("could not parse URL");
-    let api_url = split[1].parse().expect("could not parse URL");
+    let url_p2p = split[0].parse().expect("could not parse URL");
+    let url_api = split[1].parse().expect("could not parse URL");
     let hex_cert = hex::decode(split[3]).expect("cert was not hex encoded");
     PeerServerParams {
         cert: rustls::Certificate(hex_cert),
-        p2p_url,
-        api_url,
+        url_p2p,
+        url_api,
         name: split[2].to_string(),
     }
 }
 
 fn gen_tls(
     dir_out_path: &Path,
-    p2p_url: Url,
-    api_url: Url,
+    url_p2p: Url,
+    url_api: Url,
     name: String,
     key: &LessSafeKey,
 ) -> String {
@@ -139,7 +139,7 @@ fn gen_tls(
 
     rustls::ServerName::try_from(name.as_str()).expect("Valid DNS name");
     // TODO Base64 encode name, hash fingerprint cert_string
-    let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, hex::encode(cert.0));
+    let cert_url = format!("{}@{}@{}@{}", url_p2p, url_api, name, hex::encode(cert.0));
     fs::write(dir_out_path.join(TLS_CERT), &cert_url).unwrap();
     cert_url
 }

@@ -99,9 +99,9 @@ pub struct ServerConfigLocal {
     /// Our peer id (generally should not change)
     pub identity: PeerId,
     /// Our bind address for communicating with peers
-    pub fed_bind: SocketAddr,
+    pub listen_p2p: SocketAddr,
     /// Our bind address for our API endpoints
-    pub api_bind: SocketAddr,
+    pub listen_api: SocketAddr,
     /// Our publicly known TLS cert
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
@@ -225,8 +225,8 @@ impl ServerConfig {
         let local = ServerConfigLocal {
             p2p: params.peers(),
             identity,
-            fed_bind: params.fed_network.bind_addr,
-            api_bind: params.api_network.bind_addr,
+            listen_p2p: params.fed_network.bind_addr,
+            listen_api: params.api_network.bind_addr,
             tls_cert: params.tls.our_certificate.clone(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
@@ -468,7 +468,7 @@ impl ServerConfig {
     pub fn network_config(&self) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.identity,
-            bind_addr: self.local.fed_bind,
+            bind_addr: self.local.listen_p2p,
             peers: self
                 .local
                 .p2p
@@ -505,8 +505,8 @@ impl ServerConfig {
 #[derive(Clone)]
 pub struct PeerServerParams {
     pub cert: rustls::Certificate,
-    pub p2p_url: Url,
-    pub api_url: Url,
+    pub url_p2p: Url,
+    pub url_api: Url,
     pub name: String,
 }
 
@@ -559,8 +559,8 @@ impl ServerConfigParams {
     /// Generates the parameters necessary for running server config generation
     #[allow(clippy::too_many_arguments)]
     pub fn gen_params(
-        bind_p2p: SocketAddr,
-        bind_api: SocketAddr,
+        listen_p2p: SocketAddr,
+        listen_api: SocketAddr,
         key: rustls::PrivateKey,
         our_id: PeerId,
         max_denomination: Amount,
@@ -589,12 +589,20 @@ impl ServerConfigParams {
 
         ServerConfigParams {
             tls,
-            fed_network: Self::gen_network(&bind_p2p, &our_id, DEFAULT_P2P_PORT, peers, |params| {
-                params.p2p_url
-            }),
-            api_network: Self::gen_network(&bind_api, &our_id, DEFAULT_API_PORT, peers, |params| {
-                params.api_url
-            }),
+            fed_network: Self::gen_network(
+                &listen_p2p,
+                &our_id,
+                DEFAULT_P2P_PORT,
+                peers,
+                |params| params.url_p2p,
+            ),
+            api_network: Self::gen_network(
+                &listen_api,
+                &our_id,
+                DEFAULT_API_PORT,
+                peers,
+                |params| params.url_api,
+            ),
             federation_name,
             modules: ConfigGenParams::new()
                 .attach(WalletConfigGenParams {
@@ -656,13 +664,13 @@ impl ServerConfigParams {
             .iter()
             .map(|peer| {
                 let peer_port = base_port + u16::from(*peer) * 10;
-                let p2p_url = format!("ws://127.0.0.1:{}", peer_port);
-                let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
+                let url_p2p = format!("ws://127.0.0.1:{}", peer_port);
+                let url_api = format!("ws://127.0.0.1:{}", peer_port + 1);
 
                 let params: PeerServerParams = PeerServerParams {
                     cert: keys[peer].0.clone(),
-                    p2p_url: p2p_url.parse().expect("Should parse"),
-                    api_url: api_url.parse().expect("Should parse"),
+                    url_p2p: url_p2p.parse().expect("Should parse"),
+                    url_api: url_api.parse().expect("Should parse"),
                     name: format!("peer-{}", peer.to_usize()),
                 };
                 (*peer, params)
@@ -672,12 +680,12 @@ impl ServerConfigParams {
         peers
             .iter()
             .map(|peer| {
-                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url);
-                let bind_api = parse_host_port(peer_params[peer].clone().api_url);
+                let listen_p2p = parse_host_port(peer_params[peer].clone().url_p2p);
+                let listen_api = parse_host_port(peer_params[peer].clone().url_api);
 
                 let params: ServerConfigParams = Self::gen_params(
-                    bind_p2p.parse().expect("Should parse"),
-                    bind_api.parse().expect("Should parse"),
+                    listen_p2p.parse().expect("Should parse"),
+                    listen_api.parse().expect("Should parse"),
                     keys[peer].1.clone(),
                     *peer,
                     max_denomination,

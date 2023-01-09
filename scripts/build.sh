@@ -51,9 +51,9 @@ do
   export FM_PASSWORD="pass$ID"
   if [ $ID -eq 0 ]; then
     # Test that the ports will default to $BASE_PORT and $BASE_PORT+1 if unspecified
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost --api-url ws://localhost --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
+    $FM_BIN_DIR/distributedgen create-cert --url-p2p ws://localhost --url-api ws://localhost --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
   else
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost:$fed_port --api-url ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
+    $FM_BIN_DIR/distributedgen create-cert --url-p2p ws://localhost:$fed_port --url-api ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
   fi
   CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
 done
