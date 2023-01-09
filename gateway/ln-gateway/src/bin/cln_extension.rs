@@ -1,5 +1,6 @@
-use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 
+use bitcoin_hashes::{sha256, Hash};
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
 use fedimint_api::{task::TaskGroup, Amount};
@@ -18,7 +19,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use tokio::{
     io::{stdin, stdout},
-    sync::{mpsc, Mutex},
+    sync::{mpsc, oneshot, Mutex},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Status};
@@ -262,9 +263,17 @@ impl GatewayLightning for ClnRpcService {
 
     async fn subscribe_intercept_htlcs(
         &self,
-        _request: tonic::Request<SubscribeInterceptHtlcsRequest>,
+        request: tonic::Request<SubscribeInterceptHtlcsRequest>,
     ) -> Result<tonic::Response<Self::SubscribeInterceptHtlcsStream>, Status> {
-        unimplemented!()
+        let SubscribeInterceptHtlcsRequest { short_channel_id } = request.into_inner();
+        let receiver = self
+            .interceptor
+            .lock()
+            .await
+            .add_htlc_subscriber(short_channel_id)
+            .await;
+
+        Ok(tonic::Response::new(ReceiverStream::new(receiver)))
     }
 
     type CompleteHtlcsStream = tonic::Streaming<CompleteHtlcsResponse>;
@@ -295,24 +304,100 @@ pub enum ClnRpcError {
 struct ClnHtlcInterceptor {
     subscriptions:
         Mutex<HashMap<u64, mpsc::Sender<Result<SubscribeInterceptHtlcsResponse, Status>>>>,
+    outcomes: Mutex<HashMap<u64, oneshot::Sender<Action>>>,
 }
 
 impl ClnHtlcInterceptor {
     fn new() -> Self {
         Self {
             subscriptions: Mutex::new(HashMap::new()),
+            outcomes: Mutex::new(HashMap::new()),
         }
     }
 
-    async fn intercept_htlc(&self, _payload: HtlcAccepted) -> serde_json::Value {
-        unimplemented!("TODO: Implement HTLC filtering using short channel ids")
+    async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
+        let short_channel_id = payload.onion.short_channel_id;
+        let htlc_expiry = payload.htlc.cltv_expiry;
+
+        if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
+            let payment_hash = payload.htlc.payment_hash.to_vec();
+
+            match subscription
+                .send(Ok(SubscribeInterceptHtlcsResponse {
+                    payment_hash: payment_hash.clone(),
+                    incoming_amount_msat: payload.htlc.amount.msats,
+                    outgoing_amount_msat: payload.onion.forward_amount.msats,
+                    incoming_expiry: htlc_expiry,
+                    short_channel_id,
+                    // TODO: generate unique id for each intercepted HTLC
+                    intercepted_htlc_id: payment_hash.clone(),
+                }))
+                .await
+            {
+                Ok(_) => {
+                    // Open a channel to receive the outcome of the HTLC processing
+                    let (sender, receiver) = oneshot::channel::<Action>();
+                    self.outcomes.lock().await.insert(short_channel_id, sender);
+
+                    // If the gateway does not respond within the HTLC expiry,
+                    // Automatically respond with a failure message.
+                    return tokio::time::timeout(
+                        Duration::from_secs(5),
+                        self.await_htlc_processing(receiver, payment_hash.clone()),
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("await_htlc_processing error {:?}", e);
+
+                        // Bolt 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                        // 2002 error code reports general temporary failure of this processing node.
+                        serde_json::json!({
+                            "result": "fail",
+                            "failure_message": "2002"
+                        })
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to send htlc to subscription: {:?}", e);
+
+                    // BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                    // 2002 error code reports general temporary failure of this processing node.
+                    return serde_json::json!({
+                        "result": "fail",
+                        "failure_message": "2002"
+                    });
+                }
+            }
+        }
+
+        // We have no subscription for this HTLC.
+        // Ignore it by requesting the node to continue
+        serde_json::json!({ "result": "continue" })
+    }
+
+    // Await outcome of HTLC processing by the gateway.
+    // If the gateway does not respond within the HTLC expiry `cltv_expiry_relative`,
+    // Automatically respond with a failure message.
+    async fn await_htlc_processing(
+        &self,
+        receiver: oneshot::Receiver<Action>,
+        htlc_id: Vec<u8>,
+    ) -> serde_json::Value {
+        // TODO: Return outcome of HTLC processing by the gateway
+        json!({ "result": "continue" })
     }
 
     async fn add_htlc_subscriber(
         &mut self,
-        _short_channel_id: u64,
+        short_channel_id: u64,
     ) -> mpsc::Receiver<Result<SubscribeInterceptHtlcsResponse, Status>> {
-        unimplemented!("TODO: Implement HTLC intercept subscription")
+        let (sender, receiver) =
+            mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, Status>>(100);
+        self.subscriptions
+            .lock()
+            .await
+            .insert(short_channel_id, sender);
+        receiver
     }
 
     // TODO: Add a method to remove a HTLC subscriber
