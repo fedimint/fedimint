@@ -112,10 +112,12 @@ First let's have the gateway execute a peg-in so it has an ecash token balance. 
 $ ./scripts/pegin.sh 10000 1
 ```
 
+Make a note of the federation id from the previous step, or run `gateway-cli info` and copy the federation id.
+
 Now we can use `gateway-cli` of the node where the gateway plugin is running to get our ecash token balance:
 
 ```shell
-$ gateway-cli balance Hals_trusty_mint
+$ gateway-cli balance <FEDERATION-ID>
 {
    "balance_msat": 10000000
 }
