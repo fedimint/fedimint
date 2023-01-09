@@ -763,21 +763,6 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -812,12 +797,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, Connector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::NetworkConfig;
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
-
-<span class="doccomment">/// Default port for communication with peers when not specified (0x1FED)
-</span><span class="kw">pub const </span>DEFAULT_P2P_PORT: u16 = <span class="number">8173</span>;
-
-<span class="doccomment">/// Default port for exposing the API when not specified
-</span><span class="kw">pub const </span>DEFAULT_API_PORT: u16 = <span class="number">8174</span>;
 
 <span class="doccomment">/// The maximum open connections the API can handle
 </span><span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
@@ -1369,12 +1348,8 @@
 
         ServerConfigParams {
             tls,
-            fed_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, DEFAULT_P2P_PORT, peers, |params| {
-                params.p2p_url
-            }),
-            api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, DEFAULT_API_PORT, peers, |params| {
-                params.api_url
-            }),
+            fed_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, peers, |params| params.p2p_url),
+            api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, peers, |params| params.api_url),
             federation_name,
             modules: ConfigGenParams::new()
                 .attach(WalletConfigGenParams {
@@ -1395,7 +1370,6 @@
     <span class="kw">fn </span>gen_network(
         bind_address: <span class="kw-2">&amp;</span>SocketAddr,
         our_id: <span class="kw-2">&amp;</span>PeerId,
-        default_port: u16,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
         extract_url: <span class="kw">impl </span>Fn(PeerServerParams) -&gt; Url,
     ) -&gt; NetworkConfig {
@@ -1405,11 +1379,7 @@
             peers: peers
                 .iter()
                 .map(|(peer, params)| {
-                    <span class="kw">let </span><span class="kw-2">mut </span>url = extract_url(params.clone());
-                    <span class="kw">if </span>url.port().is_none() {
-                        url.set_port(<span class="prelude-val">Some</span>(default_port)).expect(<span class="string">&quot;Can set port&quot;</span>);
-                    }
-
+                    <span class="kw">let </span>url = extract_url(params.clone());
                     (<span class="kw-2">*</span>peer, url)
                 })
                 .collect(),
