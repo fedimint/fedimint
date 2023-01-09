@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use cln_plugin::{options, Builder, Plugin};
-use cln_rpc::ClnRpc;
+use cln_rpc::{model, ClnRpc};
 use fedimint_api::{task::TaskGroup, Amount};
 use fedimint_server::config::load_from_file;
 use ln_gateway::{
@@ -166,7 +166,28 @@ impl GatewayLightning for ClnRpcService {
         &self,
         _request: tonic::Request<GetPubKeyRequest>,
     ) -> Result<tonic::Response<GetPubKeyResponse>, Status> {
-        unimplemented!()
+        self.client
+            .lock()
+            .await
+            .call(cln_rpc::Request::Getinfo(
+                model::requests::GetinfoRequest {},
+            ))
+            .await
+            .map(|response| {
+                let pub_key = match response {
+                    cln_rpc::Response::Getinfo(model::responses::GetinfoResponse {
+                        id, ..
+                    }) => id,
+                    _ => panic!("Unexpected response from cln_rpc"),
+                };
+                tonic::Response::new(GetPubKeyResponse {
+                    pub_key: pub_key.serialize().to_vec(),
+                })
+            })
+            .map_err(|e| {
+                error!("cln getinfo returned error: {:?}", e);
+                Status::internal(e.to_string())
+            })
     }
 
     async fn pay_invoice(
