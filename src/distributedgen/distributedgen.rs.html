@@ -298,13 +298,13 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
         </span>dir_out_path: PathBuf,
 
-        <span class="doccomment">/// Address we bind to for exposing the API
-        </span><span class="attr">#[arg(long = <span class="string">&quot;bind-api&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8173&quot;</span>)]
-        </span>bind_api: SocketAddr,
-
         <span class="doccomment">/// Address we bind to for federation communication
-        </span><span class="attr">#[arg(long = <span class="string">&quot;bind-p2p&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8174&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;bind-p2p&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8173&quot;</span>)]
         </span>bind_p2p: SocketAddr,
+
+        <span class="doccomment">/// Address we bind to for exposing the API
+        </span><span class="attr">#[arg(long = <span class="string">&quot;bind-api&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8174&quot;</span>)]
+        </span>bind_api: SocketAddr,
 
         <span class="doccomment">/// Federation name, same for all peers
         </span><span class="attr">#[arg(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hals_trusty_mint&quot;</span>)]
