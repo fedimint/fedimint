@@ -58,13 +58,13 @@ enum Command {
         #[arg(long = "out-dir")]
         dir_out_path: PathBuf,
 
-        /// Address we bind to for exposing the API
-        #[arg(long = "bind-api", default_value = "127.0.0.1:8173")]
-        bind_api: SocketAddr,
-
         /// Address we bind to for federation communication
-        #[arg(long = "bind-p2p", default_value = "127.0.0.1:8174")]
+        #[arg(long = "bind-p2p", default_value = "127.0.0.1:8173")]
         bind_p2p: SocketAddr,
+
+        /// Address we bind to for exposing the API
+        #[arg(long = "bind-api", default_value = "127.0.0.1:8174")]
+        bind_api: SocketAddr,
 
         /// Federation name, same for all peers
         #[arg(long = "federation-name", default_value = "Hals_trusty_mint")]
