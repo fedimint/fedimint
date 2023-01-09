@@ -59,7 +59,7 @@ struct RunTemplate {
 
 async fn run_page(Extension(state): Extension<MutableState>) -> RunTemplate {
     let state = state.lock().await;
-    let path = state.cfg_path.join("client.json");
+    let path = state.data_dir.join("client.json");
     let connection_string: String = match std::fs::File::open(path) {
         Ok(file) => {
             let cfg: ClientConfig =
@@ -111,7 +111,7 @@ async fn post_guardians(
 
     // Don't allow re-running DKG if configs already exist
     let consensus_path = state
-        .cfg_path
+        .data_dir
         .join(CONSENSUS_CONFIG)
         .with_extension(JSON_EXT);
     if std::path::Path::new(&consensus_path).exists() {
@@ -129,8 +129,8 @@ async fn post_guardians(
     }
 
     // Actually run DKG
-    let key = get_key(Some(state.password.clone()), state.cfg_path.join(SALT_FILE));
-    let pk_bytes = encrypted_read(&key, state.cfg_path.join(TLS_PK));
+    let key = get_key(Some(state.password.clone()), state.data_dir.join(SALT_FILE));
+    let pk_bytes = encrypted_read(&key, state.data_dir.join(TLS_PK));
     let max_denomination = Amount::from_msats(100000000000);
     let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
     let module_config_gens = ModuleInitRegistry::from([
@@ -141,7 +141,7 @@ async fn post_guardians(
         ("mint", Arc::new(MintConfigGenerator)),
         ("ln", Arc::new(LightningModuleConfigGen)),
     ]);
-    let dir_out_path = state.cfg_path.clone();
+    let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();
 
     let mut dkg_task_group = state.task_group.make_subgroup().await;
@@ -247,7 +247,7 @@ async fn post_federation_params(
 
     // FIXME: this should return Result
     let tls_connect_string = create_cert(
-        state.cfg_path.clone(),
+        state.data_dir.clone(),
         form.p2p_url.clone(),
         form.api_url.clone(),
         form.guardian_name.clone(),
@@ -275,7 +275,7 @@ async fn post_federation_params(
 
 async fn qr(Extension(state): Extension<MutableState>) -> impl axum::response::IntoResponse {
     let state = state.lock().await;
-    let path = state.cfg_path.join("client.json");
+    let path = state.data_dir.join("client.json");
     let connection_string: String = match std::fs::File::open(path) {
         Ok(file) => {
             let cfg: ClientConfig =
@@ -308,7 +308,7 @@ struct FederationParameters {
 
 struct State {
     params: Option<FederationParameters>,
-    cfg_path: PathBuf,
+    data_dir: PathBuf,
     sender: Sender<UiMessage>,
     password: String,
     task_group: TaskGroup,
@@ -322,7 +322,7 @@ pub enum UiMessage {
 }
 
 pub async fn run_ui(
-    cfg_path: PathBuf,
+    data_dir: PathBuf,
     sender: Sender<UiMessage>,
     bind_addr: SocketAddr,
     password: String,
@@ -330,7 +330,7 @@ pub async fn run_ui(
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,
-        cfg_path,
+        data_dir,
         sender,
         password,
         task_group,
