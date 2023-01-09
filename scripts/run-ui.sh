@@ -11,7 +11,7 @@ bitcoind -regtest -daemon -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin 
 # start guardians
 for ((ID = 0; ID < $FM_FED_SIZE; ID++)); do
   mkdir $PWD/fed-ui/mock-$ID
-  cargo run --bin fedimintd $PWD/fed-ui/mock-$ID pw-$ID --ui-bind 127.0.0.1:$((19800 + $ID)) &
+  cargo run --bin fedimintd $PWD/fed-ui/mock-$ID pw-$ID --listen-ui 127.0.0.1:$((19800 + $ID)) &
 done
 
 function kill_fedimint_processes {

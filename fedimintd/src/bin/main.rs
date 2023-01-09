@@ -30,8 +30,8 @@ pub struct ServerOpts {
     #[arg(env = "FM_PASSWORD")]
     pub password: Option<String>,
     /// Port to run admin UI on
-    #[arg(long = "ui-bind", env = "FM_LISTEN_UI")]
-    pub ui_bind: Option<SocketAddr>,
+    #[arg(long = "listen-ui", env = "FM_LISTEN_UI")]
+    pub listen_ui: Option<SocketAddr>,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
@@ -77,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
     // Run admin UI if a socket address was given for it
-    if let Some(ui_bind) = opts.ui_bind {
+    if let Some(listen_ui) = opts.listen_ui {
         // Make sure password is set
         let password = match opts.password.clone() {
             Some(password) => password,
@@ -92,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
         let ui_task_group = task_group.make_subgroup().await;
         task_group
             .spawn("admin-ui", move |_| async move {
-                run_ui(cfg_path, ui_sender, ui_bind, password, ui_task_group).await;
+                run_ui(cfg_path, ui_sender, listen_ui, password, ui_task_group).await;
             })
             .await;
 
