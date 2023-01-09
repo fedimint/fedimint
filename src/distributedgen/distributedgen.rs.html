@@ -273,7 +273,7 @@
     <span class="doccomment">/// Creates a connection cert string that must be shared with all other peers
     </span>CreateCert {
         <span class="doccomment">/// Directory to output all the generated config files
-        </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>, env = <span class="string">&quot;FM_DATA_DIR&quot;</span>)]
         </span>dir_out_path: PathBuf,
 
         <span class="doccomment">/// Our API address for clients to connect to us
