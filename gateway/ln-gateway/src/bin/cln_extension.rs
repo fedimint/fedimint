@@ -1,10 +1,13 @@
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    collections::HashMap, net::SocketAddr, path::PathBuf, pin::Pin, str::FromStr, sync::Arc,
+};
 
 use anyhow::anyhow;
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
 use fedimint_api::{task::TaskGroup, Amount};
+use futures::Stream;
 use ln_gateway::gatewaylnrpc::{
     gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
@@ -188,13 +191,63 @@ impl GatewayLightning for ClnRpcService {
             })
     }
 
-    type PayInvoiceStream = ReceiverStream<Result<PayInvoiceResponse, Status>>;
+    type PayInvoiceStream =
+        Pin<Box<dyn Stream<Item = Result<PayInvoiceResponse, tonic::Status>> + Send + 'static>>;
 
     async fn pay_invoice(
         &self,
-        _request: tonic::Request<tonic::Streaming<PayInvoiceRequest>>,
-    ) -> Result<tonic::Response<Self::PayInvoiceStream>, Status> {
-        unimplemented!()
+        request: tonic::Request<tonic::Streaming<PayInvoiceRequest>>,
+    ) -> Result<tonic::Response<Self::PayInvoiceStream>, tonic::Status> {
+        let mut stream = request.into_inner();
+
+        // Since the cln_rpc client is not `Sync`, we cannot actually lazily pocess the requests into response stream
+        // The current approach will process all requests within the incoming stream, before returning a response stream
+        let mut outcomes: Vec<Result<PayInvoiceResponse, tonic::Status>> = Vec::new();
+
+        while let Some(PayInvoiceRequest {
+            invoice,
+            max_delay,
+            max_fee_percent,
+        }) = stream.message().await?
+        {
+            let outcome = self
+                .client
+                .lock()
+                .await
+                .call(cln_rpc::Request::Pay(model::PayRequest {
+                    bolt11: invoice,
+                    amount_msat: None,
+                    label: None,
+                    riskfactor: None,
+                    maxfeepercent: Some(max_fee_percent),
+                    retry_for: None,
+                    maxdelay: Some(max_delay as u16),
+                    exemptfee: None,
+                    localinvreqid: None,
+                    exclude: None,
+                    maxfee: None,
+                    description: None,
+                }))
+                .await
+                .map(|response| match response {
+                    cln_rpc::Response::Pay(model::PayResponse {
+                        payment_preimage, ..
+                    }) => PayInvoiceResponse {
+                        preimage: payment_preimage.to_vec(),
+                    },
+                    _ => panic!("Unexpected response from cln pay rpc"),
+                })
+                .map_err(|e| {
+                    error!("cln pay rpc returned error {:?}", e);
+                    tonic::Status::internal(e.to_string())
+                });
+
+            outcomes.push(outcome);
+        }
+
+        Ok(tonic::Response::new(
+            Box::pin(tokio_stream::iter(outcomes)) as Self::PayInvoiceStream
+        ))
     }
 
     type SubscribeInterceptHtlcsStream =
