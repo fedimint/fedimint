@@ -16,7 +16,7 @@ jobs:
 
       - name: Install native packages
         run: |
-          sudo apt-get -y install mold
+          sudo apt-get -y install mold protobuf-compiler
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
