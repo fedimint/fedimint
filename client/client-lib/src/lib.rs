@@ -1296,7 +1296,7 @@ impl Debug for ClientSecret {
 /// Builds a fake module registry which is only usable for decoding messages since the client isn't
 /// modularized yet but we need the decoding functionality.
 fn module_decode_stubs() -> ModuleDecoderRegistry {
-    ModuleDecoderRegistry::new([
+    ModuleDecoderRegistry::from_iter([
         (MODULE_KEY_LN, Decoder::from_typed(&LightningModuleDecoder)),
         (MODULE_KEY_WALLET, Decoder::from_typed(&WalletModuleDecoder)),
         (MODULE_KEY_MINT, Decoder::from_typed(&MintModuleDecoder)),

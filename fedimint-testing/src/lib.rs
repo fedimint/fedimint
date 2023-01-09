@@ -117,7 +117,7 @@ where
 
     fn decoders(&self) -> ModuleDecoderRegistry {
         let module = &self.members.first().unwrap().1;
-        ModuleDecoderRegistry::new(std::iter::once((
+        ModuleDecoderRegistry::from_iter(std::iter::once((
             module.module_key(),
             IServerModule::decoder(module),
         )))

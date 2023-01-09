@@ -17,7 +17,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
         path: String,
         data: Value,
     ) -> Result<Value, ApiError> {
-        for module in self.fedimint.modules.modules() {
+        for module in self.fedimint.modules.iter_modules() {
             if module.api_base_name() == module_name {
                 let endpoint = module
                     .api_endpoints()
