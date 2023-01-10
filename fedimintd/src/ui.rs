@@ -144,7 +144,17 @@ async fn post_guardians(
     let dir_out_path = state.cfg_path.clone();
     let fedimintd_sender = state.sender.clone();
 
+    // kill dkg if it's already running
+    if let Some(dkg_task_group) = state.dkg_task_group.clone() {
+        tracing::info!("killing dkg task group");
+        dkg_task_group
+            .shutdown_join_all()
+            .await
+            .expect("couldn't shut down dkg task group");
+    }
+
     let mut dkg_task_group = state.task_group.make_subgroup().await;
+    state.dkg_task_group = Some(dkg_task_group.clone());
     state
         .task_group
         .spawn("admin UI running DKG", move |_| async move {
@@ -312,6 +322,7 @@ struct State {
     sender: Sender<UiMessage>,
     password: String,
     task_group: TaskGroup,
+    dkg_task_group: Option<TaskGroup>,
 }
 type MutableState = Arc<Mutex<State>>;
 
@@ -334,6 +345,7 @@ pub async fn run_ui(
         sender,
         password,
         task_group,
+        dkg_task_group: None,
     }));
 
     let app = Router::new()
