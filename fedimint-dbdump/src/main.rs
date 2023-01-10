@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use docopt::Docopt;
 use erased_serde::Serialize;
+use fedimint_api::db as DatabaseRange;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
 use fedimint_api::module::ModuleInit;
@@ -93,33 +94,36 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through all the specified ranges in the database and retrieves the
-    /// data for each range. Prints serialized contents at the end.
+    /// data for each range. Prints serialized contents of in-mmemory BTree at the end.
     pub async fn dump_database(&mut self) {
         for range in self.ranges.clone() {
             match range.as_str() {
                 "consensus" => {
-                    self.get_consensus_data().await;
+                    self.retrieve_consensus_data().await;
                 }
                 "mint" => {
-                    self.get_mint_data().await;
+                    self.retrieve_mint_data().await;
                 }
                 "wallet" => {
-                    self.get_wallet_data().await;
+                    self.retrieve_wallet_data().await;
                 }
                 "lightning" => {
-                    self.get_lightning_data().await;
+                    self.retrieve_lightning_data().await;
                 }
                 "mintclient" => {
-                    self.get_mint_client_data().await;
+                    self.retrieve_mint_client_data().await;
                 }
                 "lightningclient" => {
-                    self.get_ln_client_data().await;
+                    self.retrieve_ln_client_data().await;
                 }
                 "walletclient" => {
-                    self.get_wallet_client_data().await;
+                    self.retrieve_wallet_client_data().await;
                 }
                 "client" => {
-                    self.get_client_data().await;
+                    self.retrieve_client_data().await;
+                }
+                "database" => {
+                    self.retrieve_database_data().await;
                 }
                 _ => {}
             }
@@ -129,8 +133,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through each of the prefixes within the consensus range and retrieves
-    /// the corresponding data.
-    async fn get_consensus_data(&mut self) {
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_consensus_data(&mut self) {
         let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
 
         for table in ConsensusRange::DbKeyPrefix::iter() {
@@ -204,8 +208,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through each of the prefixes within the mint range and retrieves
-    /// the corresponding data.
-    async fn get_mint_data(&mut self) {
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_mint_data(&mut self) {
         let mut mint: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         for table in MintRange::DbKeyPrefix::iter() {
             filter_prefixes!(table, self);
@@ -277,8 +281,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through each of the prefixes within the wallet range and retrieves
-    /// the corresponding data.
-    async fn get_wallet_data(&mut self) {
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_wallet_data(&mut self) {
         let mut wallet: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         for table in WalletRange::DbKeyPrefix::iter() {
             filter_prefixes!(table, self);
@@ -361,8 +365,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through each of the prefixes within the lightning range and retrieves
-    /// the corresponding data.
-    async fn get_lightning_data(&mut self) {
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_lightning_data(&mut self) {
         let mut lightning: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         for table in LightningRange::DbKeyPrefix::iter() {
             filter_prefixes!(table, self);
@@ -436,8 +440,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through each of the prefixes within the lightning client range and retrieves
-    /// the corresponding data.
-    async fn get_ln_client_data(&mut self) {
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_ln_client_data(&mut self) {
         let mut ln_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         for table in ClientLightningRange::DbKeyPrefix::iter() {
             filter_prefixes!(table, self);
@@ -500,8 +504,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through each of the prefixes within the mint client range and retrieves
-    /// the corresponding data.
-    async fn get_mint_client_data(&mut self) {
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_mint_client_data(&mut self) {
         let mut mint_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         for table in ClientMintRange::DbKeyPrefix::iter() {
             filter_prefixes!(table, self);
@@ -565,8 +569,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     /// Iterates through each of the prefixes within the wallet client range and retrieves
-    /// the corresponding data.
-    async fn get_wallet_client_data(&mut self) {
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_wallet_client_data(&mut self) {
         let mut wallet_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         for table in ClientWalletRange::DbKeyPrefix::iter() {
             filter_prefixes!(table, self);
@@ -589,7 +593,9 @@ impl<'a> DatabaseDump<'a> {
             .insert("Client Wallet".to_string(), Box::new(wallet_client));
     }
 
-    async fn get_client_data(&mut self) {
+    /// Iterates through each of the prefixes within the client range and retrieves
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_client_data(&mut self) {
         let mut client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
 
         for table in ClientRange::DbKeyPrefix::iter() {
@@ -612,6 +618,31 @@ impl<'a> DatabaseDump<'a> {
         self.serialized
             .insert("Client".to_string(), Box::new(client));
     }
+
+    /// Iterates through each of the prefixes within the database metadata range and retrieves
+    /// the corresponding data and stores it in the in-memory BTree.
+    async fn retrieve_database_data(&mut self) {
+        let mut database_metadata: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
+        for table in DatabaseRange::DbKeyPrefix::iter() {
+            filter_prefixes!(table, self);
+
+            match table {
+                DatabaseRange::DbKeyPrefix::DatabaseVersion => {
+                    let version = self
+                        .read_only
+                        .get_value(&DatabaseRange::DatabaseVersionKey)
+                        .await
+                        .unwrap();
+                    if let Some(version) = version {
+                        database_metadata.insert("Code Version".to_string(), Box::new(version));
+                    }
+                }
+            }
+        }
+
+        self.serialized
+            .insert("Database".to_string(), Box::new(database_metadata));
+    }
 }
 
 const USAGE: &str = "
@@ -625,7 +656,7 @@ Options:
     RANGES=consensus,mint,wallet,lightning,mintclient,lightningclient,walletclient,client
 ";
 
-const RANGES: [&str; 8] = [
+const RANGES: [&str; 9] = [
     "consensus",
     "mint",
     "wallet",
@@ -634,6 +665,7 @@ const RANGES: [&str; 8] = [
     "lightningclient",
     "walletclient",
     "client",
+    "database",
 ];
 
 #[derive(Debug, Deserialize)]

@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use serde::Serialize;
+use strum_macros::EnumIter;
 use thiserror::Error;
 use tracing::{trace, warn};
 
@@ -66,6 +68,27 @@ dyn_newtype_define! {
     /// A handle to a type-erased database implementation
     #[derive(Clone)]
     pub Database(Arc<IDatabase>)
+}
+
+#[repr(u8)]
+#[derive(Clone, EnumIter, Debug)]
+pub enum DbKeyPrefix {
+    DatabaseVersion = 0x50,
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct DatabaseVersionKey;
+
+impl DatabaseKeyPrefixConst for DatabaseVersionKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::DatabaseVersion as u8;
+    type Key = Self;
+    type Value = String;
+}
+
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 /// Fedimint requires that the database implementation implement Snapshot Isolation.

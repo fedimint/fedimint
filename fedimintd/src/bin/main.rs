@@ -4,6 +4,9 @@ use std::sync::Arc;
 
 use clap::Parser;
 use fedimint_api::db::Database;
+use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::db::DatabaseVersionKey;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::ModuleInit;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningModuleConfigGen;
@@ -35,6 +38,36 @@ pub struct ServerOpts {
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
+}
+
+/// Retrieves the code version from the database and compares it against the code version from the configuration.
+/// If the code version does not exist in the database, the version from the configuration is persisted in the database.
+/// If the code version in the database does not match the version in the config, an info message is printed.
+/// If the code version in the database matches the version in the config, an info message is printed.
+async fn check_code_version(
+    current_code_version: &str,
+    mut dbtx: DatabaseTransaction<'_>,
+) -> Result<(), anyhow::Error> {
+    let persisted_code_version = dbtx.get_value(&DatabaseVersionKey).await?;
+
+    if let Some(persisted_code_version) = persisted_code_version {
+        if persisted_code_version == current_code_version {
+            tracing::info!("Code version matches database {}", persisted_code_version);
+        } else {
+            tracing::info!(
+                "Curernt code version {} does not match the database {}",
+                current_code_version,
+                persisted_code_version
+            );
+        }
+    } else {
+        tracing::info!("Persisting code version {}", current_code_version);
+        dbtx.insert_new_entry(&DatabaseVersionKey, &current_code_version.to_string())
+            .await?;
+        dbtx.commit_tx().await?;
+    }
+
+    Ok(())
 }
 
 #[tokio::main]
@@ -118,6 +151,9 @@ async fn main() -> anyhow::Result<()> {
     let db: Database = fedimint_rocksdb::RocksDb::open(opts.cfg_path.join(DB_FILE))
         .expect("Error opening DB")
         .into();
+
+    let dbtx = db.begin_transaction(ModuleDecoderRegistry::default()).await;
+    check_code_version(CODE_VERSION, dbtx).await?;
 
     let local_task_set = tokio::task::LocalSet::new();
     let _guard = local_task_set.enter();
