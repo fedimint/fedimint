@@ -144,10 +144,10 @@ You can start the binary(-ies) inside with the usual:
 
 ```
 $ docker run -it fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r fedimintd --help
-Usage: fedimintd [OPTIONS] <CFG_PATH> [PASSWORD]
+Usage: fedimintd [OPTIONS] <DATA_DIR> [PASSWORD]
 
 Arguments:
-  <CFG_PATH>  Path to folder containing federation config files
+  <DATA_DIR>  Path to folder containing federation config files
   [PASSWORD]  Password to encrypt sensitive config files [env: FM_PASSWORD=]
 
 Options:

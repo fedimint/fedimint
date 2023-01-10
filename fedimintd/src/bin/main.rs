@@ -25,7 +25,7 @@ use crate::{JSON_EXT, LOCAL_CONFIG};
 #[derive(Parser)]
 pub struct ServerOpts {
     /// Path to folder containing federation config files
-    pub cfg_path: PathBuf,
+    pub data_dir: PathBuf,
     /// Password to encrypt sensitive config files
     #[arg(env = "FM_PASSWORD")]
     pub password: Option<String>,
@@ -88,16 +88,16 @@ async fn main() -> anyhow::Result<()> {
         };
 
         // Spawn admin UI
-        let cfg_path = opts.cfg_path.clone();
+        let data_dir = opts.data_dir.clone();
         let ui_task_group = task_group.make_subgroup().await;
         task_group
             .spawn("admin-ui", move |_| async move {
-                run_ui(cfg_path, ui_sender, listen_ui, password, ui_task_group).await;
+                run_ui(data_dir, ui_sender, listen_ui, password, ui_task_group).await;
             })
             .await;
 
         // If federation configs (e.g. local.json) missing, wait for admin UI to report DKG completion
-        let local_cfg_path = opts.cfg_path.join(LOCAL_CONFIG).with_extension(JSON_EXT);
+        let local_cfg_path = opts.data_dir.join(LOCAL_CONFIG).with_extension(JSON_EXT);
         if !std::path::Path::new(&local_cfg_path).exists() {
             loop {
                 if let UiMessage::DKGSuccess = ui_receiver
@@ -111,11 +111,11 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let salt_path = opts.cfg_path.join(SALT_FILE);
+    let salt_path = opts.data_dir.join(SALT_FILE);
     let key = get_key(opts.password, salt_path);
-    let cfg = read_server_configs(&key, opts.cfg_path.clone());
+    let cfg = read_server_configs(&key, opts.data_dir.clone());
 
-    let db: Database = fedimint_rocksdb::RocksDb::open(opts.cfg_path.join(DB_FILE))
+    let db: Database = fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))
         .expect("Error opening DB")
         .into();
 
