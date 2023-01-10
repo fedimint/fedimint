@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::{Infallible, TryInto};
 use std::hash::Hasher;
+use std::io::Write;
 use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
@@ -341,6 +342,24 @@ impl ModuleInit for WalletConfigGenerator {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<WalletConfig>()?.validate_config(identity)
+    }
+
+    #[allow(clippy::unused_io_amount)]
+    fn hash_consensus_config(
+        &self,
+        engine: &mut sha256::HashEngine,
+        config: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        let config = serde_json::from_value::<WalletConfigConsensus>(config)?;
+
+        engine.write(config.network.to_string().as_bytes())?;
+        engine.write(config.peg_in_descriptor.to_string().as_bytes())?;
+        config.peer_peg_in_keys.consensus_encode(engine)?;
+        config.finality_delay.consensus_encode(engine)?;
+        config.default_fee.consensus_encode(engine)?;
+        config.fee_consensus.consensus_encode(engine)?;
+
+        Ok(())
     }
 }
 

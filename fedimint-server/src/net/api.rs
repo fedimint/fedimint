@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use bitcoin_hashes::sha256;
 use fedimint_api::server::ServerModule;
 use fedimint_api::{
     config::ClientConfig,
@@ -223,6 +224,12 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
             "/config",
             async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> ClientConfig {
                 Ok(fedimint.cfg.consensus.to_client_config(&fedimint.module_inits))
+            }
+        },
+        api_endpoint! {
+            "/consensus_hash",
+            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> sha256::Hash {
+                Ok(fedimint.cfg.consensus.hash)
             }
         },
     ]

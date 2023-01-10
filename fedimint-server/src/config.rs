@@ -3,6 +3,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{bail, format_err};
+use bitcoin::hashes::sha256;
+use bitcoin::hashes::sha256::HashEngine;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     ApiEndpoint, BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner,
@@ -27,6 +29,7 @@ use tokio_rustls::rustls;
 use tracing::info;
 use url::Url;
 
+use crate::fedimint_api::BitcoinHash;
 use crate::fedimint_api::NumPeers;
 use crate::net::connect::TlsConfig;
 use crate::net::connect::{parse_host_port, Connector};
@@ -67,6 +70,8 @@ pub struct ServerConfigPrivate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigConsensus {
+    /// SHA256 hash of the consensus config values, for validation with other peers
+    pub hash: sha256::Hash,
     /// The version of the binary code running
     pub code_version: String,
     /// Configurable federation name
@@ -127,6 +132,29 @@ pub struct ServerConfigParams {
 }
 
 impl ServerConfigConsensus {
+    pub fn update_hash_code(
+        &mut self,
+        module_config_gens: &ModuleInitRegistry,
+    ) -> anyhow::Result<()> {
+        let mut engine = HashEngine::default();
+
+        self.code_version.consensus_encode(&mut engine)?;
+        self.federation_name.consensus_encode(&mut engine)?;
+        self.auth_pk_set.consensus_encode(&mut engine)?;
+        self.auth_pk_set.consensus_encode(&mut engine)?;
+        self.epoch_pk_set.consensus_encode(&mut engine)?;
+        self.api.consensus_encode(&mut engine)?;
+
+        for (k, v) in self.modules.iter() {
+            module_config_gens
+                .get(&k.as_str())
+                .ok_or_else(|| format_err!("module config gen not found: {k}"))?
+                .hash_consensus_config(&mut engine, v.clone())?;
+        }
+        self.hash = sha256::Hash::from_engine(engine);
+        Ok(())
+    }
+
     pub fn to_client_config_try(
         &self,
         module_config_gens: &ModuleInitRegistry,
@@ -158,6 +186,7 @@ impl ServerConfigConsensus {
             .expect("configuration mismatch")
     }
 }
+use fedimint_api::encoding::Encodable;
 use impl_tools::autoimpl;
 
 // TODO: turn into newtype
@@ -208,6 +237,7 @@ impl ServerConfig {
         epoch_keys: ThresholdKeys,
         hbbft_keys: ThresholdKeys,
         modules: BTreeMap<String, ServerModuleConfig>,
+        module_config_gens: &ModuleInitRegistry,
     ) -> Self {
         let private = ServerConfigPrivate {
             tls_key: params.tls.our_private_key.clone(),
@@ -226,6 +256,7 @@ impl ServerConfig {
             modules: Default::default(),
         };
         let consensus = ServerConfigConsensus {
+            hash: sha256::Hash::all_zeros(),
             code_version: code_version.to_string(),
             federation_name: params.federation_name.clone(),
             auth_pk_set: auth_keys.public_key_set,
@@ -240,6 +271,9 @@ impl ServerConfig {
             private,
         };
         cfg.add_modules(modules);
+        cfg.consensus
+            .update_hash_code(module_config_gens)
+            .expect("Could not hash config");
         cfg
     }
 
@@ -364,6 +398,7 @@ impl ServerConfig {
                         .iter()
                         .map(|(name, cfgs)| (name.to_string(), cfgs[&id].clone()))
                         .collect(),
+                    &module_config_gens,
                 );
                 (id, config)
             })
@@ -442,6 +477,7 @@ impl ServerConfig {
             epoch_keys,
             hbbft_keys,
             module_cfgs,
+            &module_config_gens,
         );
 
         info!("Distributed key generation has completed successfully!");

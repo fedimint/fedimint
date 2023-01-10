@@ -4,7 +4,9 @@ use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
+use anyhow::bail;
 use config::ServerConfig;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::encoding::DecodeError;
@@ -23,6 +25,7 @@ use mint_client::api::{IFederationApi, WsFederationApi};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 use tracing::{info, warn};
 
 use crate::consensus::{
@@ -95,6 +98,17 @@ impl FedimintServer {
                 net::api::run_server(cfg, server_consensus, handle)
             })
             .await;
+
+        loop {
+            info!("Waiting for peers to agree on a consensus config hash");
+            sleep(Duration::from_millis(1000)).await;
+            match server.api.fetch_consensus_hash().await {
+                Ok(hash) if hash == server.cfg.consensus.hash => break,
+                Ok(_) => bail!("Our consensus config doesn't match peers!"),
+                Err(_) => {}
+            }
+        }
+
         task_group
             .spawn_local("consensus", move |handle| server.run_consensus(handle))
             .await;

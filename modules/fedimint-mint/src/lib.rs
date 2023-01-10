@@ -4,6 +4,7 @@ use std::iter::FromIterator;
 use std::ops::Sub;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::HashEngine;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey};
@@ -46,7 +47,7 @@ use threshold_crypto::group::Curve;
 use tracing::{debug, error, info, warn};
 
 use crate::common::MintModuleDecoder;
-use crate::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
+use crate::config::{MintConfig, MintConfigConsensus, MintConfigPrivate, TbsPublicKeyShares};
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
     ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
@@ -173,19 +174,21 @@ impl ModuleInit for MintConfigGenerator {
                 let config = MintConfig {
                     consensus: MintConfigConsensus {
                         threshold: peers.threshold(),
-                        peer_tbs_pks: peers
-                            .iter()
-                            .map(|&key_peer| {
-                                let keys = params
-                                    .mint_amounts
-                                    .iter()
-                                    .map(|amount| {
-                                        (*amount, tbs_keys[amount].1[key_peer.to_usize()])
-                                    })
-                                    .collect();
-                                (key_peer, keys)
-                            })
-                            .collect(),
+                        peer_tbs_pks: TbsPublicKeyShares(
+                            peers
+                                .iter()
+                                .map(|&key_peer| {
+                                    let keys = params
+                                        .mint_amounts
+                                        .iter()
+                                        .map(|amount| {
+                                            (*amount, tbs_keys[amount].1[key_peer.to_usize()])
+                                        })
+                                        .collect();
+                                    (key_peer, keys)
+                                })
+                                .collect(),
+                        ),
                         fee_consensus: FeeConsensus::default(),
                         max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
                     },
@@ -244,20 +247,23 @@ impl ModuleInit for MintConfigGenerator {
                     .collect(),
             },
             consensus: MintConfigConsensus {
-                peer_tbs_pks: peers
-                    .iter()
-                    .map(|peer| {
-                        let pks = amounts_keys
-                            .iter()
-                            .map(|(amount, (pks, _))| {
-                                let pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
-                                (*amount, pks)
-                            })
-                            .collect::<Tiered<PublicKeyShare>>();
+                peer_tbs_pks: TbsPublicKeyShares(
+                    peers
+                        .iter()
+                        .map(|peer| {
+                            let pks = amounts_keys
+                                .iter()
+                                .map(|(amount, (pks, _))| {
+                                    let pks =
+                                        PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
+                                    (*amount, pks)
+                                })
+                                .collect::<Tiered<PublicKeyShare>>();
 
-                        (*peer, pks)
-                    })
-                    .collect(),
+                            (*peer, pks)
+                        })
+                        .collect(),
+                ),
                 fee_consensus: Default::default(),
                 threshold: peers.threshold(),
                 max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
@@ -283,6 +289,15 @@ impl ModuleInit for MintConfigGenerator {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<MintConfig>()?.validate_config(identity)
+    }
+
+    fn hash_consensus_config(
+        &self,
+        engine: &mut HashEngine,
+        config: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        serde_json::from_value::<MintConfigConsensus>(config)?.consensus_encode(engine)?;
+        Ok(())
     }
 }
 
@@ -791,26 +806,24 @@ impl Mint {
     pub fn new(cfg: MintConfig) -> Mint {
         assert!(cfg.private.tbs_sks.tiers().count() > 0);
 
+        let pks: BTreeMap<PeerId, Tiered<PublicKeyShare>> = cfg.consensus.peer_tbs_pks.0.clone();
+
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
         // consistent.
-        assert!(cfg
-            .consensus
-            .peer_tbs_pks
+        assert!(pks
             .values()
             .all(|pk| pk.structural_eq(&cfg.private.tbs_sks)));
 
         let ref_pub_key = cfg.private.tbs_sks.to_public();
 
         // Find our key index and make sure we know the private key for all our public key shares
-        let our_id = cfg
-            .consensus // FIXME: make sure we use id instead of idx everywhere
-            .peer_tbs_pks
+        let our_id = pks // FIXME: make sure we use id instead of idx everywhere
             .iter()
             .find_map(|(&id, pk)| if pk == &ref_pub_key { Some(id) } else { None })
             .expect("Own key not found among pub keys.");
 
         assert_eq!(
-            cfg.consensus.peer_tbs_pks[&our_id],
+            pks[&our_id],
             cfg.private
                 .tbs_sks
                 .iter()
@@ -818,24 +831,19 @@ impl Mint {
                 .collect()
         );
 
-        let aggregate_pub_keys = TieredMultiZip::new(
-            cfg.consensus
-                .peer_tbs_pks
-                .values()
-                .map(|keys| keys.iter())
-                .collect(),
-        )
-        .map(|(amt, keys)| {
-            // TODO: avoid this through better aggregation API allowing references or
-            let keys = keys.into_iter().copied().collect::<Vec<_>>();
-            (amt, keys.aggregate(cfg.consensus.threshold))
-        })
-        .collect();
+        let aggregate_pub_keys =
+            TieredMultiZip::new(pks.values().map(|keys| keys.iter()).collect())
+                .map(|(amt, keys)| {
+                    // TODO: avoid this through better aggregation API allowing references or
+                    let keys = keys.into_iter().copied().collect::<Vec<_>>();
+                    (amt, keys.aggregate(cfg.consensus.threshold))
+                })
+                .collect();
 
         Mint {
             cfg: cfg.clone(),
             sec_key: cfg.private.tbs_sks,
-            pub_key_shares: cfg.consensus.peer_tbs_pks,
+            pub_key_shares: pks,
             pub_key: aggregate_pub_keys,
         }
     }

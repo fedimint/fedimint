@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::HashEngine;
 use common::DummyModuleDecoder;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::TypedServerModuleConsensusConfig;
@@ -126,6 +127,15 @@ impl ModuleInit for DummyConfigGenerator {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<DummyConfig>()?.validate_config(identity)
+    }
+
+    fn hash_consensus_config(
+        &self,
+        engine: &mut HashEngine,
+        config: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        serde_json::from_value::<DummyConfigConsensus>(config)?.consensus_encode(engine)?;
+        Ok(())
     }
 }
 

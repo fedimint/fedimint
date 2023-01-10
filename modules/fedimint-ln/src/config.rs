@@ -3,6 +3,7 @@ use fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
+use fedimint_api::encoding::Encodable;
 use fedimint_api::PeerId;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
@@ -15,7 +16,7 @@ pub struct LightningConfig {
     pub consensus: LightningConfigConsensus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 pub struct LightningConfigConsensus {
     /// The threshold public keys for encrypting the LN preimage
     pub threshold_pub_keys: threshold_crypto::PublicKeySet,
@@ -77,7 +78,7 @@ impl TypedServerModuleConfig for LightningConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
     pub contract_input: fedimint_api::Amount,
     pub contract_output: fedimint_api::Amount,

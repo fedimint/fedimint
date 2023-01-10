@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::HashEngine;
 use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
 use thiserror::Error;
@@ -237,6 +238,12 @@ pub trait ModuleInit {
     ) -> anyhow::Result<ClientModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+
+    fn hash_consensus_config(
+        &self,
+        engine: &mut HashEngine,
+        config: serde_json::Value,
+    ) -> anyhow::Result<()>;
 }
 
 #[async_trait]

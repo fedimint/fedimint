@@ -78,6 +78,12 @@ pub trait Decodable: Sized {
     ) -> Result<Self, DecodeError>;
 }
 
+impl Encodable for hbbft::crypto::PublicKeySet {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        SerdeEncodable(self.clone()).consensus_encode(writer)
+    }
+}
+
 impl Encodable for Url {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.to_string().consensus_encode(writer)
@@ -131,6 +137,7 @@ impl_encode_decode_num!(u64);
 impl_encode_decode_num!(u32);
 impl_encode_decode_num!(u16);
 impl_encode_decode_num!(u8);
+impl_encode_decode_num!(usize);
 
 macro_rules! impl_encode_decode_tuple {
     ($($x:ident),*) => (
@@ -505,7 +512,7 @@ where
 }
 /// Wrappers for `T` that are `De-Serializable`, while we need them in `Encodable` contex
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
-pub struct SerdeEncodable<T>(T);
+pub struct SerdeEncodable<T>(pub T);
 
 impl<T> Encodable for SerdeEncodable<T>
 where

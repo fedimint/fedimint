@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::io::{Error, Write};
 use std::iter::FromIterator;
 
 use anyhow::bail;
@@ -6,6 +7,7 @@ use fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
+use fedimint_api::encoding::{Encodable, SerdeEncodable};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
@@ -21,9 +23,18 @@ pub struct MintConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TbsPublicKeyShares(pub BTreeMap<PeerId, Tiered<PublicKeyShare>>);
+
+impl Encodable for TbsPublicKeyShares {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        SerdeEncodable(self.clone()).consensus_encode(writer)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 pub struct MintConfigConsensus {
     /// The set of public keys for blind-signing all peers and note denominations
-    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    pub peer_tbs_pks: TbsPublicKeyShares,
     /// Fees charged for ecash transactions
     pub fee_consensus: FeeConsensus,
     /// Number of signers required
@@ -50,19 +61,24 @@ impl TypedClientModuleConfig for MintClientConfig {}
 
 impl TypedServerModuleConsensusConfig for MintConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        let pub_key: HashMap<Amount, AggregatePublicKey> =
-            TieredMultiZip::new(self.peer_tbs_pks.values().map(|keys| keys.iter()).collect())
-                .map(|(amt, keys)| {
-                    // TODO: avoid this through better aggregation API allowing references or
-                    let keys = keys.into_iter().copied().collect::<Vec<_>>();
-                    (amt, keys.aggregate(self.threshold))
-                })
-                .collect();
+        let pub_key: HashMap<Amount, AggregatePublicKey> = TieredMultiZip::new(
+            self.peer_tbs_pks
+                .0
+                .values()
+                .map(|keys| keys.iter())
+                .collect(),
+        )
+        .map(|(amt, keys)| {
+            // TODO: avoid this through better aggregation API allowing references or
+            let keys = keys.into_iter().copied().collect::<Vec<_>>();
+            (amt, keys.aggregate(self.threshold))
+        })
+        .collect();
 
         serde_json::to_value(&MintClientConfig {
             tbs_pks: Tiered::from_iter(pub_key.into_iter()),
             fee_consensus: self.fee_consensus.clone(),
-            peer_tbs_pks: self.peer_tbs_pks.clone(),
+            peer_tbs_pks: self.peer_tbs_pks.0.clone(),
             max_notes_per_denomination: self.max_notes_per_denomination,
         })
         .expect("Serialization can't fail")
@@ -93,6 +109,7 @@ impl TypedServerModuleConfig for MintConfig {
         let pks: BTreeMap<Amount, PublicKeyShare> = self
             .consensus
             .peer_tbs_pks
+            .0
             .get(identity)
             .unwrap()
             .as_map()
@@ -108,7 +125,7 @@ impl TypedServerModuleConfig for MintConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
     pub coin_issuance_abs: fedimint_api::Amount,
     pub coin_spend_abs: fedimint_api::Amount,

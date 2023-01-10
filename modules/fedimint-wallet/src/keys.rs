@@ -3,12 +3,15 @@ use std::str::FromStr;
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::PublicKey;
+use fedimint_api::encoding::Encodable;
 use miniscript::{MiniscriptKey, ToPublicKey};
 use serde::{Deserialize, Serialize};
 
 use crate::tweakable::{Contract, Tweakable};
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable,
+)]
 pub struct CompressedPublicKey {
     pub key: secp256k1::PublicKey,
 }

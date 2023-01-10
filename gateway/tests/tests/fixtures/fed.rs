@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use bitcoin::{secp256k1, Address};
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::TransactionId;
 use fedimint_core::{
     epoch::SignedEpochOutcome,
@@ -109,5 +110,9 @@ impl IFederationApi for MockApi {
         _id: &secp256k1::XOnlyPublicKey,
     ) -> Result<Vec<ECashUserBackupSnapshot>, ApiError> {
         unimplemented!()
+    }
+
+    async fn fetch_consensus_hash(&self) -> mint_client::api::Result<Sha256Hash> {
+        todo!()
     }
 }

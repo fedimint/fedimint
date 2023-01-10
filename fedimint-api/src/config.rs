@@ -10,6 +10,7 @@ use anyhow::format_err;
 use bitcoin::secp256k1;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
+use fedimint_api::encoding::Encodable;
 use fedimint_api::BitcoinHash;
 use hbbft::crypto::group::Curve;
 use hbbft::crypto::group::GroupEncoding;
@@ -32,7 +33,7 @@ use crate::core::ModuleKey;
 use crate::net::peers::MuxPeerConnections;
 use crate::PeerId;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct ApiEndpoint {
     /// The peer's API websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     pub url: Url,

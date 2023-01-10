@@ -197,6 +197,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
+    use bitcoin_hashes::sha256::Hash as Sha256Hash;
     use bitcoin_hashes::Hash;
     use fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
     use fedimint_api::db::mem_impl::MemDatabase;
@@ -317,6 +318,10 @@ mod tests {
             _id: &secp256k1::XOnlyPublicKey,
         ) -> crate::api::Result<Vec<ECashUserBackupSnapshot>> {
             unimplemented!()
+        }
+
+        async fn fetch_consensus_hash(&self) -> crate::api::Result<Sha256Hash> {
+            todo!()
         }
     }
 

@@ -6,6 +6,7 @@ use bitcoin::Network;
 use fedimint_api::config::TypedServerModuleConfig;
 use fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
 use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
+use fedimint_api::encoding::Encodable;
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
@@ -67,7 +68,7 @@ pub struct WalletClientConfig {
 
 impl TypedClientModuleConfig for WalletClientConfig {}
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
     pub peg_in_abs: fedimint_api::Amount,
     pub peg_out_abs: fedimint_api::Amount,

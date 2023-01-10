@@ -1081,6 +1081,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bitcoin_hashes 0.11.0",
  "fedimint-api",
  "futures",
  "impl-tools",
@@ -1174,6 +1175,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin",
+ "bitcoin_hashes 0.11.0",
  "bytes",
  "fedimint-api",
  "fedimint-build",
@@ -1624,6 +1626,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
+ "bitcoin_hashes 0.11.0",
  "fedimint-api",
  "fedimint-core",
  "fedimint-ln",

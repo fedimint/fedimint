@@ -97,6 +97,9 @@ pub trait IFederationApi: Debug + Send + Sync {
         &self,
         id: &secp256k1::XOnlyPublicKey,
     ) -> Result<Vec<ECashUserBackupSnapshot>>;
+
+    /// Returns a hash of the consensus configs from peers
+    async fn fetch_consensus_hash(&self) -> Result<Sha256Hash>;
 }
 
 dyn_newtype_define! {
@@ -406,6 +409,15 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
             .into_iter()
             .flatten()
             .collect())
+    }
+
+    async fn fetch_consensus_hash(&self) -> Result<Sha256Hash> {
+        self.request(
+            "/consensus_hash",
+            (),
+            EventuallyConsistent::new(self.peers().one_honest()),
+        )
+        .await
     }
 }
 

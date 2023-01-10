@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Sub;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
@@ -325,6 +326,15 @@ impl ModuleInit for LightningModuleConfigGen {
         config
             .to_typed::<LightningConfig>()?
             .validate_config(identity)
+    }
+
+    fn hash_consensus_config(
+        &self,
+        engine: &mut HashEngine,
+        config: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        serde_json::from_value::<LightningConfigConsensus>(config)?.consensus_encode(engine)?;
+        Ok(())
     }
 }
 
