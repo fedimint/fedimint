@@ -115,8 +115,8 @@ impl Database {
 /// | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes |
 /// | -------- | ------------------ | ---------- | ------------------- | -------------- | ----------- |
 /// | MemoryDB | Prevented          | Prevented  | Prevented           | Prevented      | Possible    |
-/// | SledDB   | Prevented          | Prevented  | Possible            | Possible       | Possible    |
 /// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
+/// | Sqlite   | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
 #[async_trait]
 pub trait IDatabaseTransaction<'a>: 'a + Send {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
