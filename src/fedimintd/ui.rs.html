@@ -412,7 +412,7 @@
 
 <span class="kw">async fn </span>run_page(Extension(state): Extension&lt;MutableState&gt;) -&gt; RunTemplate {
     <span class="kw">let </span>state = state.lock().<span class="kw">await</span>;
-    <span class="kw">let </span>path = state.cfg_path.join(<span class="string">&quot;client.json&quot;</span>);
+    <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
     <span class="kw">let </span>connection_string: String = <span class="kw">match </span>std::fs::File::open(path) {
         <span class="prelude-val">Ok</span>(file) =&gt; {
             <span class="kw">let </span>cfg: ClientConfig =
@@ -464,7 +464,7 @@
 
     <span class="comment">// Don&#39;t allow re-running DKG if configs already exist
     </span><span class="kw">let </span>consensus_path = state
-        .cfg_path
+        .data_dir
         .join(CONSENSUS_CONFIG)
         .with_extension(JSON_EXT);
     <span class="kw">if </span>std::path::Path::new(<span class="kw-2">&amp;</span>consensus_path).exists() {
@@ -482,8 +482,8 @@
     }
 
     <span class="comment">// Actually run DKG
-    </span><span class="kw">let </span>key = get_key(<span class="prelude-val">Some</span>(state.password.clone()), state.cfg_path.join(SALT_FILE));
-    <span class="kw">let </span>pk_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, state.cfg_path.join(TLS_PK));
+    </span><span class="kw">let </span>key = get_key(<span class="prelude-val">Some</span>(state.password.clone()), state.data_dir.join(SALT_FILE));
+    <span class="kw">let </span>pk_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, state.data_dir.join(TLS_PK));
     <span class="kw">let </span>max_denomination = Amount::from_msats(<span class="number">100000000000</span>);
     <span class="kw">let </span>(dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::&lt;UiMessage&gt;();
     <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from([
@@ -494,7 +494,7 @@
         (<span class="string">&quot;mint&quot;</span>, Arc::new(MintConfigGenerator)),
         (<span class="string">&quot;ln&quot;</span>, Arc::new(LightningModuleConfigGen)),
     ]);
-    <span class="kw">let </span>dir_out_path = state.cfg_path.clone();
+    <span class="kw">let </span>dir_out_path = state.data_dir.clone();
     <span class="kw">let </span>fedimintd_sender = state.sender.clone();
 
     <span class="kw">let </span><span class="kw-2">mut </span>dkg_task_group = state.task_group.make_subgroup().<span class="kw">await</span>;
@@ -600,7 +600,7 @@
 
     <span class="comment">// FIXME: this should return Result
     </span><span class="kw">let </span>tls_connect_string = create_cert(
-        state.cfg_path.clone(),
+        state.data_dir.clone(),
         form.p2p_url.clone(),
         form.api_url.clone(),
         form.guardian_name.clone(),
@@ -628,7 +628,7 @@
 
 <span class="kw">async fn </span>qr(Extension(state): Extension&lt;MutableState&gt;) -&gt; <span class="kw">impl </span>axum::response::IntoResponse {
     <span class="kw">let </span>state = state.lock().<span class="kw">await</span>;
-    <span class="kw">let </span>path = state.cfg_path.join(<span class="string">&quot;client.json&quot;</span>);
+    <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
     <span class="kw">let </span>connection_string: String = <span class="kw">match </span>std::fs::File::open(path) {
         <span class="prelude-val">Ok</span>(file) =&gt; {
             <span class="kw">let </span>cfg: ClientConfig =
@@ -661,7 +661,7 @@
 
 <span class="kw">struct </span>State {
     params: <span class="prelude-ty">Option</span>&lt;FederationParameters&gt;,
-    cfg_path: PathBuf,
+    data_dir: PathBuf,
     sender: Sender&lt;UiMessage&gt;,
     password: String,
     task_group: TaskGroup,
@@ -675,7 +675,7 @@
 }
 
 <span class="kw">pub async fn </span>run_ui(
-    cfg_path: PathBuf,
+    data_dir: PathBuf,
     sender: Sender&lt;UiMessage&gt;,
     bind_addr: SocketAddr,
     password: String,
@@ -683,7 +683,7 @@
 ) {
     <span class="kw">let </span>state = Arc::new(Mutex::new(State {
         params: <span class="prelude-val">None</span>,
-        cfg_path,
+        data_dir,
         sender,
         password,
         task_group,
