@@ -40,7 +40,7 @@ impl<M> ModuleRegistry<M> {
     ///
     /// # Panics
     /// If the module isn't in the registry
-    pub fn get_module(&self, module_key: ModuleKey) -> &M {
+    pub fn get(&self, module_key: ModuleKey) -> &M {
         self.0
             .get(&module_key)
             .expect("CIs were decoded, so the module exists")
