@@ -11,7 +11,6 @@ use fedimint_api::config::FederationId;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::{Amount, ServerModulePlugin};
@@ -203,7 +202,7 @@ impl LnClient {
         // TODO: unify block height type
         self.context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction()
             .await
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .await
@@ -268,11 +267,7 @@ impl LnClient {
     }
 
     pub async fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
-        let mut dbtx = self
-            .context
-            .db
-            .begin_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .await
             .expect("Db error");
@@ -283,7 +278,7 @@ impl LnClient {
         let confirmed_invoice = self
             .context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction()
             .await
             .get_value(&ConfirmedInvoiceKey(contract_id))
             .await
@@ -344,7 +339,7 @@ mod tests {
     use fedimint_api::config::ConfigGenParams;
     use fedimint_api::core::OutputOutcome;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
+    use fedimint_api::db::Database;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::SignedEpochOutcome;
     use fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -362,7 +357,7 @@ mod tests {
 
     use crate::api::IFederationApi;
     use crate::ln::LnClient;
-    use crate::{ClientContext, LegacyTransaction};
+    use crate::{module_decode_stubs, ClientContext, LegacyTransaction};
 
     type Fed = FakeFed<LightningModule>;
 
@@ -407,11 +402,8 @@ mod tests {
                 .lock()
                 .await
                 .fetch_from_all(|m, db| async {
-                    m.get_contract_account(
-                        &mut db.begin_transaction(ModuleDecoderRegistry::default()).await,
-                        contract,
-                    )
-                    .await
+                    m.get_contract_account(&mut db.begin_transaction().await, contract)
+                        .await
                 })
                 .await
                 .unwrap())
@@ -497,7 +489,7 @@ mod tests {
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client_context = ClientContext {
-            db: MemDatabase::new().into(),
+            db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
@@ -543,11 +535,7 @@ mod tests {
         };
         let timelock = 42;
 
-        let mut dbtx = client
-            .context
-            .db
-            .begin_transaction(ModuleDecoderRegistry::default())
-            .await;
+        let mut dbtx = client.context.db.begin_transaction().await;
         let output = client
             .create_outgoing_output(&mut dbtx, invoice.clone(), &gateway, timelock, &mut rng)
             .await

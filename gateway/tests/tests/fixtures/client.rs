@@ -9,7 +9,7 @@ use ln_gateway::{
 };
 use mint_client::{
     api::{FederationApi, WsFederationConnect},
-    Client, GatewayClient, GatewayClientConfig,
+    module_decode_stubs, Client, GatewayClient, GatewayClientConfig,
 };
 use secp256k1::{PublicKey, Secp256k1};
 use url::Url;
@@ -36,9 +36,11 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         let federation_id = config.client_config.federation_id.clone();
 
         let api: FederationApi = MockApi::new().into();
-        let db = self
-            .db_factory
-            .create_database(federation_id, PathBuf::new())?;
+        let db = self.db_factory.create_database(
+            federation_id,
+            PathBuf::new(),
+            module_decode_stubs(),
+        )?;
 
         Ok(GatewayClient::new_with_api(config, db, api, Default::default()).await)
     }

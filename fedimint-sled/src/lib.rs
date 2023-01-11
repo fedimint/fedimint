@@ -7,11 +7,9 @@ use std::path::Path;
 use anyhow::Result;
 use async_trait::async_trait;
 use fedimint_api::db::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
-    PrefixIter,
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, PrefixIter,
 };
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
 pub use sled;
 use sled::transaction::TransactionError;
 
@@ -52,16 +50,15 @@ impl From<SledDb> for sled::Tree {
 // TODO: maybe make the concrete impl its own crate
 #[async_trait]
 impl IDatabase for SledDb {
-    async fn begin_transaction(&self, decoders: ModuleDecoderRegistry) -> DatabaseTransaction {
-        let sled_tx = SledTransaction {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
+        let mut sled_tx = SledTransaction {
             operations: Vec::new(),
             db: self,
             num_pending_operations: 0,
             num_savepoint_operations: 0,
         };
-        let mut tx = DatabaseTransaction::new(sled_tx, decoders);
-        tx.set_tx_savepoint().await;
-        tx
+        sled_tx.set_tx_savepoint().await;
+        Box::new(sled_tx)
     }
 }
 
@@ -197,82 +194,76 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
 
 #[cfg(test)]
 mod fedimint_sled_tests {
+    use fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+
     use crate::SledDb;
 
-    fn open_temp_db(temp_path: &str) -> SledDb {
+    fn open_temp_db(temp_path: &str) -> Database {
         let path = tempfile::Builder::new()
             .prefix(temp_path)
             .tempdir()
             .unwrap();
-        SledDb::open(path, "default").unwrap()
+        Database::new(
+            SledDb::open(path, "default").unwrap(),
+            ModuleDecoderRegistry::default(),
+        )
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(
-            open_temp_db("fcb-sled-test-insert-elements").into(),
-        )
-        .await;
+        fedimint_api::db::verify_insert_elements(open_temp_db("fcb-sled-test-insert-elements"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(
-            open_temp_db("fcb-sled-test-remove-nonexisting").into(),
-        )
+        fedimint_api::db::verify_remove_nonexisting(open_temp_db(
+            "fcb-sled-test-remove-nonexisting",
+        ))
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_existing(
-            open_temp_db("fcb-sled-test-remove-existing").into(),
-        )
-        .await;
+        fedimint_api::db::verify_remove_existing(open_temp_db("fcb-sled-test-remove-existing"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(
-            open_temp_db("fcb-sled-test-read-own-writes").into(),
-        )
-        .await;
+        fedimint_api::db::verify_read_own_writes(open_temp_db("fcb-sled-test-read-own-writes"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(
-            open_temp_db("fcb-sled-test-prevent-dirty-reads").into(),
-        )
+        fedimint_api::db::verify_prevent_dirty_reads(open_temp_db(
+            "fcb-sled-test-prevent-dirty-reads",
+        ))
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(
-            open_temp_db("fcb-sled-test-find-by-prefix").into(),
-        )
-        .await;
+        fedimint_api::db::verify_find_by_prefix(open_temp_db("fcb-sled-test-find-by-prefix")).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db("fcb-sled-test-commit").into()).await;
+        fedimint_api::db::verify_commit(open_temp_db("fcb-sled-test-rollback-to-savepoint")).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(
-            open_temp_db("fcb-sled-test-rollback-to-savepoint").into(),
-        )
+        fedimint_api::db::verify_rollback_to_savepoint(open_temp_db(
+            "fcb-sled-test-rollback-to-savepoint",
+        ))
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(
-            open_temp_db("fcb-sled-test-remove-by-prefix").into(),
-        )
-        .await;
+        fedimint_api::db::verify_remove_by_prefix(open_temp_db("fcb-sled-test-remove-by-prefix"))
+            .await;
     }
 }

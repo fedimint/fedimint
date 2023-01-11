@@ -150,7 +150,7 @@ impl FedimintConsensus {
     }
 
     pub async fn database_transaction(&self) -> DatabaseTransaction<'_> {
-        self.db.begin_transaction(self.decoders()).await
+        self.db.begin_transaction().await
     }
 
     pub async fn submit_transaction(
@@ -174,7 +174,7 @@ impl FedimintConsensus {
         let mut pub_keys = Vec::new();
 
         // Create read-only DB tx so that the read state is consistent
-        let mut dbtx = self.db.begin_transaction(self.decoders()).await;
+        let mut dbtx = self.db.begin_transaction().await;
 
         for input in &transaction.inputs {
             let module = self.modules.get(input.module_key());
@@ -254,7 +254,7 @@ impl FedimintConsensus {
                 .into_iter()
                 .into_group_map_by(|(_peer, mci)| mci.module_key());
 
-            let mut dbtx = self.db.begin_transaction(self.decoders()).await;
+            let mut dbtx = self.db.begin_transaction().await;
             for (module_key, module_cis) in per_module_cis {
                 self.modules
                     .get(module_key)
@@ -268,7 +268,7 @@ impl FedimintConsensus {
         // Process transactions
         let mut rejected_txs: BTreeSet<TransactionId> = BTreeSet::new();
         {
-            let mut dbtx = self.db.begin_transaction(self.decoders()).await;
+            let mut dbtx = self.db.begin_transaction().await;
 
             let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
             let mut processed_txs: HashSet<TransactionId> = HashSet::new();
@@ -334,7 +334,7 @@ impl FedimintConsensus {
 
         // End consensus epoch
         let epoch_history = {
-            let mut dbtx = self.db.begin_transaction(self.decoders()).await;
+            let mut dbtx = self.db.begin_transaction().await;
             let mut drop_peers = Vec::<PeerId>::new();
 
             let epoch_history = self
@@ -370,7 +370,7 @@ impl FedimintConsensus {
 
     pub async fn get_last_epoch(&self) -> Option<u64> {
         self.db
-            .begin_transaction(self.decoders())
+            .begin_transaction()
             .await
             .get_value(&LastEpochKey)
             .await
@@ -380,7 +380,7 @@ impl FedimintConsensus {
 
     pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
         self.db
-            .begin_transaction(self.decoders())
+            .begin_transaction()
             .await
             .get_value(&EpochHistoryKey(epoch))
             .await
@@ -398,7 +398,7 @@ impl FedimintConsensus {
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self
             .db
-            .begin_transaction(self.decoders())
+            .begin_transaction()
             .await
             .get_value(&prev_epoch_key)
             .await
@@ -582,7 +582,7 @@ impl FedimintConsensus {
 
         let rejected: Option<String> = self
             .db
-            .begin_transaction(self.decoders())
+            .begin_transaction()
             .await
             .get_value(&RejectedTransactionKey(txid))
             .await
