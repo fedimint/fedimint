@@ -104,10 +104,10 @@ pub trait IFederationApi: Debug + Send + Sync {
 }
 
 dyn_newtype_define! {
-    pub FederationApi(Arc<IFederationApi>)
+    pub DynFederationApi(Arc<IFederationApi>)
 }
 
-impl FederationApi {
+impl DynFederationApi {
     pub async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
     where
         T: TryIntoOutcome + Send,

@@ -20,7 +20,7 @@ use crate::db::{Database, DatabaseTransaction};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
-use crate::server::{PluginVerificationCache, ServerModule};
+use crate::server::{DynServerModule, VerificationCache};
 use crate::task::TaskGroup;
 use crate::{Amount, OutPoint, PeerId};
 
@@ -208,13 +208,13 @@ pub trait ModuleInit {
 
     fn module_kind(&self) -> ModuleKind;
 
-    /// Initialize the [`ServerModule`] instance from its config
+    /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
         &self,
         cfg: ServerModuleConfig,
         db: Database,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ServerModule>;
+    ) -> anyhow::Result<DynServerModule>;
 
     fn trusted_dealer_gen(
         &self,
@@ -244,7 +244,7 @@ pub trait ModuleInit {
 }
 
 #[async_trait]
-pub trait ServerModulePlugin: Debug + Sized {
+pub trait ServerModule: Debug + Sized {
     const KIND: ModuleKind;
 
     type Decoder: PluginDecode;
@@ -252,7 +252,7 @@ pub trait ServerModulePlugin: Debug + Sized {
     type Output: PluginOutput;
     type OutputOutcome: PluginOutputOutcome;
     type ConsensusItem: PluginConsensusItem;
-    type VerificationCache: PluginVerificationCache;
+    type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't allocate

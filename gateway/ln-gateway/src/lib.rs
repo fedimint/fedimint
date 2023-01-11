@@ -36,7 +36,7 @@ use tracing::{debug, error, warn};
 
 use crate::{
     actor::GatewayActor,
-    client::GatewayClientBuilder,
+    client::DynGatewayClientBuilder,
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
@@ -54,7 +54,7 @@ pub struct LnGateway {
     ln_rpc: Arc<dyn LnRpc>,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
-    client_builder: GatewayClientBuilder,
+    client_builder: DynGatewayClientBuilder,
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
 }
@@ -63,7 +63,7 @@ impl LnGateway {
     pub async fn new(
         config: GatewayConfig,
         ln_rpc: Arc<dyn LnRpc>,
-        client_builder: GatewayClientBuilder,
+        client_builder: DynGatewayClientBuilder,
         // TODO: consider encapsulating message channel within LnGateway
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,

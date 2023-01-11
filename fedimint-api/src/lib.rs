@@ -9,7 +9,7 @@ use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
-pub use module::ServerModulePlugin;
+pub use module::ServerModule;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 pub use tiered::Tiered;

@@ -37,7 +37,7 @@ pub trait IDbFactory: Debug {
 dyn_newtype_define!(
     /// Arc reference to a database factory
     #[derive(Clone)]
-    pub DbFactory(Arc<IDbFactory>)
+    pub DynDbFactory(Arc<IDbFactory>)
 );
 
 /// A factory that creates in-memory databases
@@ -97,17 +97,17 @@ pub trait IGatewayClientBuilder: Debug {
 dyn_newtype_define! {
     /// dyn newtype for a Gateway federation client builder
     #[derive(Clone)]
-    pub GatewayClientBuilder(Arc<IGatewayClientBuilder>)
+    pub DynGatewayClientBuilder(Arc<IGatewayClientBuilder>)
 }
 
 #[derive(Debug, Clone)]
 pub struct StandardGatewayClientBuilder {
     work_dir: PathBuf,
-    db_factory: DbFactory,
+    db_factory: DynDbFactory,
 }
 
 impl StandardGatewayClientBuilder {
-    pub fn new(work_dir: PathBuf, db_factory: DbFactory) -> Self {
+    pub fn new(work_dir: PathBuf, db_factory: DynDbFactory) -> Self {
         Self {
             work_dir,
             db_factory,

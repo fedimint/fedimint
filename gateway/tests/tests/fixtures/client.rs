@@ -4,11 +4,11 @@ use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::config::{ClientConfig, FederationId};
 use ln_gateway::{
-    client::{DbFactory, IGatewayClientBuilder},
+    client::{DynDbFactory, IGatewayClientBuilder},
     LnGatewayError,
 };
 use mint_client::{
-    api::{FederationApi, WsFederationConnect},
+    api::{DynFederationApi, WsFederationConnect},
     module_decode_stubs, Client, GatewayClient, GatewayClientConfig,
 };
 use secp256k1::{PublicKey, Secp256k1};
@@ -18,11 +18,11 @@ use super::fed::MockApi;
 
 #[derive(Debug, Clone)]
 pub struct TestGatewayClientBuilder {
-    db_factory: DbFactory,
+    db_factory: DynDbFactory,
 }
 
 impl TestGatewayClientBuilder {
-    pub fn new(db_factory: DbFactory) -> Self {
+    pub fn new(db_factory: DynDbFactory) -> Self {
         Self { db_factory }
     }
 }
@@ -35,7 +35,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
     ) -> Result<Client<GatewayClientConfig>, LnGatewayError> {
         let federation_id = config.client_config.federation_id.clone();
 
-        let api: FederationApi = MockApi::new().into();
+        let api: DynFederationApi = MockApi::new().into();
         let db = self.db_factory.create_database(
             federation_id,
             PathBuf::new(),

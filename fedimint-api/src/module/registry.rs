@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::core::{Decoder, ModuleInstanceId};
-use crate::server::ServerModule;
+use crate::server::DynServerModule;
 
 // TODO: unify and/or make a newtype?
 /// Fedimint module identifier
@@ -48,7 +48,7 @@ impl<M> ModuleRegistry<M> {
 }
 
 /// Collection of server modules
-pub type ServerModuleRegistry = ModuleRegistry<ServerModule>;
+pub type ServerModuleRegistry = ModuleRegistry<DynServerModule>;
 
 impl ServerModuleRegistry {
     /// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
@@ -59,7 +59,7 @@ impl ServerModuleRegistry {
 
     // TODO: move into `ModuleRegistry` impl by splitting `module_key` fn into separate trait
     /// Add a module to the registry
-    pub fn register_module(&mut self, id: ModuleInstanceId, module: ServerModule) {
+    pub fn register_module(&mut self, id: ModuleInstanceId, module: DynServerModule) {
         assert!(
             self.0.insert(id, module).is_none(),
             "Module was already registered!"

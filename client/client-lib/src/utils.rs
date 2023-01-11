@@ -7,7 +7,7 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{ParseAmountError, TieredMulti};
 use lightning_invoice::Currency;
 
-use crate::api::FederationApi;
+use crate::api::DynFederationApi;
 use crate::mint::SpendableNote;
 
 pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
@@ -61,7 +61,7 @@ pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Er
 #[derive(Debug)]
 pub struct ClientContext {
     pub db: Database,
-    pub api: FederationApi,
+    pub api: DynFederationApi,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
 }
 

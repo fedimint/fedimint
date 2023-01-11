@@ -12,7 +12,7 @@ use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleInit, TransactionItemAmount};
-use fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
+use fedimint_api::{OutPoint, PeerId, ServerModule};
 
 pub mod btc;
 
@@ -32,7 +32,7 @@ pub struct TestInputMeta {
 
 impl<Module> FakeFed<Module>
 where
-    Module: ServerModulePlugin + 'static + Send + Sync,
+    Module: ServerModule + 'static + Send + Sync,
     Module::ConsensusItem: Clone,
     Module::OutputOutcome: Eq + Debug,
     Module::Decoder: Sync + Send + 'static,
@@ -79,7 +79,7 @@ where
     pub async fn verify_input(&self, input: &Module::Input) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
-        async fn member_validate<M: ServerModulePlugin>(
+        async fn member_validate<M: ServerModule>(
             member: &M,
             dbtx: &mut DatabaseTransaction<'_>,
             fake_ic: &FakeInterconnect,
@@ -125,7 +125,7 @@ where
         inputs: &[Module::Input],
         outputs: &[(OutPoint, Module::Output)],
     ) where
-        <Module as ServerModulePlugin>::Input: Send + Sync,
+        <Module as ServerModule>::Input: Send + Sync,
     {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
         // TODO: only include some of the proposals for realism

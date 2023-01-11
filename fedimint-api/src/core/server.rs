@@ -14,31 +14,29 @@ use fedimint_api::{
 };
 
 use super::*;
-use crate::module::{
-    ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount,
-};
+use crate::module::{ApiEndpoint, InputMeta, ModuleError, ServerModule, TransactionItemAmount};
 
-pub trait ModuleVerificationCache: Debug {
+pub trait IVerificationCache: Debug {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self) -> VerificationCache;
+    fn clone(&self) -> DynVerificationCache;
 }
 
 dyn_newtype_define! {
-    pub VerificationCache(Box<ModuleVerificationCache>)
+    pub DynVerificationCache(Box<IVerificationCache>)
 }
 
 // TODO: make macro impl that doesn't force en/decodable
-pub trait PluginVerificationCache: Clone + Debug + Send + Sync + 'static {}
+pub trait VerificationCache: Clone + Debug + Send + Sync + 'static {}
 
-impl<T> ModuleVerificationCache for T
+impl<T> IVerificationCache for T
 where
-    T: PluginVerificationCache + 'static,
+    T: VerificationCache + 'static,
 {
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 
-    fn clone(&self) -> VerificationCache {
+    fn clone(&self) -> DynVerificationCache {
         <Self as Clone>::clone(self).into()
     }
 }
@@ -77,7 +75,7 @@ pub trait IServerModule: Debug {
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    fn build_verification_cache(&self, inputs: &[Input]) -> VerificationCache;
+    fn build_verification_cache(&self, inputs: &[Input]) -> DynVerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -87,7 +85,7 @@ pub trait IServerModule: Debug {
         &self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'_>,
-        verification_cache: &VerificationCache,
+        verification_cache: &DynVerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError>;
 
@@ -103,7 +101,7 @@ pub trait IServerModule: Debug {
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
-        verification_cache: &VerificationCache,
+        verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
@@ -163,21 +161,21 @@ pub trait IServerModule: Debug {
     /// Returns a list of custom API endpoints defined by the module. These are made available both
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
     /// their input and the current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint<ServerModule>>;
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>>;
 }
 
 dyn_newtype_define!(
     #[derive(Clone)]
-    pub ServerModule(Arc<IServerModule>)
+    pub DynServerModule(Arc<IServerModule>)
 );
 
 #[async_trait]
 impl<T> IServerModule for T
 where
-    T: ServerModulePlugin + 'static + Sync,
+    T: ServerModule + 'static + Sync,
 {
     fn decoder(&self) -> Decoder {
-        Decoder::from_typed(ServerModulePlugin::decoder(self))
+        Decoder::from_typed(ServerModule::decoder(self))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -186,7 +184,7 @@ where
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        <Self as ServerModulePlugin>::await_consensus_proposal(self, dbtx).await
+        <Self as ServerModule>::await_consensus_proposal(self, dbtx).await
     }
 
     /// This module's contribution to the next consensus proposal
@@ -195,7 +193,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<ConsensusItem> {
-        <Self as ServerModulePlugin>::consensus_proposal(self, dbtx)
+        <Self as ServerModule>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
             .map(|v| ConsensusItem::from_typed(module_instance_id, v))
@@ -211,7 +209,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, ConsensusItem)>,
     ) {
-        <Self as ServerModulePlugin>::begin_consensus_epoch(
+        <Self as ServerModule>::begin_consensus_epoch(
             self,
             dbtx,
             consensus_items
@@ -221,7 +219,7 @@ where
                         peer,
                         Clone::clone(
                             item.as_any()
-                                .downcast_ref::<<Self as ServerModulePlugin>::ConsensusItem>()
+                                .downcast_ref::<<Self as ServerModule>::ConsensusItem>()
                                 .expect("incorrect consensus item type passed to module plugin"),
                         ),
                     )
@@ -235,12 +233,12 @@ where
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    fn build_verification_cache<'a>(&self, inputs: &[Input]) -> VerificationCache {
-        <Self as ServerModulePlugin>::build_verification_cache(
+    fn build_verification_cache<'a>(&self, inputs: &[Input]) -> DynVerificationCache {
+        <Self as ServerModule>::build_verification_cache(
             self,
             inputs.iter().map(|i| {
                 i.as_any()
-                    .downcast_ref::<<Self as ServerModulePlugin>::Input>()
+                    .downcast_ref::<<Self as ServerModule>::Input>()
                     .expect("incorrect input type passed to module plugin")
             }),
         )
@@ -255,20 +253,20 @@ where
         &self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'_>,
-        verification_cache: &VerificationCache,
+        verification_cache: &DynVerificationCache,
         input: &Input,
     ) -> Result<InputMeta, ModuleError> {
-        <Self as ServerModulePlugin>::validate_input(
+        <Self as ServerModule>::validate_input(
             self,
             interconnect,
             dbtx,
             verification_cache
                 .as_any()
-                .downcast_ref::<<Self as ServerModulePlugin>::VerificationCache>()
+                .downcast_ref::<<Self as ServerModule>::VerificationCache>()
                 .expect("incorrect verification cache type passed to module plugin"),
             input
                 .as_any()
-                .downcast_ref::<<Self as ServerModulePlugin>::Input>()
+                .downcast_ref::<<Self as ServerModule>::Input>()
                 .expect("incorrect input type passed to module plugin"),
         )
         .await
@@ -287,19 +285,19 @@ where
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
-        verification_cache: &VerificationCache,
+        verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        <Self as ServerModulePlugin>::apply_input(
+        <Self as ServerModule>::apply_input(
             self,
             interconnect,
             dbtx,
             input
                 .as_any()
-                .downcast_ref::<<Self as ServerModulePlugin>::Input>()
+                .downcast_ref::<<Self as ServerModule>::Input>()
                 .expect("incorrect input type passed to module plugin"),
             verification_cache
                 .as_any()
-                .downcast_ref::<<Self as ServerModulePlugin>::VerificationCache>()
+                .downcast_ref::<<Self as ServerModule>::VerificationCache>()
                 .expect("incorrect verification cache type passed to module plugin"),
         )
         .await
@@ -315,12 +313,12 @@ where
         dbtx: &mut DatabaseTransaction,
         output: &Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        <Self as ServerModulePlugin>::validate_output(
+        <Self as ServerModule>::validate_output(
             self,
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<Self as ServerModulePlugin>::Output>()
+                .downcast_ref::<<Self as ServerModule>::Output>()
                 .expect("incorrect output type passed to module plugin"),
         )
         .await
@@ -342,12 +340,12 @@ where
         output: &Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        <Self as ServerModulePlugin>::apply_output(
+        <Self as ServerModule>::apply_output(
             self,
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<Self as ServerModulePlugin>::Output>()
+                .downcast_ref::<<Self as ServerModule>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
         )
@@ -364,7 +362,7 @@ where
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'a>,
     ) -> Vec<PeerId> {
-        <Self as ServerModulePlugin>::end_consensus_epoch(self, consensus_peers, dbtx).await
+        <Self as ServerModule>::end_consensus_epoch(self, consensus_peers, dbtx).await
     }
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
@@ -376,7 +374,7 @@ where
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<OutputOutcome> {
-        <Self as ServerModulePlugin>::output_status(self, dbtx, out_point)
+        <Self as ServerModule>::output_status(self, dbtx, out_point)
             .await
             .map(|v| OutputOutcome::from_typed(module_instance_id, v))
     }
@@ -386,16 +384,16 @@ where
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
-        <Self as ServerModulePlugin>::audit(self, dbtx, audit).await
+        <Self as ServerModule>::audit(self, dbtx, audit).await
     }
 
-    fn api_endpoints(&self) -> Vec<ApiEndpoint<ServerModule>> {
-        <Self as ServerModulePlugin>::api_endpoints(self)
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>> {
+        <Self as ServerModule>::api_endpoints(self)
             .into_iter()
             .map(|ApiEndpoint { path, handler }| ApiEndpoint {
                 path,
                 handler: Box::new(
-                    move |module: &ServerModule,
+                    move |module: &DynServerModule,
                           dbtx: fedimint_api::db::DatabaseTransaction<'_>,
                           value: serde_json::Value| {
                         let typed_module = module

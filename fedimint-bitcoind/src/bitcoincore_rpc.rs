@@ -12,7 +12,7 @@ use super::*;
 // <https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48>
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
 
-pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg, task_handle: TaskHandle) -> Result<BitcoindRpc> {
+pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
     let bitcoind_client = ::bitcoincore_rpc::Client::new(
         &cfg.btc_rpc_address,
         Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),

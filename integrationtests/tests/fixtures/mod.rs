@@ -30,13 +30,13 @@ use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_api::module::ModuleInit;
 use fedimint_api::net::peers::IMuxPeerConnections;
-use fedimint_api::server::ServerModule;
+use fedimint_api::server::DynServerModule;
 use fedimint_api::task::{timeout, TaskGroup};
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
-use fedimint_bitcoind::BitcoindRpc;
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_ln::{LightningGateway, LightningModuleConfigGen};
 use fedimint_mint::{MintConfigGenerator, MintOutput};
 use fedimint_server::config::{connect, ServerConfig};
@@ -61,7 +61,7 @@ use itertools::Itertools;
 use lightning_invoice::Invoice;
 use ln_gateway::{
     actor::GatewayActor,
-    client::{GatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
+    client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
     config::GatewayConfig,
     rpc::GatewayRequest,
     LnGateway,
@@ -258,7 +258,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
-            let bitcoin_rpc_2: BitcoindRpc = bitcoin.clone().into();
+            let bitcoin_rpc_2: DynBitcoindRpc = bitcoin.clone().into();
             let lightning = FakeLightningTest::new();
             let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
             let net = MockNetwork::new();
@@ -472,7 +472,7 @@ impl GatewayTest {
         };
 
         // Create federation client builder for the gateway
-        let client_builder: GatewayClientBuilder =
+        let client_builder: DynGatewayClientBuilder =
             StandardGatewayClientBuilder::new(PathBuf::new(), MemDbFactory.into()).into();
 
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
@@ -596,7 +596,7 @@ pub struct FederationTest {
 struct ServerTest {
     fedimint: FedimintServer,
     last_consensus: Vec<HbbftConsensusOutcome>,
-    bitcoin_rpc: BitcoindRpc,
+    bitcoin_rpc: DynBitcoindRpc,
     database: Database,
     override_proposal: Option<ConsensusProposal>,
     dropped_peers: Vec<PeerId>,
@@ -1012,14 +1012,15 @@ impl FederationTest {
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
         database_gen: &impl Fn(ModuleDecoderRegistry) -> Database,
-        bitcoin_gen: &impl Fn() -> BitcoindRpc,
+        bitcoin_gen: &impl Fn() -> DynBitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
         module_inits: ModuleInitRegistry,
         override_modules: impl Fn(
             ServerConfig,
             Database,
-        )
-            -> Pin<Box<dyn Future<Output = BTreeMap<&'static str, ServerModule>>>>,
+        ) -> Pin<
+            Box<dyn Future<Output = BTreeMap<&'static str, DynServerModule>>>,
+        >,
         task_group: &mut TaskGroup,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {

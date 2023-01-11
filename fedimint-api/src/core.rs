@@ -193,7 +193,7 @@ macro_rules! plugin_types_trait_impl {
 
         impl fedimint_api::core::PluginConsensusItem for $ci {}
 
-        impl fedimint_api::server::PluginVerificationCache for $cache {}
+        impl fedimint_api::server::VerificationCache for $cache {}
     };
 }
 

@@ -13,7 +13,7 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry};
 use fedimint_api::module::{ModuleError, TransactionItemAmount};
-use fedimint_api::server::{ServerModule, VerificationCache};
+use fedimint_api::server::{DynServerModule, DynVerificationCache};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
@@ -92,7 +92,7 @@ pub struct AcceptedTransaction {
 
 #[derive(Debug)]
 struct VerificationCaches {
-    caches: HashMap<ModuleInstanceId, VerificationCache>,
+    caches: HashMap<ModuleInstanceId, DynVerificationCache>,
 }
 
 struct FundingVerifier {
@@ -123,7 +123,7 @@ impl FedimintConsensus {
         cfg: ServerConfig,
         db: Database,
         module_inits: ModuleInitRegistry,
-        modules: ModuleRegistry<ServerModule>,
+        modules: ModuleRegistry<DynServerModule>,
     ) -> Self {
         Self {
             rng_gen: Box::new(OsRngGen),
@@ -137,7 +137,7 @@ impl FedimintConsensus {
 }
 
 impl VerificationCaches {
-    fn get_cache(&self, module_key: ModuleInstanceId) -> &VerificationCache {
+    fn get_cache(&self, module_key: ModuleInstanceId) -> &DynVerificationCache {
         self.caches
             .get(&module_key)
             .expect("Verification caches were built for all modules")
