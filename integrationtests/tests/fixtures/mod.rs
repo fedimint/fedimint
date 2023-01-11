@@ -1042,7 +1042,7 @@ impl FederationTest {
 
             let mut modules = BTreeMap::new();
 
-            for (kind, gen) in module_inits.iter() {
+            for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
                 if let Some(module) = override_modules.remove(kind.as_str()) {
                     info!(module_instance_id = id, kind = %kind, "Use overriden module");

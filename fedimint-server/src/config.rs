@@ -8,7 +8,11 @@ use fedimint_api::config::{
     ApiEndpoint, BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner,
     FederationId, JsonWithKind, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_api::core::{
+    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
+    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    MODULE_INSTANCE_ID_GLOBAL,
+};
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_api::module::ModuleInit;
@@ -173,13 +177,10 @@ impl ServerConfigConsensus {
             .expect("configuration mismatch")
     }
 }
-use impl_tools::autoimpl;
 
 // TODO: turn into newtype
 pub type DynModuleInit = Arc<dyn ModuleInit + Send + Sync>;
 
-// TODO: turn all registeries into `Registry<T>(BTreeMap<&'static str, T))` + type alias
-#[autoimpl(Deref using self.0)]
 #[derive(Clone)]
 pub struct ModuleInitRegistry(BTreeMap<ModuleKind, DynModuleInit>);
 
@@ -192,6 +193,26 @@ impl From<Vec<DynModuleInit>> for ModuleInitRegistry {
 }
 
 impl ModuleInitRegistry {
+    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleInit> {
+        self.0.get(k)
+    }
+
+    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
+        for hardcoded_module in ["mint", "ln", "wallet"] {
+            if !self
+                .0
+                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
+            {
+                panic!("Missing {hardcoded_module} module");
+            }
+        }
+
+        LegacyInitOrderIter {
+            i: 0,
+            rest: self.0.clone(),
+        }
+    }
+
     pub fn decoders<'a>(
         &self,
         module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
@@ -217,6 +238,7 @@ impl ModuleInitRegistry {
 
         for (module_id, module_cfg) in &cfg.consensus.modules {
             let kind = module_cfg.kind();
+
             let Some(init) = self.0.get(kind) else {
                 anyhow::bail!("Detected configuration for unsupported module kind: {kind:?}")
             };
@@ -227,6 +249,48 @@ impl ModuleInitRegistry {
             modules.insert(*module_id, module);
         }
         Ok(ModuleRegistry::from(modules))
+    }
+}
+
+/// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
+pub struct LegacyInitOrderIter {
+    i: u16,
+    rest: BTreeMap<ModuleKind, DynModuleInit>,
+}
+
+impl Iterator for LegacyInitOrderIter {
+    type Item = (ModuleKind, DynModuleInit);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = match self.i {
+            LEGACY_HARDCODED_INSTANCE_ID_LN => {
+                let kind = ModuleKind::from_static_str("ln");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
+                let kind = ModuleKind::from_static_str("mint");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
+                let kind = ModuleKind::from_static_str("wallet");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            _ => self.rest.pop_first(),
+        };
+
+        if ret.is_some() {
+            self.i += 1;
+        }
+        ret
     }
 }
 
@@ -395,7 +459,7 @@ impl ServerConfig {
 
         // We assume user wants one module instance for every module kind
         let module_configs: BTreeMap<_, _> = module_config_gens
-            .iter()
+            .legacy_init_order_iter()
             .enumerate()
             .map(|(module_id, (_kind, gen))| {
                 (
@@ -481,7 +545,9 @@ impl ServerConfig {
         // NOTE: Currently we do not implement user-assisted module-kind to module-instance-id assignment
         // We assume that user wants one instance of each module that was compiled in. This is how
         // things were initially, where we consider "module as a code" as "module as an instance at runtime"
-        for (module_instance_id, (_kind, gen)) in module_config_gens.iter().enumerate() {
+        for (module_instance_id, (_kind, gen)) in
+            module_config_gens.legacy_init_order_iter().enumerate()
+        {
             let module_instance_id = u16::try_from(module_instance_id)
                 .expect("64k module instances should be enough for everyone");
             module_cfgs.insert(
