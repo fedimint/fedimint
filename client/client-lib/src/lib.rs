@@ -195,7 +195,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config: self
                 .config
                 .as_ref()
-                .get_module_by_kind::<LightningModuleClientConfig>("ln")
+                .get_first_module_by_kind::<LightningModuleClientConfig>("ln")
                 .expect("needs lightning module client config")
                 .1,
             context: self.context.clone(),
@@ -207,7 +207,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config: self
                 .config
                 .as_ref()
-                .get_module_by_kind::<MintClientConfig>("mint")
+                .get_first_module_by_kind::<MintClientConfig>("mint")
                 .expect("needs mint module client config")
                 .1,
             epoch_pk: self.config.as_ref().epoch_pk,
@@ -221,7 +221,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config: self
                 .config
                 .as_ref()
-                .get_module_by_kind::<WalletClientConfig>("wallet")
+                .get_first_module_by_kind::<WalletClientConfig>("wallet")
                 .expect("needs wallet module client config")
                 .1,
 
@@ -426,7 +426,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let funding_amount = self
             .config
             .as_ref()
-            .get_module_by_kind::<WalletClientConfig>("wallet")
+            .get_first_module_by_kind::<WalletClientConfig>("wallet")
             .expect("missing wallet module config")
             .1
             .fee_consensus
@@ -815,7 +815,7 @@ impl Client<UserClientConfig> {
         let invoice = InvoiceBuilder::new(network_to_currency(
             self.config
                 .0
-                .get_module_by_kind::<WalletClientConfig>("wallet")
+                .get_first_module_by_kind::<WalletClientConfig>("wallet")
                 .expect("must have wallet config available")
                 .1
                 .network,

@@ -1025,7 +1025,7 @@ impl FederationTest {
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
             let btc_rpc = bitcoin_gen();
-            let decoders = module_inits.decoders(cfg.module_kinds_iter()).unwrap();
+            let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
             let db = database_gen(decoders.clone());
             let mut task_group = task_group.clone();
 
@@ -1103,7 +1103,7 @@ impl FederationTest {
             servers,
             max_balance_sheet,
             last_consensus,
-            decoders: module_inits.decoders(cfg.module_kinds_iter()).unwrap(),
+            decoders: module_inits.decoders(cfg.iter_module_instances()).unwrap(),
             cfg,
             wallet,
         }

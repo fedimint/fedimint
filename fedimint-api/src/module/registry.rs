@@ -1,11 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::core::{Decoder, ModuleInstanceId};
+use crate::core::Decoder;
+pub use crate::core::ModuleInstanceId;
 use crate::server::DynServerModule;
-
-// TODO: unify and/or make a newtype?
-/// Fedimint module identifier
-pub type ModuleKey = u16;
 
 #[derive(Debug, Clone)]
 pub struct ModuleRegistry<M>(BTreeMap<ModuleInstanceId, M>);
@@ -16,14 +13,14 @@ impl<M> Default for ModuleRegistry<M> {
     }
 }
 
-impl<M> From<BTreeMap<ModuleKey, M>> for ModuleRegistry<M> {
-    fn from(value: BTreeMap<ModuleKey, M>) -> Self {
+impl<M> From<BTreeMap<ModuleInstanceId, M>> for ModuleRegistry<M> {
+    fn from(value: BTreeMap<ModuleInstanceId, M>) -> Self {
         Self(value)
     }
 }
 
 impl<M> ModuleRegistry<M> {
-    pub fn new(decoders: impl IntoIterator<Item = (ModuleKey, M)>) -> Self {
+    pub fn new(decoders: impl IntoIterator<Item = (ModuleInstanceId, M)>) -> Self {
         Self(decoders.into_iter().collect())
     }
 
@@ -32,7 +29,7 @@ impl<M> ModuleRegistry<M> {
         self.0.iter().map(|(id, m)| (*id, m))
     }
 
-    pub fn get_mut(&mut self, key: &ModuleKey) -> Option<&mut M> {
+    pub fn get_mut(&mut self, key: &ModuleInstanceId) -> Option<&mut M> {
         self.0.get_mut(key)
     }
 
@@ -40,7 +37,7 @@ impl<M> ModuleRegistry<M> {
     ///
     /// # Panics
     /// If the module isn't in the registry
-    pub fn get(&self, module_key: ModuleKey) -> &M {
+    pub fn get(&self, module_key: ModuleInstanceId) -> &M {
         self.0
             .get(&module_key)
             .expect("CIs were decoded, so the module exists")
@@ -69,20 +66,20 @@ impl ServerModuleRegistry {
 
 /// Collection of decoders belonging to modules, typically obtained from a `ModuleRegistry`
 #[derive(Debug, Default, Clone)]
-pub struct ModuleDecoderRegistry(BTreeMap<ModuleKey, Decoder>);
+pub struct ModuleDecoderRegistry(BTreeMap<ModuleInstanceId, Decoder>);
 
 impl ModuleDecoderRegistry {
     /// Return the decoder belonging to the module identified by the supplied `module_key`
     ///
     /// # Panics
     /// If the decoder isn't in the registry
-    pub fn get(&self, module_key: ModuleKey) -> &Decoder {
+    pub fn get(&self, module_key: ModuleInstanceId) -> &Decoder {
         self.0.get(&module_key).expect("Module not found")
     }
 }
 
-impl FromIterator<(ModuleKey, Decoder)> for ModuleDecoderRegistry {
-    fn from_iter<T: IntoIterator<Item = (ModuleKey, Decoder)>>(iter: T) -> Self {
+impl FromIterator<(ModuleInstanceId, Decoder)> for ModuleDecoderRegistry {
+    fn from_iter<T: IntoIterator<Item = (ModuleInstanceId, Decoder)>>(iter: T) -> Self {
         ModuleDecoderRegistry(iter.into_iter().collect())
     }
 }

@@ -126,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(LightningModuleConfigGen),
     ]);
 
-    let decoders = module_inits.decoders(cfg.module_kinds_iter())?;
+    let decoders = module_inits.decoders(cfg.iter_module_instances())?;
 
     let db =
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).expect("Error opening DB");
