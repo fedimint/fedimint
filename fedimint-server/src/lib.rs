@@ -355,7 +355,7 @@ impl FedimintServer {
         let mut outcomes: Vec<HbbftConsensusOutcome> = vec![];
         for outcome in step.output {
             let (outcome, ban_peers) =
-                module_parse_outcome(outcome, &self.consensus.modules.decoders());
+                module_parse_outcome(outcome, &self.consensus.modules.decoder_registry());
             for peer in ban_peers {
                 self.connections.ban_peer(peer).await;
             }

@@ -176,7 +176,7 @@ impl<const N: usize> From<[(&'static str, DynModuleInit); N]> for ModuleInitRegi
 
 impl ModuleInitRegistry {
     pub fn decoders(&self) -> ModuleDecoderRegistry {
-        ModuleDecoderRegistry::new(self.0.values().map(|v| v.decoder()))
+        ModuleDecoderRegistry::from_iter(self.0.values().map(|v| v.decoder()))
     }
 
     pub async fn init_all(

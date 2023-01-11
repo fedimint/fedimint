@@ -28,7 +28,7 @@ impl<M> ModuleRegistry<M> {
     }
 
     /// Return an iterator over all modules
-    pub fn modules(&self) -> impl Iterator<Item = &M> {
+    pub fn iter_modules(&self) -> impl Iterator<Item = &M> {
         self.0.values()
     }
 
@@ -40,7 +40,7 @@ impl<M> ModuleRegistry<M> {
     ///
     /// # Panics
     /// If the module isn't in the registry
-    pub fn module(&self, module_key: ModuleKey) -> &M {
+    pub fn get(&self, module_key: ModuleKey) -> &M {
         self.0
             .get(&module_key)
             .expect("CIs were decoded, so the module exists")
@@ -52,14 +52,14 @@ pub type ServerModuleRegistry = ModuleRegistry<ServerModule>;
 
 impl ServerModuleRegistry {
     /// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
-    pub fn decoders(&self) -> ModuleDecoderRegistry {
+    pub fn decoder_registry(&self) -> ModuleDecoderRegistry {
         // TODO: cache decoders
-        ModuleDecoderRegistry::new(self.0.iter().map(|(&id, module)| (id, module.decoder())))
+        ModuleDecoderRegistry::from_iter(self.0.iter().map(|(&id, module)| (id, module.decoder())))
     }
 
     // TODO: move into `ModuleRegistry` impl by splitting `module_key` fn into separate trait
     /// Add a module to the registry
-    pub fn register(&mut self, module: ServerModule) {
+    pub fn register_module(&mut self, module: ServerModule) {
         assert!(
             self.0.insert(module.module_key(), module).is_none(),
             "Module was already registered!"
@@ -72,16 +72,17 @@ impl ServerModuleRegistry {
 pub struct ModuleDecoderRegistry(BTreeMap<ModuleKey, Decoder>);
 
 impl ModuleDecoderRegistry {
-    /// Create a `ModuleDecoderRegistry` from decoders
-    pub fn new(decoders: impl IntoIterator<Item = (ModuleKey, Decoder)>) -> ModuleDecoderRegistry {
-        ModuleDecoderRegistry(decoders.into_iter().collect())
-    }
-
     /// Return the decoder belonging to the module identified by the supplied `module_key`
     ///
     /// # Panics
     /// If the decoder isn't in the registry
-    pub fn decoder(&self, module_key: ModuleKey) -> &Decoder {
+    pub fn get(&self, module_key: ModuleKey) -> &Decoder {
         self.0.get(&module_key).expect("Module not found")
+    }
+}
+
+impl FromIterator<(ModuleKey, Decoder)> for ModuleDecoderRegistry {
+    fn from_iter<T: IntoIterator<Item = (ModuleKey, Decoder)>>(iter: T) -> Self {
+        ModuleDecoderRegistry(iter.into_iter().collect())
     }
 }

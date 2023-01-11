@@ -21,7 +21,7 @@ use fedimint_testing::FakeFed;
 use secp256k1::KeyPair;
 
 fn ln_decoders() -> ModuleDecoderRegistry {
-    ModuleDecoderRegistry::new([(
+    ModuleDecoderRegistry::from_iter([(
         MODULE_KEY_LN,
         Decoder::from_typed(&fedimint_ln::common::LightningModuleDecoder),
     )])
