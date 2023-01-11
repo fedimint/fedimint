@@ -17,7 +17,10 @@ pub enum TransactionStatus {
 serde_module_encoding_wrapper!(SerdeOutputOutcome, fedimint_api::core::OutputOutcome);
 
 pub mod legacy {
-    use fedimint_api::core::{MODULE_KEY_LN, MODULE_KEY_MINT, MODULE_KEY_WALLET};
+    use fedimint_api::core::{
+        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    };
     use fedimint_api::encoding::{Decodable, Encodable};
     use fedimint_api::ServerModulePlugin;
     use fedimint_ln::contracts::incoming::OfferId;
@@ -40,20 +43,20 @@ pub mod legacy {
 
     impl From<fedimint_api::core::OutputOutcome> for OutputOutcome {
         fn from(oo: fedimint_api::core::OutputOutcome) -> Self {
-            match oo.module_key() {
-                MODULE_KEY_LN => OutputOutcome::LN(
+            match oo.module_instance_id() {
+                LEGACY_HARDCODED_INSTANCE_ID_LN => OutputOutcome::LN(
                     oo.as_any()
                         .downcast_ref::<LightningOutputOutcome>()
                         .expect("Module key matches")
                         .clone(),
                 ),
-                MODULE_KEY_MINT => OutputOutcome::Mint(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT => OutputOutcome::Mint(
                     oo.as_any()
                         .downcast_ref::<MintOutputOutcome>()
                         .expect("Module key matches")
                         .clone(),
                 ),
-                MODULE_KEY_WALLET => OutputOutcome::Wallet(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET => OutputOutcome::Wallet(
                     oo.as_any()
                         .downcast_ref::<WalletOutputOutcome>()
                         .expect("Module key matches")

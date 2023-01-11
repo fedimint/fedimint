@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::io::Write;
-use std::ops::Mul;
+use std::ops::{self, Mul};
 use std::str::FromStr;
 
 use anyhow::bail;
@@ -28,9 +28,46 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use url::Url;
 
 use crate::cancellable::Cancellable;
-use crate::core::ModuleKey;
+use crate::core::{ModuleInstanceId, ModuleKind};
 use crate::net::peers::MuxPeerConnections;
 use crate::PeerId;
+
+/// [`serde_json::Value`] that must contain `kind: String` field
+///
+/// TODO: enforce at ser/deserialization
+/// TODO: make inside prive and enforce `kind` on construction, to
+/// other functions non-falliable
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct JsonWithKind {
+    kind: ModuleKind,
+    #[serde(flatten)]
+    value: serde_json::Value,
+}
+
+impl JsonWithKind {
+    pub fn new(kind: ModuleKind, value: serde_json::Value) -> Self {
+        Self { kind, value }
+    }
+
+    pub fn value(&self) -> &serde_json::Value {
+        &self.value
+    }
+
+    pub fn kind(&self) -> &ModuleKind {
+        &self.kind
+    }
+    pub fn is_kind(&self, kind: &ModuleKind) -> bool {
+        &self.kind == kind
+    }
+}
+
+impl ops::Deref for JsonWithKind {
+    type Target = serde_json::Value;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ApiEndpoint {
@@ -56,7 +93,7 @@ pub struct ClientConfig {
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules
-    pub modules: BTreeMap<String, ClientModuleConfig>,
+    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
 /// The federation id is a copy of the authentication threshold public key of the federation
@@ -98,12 +135,24 @@ impl FromStr for FederationId {
 }
 
 impl ClientConfig {
-    pub fn get_module<T: DeserializeOwned>(&self, module: &str) -> anyhow::Result<T> {
-        if let Some(client_cfg) = self.modules.get(module) {
-            Ok(serde_json::from_value(client_cfg.0.clone())?)
+    pub fn get_module<T: DeserializeOwned>(&self, id: ModuleInstanceId) -> anyhow::Result<T> {
+        if let Some(client_cfg) = self.modules.get(&id) {
+            Ok(serde_json::from_value(client_cfg.0.value().clone())?)
         } else {
-            Err(format_err!("Client config for {module} module not found"))
+            Err(format_err!("Client config for module id: {id} not found"))
         }
+    }
+
+    pub fn get_module_by_kind<T: DeserializeOwned>(
+        &self,
+        kind: impl Into<ModuleKind>,
+    ) -> anyhow::Result<(ModuleInstanceId, T)> {
+        let kind: ModuleKind = kind.into();
+        let Some((id, module_cfg)) = self.modules.iter().find(|(_, v)| v.is_kind(&kind)) else {
+            anyhow::bail!("Module kind {kind:?} not found")
+        };
+
+        Ok((*id, serde_json::from_value(module_cfg.0.value().clone())?))
     }
 }
 
@@ -153,17 +202,25 @@ pub trait ModuleConfigGenParams: serde::Serialize + serde::de::DeserializeOwned 
 /// it needs to be some form of an abstract type-erased-like
 /// value.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ClientModuleConfig(pub serde_json::Value);
+pub struct ClientModuleConfig(JsonWithKind);
 
-impl From<serde_json::Value> for ClientModuleConfig {
-    fn from(v: serde_json::Value) -> Self {
-        Self(v)
+impl ClientModuleConfig {
+    pub fn new(kind: ModuleKind, value: serde_json::Value) -> Self {
+        Self(JsonWithKind::new(kind, value))
+    }
+}
+
+impl ops::Deref for ClientModuleConfig {
+    type Target = JsonWithKind;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 impl ClientModuleConfig {
     pub fn cast<T: TypedClientModuleConfig>(&self) -> anyhow::Result<T> {
-        Ok(serde_json::from_value(self.0.clone())?)
+        Ok(serde_json::from_value(self.0.value().clone())?)
     }
 }
 
@@ -174,14 +231,14 @@ impl ClientModuleConfig {
 pub struct ServerModuleConfig {
     pub local: serde_json::Value,
     pub private: serde_json::Value,
-    pub consensus: serde_json::Value,
+    pub consensus: JsonWithKind,
 }
 
 impl ServerModuleConfig {
     pub fn from(
         local: serde_json::Value,
         private: serde_json::Value,
-        consensus: serde_json::Value,
+        consensus: JsonWithKind,
     ) -> Self {
         Self {
             local,
@@ -193,7 +250,7 @@ impl ServerModuleConfig {
     pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
         let local = serde_json::from_value(self.local.clone())?;
         let private = serde_json::from_value(self.private.clone())?;
-        let consensus = serde_json::from_value(self.consensus.clone())?;
+        let consensus = serde_json::from_value(self.consensus.value().clone())?;
 
         Ok(TypedServerModuleConfig::from_parts(
             local, private, consensus,
@@ -220,16 +277,19 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
     fn from_parts(local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self;
 
     /// Split the config into its three functionally distinct parts
-    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus);
+    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus);
 
     /// Turn the typed config into type-erased version
     fn to_erased(self) -> ServerModuleConfig {
-        let (local, private, consensus) = self.to_parts();
+        let (kind, local, private, consensus) = self.to_parts();
 
         ServerModuleConfig {
             local: serde_json::to_value(local).expect("serialization can't fail"),
             private: serde_json::to_value(private).expect("serialization can't fail"),
-            consensus: serde_json::to_value(consensus).expect("serialization can't fail"),
+            consensus: JsonWithKind::new(
+                kind,
+                serde_json::to_value(consensus).expect("serialization can't fail"),
+            ),
         }
     }
 
@@ -239,8 +299,13 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 
 /// Typed client side module config
 pub trait TypedClientModuleConfig: DeserializeOwned + Serialize {
+    fn kind(&self) -> ModuleKind;
+
     fn to_erased(&self) -> ClientModuleConfig {
-        ClientModuleConfig(serde_json::to_value(self).expect("serialization can't fail"))
+        ClientModuleConfig::new(
+            self.kind(),
+            serde_json::to_value(self).expect("serialization can't fail"),
+        )
     }
 }
 
@@ -534,8 +599,8 @@ where
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     pub async fn run_g2(
         &mut self,
-        module_id: ModuleKey,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        module_id: ModuleInstanceId,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(module_id, G2Projective::generator(), connections, rng)
@@ -545,8 +610,8 @@ where
     /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     pub async fn run_g1(
         &mut self,
-        module_id: ModuleKey,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        module_id: ModuleInstanceId,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(module_id, G1Projective::generator(), connections, rng)
@@ -556,9 +621,9 @@ where
     /// Runs the DKG algorithms with our peers
     pub async fn run<G: DkgGroup>(
         &mut self,
-        module_id: ModuleKey,
+        module_id: ModuleInstanceId,
         group: G,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> Cancellable<HashMap<T, DkgKeys<G>>>
     where

@@ -86,13 +86,10 @@ pub async fn run_dkg(
     .await;
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
-    let module_config_gens = ModuleInitRegistry::from([
-        (
-            "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
-        ),
-        ("mint", Arc::new(MintConfigGenerator)),
-        ("ln", Arc::new(LightningModuleConfigGen)),
+    let module_config_gens = ModuleInitRegistry::from(vec![
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
 
     let result = ServerConfig::distributed_gen(

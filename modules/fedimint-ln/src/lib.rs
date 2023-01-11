@@ -27,7 +27,9 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_LN};
+use fedimint_api::core::{
+    Decoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
@@ -60,6 +62,8 @@ use crate::db::{
     ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
     ProposeDecryptionShareKeyPrefix,
 };
+
+const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 
 /// The lightning module implements an account system. It does not have the privacy guarantees of
 /// the e-cash mint module but instead allows for smart contracting. There exist three contract
@@ -230,6 +234,14 @@ pub struct LightningModuleConfigGen;
 
 #[async_trait]
 impl ModuleInit for LightningModuleConfigGen {
+    fn decoder(&self) -> Decoder {
+        Decoder::from_typed(LightningModuleDecoder)
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        KIND
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -237,10 +249,6 @@ impl ModuleInit for LightningModuleConfigGen {
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<ServerModule> {
         Ok(LightningModule::new(cfg.to_typed()?).into())
-    }
-
-    fn decoder(&self) -> (ModuleKey, Decoder) {
-        (MODULE_KEY_LN, (&LightningModuleDecoder).into())
     }
 
     fn trusted_dealer_gen(
@@ -278,14 +286,18 @@ impl ModuleInit for LightningModuleConfigGen {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
+        module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         _params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let g1 = if let Ok(g1) = dkg.run_g1(MODULE_KEY_LN, connections, &mut OsRng).await {
+        let g1 = if let Ok(g1) = dkg
+            .run_g1(module_instance_id, connections, &mut OsRng)
+            .await
+        {
             g1
         } else {
             return Ok(Err(Cancelled));
@@ -330,6 +342,8 @@ impl ModuleInit for LightningModuleConfigGen {
 
 #[async_trait]
 impl ServerModulePlugin for LightningModule {
+    const KIND: ModuleKind = KIND;
+
     type Decoder = LightningModuleDecoder;
     type Input = LightningInput;
     type Output = LightningOutput;
@@ -337,12 +351,8 @@ impl ServerModulePlugin for LightningModule {
     type ConsensusItem = LightningConsensusItem;
     type VerificationCache = LightningVerificationCache;
 
-    fn module_key(&self) -> ModuleKey {
-        MODULE_KEY_LN
-    }
-
-    fn decoder(&self) -> &'static Self::Decoder {
-        &LightningModuleDecoder
+    fn decoder(&self) -> Self::Decoder {
+        LightningModuleDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
@@ -849,10 +859,6 @@ impl ServerModulePlugin for LightningModule {
             .await;
     }
 
-    fn api_base_name(&self) -> &'static str {
-        "ln"
-    }
-
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
@@ -979,7 +985,11 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     // This is a future because we are normally reading from a network socket. But for internal
     // calls the data is available instantly in one go, so we can just block on it.
     let body = interconnect
-        .call("wallet", "/block_height".to_owned(), Default::default())
+        .call(
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            "/block_height".to_owned(),
+            Default::default(),
+        )
         .await
         .expect("Wallet module not present or malfunctioning!");
 

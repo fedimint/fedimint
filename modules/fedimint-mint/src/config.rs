@@ -6,11 +6,14 @@ use fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
+use fedimint_api::core::ModuleKind;
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
+
+use crate::KIND;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
@@ -46,7 +49,11 @@ pub struct MintClientConfig {
     pub max_notes_per_denomination: u16,
 }
 
-impl TypedClientModuleConfig for MintClientConfig {}
+impl TypedClientModuleConfig for MintClientConfig {
+    fn kind(&self) -> ModuleKind {
+        crate::KIND
+    }
+}
 
 impl TypedServerModuleConsensusConfig for MintConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
@@ -59,14 +66,16 @@ impl TypedServerModuleConsensusConfig for MintConfigConsensus {
                 })
                 .collect();
 
-        serde_json::to_value(&MintClientConfig {
-            tbs_pks: Tiered::from_iter(pub_key.into_iter()),
-            fee_consensus: self.fee_consensus.clone(),
-            peer_tbs_pks: self.peer_tbs_pks.clone(),
-            max_notes_per_denomination: self.max_notes_per_denomination,
-        })
-        .expect("Serialization can't fail")
-        .into()
+        ClientModuleConfig::new(
+            KIND,
+            serde_json::to_value(&MintClientConfig {
+                tbs_pks: Tiered::from_iter(pub_key.into_iter()),
+                fee_consensus: self.fee_consensus.clone(),
+                peer_tbs_pks: self.peer_tbs_pks.clone(),
+                max_notes_per_denomination: self.max_notes_per_denomination,
+            })
+            .expect("Serialization can't fail"),
+        )
     }
 }
 
@@ -79,8 +88,8 @@ impl TypedServerModuleConfig for MintConfig {
         Self { private, consensus }
     }
 
-    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
-        ((), self.private, self.consensus)
+    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
+        (KIND, (), self.private, self.consensus)
     }
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {

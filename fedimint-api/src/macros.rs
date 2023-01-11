@@ -45,6 +45,44 @@ macro_rules! dyn_newtype_define {
 }
 
 #[macro_export]
+macro_rules! dyn_newtype_define_with_instance_id{
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident<$lifetime:lifetime>(Box<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name<$lifetime>(Box<$trait>)
+        }
+        $crate::_dyn_newtype_impl_deref_mut!($name<$lifetime>);
+    };
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident(Box<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name(Box<$trait>)
+        }
+        $crate::_dyn_newtype_impl_deref_mut!($name);
+    };
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident<$lifetime:lifetime>(Arc<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name<$lifetime>(Arc<$trait>)
+        }
+    };
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident(Arc<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name(Arc<$trait>)
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! _dyn_newtype_define_inner {
     (   $(#[$outer:meta])*
         $vis:vis $name:ident($container:ident<$trait:ident>)
@@ -60,6 +98,7 @@ macro_rules! _dyn_newtype_define_inner {
             }
 
         }
+
         impl<I> From<I> for $name
         where
             I: $trait + Send + Sync + 'static,
@@ -95,6 +134,71 @@ macro_rules! _dyn_newtype_define_inner {
         {
             fn from(i: I) -> Self {
                 Self($container::new(i))
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! _dyn_newtype_define_with_instance_id_inner {
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident($container:ident<$trait:ident>)
+    ) => {
+        $(#[$outer])*
+        $vis struct $name($container<dyn $trait + Send + Sync + 'static>, ::fedimint_api::core::ModuleInstanceId);
+
+        impl std::ops::Deref for $name {
+            type Target = dyn $trait + Send + Sync + 'static;
+
+            fn deref(&self) -> &<Self as std::ops::Deref>::Target {
+                &*self.0
+            }
+
+        }
+
+        impl $name {
+            pub fn module_instance_id(&self) -> ::fedimint_api::core::ModuleInstanceId {
+                self.1
+            }
+
+            pub fn from_typed<I>(module_instance_id: ::fedimint_api::core::ModuleInstanceId, typed: I) -> Self
+            where
+                I: $trait + Send + Sync + 'static {
+
+                Self($container::new(typed), module_instance_id)
+            }
+        }
+
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Debug::fmt(&self.0, f)
+            }
+        }
+    };
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident<$lifetime:lifetime>($container:ident<$trait:ident>)
+    ) => {
+        $(#[$outer])*
+        $vis struct $name<$lifetime>($container<dyn $trait<$lifetime> + Send + $lifetime>, ModuleInstanceId);
+
+        impl $name {
+            pub fn module_instance_id(&self) -> ::fedimint_api::core::ModuleInstanceId {
+                self.1
+            }
+
+            pub fn from_typed<I>(module_instance_id: ::fedimint_api::core::ModuleInstanceId, typed: I) -> Self
+            where
+                I: $trait + Send + Sync + 'static {
+
+                Self($container::new(typed), module_instance_id)
+            }
+        }
+
+        impl<$lifetime> std::ops::Deref for $name<$lifetime> {
+            type Target = dyn $trait<$lifetime> + Send + $lifetime;
+
+            fn deref(&self) -> &<Self as std::ops::Deref>::Target {
+                &*self.0
             }
         }
     };
@@ -138,6 +242,17 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
         impl Clone for $name {
             fn clone(&self) -> Self {
                 self.0.clone()
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id {
+    ($name:ident) => {
+        impl Clone for $name {
+            fn clone(&self) -> Self {
+                self.0.clone(self.1)
             }
         }
     };

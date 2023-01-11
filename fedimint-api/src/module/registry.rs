@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::core::Decoder;
+use crate::core::{Decoder, ModuleInstanceId};
 use crate::server::ServerModule;
 
 // TODO: unify and/or make a newtype?
@@ -8,7 +8,7 @@ use crate::server::ServerModule;
 pub type ModuleKey = u16;
 
 #[derive(Debug, Clone)]
-pub struct ModuleRegistry<M>(BTreeMap<ModuleKey, M>);
+pub struct ModuleRegistry<M>(BTreeMap<ModuleInstanceId, M>);
 
 impl<M> Default for ModuleRegistry<M> {
     fn default() -> Self {
@@ -28,8 +28,8 @@ impl<M> ModuleRegistry<M> {
     }
 
     /// Return an iterator over all modules
-    pub fn iter_modules(&self) -> impl Iterator<Item = &M> {
-        self.0.values()
+    pub fn iter_modules(&self) -> impl Iterator<Item = (ModuleInstanceId, &M)> {
+        self.0.iter().map(|(id, m)| (*id, m))
     }
 
     pub fn get_mut(&mut self, key: &ModuleKey) -> Option<&mut M> {
@@ -59,9 +59,9 @@ impl ServerModuleRegistry {
 
     // TODO: move into `ModuleRegistry` impl by splitting `module_key` fn into separate trait
     /// Add a module to the registry
-    pub fn register_module(&mut self, module: ServerModule) {
+    pub fn register_module(&mut self, id: ModuleInstanceId, module: ServerModule) {
         assert!(
-            self.0.insert(module.module_key(), module).is_none(),
+            self.0.insert(id, module).is_none(),
             "Module was already registered!"
         )
     }

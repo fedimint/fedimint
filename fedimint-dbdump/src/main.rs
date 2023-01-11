@@ -675,17 +675,15 @@ async fn main() {
         }
     };
 
-    let module_inits = ModuleInitRegistry::from([
-        (
-            "wallet",
-            Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
-        ),
-        ("mint", Arc::new(MintConfigGenerator)),
-        ("ln", Arc::new(LightningModuleConfigGen)),
+    let _module_inits = ModuleInitRegistry::from(vec![
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
 
+    let decoders = Default::default(); // TODO: read config and use it to create decoders
+
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-    let decoders = module_inits.decoders();
     let mut dbdump = DatabaseDump {
         serialized,
         read_only: DatabaseTransaction::new(Box::new(read_only), &decoders),

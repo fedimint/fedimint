@@ -3,9 +3,12 @@ use fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
+use fedimint_api::core::ModuleKind;
 use fedimint_api::PeerId;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
+
+use crate::KIND;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
@@ -32,7 +35,11 @@ pub struct LightningConfigPrivate {
     pub threshold_sec_key: SerdeSecret<threshold_crypto::SecretKeyShare>,
 }
 
-impl TypedClientModuleConfig for LightningModuleClientConfig {}
+impl TypedClientModuleConfig for LightningModuleClientConfig {
+    fn kind(&self) -> ModuleKind {
+        KIND
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct LightningModuleClientConfig {
@@ -42,12 +49,14 @@ pub struct LightningModuleClientConfig {
 
 impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        serde_json::to_value(&LightningModuleClientConfig {
-            threshold_pub_key: self.threshold_pub_keys.public_key(),
-            fee_consensus: self.fee_consensus.clone(),
-        })
-        .expect("Serialization can't fail")
-        .into()
+        ClientModuleConfig::new(
+            KIND,
+            serde_json::to_value(&LightningModuleClientConfig {
+                threshold_pub_key: self.threshold_pub_keys.public_key(),
+                fee_consensus: self.fee_consensus.clone(),
+            })
+            .expect("Serialization can't fail"),
+        )
     }
 }
 
@@ -60,8 +69,8 @@ impl TypedServerModuleConfig for LightningConfig {
         Self { private, consensus }
     }
 
-    fn to_parts(self) -> (Self::Local, Self::Private, Self::Consensus) {
-        ((), self.private, self.consensus)
+    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
+        (KIND, (), self.private, self.consensus)
     }
 
     fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {

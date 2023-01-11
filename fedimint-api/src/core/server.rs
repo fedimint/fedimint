@@ -20,7 +20,6 @@ use crate::module::{
 
 pub trait ModuleVerificationCache: Debug {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> VerificationCache;
 }
 
@@ -29,9 +28,7 @@ dyn_newtype_define! {
 }
 
 // TODO: make macro impl that doesn't force en/decodable
-pub trait PluginVerificationCache: Clone + Debug + Send + Sync + 'static {
-    fn module_key(&self) -> ModuleKey;
-}
+pub trait PluginVerificationCache: Clone + Debug + Send + Sync + 'static {}
 
 impl<T> ModuleVerificationCache for T
 where
@@ -41,21 +38,16 @@ where
         self
     }
 
-    fn module_key(&self) -> ModuleKey {
-        <Self as PluginVerificationCache>::module_key(self)
-    }
-
     fn clone(&self) -> VerificationCache {
         <Self as Clone>::clone(self).into()
     }
 }
+
 /// Backend side module interface
 ///
 /// Server side Fedimint module needs to implement this trait.
 #[async_trait]
 pub trait IServerModule: Debug {
-    fn module_key(&self) -> ModuleKey;
-
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> Decoder;
 
@@ -65,7 +57,11 @@ pub trait IServerModule: Debug {
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<ConsensusItem>;
+    async fn consensus_proposal(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+    ) -> Vec<ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -155,6 +151,7 @@ pub trait IServerModule: Debug {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
+        module_instance_id: ModuleInstanceId,
     ) -> Option<OutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the module.
@@ -162,12 +159,6 @@ pub trait IServerModule: Debug {
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str;
 
     /// Returns a list of custom API endpoints defined by the module. These are made available both
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
@@ -185,10 +176,6 @@ impl<T> IServerModule for T
 where
     T: ServerModulePlugin + 'static + Sync,
 {
-    fn module_key(&self) -> ModuleKey {
-        <Self as ServerModulePlugin>::module_key(self)
-    }
-
     fn decoder(&self) -> Decoder {
         Decoder::from_typed(ServerModulePlugin::decoder(self))
     }
@@ -203,11 +190,15 @@ where
     }
 
     /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<ConsensusItem> {
+    async fn consensus_proposal(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+    ) -> Vec<ConsensusItem> {
         <Self as ServerModulePlugin>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
-            .map(Into::into)
+            .map(|v| ConsensusItem::from_typed(module_instance_id, v))
             .collect()
     }
 
@@ -383,10 +374,11 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
+        module_instance_id: ModuleInstanceId,
     ) -> Option<OutputOutcome> {
         <Self as ServerModulePlugin>::output_status(self, dbtx, out_point)
             .await
-            .map(Into::into)
+            .map(|v| OutputOutcome::from_typed(module_instance_id, v))
     }
 
     /// Queries the database and returns all assets and liabilities of the module.
@@ -395,10 +387,6 @@ where
     /// and consensus should halt.
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
         <Self as ServerModulePlugin>::audit(self, dbtx, audit).await
-    }
-
-    fn api_base_name(&self) -> &'static str {
-        <Self as ServerModulePlugin>::api_base_name(self)
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<ServerModule>> {

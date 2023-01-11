@@ -4,38 +4,95 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
+use core::fmt;
 use std::any::Any;
+use std::borrow::Cow;
 use std::fmt::{Debug, Display};
-use std::io;
 use std::io::Read;
+use std::sync::Arc;
+use std::{io, ops};
 
 pub use bitcoin::KeyPair;
 use fedimint_api::{
-    dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
+    dyn_newtype_define,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
 };
+use serde::{Deserialize, Serialize};
 
-use crate::ModuleDecoderRegistry;
+use crate::{
+    dyn_newtype_define_with_instance_id, dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id,
+    ModuleDecoderRegistry,
+};
 
 pub mod encode;
 
 pub mod client;
 pub mod server;
 
-/// A module key identifing a module
+/// Module instance ID
 ///
-/// Used as an unique ID, and also as prefix in serialization
-/// of module-specific data.
-pub type ModuleKey = u16;
+/// This value uniquely identifies a single instance of a module in a federation.
+///
+/// In case a single [`ModuleKind`] is instantiated twice (rare, but possible),
+/// each instance will have a different id.
+///
+/// Note: We have used this type differently before, assuming each `u16`
+/// uniquly identifies a type of module in question. This function will move
+/// to a `ModuleKind` type which only identifies type of a module (mint vs wallet vs ln, etc)
+// TODO: turn in a newtype
+pub type ModuleInstanceId = u16;
 
-/// Temporary constant for the modules we already have
+/// Special ID we use for global dkg
+pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
+
+// Note: needs to be in alphabetical order of ModuleKind of each module,
+// as this is the ordering we currently harcoded.
+// Should be used only for pre-modularization code we still have  left
+pub const LEGACY_HARDCODED_INSTANCE_ID_LN: ModuleInstanceId = 0;
+pub const LEGACY_HARDCODED_INSTANCE_ID_MINT: ModuleInstanceId = 1;
+pub const LEGACY_HARDCODED_INSTANCE_ID_WALLET: ModuleInstanceId = 2;
+
+/// A type of a module
 ///
-/// To be removed after modularization is complete.
-pub const MODULE_KEY_WALLET: u16 = 0;
-pub const MODULE_KEY_MINT: u16 = 1;
-pub const MODULE_KEY_LN: u16 = 2;
-// not really a module
-pub const MODULE_KEY_GLOBAL: u16 = 1024;
+/// This is a short string that identifies type of a module.
+/// Authors of 3rd party modules are free to come up with a string,
+/// long enough to avoid conflicts with similiar modules.
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ModuleKind(Cow<'static, str>);
+
+impl ModuleKind {
+    pub fn clone_from_str(s: &str) -> Self {
+        Self(Cow::from(s.to_owned()))
+    }
+
+    pub const fn from_static_str(s: &'static str) -> Self {
+        Self(Cow::Borrowed(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ModuleKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl From<&'static str> for ModuleKind {
+    fn from(val: &'static str) -> Self {
+        ModuleKind::from_static_str(val)
+    }
+}
+
+impl ops::Deref for ModuleKind {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Implement `Encodable` and `Decodable` for a "module dyn newtype"
 ///
@@ -51,7 +108,7 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 &self,
                 writer: &mut W,
             ) -> Result<usize, std::io::Error> {
-                self.0.module_key().consensus_encode(writer)?;
+                self.1.consensus_encode(writer)?;
                 self.0.consensus_encode_dyn(writer)
             }
         }
@@ -61,14 +118,15 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 r: &mut R,
                 modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, DecodeError> {
-                $crate::core::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
-                    m.$decode_fn(r)
-                })
+                $crate::core::encode::module_decode_key_prefixed_decodable(
+                    r,
+                    modules,
+                    |r, m, id| m.$decode_fn(r, id),
+                )
             }
         }
     };
 }
-
 /// Define a "plugin" trait
 ///
 /// "Plugin trait" is a trait that a developer of a mint module
@@ -80,15 +138,13 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
 /// "module dyn newtypes", erasing the exact type and used in a common
 /// Fedimint code.
 #[macro_export]
-macro_rules! module_plugin_trait_define {
+macro_rules! module_plugin_trait_define{
     (   $(#[$outer:meta])*
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
         pub trait $plugin_ty:
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
         {
-            fn module_key(&self) -> ModuleKey;
-
             $($extra_methods)*
         }
 
@@ -100,12 +156,8 @@ macro_rules! module_plugin_trait_define {
                 self
             }
 
-            fn module_key(&self) -> ModuleKey {
-                <Self as $plugin_ty>::module_key(self)
-            }
-
-            fn clone(&self) -> $newtype_ty {
-                <Self as Clone>::clone(self).into()
+            fn clone(&self, instance_id: ::fedimint_api::core::ModuleInstanceId) -> $newtype_ty {
+                $newtype_ty::from_typed(instance_id, <Self as Clone>::clone(self))
             }
 
             fn dyn_hash(&self) -> u64 {
@@ -122,8 +174,7 @@ macro_rules! module_plugin_trait_define {
             where
                 H: std::hash::Hasher
             {
-                let module_key = self.module_key();
-                module_key.hash(state);
+                self.1.hash(state);
                 self.0.dyn_hash().hash(state);
             }
         }
@@ -134,44 +185,25 @@ macro_rules! module_plugin_trait_define {
 #[macro_export]
 macro_rules! plugin_types_trait_impl {
     ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
-        impl fedimint_api::core::PluginInput for $input {
-            fn module_key(&self) -> ModuleKey {
-                $key
-            }
-        }
+        impl fedimint_api::core::PluginInput for $input {}
 
-        impl fedimint_api::core::PluginOutput for $output {
-            fn module_key(&self) -> ModuleKey {
-                $key
-            }
-        }
+        impl fedimint_api::core::PluginOutput for $output {}
 
-        impl fedimint_api::core::PluginOutputOutcome for $outcome {
-            fn module_key(&self) -> ModuleKey {
-                $key
-            }
-        }
+        impl fedimint_api::core::PluginOutputOutcome for $outcome {}
 
-        impl fedimint_api::core::PluginConsensusItem for $ci {
-            fn module_key(&self) -> ModuleKey {
-                $key
-            }
-        }
+        impl fedimint_api::core::PluginConsensusItem for $ci {}
 
-        impl fedimint_api::server::PluginVerificationCache for $cache {
-            fn module_key(&self) -> ModuleKey {
-                $key
-            }
-        }
+        impl fedimint_api::server::PluginVerificationCache for $cache {}
     };
 }
 
 macro_rules! erased_eq {
     ($newtype:ty) => {
         fn erased_eq(&self, other: &$newtype) -> bool {
-            if self.module_key() != other.module_key() {
-                return false;
-            }
+            // TODO:?
+            // if self.module_key() != other.module_key() {
+            //     return false;
+            // }
 
             let other: &T = other
                 .as_any()
@@ -211,45 +243,72 @@ macro_rules! newtype_impl_display_passthrough {
 /// Static-polymorphism version of [`ModuleDecode`]
 ///
 /// All methods are static, as the decoding code is supposed to be instance-independent,
-/// at least until we start to support modules with overriden [`ModuleKey`]s
+/// at least until we start to support modules with overriden [`ModuleInstanceId`]s
 pub trait PluginDecode: Debug + Send + Sync + 'static {
+    type Input: PluginInput;
+    type Output: PluginOutput;
+    type OutputOutcome: PluginOutputOutcome;
+    type ConsensusItem: PluginConsensusItem;
+
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
-    fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Self::Input, DecodeError>;
 
     /// Decode `Output` compatible with this module, after the module key prefix was already decoded
-    fn decode_output(r: &mut dyn io::Read) -> Result<Output, DecodeError>;
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Self::Output, DecodeError>;
 
     /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
-    fn decode_output_outcome(r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+    fn decode_output_outcome(
+        &self,
+        r: &mut dyn io::Read,
+    ) -> Result<Self::OutputOutcome, DecodeError>;
 
     /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
-    fn decode_consensus_item(r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+    fn decode_consensus_item(
+        &self,
+        r: &mut dyn io::Read,
+    ) -> Result<Self::ConsensusItem, DecodeError>;
 }
 
 pub trait ModuleDecode: Debug {
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
+    fn decode_input(
+        &self,
+        r: &mut dyn io::Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<Input, DecodeError>;
 
     /// Decode `Output` compatible with this module, after the module key prefix was already decoded
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
+    fn decode_output(
+        &self,
+        r: &mut dyn io::Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<Output, DecodeError>;
 
     /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+    fn decode_output_outcome(
+        &self,
+        r: &mut dyn io::Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<OutputOutcome, DecodeError>;
 
     /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
-    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+    fn decode_consensus_item(
+        &self,
+        r: &mut dyn io::Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<ConsensusItem, DecodeError>;
 }
 
 // TODO: use macro again
 /// Decoder for module associated types
 #[derive(Clone)]
-pub struct Decoder(&'static (dyn ModuleDecode + Send + Sync));
+pub struct Decoder(Arc<dyn ModuleDecode + Send + Sync>);
 
 impl std::ops::Deref for Decoder {
     type Target = dyn ModuleDecode + Send + Sync + 'static;
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-        self.0
+        &*self.0
     }
 }
 
@@ -263,55 +322,91 @@ impl<T> ModuleDecode for T
 where
     T: PluginDecode + 'static,
 {
-    fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
-        <Self as PluginDecode>::decode_input(r)
+    fn decode_input(
+        &self,
+        r: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<Input, DecodeError> {
+        Ok(Input::from_typed(
+            instance_id,
+            <Self as PluginDecode>::decode_input(self, r)?,
+        ))
     }
 
-    fn decode_output(&self, r: &mut dyn Read) -> Result<Output, DecodeError> {
-        <Self as PluginDecode>::decode_output(r)
+    fn decode_output(
+        &self,
+        r: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<Output, DecodeError> {
+        Ok(Output::from_typed(
+            instance_id,
+            <Self as PluginDecode>::decode_output(self, r)?,
+        ))
     }
 
-    fn decode_output_outcome(&self, r: &mut dyn Read) -> Result<OutputOutcome, DecodeError> {
-        <Self as PluginDecode>::decode_output_outcome(r)
+    fn decode_output_outcome(
+        &self,
+        r: &mut dyn Read,
+
+        instance_id: ModuleInstanceId,
+    ) -> Result<OutputOutcome, DecodeError> {
+        Ok(OutputOutcome::from_typed(
+            instance_id,
+            <Self as PluginDecode>::decode_output_outcome(self, r)?,
+        ))
     }
 
-    fn decode_consensus_item(&self, r: &mut dyn Read) -> Result<ConsensusItem, DecodeError> {
-        <Self as PluginDecode>::decode_consensus_item(r)
+    fn decode_consensus_item(
+        &self,
+        r: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<ConsensusItem, DecodeError> {
+        Ok(ConsensusItem::from_typed(
+            instance_id,
+            <Self as PluginDecode>::decode_consensus_item(self, r)?,
+        ))
     }
 }
 
 impl ModuleDecode for Decoder {
-    fn decode_input(&self, r: &mut dyn Read) -> Result<Input, DecodeError> {
-        self.0.decode_input(r)
+    fn decode_input(
+        &self,
+        r: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<Input, DecodeError> {
+        self.0.decode_input(r, instance_id)
     }
 
-    fn decode_output(&self, r: &mut dyn Read) -> Result<Output, DecodeError> {
-        self.0.decode_output(r)
+    fn decode_output(
+        &self,
+        r: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<Output, DecodeError> {
+        self.0.decode_output(r, instance_id)
     }
 
-    fn decode_output_outcome(&self, r: &mut dyn Read) -> Result<OutputOutcome, DecodeError> {
-        self.0.decode_output_outcome(r)
+    fn decode_output_outcome(
+        &self,
+        r: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<OutputOutcome, DecodeError> {
+        self.0.decode_output_outcome(r, instance_id)
     }
 
-    fn decode_consensus_item(&self, r: &mut dyn Read) -> Result<ConsensusItem, DecodeError> {
-        self.0.decode_consensus_item(r)
+    fn decode_consensus_item(
+        &self,
+        r: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<ConsensusItem, DecodeError> {
+        self.0.decode_consensus_item(r, instance_id)
     }
 }
 
 impl Decoder {
     /// Creates a static, type-erased decoder. Only call this a limited amout of times since it uses
     /// `Box::leak` internally.
-    pub fn from_typed(decoder: &'static (impl PluginDecode + Send + Sync + 'static)) -> Decoder {
-        Decoder(decoder)
-    }
-}
-
-impl<T> From<&'static T> for Decoder
-where
-    T: PluginDecode + Send + Sync + 'static,
-{
-    fn from(value: &'static T) -> Self {
-        Decoder(value)
+    pub fn from_typed(decoder: impl PluginDecode + Send + Sync + 'static) -> Decoder {
+        Decoder(Arc::new(decoder))
     }
 }
 
@@ -320,8 +415,7 @@ where
 /// General purpose code should use [`Input`] instead
 pub trait ModuleInput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn module_key(&self) -> ModuleKey;
-    fn clone(&self) -> Input;
+    fn clone(&self, instance_id: ModuleInstanceId) -> Input;
     fn dyn_hash(&self) -> u64;
     fn erased_eq(&self, other: &Input) -> bool;
 }
@@ -334,14 +428,14 @@ module_plugin_trait_define! {
     }
 }
 
-dyn_newtype_define! {
+dyn_newtype_define_with_instance_id! {
     /// An owned, immutable input to a [`Transaction`]
     pub Input(Box<ModuleInput>)
 }
 module_dyn_newtype_impl_encode_decode! {
     Input, decode_input
 }
-dyn_newtype_impl_dyn_clone_passhthrough!(Input);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(Input);
 
 newtype_impl_eq_passthrough!(Input);
 
@@ -352,14 +446,12 @@ newtype_impl_display_passthrough!(Input);
 /// General purpose code should use [`Output`] instead
 pub trait ModuleOutput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn module_key(&self) -> ModuleKey;
-
-    fn clone(&self) -> Output;
+    fn clone(&self, instance_id: ModuleInstanceId) -> Output;
     fn dyn_hash(&self) -> u64;
     fn erased_eq(&self, other: &Output) -> bool;
 }
 
-dyn_newtype_define! {
+dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`]
     pub Output(Box<ModuleOutput>)
 }
@@ -373,7 +465,7 @@ module_plugin_trait_define! {
 module_dyn_newtype_impl_encode_decode! {
     Output, decode_output
 }
-dyn_newtype_impl_dyn_clone_passhthrough!(Output);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(Output);
 
 newtype_impl_eq_passthrough!(Output);
 
@@ -385,14 +477,12 @@ pub enum FinalizationError {
 
 pub trait ModuleOutputOutcome: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    /// Module key
-    fn module_key(&self) -> ModuleKey;
-    fn clone(&self) -> OutputOutcome;
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> OutputOutcome;
     fn dyn_hash(&self) -> u64;
     fn erased_eq(&self, other: &OutputOutcome) -> bool;
 }
 
-dyn_newtype_define! {
+dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
     pub OutputOutcome(Box<ModuleOutputOutcome>)
 }
@@ -400,24 +490,13 @@ module_plugin_trait_define! {
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
     { }
     {
-        fn erased_eq(&self, other: &OutputOutcome) -> bool {
-            if self.module_key() != other.module_key() {
-                return false;
-            }
-
-            let other = other
-                .as_any()
-                .downcast_ref::<T>()
-                .expect("Type is ensured in previous step");
-
-            self == other
-        }
+        erased_eq!(OutputOutcome);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
     OutputOutcome, decode_output_outcome
 }
-dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(OutputOutcome);
 
 newtype_impl_eq_passthrough!(OutputOutcome);
 
@@ -425,15 +504,13 @@ newtype_impl_display_passthrough!(OutputOutcome);
 
 pub trait ModuleConsensusItem: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    /// Module key
-    fn module_key(&self) -> ModuleKey;
-    fn clone(&self) -> ConsensusItem;
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> ConsensusItem;
     fn dyn_hash(&self) -> u64;
 
     fn erased_eq(&self, other: &ConsensusItem) -> bool;
 }
 
-dyn_newtype_define! {
+dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
     pub ConsensusItem(Box<ModuleConsensusItem>)
 }
@@ -447,7 +524,7 @@ module_plugin_trait_define! {
 module_dyn_newtype_impl_encode_decode! {
     ConsensusItem, decode_consensus_item
 }
-dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(ConsensusItem);
 
 newtype_impl_eq_passthrough!(ConsensusItem);
 
@@ -478,84 +555,5 @@ where
             outputs: Decodable::consensus_decode(r, modules)?,
             signature: Decodable::consensus_decode(r, modules)?,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    use fedimint_api::core::PluginConsensusItem;
-    use fedimint_api::encoding::{Decodable, Encodable};
-
-    use crate::core::{
-        ConsensusItem, Input, ModuleKey, Output, OutputOutcome, PluginInput, PluginOutput,
-        PluginOutputOutcome,
-    };
-
-    macro_rules! test_newtype_eq_hash {
-        ($newtype:ty, $trait:ty) => {
-            #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
-            struct Foo {
-                key: u16,
-                data: u16,
-            }
-
-            impl std::fmt::Display for Foo {
-                fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    unimplemented!();
-                }
-            }
-
-            impl $trait for Foo {
-                fn module_key(&self) -> ModuleKey {
-                    self.key
-                }
-            }
-
-            let a: $newtype = Foo { key: 42, data: 0 }.into();
-            let b: $newtype = Foo { key: 21, data: 0 }.into();
-            let c: $newtype = Foo { key: 42, data: 1 }.into();
-
-            assert_eq!(a, a);
-            assert_ne!(a, b);
-            assert_ne!(a, c);
-            assert_ne!(b, c);
-
-            assert_eq!(hash(&a), hash(&a));
-            assert_ne!(hash(&a), hash(&b));
-            assert_ne!(hash(&a), hash(&c));
-            assert_ne!(hash(&b), hash(&c));
-        };
-    }
-
-    fn hash<T>(item: &T) -> u64
-    where
-        T: Hash,
-    {
-        let mut hasher = DefaultHasher::new();
-        item.hash(&mut hasher);
-        hasher.finish()
-    }
-
-    #[test]
-    fn test_dyn_eq_hash_input() {
-        test_newtype_eq_hash!(Input, PluginInput);
-    }
-
-    #[test]
-    fn test_dyn_eq_hash_output() {
-        test_newtype_eq_hash!(Output, PluginOutput);
-    }
-
-    #[test]
-    fn test_dyn_eq_hash_outcome() {
-        test_newtype_eq_hash!(OutputOutcome, PluginOutputOutcome);
-    }
-
-    #[test]
-    fn test_dyn_eq_hash_ci() {
-        test_newtype_eq_hash!(ConsensusItem, PluginConsensusItem);
     }
 }

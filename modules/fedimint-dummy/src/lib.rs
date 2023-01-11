@@ -9,7 +9,7 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{Decoder, ModuleKey};
+use fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
@@ -31,6 +31,8 @@ pub mod common;
 pub mod config;
 pub mod db;
 
+const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
+
 /// Dummy module
 #[derive(Debug)]
 pub struct Dummy {
@@ -47,6 +49,15 @@ pub struct DummyConfigGenerator;
 
 #[async_trait]
 impl ModuleInit for DummyConfigGenerator {
+    fn decoder(&self) -> Decoder {
+        Decoder::from_typed(DummyModuleDecoder)
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        const KIND: &str = "dummy";
+        ModuleKind::from_static_str(KIND)
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -54,10 +65,6 @@ impl ModuleInit for DummyConfigGenerator {
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<ServerModule> {
         Ok(Dummy::new(cfg.to_typed()?).into())
-    }
-
-    fn decoder(&self) -> (ModuleKey, Decoder) {
-        (MODULE_KEY_DUMMY, (&DummyModuleDecoder).into())
     }
 
     fn trusted_dealer_gen(
@@ -90,8 +97,9 @@ impl ModuleInit for DummyConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        _connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        _connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         _our_id: &PeerId,
+        _instance_id: ModuleInstanceId,
         _peers: &[PeerId],
         params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
@@ -176,6 +184,8 @@ impl fmt::Display for DummyOutputConfirmation {
 
 #[async_trait]
 impl ServerModulePlugin for Dummy {
+    const KIND: ModuleKind = KIND;
+
     type Decoder = DummyModuleDecoder;
     type Input = DummyInput;
     type Output = DummyOutput;
@@ -183,12 +193,8 @@ impl ServerModulePlugin for Dummy {
     type ConsensusItem = DummyOutputConfirmation;
     type VerificationCache = DummyVerificationCache;
 
-    fn module_key(&self) -> ModuleKey {
-        MODULE_KEY_DUMMY
-    }
-
-    fn decoder(&self) -> &'static Self::Decoder {
-        &DummyModuleDecoder
+    fn decoder(&self) -> Self::Decoder {
+        DummyModuleDecoder
     }
 
     async fn await_consensus_proposal(&self, _dbtx: &mut DatabaseTransaction<'_>) {}
@@ -268,10 +274,6 @@ impl ServerModulePlugin for Dummy {
     }
 
     async fn audit(&self, _dbtx: &mut DatabaseTransaction<'_>, _audit: &mut Audit) {}
-
-    fn api_base_name(&self) -> &'static str {
-        "dummy"
-    }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![api_endpoint! {

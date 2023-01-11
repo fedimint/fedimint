@@ -4,19 +4,23 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use super::ModuleKind;
 use crate::core::Decoder;
-use crate::core::{ModuleKey, PluginDecode};
+use crate::core::PluginDecode;
 use crate::module::TransactionItemAmount;
 use crate::{dyn_newtype_define, ServerModulePlugin};
 
 #[async_trait]
 pub trait ClientModulePlugin: Debug {
+    const KIND: &'static str;
     type Decoder: PluginDecode;
     type Module: ServerModulePlugin;
 
-    const MODULE_KEY: ModuleKey;
+    fn module_kind() -> ModuleKind {
+        ModuleKind::from_static_str(Self::KIND)
+    }
 
-    fn decoder(&self) -> &'static Self::Decoder;
+    fn decoder(&self) -> Self::Decoder;
 
     /// Returns the amount represented by the input and the fee its processing requires
     fn input_amount(
@@ -32,8 +36,6 @@ pub trait ClientModulePlugin: Debug {
 }
 
 pub trait IClientModule: Debug {
-    fn module_key(&self) -> ModuleKey;
-
     fn as_any(&self) -> &dyn Any;
 
     /// Return the type-erased decoder of the module
@@ -50,10 +52,6 @@ where
     T: ClientModulePlugin + 'static,
     <T as ClientModulePlugin>::Decoder: Sync + Send + 'static,
 {
-    fn module_key(&self) -> ModuleKey {
-        <T as ClientModulePlugin>::MODULE_KEY
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

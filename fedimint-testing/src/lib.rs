@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+use fedimint_api::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -41,6 +42,7 @@ where
         constructor: F,
         params: &ConfigGenParams,
         conf_gen: &ConfGen,
+        module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<FakeFed<Module>>
     where
         ConfGen: ModuleInit,
@@ -57,7 +59,7 @@ where
         for (peer, cfg) in server_cfg {
             let db = Database::new(
                 MemDatabase::new(),
-                ModuleDecoderRegistry::from_iter([conf_gen.decoder()]),
+                ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder())]),
             );
             let member = constructor(cfg, db.clone()).await?;
             members.push((peer, member, db));
@@ -231,7 +233,7 @@ where
     }
 
     pub fn client_cfg_typed<T: serde::de::DeserializeOwned>(&self) -> anyhow::Result<T> {
-        Ok(serde_json::from_value(self.client_cfg.0.clone())?)
+        Ok(serde_json::from_value(self.client_cfg.value().clone())?)
     }
 
     pub async fn fetch_from_all<'a: 'b, 'b, O, F, Fut>(&'a mut self, fetch: F) -> O
@@ -306,7 +308,7 @@ where
 
 struct FakeInterconnect(
     Box<
-        dyn Fn(&'static str, String, serde_json::Value) -> Result<serde_json::Value, ApiError>
+        dyn Fn(ModuleInstanceId, String, serde_json::Value) -> Result<serde_json::Value, ApiError>
             + Sync
             + Send,
     >,
@@ -315,7 +317,7 @@ struct FakeInterconnect(
 impl FakeInterconnect {
     fn new_block_height_responder(bh: Arc<AtomicU64>) -> FakeInterconnect {
         FakeInterconnect(Box::new(move |module, path, _data| {
-            assert_eq!(module, "wallet");
+            assert_eq!(module, LEGACY_HARDCODED_INSTANCE_ID_WALLET);
             assert_eq!(path, "/block_height");
 
             let height = bh.load(Ordering::Relaxed);
@@ -328,10 +330,10 @@ impl FakeInterconnect {
 impl ModuleInterconect for FakeInterconnect {
     async fn call(
         &self,
-        module: &'static str,
+        module_id: ModuleInstanceId,
         path: String,
         data: serde_json::Value,
     ) -> Result<serde_json::Value, ApiError> {
-        (self.0)(module, path, data)
+        (self.0)(module_id, path, data)
     }
 }

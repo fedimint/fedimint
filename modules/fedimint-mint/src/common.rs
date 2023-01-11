@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::io;
 
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::core::{ConsensusItem, Input, Output, OutputOutcome, PluginDecode};
+use fedimint_api::core::PluginDecode;
 use fedimint_api::encoding::DecodeError;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -65,31 +65,30 @@ impl SignedBackupRequest {
 pub struct MintModuleDecoder;
 
 impl PluginDecode for MintModuleDecoder {
-    fn decode_input(mut d: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        Ok(Input::from(MintInput::consensus_decode(
-            &mut d,
-            &ModuleDecoderRegistry::default(),
-        )?))
-    }
-    fn decode_output(mut d: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        Ok(Output::from(MintOutput::consensus_decode(
-            &mut d,
-            &ModuleDecoderRegistry::default(),
-        )?))
+    type Input = MintInput;
+    type Output = MintOutput;
+    type OutputOutcome = MintOutputOutcome;
+    type ConsensusItem = MintOutputConfirmation;
+
+    fn decode_input(&self, mut d: &mut dyn io::Read) -> Result<MintInput, DecodeError> {
+        MintInput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
     }
 
-    fn decode_output_outcome(mut d: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        Ok(OutputOutcome::from(MintOutputOutcome::consensus_decode(
-            &mut d,
-            &ModuleDecoderRegistry::default(),
-        )?))
+    fn decode_output(&self, mut d: &mut dyn io::Read) -> Result<MintOutput, DecodeError> {
+        MintOutput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
+    }
+
+    fn decode_output_outcome(
+        &self,
+        mut d: &mut dyn io::Read,
+    ) -> Result<MintOutputOutcome, DecodeError> {
+        MintOutputOutcome::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
     }
 
     fn decode_consensus_item(
+        &self,
         mut r: &mut dyn io::Read,
-    ) -> Result<fedimint_api::core::ConsensusItem, DecodeError> {
-        Ok(ConsensusItem::from(
-            MintOutputConfirmation::consensus_decode(&mut r, &ModuleDecoderRegistry::default())?,
-        ))
+    ) -> Result<MintOutputConfirmation, DecodeError> {
+        MintOutputConfirmation::consensus_decode(&mut r, &ModuleDecoderRegistry::default())
     }
 }

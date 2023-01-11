@@ -4,7 +4,6 @@ use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
 use fedimint_api::core::client::ClientModulePlugin;
-use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModulePlugin};
@@ -31,12 +30,12 @@ pub struct WalletClient {
 }
 
 impl ClientModulePlugin for WalletClient {
+    const KIND: &'static str = "wallet";
     type Decoder = <Wallet as ServerModulePlugin>::Decoder;
     type Module = Wallet;
-    const MODULE_KEY: ModuleKey = MODULE_KEY_WALLET;
 
-    fn decoder(&self) -> &'static Self::Decoder {
-        &WalletModuleDecoder
+    fn decoder(&self) -> Self::Decoder {
+        WalletModuleDecoder
     }
 
     fn input_amount(
@@ -198,6 +197,7 @@ mod tests {
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
     use fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
+    use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::task::TaskGroup;
@@ -239,7 +239,10 @@ mod tests {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
                 outputs: vec![SerdeOutputOutcome::from(
-                    &(WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()).into()),
+                    &fedimint_api::core::OutputOutcome::from_typed(
+                        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                        WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()),
+                    ),
                 )],
             })
         }
@@ -356,6 +359,7 @@ mod tests {
                     finality_delay: 10,
                 }),
                 &WalletConfigGenerator,
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             )
             .await
             .unwrap(),

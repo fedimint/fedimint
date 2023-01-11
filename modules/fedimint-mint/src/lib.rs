@@ -13,7 +13,7 @@ use fedimint_api::config::{
     scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_MINT};
+use fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
@@ -57,6 +57,8 @@ pub mod config;
 
 pub mod common;
 pub mod db;
+
+const KIND: ModuleKind = ModuleKind::from_static_str("mint");
 
 /// By default, the maximum notes per denomination when change-making for users
 const DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = 3;
@@ -136,6 +138,14 @@ pub struct MintConfigGenerator;
 
 #[async_trait]
 impl ModuleInit for MintConfigGenerator {
+    fn decoder(&self) -> Decoder {
+        Decoder::from_typed(MintModuleDecoder)
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        KIND
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -143,10 +153,6 @@ impl ModuleInit for MintConfigGenerator {
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<ServerModule> {
         Ok(Mint::new(cfg.to_typed()?).into())
-    }
-
-    fn decoder(&self) -> (ModuleKey, Decoder) {
-        (MODULE_KEY_MINT, (&MintModuleDecoder).into())
     }
 
     fn trusted_dealer_gen(
@@ -209,8 +215,9 @@ impl ModuleInit for MintConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
+        module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
@@ -225,7 +232,10 @@ impl ModuleInit for MintConfigGenerator {
             our_id,
             peers,
         );
-        let g2 = if let Ok(g2) = dkg.run_g2(MODULE_KEY_MINT, connections, &mut OsRng).await {
+        let g2 = if let Ok(g2) = dkg
+            .run_g2(module_instance_id, connections, &mut OsRng)
+            .await
+        {
             g2
         } else {
             return Ok(Err(Cancelled));
@@ -349,6 +359,7 @@ impl std::fmt::Display for MintOutputConfirmation {
 
 #[async_trait]
 impl ServerModulePlugin for Mint {
+    const KIND: ModuleKind = KIND;
     type Decoder = MintModuleDecoder;
     type Input = MintInput;
     type Output = MintOutput;
@@ -356,12 +367,8 @@ impl ServerModulePlugin for Mint {
     type ConsensusItem = MintOutputConfirmation;
     type VerificationCache = VerificationCache;
 
-    fn module_key(&self) -> ModuleKey {
-        MODULE_KEY_MINT
-    }
-
-    fn decoder(&self) -> &'static Self::Decoder {
-        &MintModuleDecoder
+    fn decoder(&self) -> Self::Decoder {
+        MintModuleDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
@@ -708,10 +715,6 @@ impl ServerModulePlugin for Mint {
                 MintAuditItemKey::RedemptionTotal => v.msats as i64,
             })
             .await;
-    }
-
-    fn api_base_name(&self) -> &'static str {
-        "mint"
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {

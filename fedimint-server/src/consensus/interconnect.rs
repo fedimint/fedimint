@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiError;
 use serde_json::Value;
@@ -13,12 +14,12 @@ pub struct FedimintInterconnect<'a> {
 impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
     async fn call(
         &self,
-        module_name: &'static str,
+        id: ModuleInstanceId,
         path: String,
         data: Value,
     ) -> Result<Value, ApiError> {
-        for module in self.fedimint.modules.iter_modules() {
-            if module.api_base_name() == module_name {
+        for (module_id, module) in self.fedimint.modules.iter_modules() {
+            if module_id == id {
                 let endpoint = module
                     .api_endpoints()
                     .into_iter()
@@ -33,6 +34,6 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
                 .await;
             }
         }
-        panic!("Module not registered: {}", module_name);
+        panic!("Module not registered: {}", id);
     }
 }
