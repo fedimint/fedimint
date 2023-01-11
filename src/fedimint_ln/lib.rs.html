@@ -1013,6 +1013,16 @@
 <a href="#1013" id="1013">1013</a>
 <a href="#1014" id="1014">1014</a>
 <a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1042,7 +1052,9 @@
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_LN};
+<span class="kw">use </span>fedimint_api::core::{
+    Decoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
@@ -1075,6 +1087,8 @@
     ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
     ProposeDecryptionShareKeyPrefix,
 };
+
+<span class="kw">const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;ln&quot;</span>);
 
 <span class="doccomment">/// The lightning module implements an account system. It does not have the privacy guarantees of
 /// the e-cash mint module but instead allows for smart contracting. There exist three contract
@@ -1245,6 +1259,14 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>LightningModuleConfigGen {
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
+        Decoder::from_typed(LightningModuleDecoder)
+    }
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        KIND
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
@@ -1252,10 +1274,6 @@
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;ServerModule&gt; {
         <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>).into())
-    }
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleKey, Decoder) {
-        (MODULE_KEY_LN, (<span class="kw-2">&amp;</span>LightningModuleDecoder).into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1293,14 +1311,18 @@
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
+        module_instance_id: ModuleInstanceId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         _params: <span class="kw-2">&amp;</span>ConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        <span class="kw">let </span>g1 = <span class="kw">if let </span><span class="prelude-val">Ok</span>(g1) = dkg.run_g1(MODULE_KEY_LN, connections, <span class="kw-2">&amp;mut </span>OsRng).<span class="kw">await </span>{
+        <span class="kw">let </span>g1 = <span class="kw">if let </span><span class="prelude-val">Ok</span>(g1) = dkg
+            .run_g1(module_instance_id, connections, <span class="kw-2">&amp;mut </span>OsRng)
+            .<span class="kw">await
+        </span>{
             g1
         } <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
@@ -1345,6 +1367,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>LightningModule {
+    <span class="kw">const </span>KIND: ModuleKind = KIND;
+
     <span class="kw">type </span>Decoder = LightningModuleDecoder;
     <span class="kw">type </span>Input = LightningInput;
     <span class="kw">type </span>Output = LightningOutput;
@@ -1352,12 +1376,8 @@
     <span class="kw">type </span>ConsensusItem = LightningConsensusItem;
     <span class="kw">type </span>VerificationCache = LightningVerificationCache;
 
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-        MODULE_KEY_LN
-    }
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">Self</span>::Decoder {
-        <span class="kw-2">&amp;</span>LightningModuleDecoder
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
+        LightningModuleDecoder
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
@@ -1864,10 +1884,6 @@
             .<span class="kw">await</span>;
     }
 
-    <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
-        <span class="string">&quot;ln&quot;
-    </span>}
-
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
@@ -1994,7 +2010,11 @@
     <span class="comment">// This is a future because we are normally reading from a network socket. But for internal
     // calls the data is available instantly in one go, so we can just block on it.
     </span><span class="kw">let </span>body = interconnect
-        .call(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;/block_height&quot;</span>.to_owned(), Default::default())
+        .call(
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            <span class="string">&quot;/block_height&quot;</span>.to_owned(),
+            Default::default(),
+        )
         .<span class="kw">await
         </span>.expect(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);
 

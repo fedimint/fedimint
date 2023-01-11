@@ -14,9 +14,11 @@
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 
 <span class="kw">use </span><span class="kw">super</span>::ApiError;
+<span class="kw">use </span><span class="kw">crate</span>::core::ModuleInstanceId;
 
 <span class="doccomment">/// Provides an interface to call APIs of other modules
 </span><span class="attr">#[async_trait]
@@ -25,7 +27,7 @@
     /// This has lower latency.
     </span><span class="kw">async fn </span>call(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+        module_id: ModuleInstanceId,
         path: String,
         data: serde_json::Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;;

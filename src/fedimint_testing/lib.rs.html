@@ -335,6 +335,8 @@
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -343,6 +345,7 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -378,6 +381,7 @@
         constructor: F,
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         conf_gen: <span class="kw-2">&amp;</span>ConfGen,
+        module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;FakeFed&lt;Module&gt;&gt;
     <span class="kw">where
         </span>ConfGen: ModuleInit,
@@ -394,7 +398,7 @@
         <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>server_cfg {
             <span class="kw">let </span>db = Database::new(
                 MemDatabase::new(),
-                ModuleDecoderRegistry::from_iter([conf_gen.decoder()]),
+                ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder())]),
             );
             <span class="kw">let </span>member = constructor(cfg, db.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
             members.push((peer, member, db));
@@ -568,7 +572,7 @@
     }
 
     <span class="kw">pub fn </span>client_cfg_typed&lt;T: serde::de::DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
-        <span class="prelude-val">Ok</span>(serde_json::from_value(<span class="self">self</span>.client_cfg.<span class="number">0</span>.clone())<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(serde_json::from_value(<span class="self">self</span>.client_cfg.value().clone())<span class="question-mark">?</span>)
     }
 
     <span class="kw">pub async fn </span>fetch_from_all&lt;<span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;b</span>, O, F, Fut&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="self">self</span>, fetch: F) -&gt; O
@@ -643,7 +647,7 @@
 
 <span class="kw">struct </span>FakeInterconnect(
     Box&lt;
-        <span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, String, serde_json::Value) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;
+        <span class="kw">dyn </span>Fn(ModuleInstanceId, String, serde_json::Value) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;
             + Sync
             + Send,
     &gt;,
@@ -652,7 +656,7 @@
 <span class="kw">impl </span>FakeInterconnect {
     <span class="kw">fn </span>new_block_height_responder(bh: Arc&lt;AtomicU64&gt;) -&gt; FakeInterconnect {
         FakeInterconnect(Box::new(<span class="kw">move </span>|module, path, _data| {
-            <span class="macro">assert_eq!</span>(module, <span class="string">&quot;wallet&quot;</span>);
+            <span class="macro">assert_eq!</span>(module, LEGACY_HARDCODED_INSTANCE_ID_WALLET);
             <span class="macro">assert_eq!</span>(path, <span class="string">&quot;/block_height&quot;</span>);
 
             <span class="kw">let </span>height = bh.load(Ordering::Relaxed);
@@ -665,11 +669,11 @@
 </span><span class="kw">impl </span>ModuleInterconect <span class="kw">for </span>FakeInterconnect {
     <span class="kw">async fn </span>call(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+        module_id: ModuleInstanceId,
         path: String,
         data: serde_json::Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt; {
-        (<span class="self">self</span>.<span class="number">0</span>)(module, path, data)
+        (<span class="self">self</span>.<span class="number">0</span>)(module_id, path, data)
     }
 }
 </code></pre></div>

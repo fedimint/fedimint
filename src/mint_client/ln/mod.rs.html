@@ -602,6 +602,9 @@
 <a href="#602" id="602">602</a>
 <a href="#603" id="603">603</a>
 <a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -613,7 +616,6 @@
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::config::FederationId;
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
-<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::timeout;
@@ -649,12 +651,12 @@
 }
 
 <span class="kw">impl </span>ClientModulePlugin <span class="kw">for </span>LnClient {
+    <span class="kw">const </span>KIND: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;ln&quot;</span>;
     <span class="kw">type </span>Decoder = &lt;LightningModule <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
     <span class="kw">type </span>Module = LightningModule;
-    <span class="kw">const </span>MODULE_KEY: ModuleKey = MODULE_KEY_LN;
 
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">Self</span>::Decoder {
-        <span class="kw-2">&amp;</span>LightningModuleDecoder
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
+        LightningModuleDecoder
     }
 
     <span class="kw">fn </span>input_amount(
@@ -941,7 +943,9 @@
     <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
-    <span class="kw">use </span>fedimint_api::core::OutputOutcome;
+    <span class="kw">use </span>fedimint_api::core::{
+        OutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    };
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
@@ -979,7 +983,8 @@
             <span class="kw">let </span>mint = <span class="self">self</span>.mint.lock().<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
                 epoch: <span class="number">0</span>,
-                outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>OutputOutcome::from(
+                outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>OutputOutcome::from_typed(
+                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
                     mint.output_outcome(OutPoint {
                         txid: tx,
                         out_idx: <span class="number">0</span>,
@@ -1085,6 +1090,7 @@
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>)) },
                 <span class="kw-2">&amp;</span>ConfigGenParams::new(),
                 <span class="kw-2">&amp;</span>LightningModuleConfigGen,
+                LEGACY_HARDCODED_INSTANCE_ID_LN,
             )
             .<span class="kw">await
             </span>.unwrap(),

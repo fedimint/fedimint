@@ -18,12 +18,14 @@
 <a href="#18" id="18">18</a>
 <a href="#19" id="19">19</a>
 <a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError};
 
+<span class="kw">use </span><span class="kw">super</span>::ModuleInstanceId;
 <span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
-<span class="kw">use </span><span class="kw">crate</span>::module::registry::{ModuleDecoderRegistry, ModuleKey};
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="kw">pub fn </span>module_decode_key_prefixed_decodable&lt;T, F, R&gt;(
     <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span>R,
@@ -32,11 +34,11 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;
 <span class="kw">where
     </span>R: io::Read,
-    F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>Decoder) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
+    F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>Decoder, ModuleInstanceId) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
 {
-    <span class="kw">let </span>key = ModuleKey::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
+    <span class="kw">let </span>key = ModuleInstanceId::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
 
-    decode_fn(d, modules.get(key))
+    decode_fn(d, modules.get(key), key)
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (0442fbabe 2023-01-10)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>

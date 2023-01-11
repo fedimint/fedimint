@@ -348,9 +348,6 @@
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
 <a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -486,13 +483,10 @@
     <span class="kw">let </span>pk_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, state.data_dir.join(TLS_PK));
     <span class="kw">let </span>max_denomination = Amount::from_msats(<span class="number">100000000000</span>);
     <span class="kw">let </span>(dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::&lt;UiMessage&gt;();
-    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from([
-        (
-            <span class="string">&quot;wallet&quot;</span>,
-            Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
-        ),
-        (<span class="string">&quot;mint&quot;</span>, Arc::new(MintConfigGenerator)),
-        (<span class="string">&quot;ln&quot;</span>, Arc::new(LightningModuleConfigGen)),
+    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
+        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
     <span class="kw">let </span>dir_out_path = state.data_dir.clone();
     <span class="kw">let </span>fedimintd_sender = state.sender.clone();

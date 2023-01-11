@@ -1032,6 +1032,8 @@
 <a href="#1032" id="1032">1032</a>
 <a href="#1033" id="1033">1033</a>
 <a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -1041,7 +1043,6 @@
 
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
-<span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_MINT};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -1184,12 +1185,12 @@
 }
 
 <span class="kw">impl </span>ClientModulePlugin <span class="kw">for </span>MintClient {
+    <span class="kw">const </span>KIND: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;mint&quot;</span>;
     <span class="kw">type </span>Decoder = &lt;Mint <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
     <span class="kw">type </span>Module = Mint;
-    <span class="kw">const </span>MODULE_KEY: ModuleKey = MODULE_KEY_MINT;
 
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">Self</span>::Decoder {
-        <span class="kw-2">&amp;</span>MintModuleDecoder
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
+        MintModuleDecoder
     }
 
     <span class="kw">fn </span>input_amount(
@@ -1697,6 +1698,7 @@
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
+    <span class="kw">use </span>fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
@@ -1741,14 +1743,15 @@
             <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
                 epoch: <span class="number">0</span>,
                 outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(
-                    <span class="kw-2">&amp;</span>(mint
-                        .output_outcome(OutPoint {
+                    <span class="kw-2">&amp;</span>(fedimint_api::core::OutputOutcome::from_typed(
+                        LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                        mint.output_outcome(OutPoint {
                             txid: tx,
                             out_idx: <span class="number">0</span>,
                         })
                         .<span class="kw">await
-                        </span>.unwrap()
-                        .into()),
+                        </span>.unwrap(),
+                    )),
                 )],
             })
         }
@@ -1845,6 +1848,7 @@
                     ],
                 }),
                 <span class="kw-2">&amp;</span>MintConfigGenerator,
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
             )
             .<span class="kw">await
             </span>.unwrap(),

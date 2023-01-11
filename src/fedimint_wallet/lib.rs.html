@@ -1596,6 +1596,11 @@
 <a href="#1596" id="1596">1596</a>
 <a href="#1597" id="1597">1597</a>
 <a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1622,7 +1627,7 @@
     BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
+<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
@@ -1668,6 +1673,8 @@
 <span class="kw">pub mod </span>keys;
 <span class="kw">pub mod </span>tweakable;
 <span class="kw">pub mod </span>txoproof;
+
+<span class="kw">const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;wallet&quot;</span>);
 
 <span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">10</span>;
 
@@ -1819,6 +1826,14 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>WalletConfigGenerator {
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
+        Decoder::from_typed(WalletModuleDecoder)
+    }
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        KIND
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
@@ -1826,10 +1841,6 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;ServerModule&gt; {
         <span class="prelude-val">Ok</span>(Wallet::new(cfg.to_typed()<span class="question-mark">?</span>, db, task_group).<span class="kw">await</span><span class="question-mark">?</span>.into())
-    }
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleKey, Decoder) {
-        (MODULE_KEY_WALLET, (<span class="kw-2">&amp;</span>WalletModuleDecoder).into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1874,8 +1885,9 @@
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
+        module_instance_id: ModuleInstanceId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
@@ -1890,7 +1902,11 @@
         <span class="kw">let </span><span class="kw-2">mut </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = BTreeMap::new();
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(Cancelled) = connections
-            .send(peers, MODULE_KEY_WALLET, DkgPeerMsg::PublicKey(our_key.key))
+            .send(
+                peers,
+                module_instance_id,
+                DkgPeerMsg::PublicKey(our_key.key),
+            )
             .<span class="kw">await
         </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
@@ -1898,7 +1914,7 @@
 
         peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
         <span class="kw">while </span>peer_peg_in_keys.len() &lt; peers.len() {
-            <span class="kw">match </span>connections.receive(MODULE_KEY_WALLET).<span class="kw">await </span>{
+            <span class="kw">match </span>connections.receive(module_instance_id).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>((peer, DkgPeerMsg::PublicKey(key))) =&gt; {
                     peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
                 }
@@ -1982,6 +1998,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>Wallet {
+    <span class="kw">const </span>KIND: ModuleKind = KIND;
+
     <span class="kw">type </span>Decoder = WalletModuleDecoder;
     <span class="kw">type </span>Input = WalletInput;
     <span class="kw">type </span>Output = WalletOutput;
@@ -1990,12 +2008,8 @@
     <span class="kw">type </span>ConsensusItem = WalletConsensusItem;
     <span class="kw">type </span>VerificationCache = WalletVerificationCache;
 
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-        MODULE_KEY_WALLET
-    }
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">Self</span>::Decoder {
-        <span class="kw-2">&amp;</span>WalletModuleDecoder
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
+        WalletModuleDecoder
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
@@ -2363,10 +2377,6 @@
             </span>})
             .<span class="kw">await</span>;
     }
-
-    <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
-        <span class="string">&quot;wallet&quot;
-    </span>}
 
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[

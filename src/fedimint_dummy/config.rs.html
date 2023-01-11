@@ -58,13 +58,25 @@
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
+<span class="kw">use </span>fedimint_api::core::ModuleKind;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+
+<span class="kw">use </span><span class="kw">crate</span>::KIND;
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DummyConfig {
@@ -89,15 +101,21 @@
     <span class="kw">pub </span>something: u64,
 }
 
-<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>DummyClientConfig {}
+<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>DummyClientConfig {
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_api::core::ModuleKind {
+        KIND
+    }
+}
 
 <span class="kw">impl </span>TypedServerModuleConsensusConfig <span class="kw">for </span>DummyConfigConsensus {
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
-        serde_json::to_value(<span class="kw-2">&amp;</span>DummyClientConfig {
-            something: <span class="self">self</span>.something,
-        })
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
-        .into()
+        ClientModuleConfig::new(
+            KIND,
+            serde_json::to_value(<span class="kw-2">&amp;</span>DummyClientConfig {
+                something: <span class="self">self</span>.something,
+            })
+            .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>),
+        )
     }
 }
 
@@ -110,8 +128,8 @@
         <span class="self">Self </span>{ private, consensus }
     }
 
-    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
-        ((), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
+    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
+        (KIND, (), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, _identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {

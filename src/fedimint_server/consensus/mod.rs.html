@@ -682,7 +682,7 @@
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>fedimint_api::core::ModuleKey;
+<span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
@@ -767,7 +767,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>VerificationCaches {
-    caches: HashMap&lt;ModuleKey, VerificationCache&gt;,
+    caches: HashMap&lt;ModuleInstanceId, VerificationCache&gt;,
 }
 
 <span class="kw">struct </span>FundingVerifier {
@@ -812,7 +812,7 @@
 }
 
 <span class="kw">impl </span>VerificationCaches {
-    <span class="kw">fn </span>get_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleKey) -&gt; <span class="kw-2">&amp;</span>VerificationCache {
+    <span class="kw">fn </span>get_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>VerificationCache {
         <span class="self">self</span>.caches
             .get(<span class="kw-2">&amp;</span>module_key)
             .expect(<span class="string">&quot;Verification caches were built for all modules&quot;</span>)
@@ -852,7 +852,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
-            <span class="kw">let </span>module = <span class="self">self</span>.modules.get(input.module_key());
+            <span class="kw">let </span>module = <span class="self">self</span>.modules.get(input.module_instance_id());
 
             <span class="kw">let </span>cache = module.build_verification_cache(<span class="kw-2">&amp;</span>[input.clone()]);
             <span class="kw">let </span>interconnect = <span class="self">self</span>.build_interconnect();
@@ -869,7 +869,7 @@
         <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.outputs {
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
-                .get(output.module_key())
+                .get(output.module_instance_id())
                 .validate_output(<span class="kw-2">&amp;mut </span>dbtx, output)
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
@@ -923,11 +923,11 @@
         <span class="comment">// Begin consensus epoch
         </span>{
             <span class="kw">let </span>per_module_cis: HashMap&lt;
-                ModuleKey,
+                ModuleInstanceId,
                 Vec&lt;(PeerId, fedimint_api::core::ConsensusItem)&gt;,
             &gt; = module_cis
                 .into_iter()
-                .into_group_map_by(|(_peer, mci)| mci.module_key());
+                .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
 
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
@@ -1016,7 +1016,7 @@
                 </span>.save_epoch_history(outcome, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>drop_peers, rejected_txs)
                 .<span class="kw">await</span>;
 
-            <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+            <span class="kw">for </span>(<span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
                 <span class="kw">let </span>module_drop_peers = module.end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
                 drop_peers.extend(module_drop_peers);
             }
@@ -1123,7 +1123,7 @@
         <span class="kw">let </span>proposal_futures = <span class="self">self
             </span>.modules
             .iter_modules()
-            .map(|module| {
+            .map(|(<span class="kw">_</span>, module)| {
                 Box::pin(<span class="kw">async </span>{
                     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
                     module.await_consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await
@@ -1155,10 +1155,10 @@
             })
             .collect();
 
-        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+        <span class="kw">for </span>(instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             items.extend(
                 module
-                    .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx)
+                    .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx, instance_id)
                     .<span class="kw">await
                     </span>.into_iter()
                     .map(ConsensusItem::Module),
@@ -1189,12 +1189,12 @@
         <span class="kw">for </span>input <span class="kw">in </span>transaction.inputs.iter() {
             <span class="kw">let </span>meta = <span class="self">self
                 </span>.modules
-                .get(input.module_key())
+                .get(input.module_instance_id())
                 .apply_input(
                     <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
                     dbtx,
                     input,
-                    caches.get_cache(input.module_key()),
+                    caches.get_cache(input.module_instance_id()),
                 )
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
@@ -1210,7 +1210,7 @@
             };
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
-                .get(output.module_key())
+                .get(output.module_instance_id())
                 .apply_output(dbtx, <span class="kw-2">&amp;</span>output, out_point)
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
@@ -1242,8 +1242,8 @@
                 };
                 <span class="kw">let </span>outcome = <span class="self">self
                     </span>.modules
-                    .get(output.module_key())
-                    .output_status(<span class="kw-2">&amp;mut </span>dbtx, outpoint)
+                    .get(output.module_instance_id())
+                    .output_status(<span class="kw-2">&amp;mut </span>dbtx, outpoint, output.module_instance_id())
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
                 outputs.push((<span class="kw-2">&amp;</span>outcome).into())
@@ -1277,7 +1277,7 @@
         <span class="kw">let </span>module_inputs = transactions
             .flat_map(|tx| tx.inputs.iter())
             .cloned()
-            .into_group_map_by(|input| input.module_key());
+            .into_group_map_by(|input| input.module_instance_id());
 
         <span class="comment">// TODO: should probably run in parallel, but currently only the mint does anything at all
         </span><span class="kw">let </span>caches = module_inputs
@@ -1294,7 +1294,7 @@
     <span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
-        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+        <span class="kw">for </span>(<span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             module.audit(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>audit).<span class="kw">await
         </span>}
         audit

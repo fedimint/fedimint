@@ -122,6 +122,15 @@
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -130,11 +139,14 @@
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
+<span class="kw">use </span>fedimint_api::core::ModuleKind;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
+
+<span class="kw">use </span><span class="kw">crate</span>::KIND;
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintConfig {
@@ -170,7 +182,11 @@
     <span class="kw">pub </span>max_notes_per_denomination: u16,
 }
 
-<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>MintClientConfig {}
+<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>MintClientConfig {
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        <span class="kw">crate</span>::KIND
+    }
+}
 
 <span class="kw">impl </span>TypedServerModuleConsensusConfig <span class="kw">for </span>MintConfigConsensus {
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
@@ -183,14 +199,16 @@
                 })
                 .collect();
 
-        serde_json::to_value(<span class="kw-2">&amp;</span>MintClientConfig {
-            tbs_pks: Tiered::from_iter(pub_key.into_iter()),
-            fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
-            peer_tbs_pks: <span class="self">self</span>.peer_tbs_pks.clone(),
-            max_notes_per_denomination: <span class="self">self</span>.max_notes_per_denomination,
-        })
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
-        .into()
+        ClientModuleConfig::new(
+            KIND,
+            serde_json::to_value(<span class="kw-2">&amp;</span>MintClientConfig {
+                tbs_pks: Tiered::from_iter(pub_key.into_iter()),
+                fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
+                peer_tbs_pks: <span class="self">self</span>.peer_tbs_pks.clone(),
+                max_notes_per_denomination: <span class="self">self</span>.max_notes_per_denomination,
+            })
+            .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>),
+        )
     }
 }
 
@@ -203,8 +221,8 @@
         <span class="self">Self </span>{ private, consensus }
     }
 
-    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
-        ((), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
+    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
+        (KIND, (), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {

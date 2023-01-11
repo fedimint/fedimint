@@ -65,7 +65,7 @@
         ConsensusItem::EpochOutcomeSignatureShare(<span class="kw">_</span>) =&gt; <span class="string">&quot;Outcome Signature&quot;</span>.to_string(),
         <span class="comment">// TODO: make this nice again
         </span>ConsensusItem::Module(mci) =&gt; {
-            <span class="macro">format!</span>(<span class="string">&quot;Module CI: module={} ci={}&quot;</span>, mci.module_key(), mci)
+            <span class="macro">format!</span>(<span class="string">&quot;Module CI: module={} ci={}&quot;</span>, mci.module_instance_id(), mci)
         }
         ConsensusItem::Transaction(Transaction {
             inputs, outputs, ..

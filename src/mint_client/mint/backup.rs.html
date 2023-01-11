@@ -876,6 +876,7 @@
 <a href="#876" id="876">876</a>
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -894,6 +895,7 @@
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_api::{
     cancellable::{Cancellable, Cancelled},
+    core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
     task::{TaskGroup, TaskHandle},
     NumPeers, PeerId,
 };
@@ -1679,7 +1681,7 @@
                 }
 
                 <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.inputs {
-                    <span class="kw">if </span>input.module_key() == MODULE_KEY_MINT {
+                    <span class="kw">if </span>input.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         <span class="kw">let </span>input = input
                             .as_any()
                             .downcast_ref::&lt;MintInput&gt;()
@@ -1690,7 +1692,7 @@
                 }
 
                 <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>tx.outputs.iter().enumerate() {
-                    <span class="kw">if </span>output.module_key() == MODULE_KEY_MINT {
+                    <span class="kw">if </span>output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         <span class="kw">let </span>output = output
                             .as_any()
                             .downcast_ref::&lt;MintOutput&gt;()
@@ -1707,7 +1709,7 @@
                 }
             }
             ConsensusItem::Module(module_item) =&gt; {
-                <span class="kw">if </span>module_item.module_key() == MODULE_KEY_MINT {
+                <span class="kw">if </span>module_item.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                     <span class="kw">let </span>mint_item = module_item
                         .as_any()
                         .downcast_ref::&lt;MintOutputConfirmation&gt;()

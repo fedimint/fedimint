@@ -235,9 +235,6 @@
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -376,13 +373,10 @@
         )
         .init();
 
-    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from([
-        (
-            <span class="string">&quot;wallet&quot;</span>,
-            Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
-        ),
-        (<span class="string">&quot;mint&quot;</span>, Arc::new(MintConfigGenerator)),
-        (<span class="string">&quot;ln&quot;</span>, Arc::new(LightningModuleConfigGen)),
+    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
+        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
 
     <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();

@@ -307,6 +307,8 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt;
 
@@ -318,7 +320,7 @@
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleKey};
+<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
@@ -340,6 +342,8 @@
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>db;
 
+<span class="kw">const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;dummy&quot;</span>);
+
 <span class="doccomment">/// Dummy module
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Dummy {
@@ -356,6 +360,15 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>DummyConfigGenerator {
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
+        Decoder::from_typed(DummyModuleDecoder)
+    }
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        <span class="kw">const </span>KIND: <span class="kw-2">&amp;</span>str = <span class="string">&quot;dummy&quot;</span>;
+        ModuleKind::from_static_str(KIND)
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
@@ -363,10 +376,6 @@
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;ServerModule&gt; {
         <span class="prelude-val">Ok</span>(Dummy::new(cfg.to_typed()<span class="question-mark">?</span>).into())
-    }
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleKey, Decoder) {
-        (MODULE_KEY_DUMMY, (<span class="kw-2">&amp;</span>DummyModuleDecoder).into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -399,8 +408,9 @@
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
+        _connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         _our_id: <span class="kw-2">&amp;</span>PeerId,
+        _instance_id: ModuleInstanceId,
         _peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
@@ -485,6 +495,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>Dummy {
+    <span class="kw">const </span>KIND: ModuleKind = KIND;
+
     <span class="kw">type </span>Decoder = DummyModuleDecoder;
     <span class="kw">type </span>Input = DummyInput;
     <span class="kw">type </span>Output = DummyOutput;
@@ -492,12 +504,8 @@
     <span class="kw">type </span>ConsensusItem = DummyOutputConfirmation;
     <span class="kw">type </span>VerificationCache = DummyVerificationCache;
 
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-        MODULE_KEY_DUMMY
-    }
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">Self</span>::Decoder {
-        <span class="kw-2">&amp;</span>DummyModuleDecoder
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
+        DummyModuleDecoder
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {}
@@ -577,10 +585,6 @@
     </span>}
 
     <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, _audit: <span class="kw-2">&amp;mut </span>Audit) {}
-
-    <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
-        <span class="string">&quot;dummy&quot;
-    </span>}
 
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[<span class="macro">api_endpoint! </span>{

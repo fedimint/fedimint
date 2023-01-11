@@ -162,6 +162,9 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::serde_module_encoding_wrapper;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -181,7 +184,10 @@
 <span class="macro">serde_module_encoding_wrapper!</span>(SerdeOutputOutcome, fedimint_api::core::OutputOutcome);
 
 <span class="kw">pub mod </span>legacy {
-    <span class="kw">use </span>fedimint_api::core::{MODULE_KEY_LN, MODULE_KEY_MINT, MODULE_KEY_WALLET};
+    <span class="kw">use </span>fedimint_api::core::{
+        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    };
     <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_api::ServerModulePlugin;
     <span class="kw">use </span>fedimint_ln::contracts::incoming::OfferId;
@@ -204,20 +210,20 @@
 
     <span class="kw">impl </span>From&lt;fedimint_api::core::OutputOutcome&gt; <span class="kw">for </span>OutputOutcome {
         <span class="kw">fn </span>from(oo: fedimint_api::core::OutputOutcome) -&gt; <span class="self">Self </span>{
-            <span class="kw">match </span>oo.module_key() {
-                MODULE_KEY_LN =&gt; OutputOutcome::LN(
+            <span class="kw">match </span>oo.module_instance_id() {
+                LEGACY_HARDCODED_INSTANCE_ID_LN =&gt; OutputOutcome::LN(
                     oo.as_any()
                         .downcast_ref::&lt;LightningOutputOutcome&gt;()
                         .expect(<span class="string">&quot;Module key matches&quot;</span>)
                         .clone(),
                 ),
-                MODULE_KEY_MINT =&gt; OutputOutcome::Mint(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT =&gt; OutputOutcome::Mint(
                     oo.as_any()
                         .downcast_ref::&lt;MintOutputOutcome&gt;()
                         .expect(<span class="string">&quot;Module key matches&quot;</span>)
                         .clone(),
                 ),
-                MODULE_KEY_WALLET =&gt; OutputOutcome::Wallet(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET =&gt; OutputOutcome::Wallet(
                     oo.as_any()
                         .downcast_ref::&lt;WalletOutputOutcome&gt;()
                         .expect(<span class="string">&quot;Module key matches&quot;</span>)

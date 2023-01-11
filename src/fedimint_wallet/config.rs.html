@@ -171,6 +171,13 @@
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::bail;
@@ -179,6 +186,7 @@
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConfig;
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
 <span class="kw">use </span>fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
+<span class="kw">use </span>fedimint_api::core::ModuleKind;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::{Feerate, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
@@ -238,7 +246,11 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>WalletClientConfig {}
+<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>WalletClientConfig {
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        <span class="kw">crate</span>::KIND
+    }
+}
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FeeConsensus {
@@ -257,14 +269,16 @@
 
 <span class="kw">impl </span>TypedServerModuleConsensusConfig <span class="kw">for </span>WalletConfigConsensus {
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
-        serde_json::to_value(<span class="kw-2">&amp;</span>WalletClientConfig {
-            peg_in_descriptor: <span class="self">self</span>.peg_in_descriptor.clone(),
-            network: <span class="self">self</span>.network,
-            fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
-            finality_delay: <span class="self">self</span>.finality_delay,
-        })
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
-        .into()
+        ClientModuleConfig::new(
+            <span class="kw">crate</span>::KIND,
+            serde_json::to_value(<span class="kw-2">&amp;</span>WalletClientConfig {
+                peg_in_descriptor: <span class="self">self</span>.peg_in_descriptor.clone(),
+                network: <span class="self">self</span>.network,
+                fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
+                finality_delay: <span class="self">self</span>.finality_delay,
+            })
+            .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>),
+        )
     }
 }
 
@@ -281,8 +295,8 @@
         }
     }
 
-    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
-        (<span class="self">self</span>.local, <span class="self">self</span>.private, <span class="self">self</span>.consensus)
+    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
+        (<span class="kw">crate</span>::KIND, <span class="self">self</span>.local, <span class="self">self</span>.private, <span class="self">self</span>.consensus)
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {

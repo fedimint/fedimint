@@ -557,46 +557,101 @@
 <a href="#557" id="557">557</a>
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
-</span><span class="kw">use </span>std::any::Any;
+</span><span class="kw">use </span>core::fmt;
+<span class="kw">use </span>std::any::Any;
+<span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt::{Debug, Display};
-<span class="kw">use </span>std::io;
 <span class="kw">use </span>std::io::Read;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::{io, ops};
 
 <span class="kw">pub use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::{
-    dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
+    dyn_newtype_define,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
 };
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
+<span class="kw">use crate</span>::{
+    dyn_newtype_define_with_instance_id, dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id,
+    ModuleDecoderRegistry,
+};
 
 <span class="kw">pub mod </span>encode;
 
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>server;
 
-<span class="doccomment">/// A module key identifing a module
+<span class="doccomment">/// Module instance ID
 ///
-/// Used as an unique ID, and also as prefix in serialization
-/// of module-specific data.
-</span><span class="kw">pub type </span>ModuleKey = u16;
+/// This value uniquely identifies a single instance of a module in a federation.
+///
+/// In case a single [`ModuleKind`] is instantiated twice (rare, but possible),
+/// each instance will have a different id.
+///
+/// Note: We have used this type differently before, assuming each `u16`
+/// uniquly identifies a type of module in question. This function will move
+/// to a `ModuleKind` type which only identifies type of a module (mint vs wallet vs ln, etc)
+</span><span class="comment">// TODO: turn in a newtype
+</span><span class="kw">pub type </span>ModuleInstanceId = u16;
 
-<span class="doccomment">/// Temporary constant for the modules we already have
+<span class="doccomment">/// Special ID we use for global dkg
+</span><span class="kw">pub const </span>MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
+
+<span class="comment">// Note: needs to be in alphabetical order of ModuleKind of each module,
+// as this is the ordering we currently harcoded.
+// Should be used only for pre-modularization code we still have  left
+</span><span class="kw">pub const </span>LEGACY_HARDCODED_INSTANCE_ID_LN: ModuleInstanceId = <span class="number">0</span>;
+<span class="kw">pub const </span>LEGACY_HARDCODED_INSTANCE_ID_MINT: ModuleInstanceId = <span class="number">1</span>;
+<span class="kw">pub const </span>LEGACY_HARDCODED_INSTANCE_ID_WALLET: ModuleInstanceId = <span class="number">2</span>;
+
+<span class="doccomment">/// A type of a module
 ///
-/// To be removed after modularization is complete.
-</span><span class="kw">pub const </span>MODULE_KEY_WALLET: u16 = <span class="number">0</span>;
-<span class="kw">pub const </span>MODULE_KEY_MINT: u16 = <span class="number">1</span>;
-<span class="kw">pub const </span>MODULE_KEY_LN: u16 = <span class="number">2</span>;
-<span class="comment">// not really a module
-</span><span class="kw">pub const </span>MODULE_KEY_GLOBAL: u16 = <span class="number">1024</span>;
+/// This is a short string that identifies type of a module.
+/// Authors of 3rd party modules are free to come up with a string,
+/// long enough to avoid conflicts with similiar modules.
+</span><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ModuleKind(Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;);
+
+<span class="kw">impl </span>ModuleKind {
+    <span class="kw">pub fn </span>clone_from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(Cow::from(s.to_owned()))
+    }
+
+    <span class="kw">pub const fn </span>from_static_str(s: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(Cow::Borrowed(s))
+    }
+
+    <span class="kw">pub fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>ModuleKind {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+        std::fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+    }
+}
+
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span>ModuleKind {
+    <span class="kw">fn </span>from(val: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
+        ModuleKind::from_static_str(val)
+    }
+}
+
+<span class="kw">impl </span>ops::Deref <span class="kw">for </span>ModuleKind {
+    <span class="kw">type </span>Target = str;
+
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
 
 <span class="doccomment">/// Implement `Encodable` and `Decodable` for a &quot;module dyn newtype&quot;
 ///
@@ -612,7 +667,7 @@
                 <span class="kw-2">&amp;</span><span class="self">self</span>,
                 writer: <span class="kw-2">&amp;mut </span>W,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-                <span class="self">self</span>.<span class="number">0</span>.module_key().consensus_encode(writer)<span class="question-mark">?</span>;
+                <span class="self">self</span>.<span class="number">1</span>.consensus_encode(writer)<span class="question-mark">?</span>;
                 <span class="self">self</span>.<span class="number">0</span>.consensus_encode_dyn(writer)
             }
         }
@@ -622,14 +677,15 @@
                 r: <span class="kw-2">&amp;mut </span>R,
                 modules: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-                <span class="macro-nonterminal">$crate::core::encode::module_decode_key_prefixed_decodable</span>(r, modules, |r, m| {
-                    m.<span class="macro-nonterminal">$decode_fn</span>(r)
-                })
+                <span class="macro-nonterminal">$crate::core::encode::module_decode_key_prefixed_decodable</span>(
+                    r,
+                    modules,
+                    |r, m, id| m.<span class="macro-nonterminal">$decode_fn</span>(r, id),
+                )
             }
         }
     };
 }
-
 <span class="doccomment">/// Define a &quot;plugin&quot; trait
 ///
 /// &quot;Plugin trait&quot; is a trait that a developer of a mint module
@@ -641,15 +697,13 @@
 /// &quot;module dyn newtypes&quot;, erasing the exact type and used in a common
 /// Fedimint code.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_trait_define {
+</span><span class="macro">macro_rules! </span>module_plugin_trait_define{
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$newtype_ty</span>:ident, <span class="macro-nonterminal">$plugin_ty</span>:ident, <span class="macro-nonterminal">$module_ty</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)*  } { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }
     ) =&gt; {
         <span class="kw">pub trait </span><span class="macro-nonterminal">$plugin_ty</span>:
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + Send + Sync + <span class="lifetime">&#39;static
         </span>{
-            <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
-
             $(<span class="macro-nonterminal">$extra_methods</span>)*
         }
 
@@ -661,12 +715,8 @@
                 <span class="self">self
             </span>}
 
-            <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-                &lt;<span class="self">Self </span><span class="kw">as </span><span class="macro-nonterminal">$plugin_ty</span>&gt;::module_key(<span class="self">self</span>)
-            }
-
-            <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="macro-nonterminal">$newtype_ty </span>{
-                &lt;<span class="self">Self </span><span class="kw">as </span>Clone&gt;::clone(<span class="self">self</span>).into()
+            <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ::fedimint_api::core::ModuleInstanceId) -&gt; <span class="macro-nonterminal">$newtype_ty </span>{
+                <span class="macro-nonterminal">$newtype_ty::from_typed</span>(instance_id, &lt;<span class="self">Self </span><span class="kw">as </span>Clone&gt;::clone(<span class="self">self</span>))
             }
 
             <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
@@ -683,8 +733,7 @@
             <span class="kw">where
                 </span>H: std::hash::Hasher
             {
-                <span class="kw">let </span>module_key = <span class="self">self</span>.module_key();
-                module_key.hash(state);
+                <span class="self">self</span>.<span class="number">1</span>.hash(state);
                 <span class="self">self</span>.<span class="number">0</span>.dyn_hash().hash(state);
             }
         }
@@ -695,46 +744,27 @@
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>plugin_types_trait_impl {
     (<span class="macro-nonterminal">$key</span>:expr, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty, <span class="macro-nonterminal">$cache</span>:ty) =&gt; {
-        <span class="kw">impl </span>fedimint_api::core::PluginInput <span class="kw">for </span><span class="macro-nonterminal">$input </span>{
-            <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-                <span class="macro-nonterminal">$key
-            </span>}
-        }
+        <span class="kw">impl </span>fedimint_api::core::PluginInput <span class="kw">for </span><span class="macro-nonterminal">$input </span>{}
 
-        <span class="kw">impl </span>fedimint_api::core::PluginOutput <span class="kw">for </span><span class="macro-nonterminal">$output </span>{
-            <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-                <span class="macro-nonterminal">$key
-            </span>}
-        }
+        <span class="kw">impl </span>fedimint_api::core::PluginOutput <span class="kw">for </span><span class="macro-nonterminal">$output </span>{}
 
-        <span class="kw">impl </span>fedimint_api::core::PluginOutputOutcome <span class="kw">for </span><span class="macro-nonterminal">$outcome </span>{
-            <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-                <span class="macro-nonterminal">$key
-            </span>}
-        }
+        <span class="kw">impl </span>fedimint_api::core::PluginOutputOutcome <span class="kw">for </span><span class="macro-nonterminal">$outcome </span>{}
 
-        <span class="kw">impl </span>fedimint_api::core::PluginConsensusItem <span class="kw">for </span><span class="macro-nonterminal">$ci </span>{
-            <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-                <span class="macro-nonterminal">$key
-            </span>}
-        }
+        <span class="kw">impl </span>fedimint_api::core::PluginConsensusItem <span class="kw">for </span><span class="macro-nonterminal">$ci </span>{}
 
-        <span class="kw">impl </span>fedimint_api::server::PluginVerificationCache <span class="kw">for </span><span class="macro-nonterminal">$cache </span>{
-            <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-                <span class="macro-nonterminal">$key
-            </span>}
-        }
+        <span class="kw">impl </span>fedimint_api::server::PluginVerificationCache <span class="kw">for </span><span class="macro-nonterminal">$cache </span>{}
     };
 }
 
 <span class="macro">macro_rules! </span>erased_eq {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$newtype</span>) -&gt; bool {
-            <span class="kw">if </span><span class="self">self</span>.module_key() != other.module_key() {
-                <span class="kw">return </span><span class="bool-val">false</span>;
-            }
+            <span class="comment">// TODO:?
+            // if self.module_key() != other.module_key() {
+            //     return false;
+            // }
 
-            <span class="kw">let </span>other: <span class="kw-2">&amp;</span>T = other
+            </span><span class="kw">let </span>other: <span class="kw-2">&amp;</span>T = other
                 .as_any()
                 .downcast_ref()
                 .expect(<span class="string">&quot;Type is ensured in previous step&quot;</span>);
@@ -772,45 +802,72 @@
 /// Static-polymorphism version of [`ModuleDecode`]
 ///
 /// All methods are static, as the decoding code is supposed to be instance-independent,
-/// at least until we start to support modules with overriden [`ModuleKey`]s
+/// at least until we start to support modules with overriden [`ModuleInstanceId`]s
 </span><span class="kw">pub trait </span>PluginDecode: Debug + Send + Sync + <span class="lifetime">&#39;static </span>{
+    <span class="kw">type </span>Input: PluginInput;
+    <span class="kw">type </span>Output: PluginOutput;
+    <span class="kw">type </span>OutputOutcome: PluginOutputOutcome;
+    <span class="kw">type </span>ConsensusItem: PluginConsensusItem;
+
     <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_input(r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Input, DecodeError&gt;;
 
     <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_output(r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output, DecodeError&gt;;
 
     <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_output_outcome(r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_output_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::OutputOutcome, DecodeError&gt;;
 
     <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_consensus_item(r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_consensus_item(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::ConsensusItem, DecodeError&gt;;
 }
 
 <span class="kw">pub trait </span>ModuleDecode: Debug {
     <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_input(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt;;
 
     <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt;;
 
     <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_output_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt;;
 
     <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
-    </span><span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt;;
+    </span><span class="kw">fn </span>decode_consensus_item(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt;;
 }
 
 <span class="comment">// TODO: use macro again
 </span><span class="doccomment">/// Decoder for module associated types
 </span><span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>Decoder(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>(<span class="kw">dyn </span>ModuleDecode + Send + Sync));
+</span><span class="kw">pub struct </span>Decoder(Arc&lt;<span class="kw">dyn </span>ModuleDecode + Send + Sync&gt;);
 
 <span class="kw">impl </span>std::ops::Deref <span class="kw">for </span>Decoder {
     <span class="kw">type </span>Target = <span class="kw">dyn </span>ModuleDecode + Send + Sync + <span class="lifetime">&#39;static</span>;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-        <span class="self">self</span>.<span class="number">0
+        <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
     </span>}
 }
 
@@ -824,55 +881,91 @@
 <span class="kw">where
     </span>T: PluginDecode + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_input(r)
+    <span class="kw">fn </span>decode_input(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(Input::from_typed(
+            instance_id,
+            &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_input(<span class="self">self</span>, r)<span class="question-mark">?</span>,
+        ))
     }
 
-    <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_output(r)
+    <span class="kw">fn </span>decode_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(Output::from_typed(
+            instance_id,
+            &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_output(<span class="self">self</span>, r)<span class="question-mark">?</span>,
+        ))
     }
 
-    <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_output_outcome(r)
+    <span class="kw">fn </span>decode_output_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(OutputOutcome::from_typed(
+            instance_id,
+            &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_output_outcome(<span class="self">self</span>, r)<span class="question-mark">?</span>,
+        ))
     }
 
-    <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_consensus_item(r)
+    <span class="kw">fn </span>decode_consensus_item(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(ConsensusItem::from_typed(
+            instance_id,
+            &lt;<span class="self">Self </span><span class="kw">as </span>PluginDecode&gt;::decode_consensus_item(<span class="self">self</span>, r)<span class="question-mark">?</span>,
+        ))
     }
 }
 
 <span class="kw">impl </span>ModuleDecode <span class="kw">for </span>Decoder {
-    <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_input(r)
+    <span class="kw">fn </span>decode_input(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.decode_input(r, instance_id)
     }
 
-    <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_output(r)
+    <span class="kw">fn </span>decode_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.decode_output(r, instance_id)
     }
 
-    <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_output_outcome(r)
+    <span class="kw">fn </span>decode_output_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.decode_output_outcome(r, instance_id)
     }
 
-    <span class="kw">fn </span>decode_consensus_item(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_consensus_item(r)
+    <span class="kw">fn </span>decode_consensus_item(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ConsensusItem, DecodeError&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.decode_consensus_item(r, instance_id)
     }
 }
 
 <span class="kw">impl </span>Decoder {
     <span class="doccomment">/// Creates a static, type-erased decoder. Only call this a limited amout of times since it uses
     /// `Box::leak` internally.
-    </span><span class="kw">pub fn </span>from_typed(decoder: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>(<span class="kw">impl </span>PluginDecode + Send + Sync + <span class="lifetime">&#39;static</span>)) -&gt; Decoder {
-        Decoder(decoder)
-    }
-}
-
-<span class="kw">impl</span>&lt;T&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>T&gt; <span class="kw">for </span>Decoder
-<span class="kw">where
-    </span>T: PluginDecode + Send + Sync + <span class="lifetime">&#39;static</span>,
-{
-    <span class="kw">fn </span>from(value: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>T) -&gt; <span class="self">Self </span>{
-        Decoder(value)
+    </span><span class="kw">pub fn </span>from_typed(decoder: <span class="kw">impl </span>PluginDecode + Send + Sync + <span class="lifetime">&#39;static</span>) -&gt; Decoder {
+        Decoder(Arc::new(decoder))
     }
 }
 
@@ -881,8 +974,7 @@
 /// General purpose code should use [`Input`] instead
 </span><span class="kw">pub trait </span>ModuleInput: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Input;
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; Input;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
     <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Input) -&gt; bool;
 }
@@ -895,14 +987,14 @@
     }
 }
 
-<span class="macro">dyn_newtype_define! </span>{
+<span class="macro">dyn_newtype_define_with_instance_id! </span>{
     <span class="doccomment">/// An owned, immutable input to a [`Transaction`]
     </span><span class="kw">pub </span>Input(Box&lt;ModuleInput&gt;)
 }
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
     Input, decode_input
 }
-<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(Input);
+<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(Input);
 
 <span class="macro">newtype_impl_eq_passthrough!</span>(Input);
 
@@ -913,14 +1005,12 @@
 /// General purpose code should use [`Output`] instead
 </span><span class="kw">pub trait </span>ModuleOutput: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
-
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Output;
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; Output;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
     <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Output) -&gt; bool;
 }
 
-<span class="macro">dyn_newtype_define! </span>{
+<span class="macro">dyn_newtype_define_with_instance_id! </span>{
     <span class="doccomment">/// An owned, immutable output of a [`Transaction`]
     </span><span class="kw">pub </span>Output(Box&lt;ModuleOutput&gt;)
 }
@@ -934,7 +1024,7 @@
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
     Output, decode_output
 }
-<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(Output);
+<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(Output);
 
 <span class="macro">newtype_impl_eq_passthrough!</span>(Output);
 
@@ -946,14 +1036,12 @@
 
 <span class="kw">pub trait </span>ModuleOutputOutcome: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
-    <span class="doccomment">/// Module key
-    </span><span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OutputOutcome;
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; OutputOutcome;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
     <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>OutputOutcome) -&gt; bool;
 }
 
-<span class="macro">dyn_newtype_define! </span>{
+<span class="macro">dyn_newtype_define_with_instance_id! </span>{
     <span class="doccomment">/// An owned, immutable output of a [`Transaction`] before it was finalized
     </span><span class="kw">pub </span>OutputOutcome(Box&lt;ModuleOutputOutcome&gt;)
 }
@@ -961,24 +1049,13 @@
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
     { }
     {
-        <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>OutputOutcome) -&gt; bool {
-            <span class="kw">if </span><span class="self">self</span>.module_key() != other.module_key() {
-                <span class="kw">return </span><span class="bool-val">false</span>;
-            }
-
-            <span class="kw">let </span>other = other
-                .as_any()
-                .downcast_ref::&lt;T&gt;()
-                .expect(<span class="string">&quot;Type is ensured in previous step&quot;</span>);
-
-            <span class="self">self </span>== other
-        }
+        <span class="macro">erased_eq!</span>(OutputOutcome);
     }
 }
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
     OutputOutcome, decode_output_outcome
 }
-<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(OutputOutcome);
+<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(OutputOutcome);
 
 <span class="macro">newtype_impl_eq_passthrough!</span>(OutputOutcome);
 
@@ -986,15 +1063,13 @@
 
 <span class="kw">pub trait </span>ModuleConsensusItem: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
-    <span class="doccomment">/// Module key
-    </span><span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusItem;
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; ConsensusItem;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
 
     <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ConsensusItem) -&gt; bool;
 }
 
-<span class="macro">dyn_newtype_define! </span>{
+<span class="macro">dyn_newtype_define_with_instance_id! </span>{
     <span class="doccomment">/// An owned, immutable output of a [`Transaction`] before it was finalized
     </span><span class="kw">pub </span>ConsensusItem(Box&lt;ModuleConsensusItem&gt;)
 }
@@ -1008,7 +1083,7 @@
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
     ConsensusItem, decode_consensus_item
 }
-<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(ConsensusItem);
+<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(ConsensusItem);
 
 <span class="macro">newtype_impl_eq_passthrough!</span>(ConsensusItem);
 
@@ -1039,85 +1114,6 @@
             outputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
             signature: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
         })
-    }
-}
-
-<span class="attr">#[cfg(test)]
-</span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::collections::hash_map::DefaultHasher;
-    <span class="kw">use </span>std::hash::{Hash, Hasher};
-
-    <span class="kw">use </span>fedimint_api::core::PluginConsensusItem;
-    <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-
-    <span class="kw">use </span><span class="kw">crate</span>::core::{
-        ConsensusItem, Input, ModuleKey, Output, OutputOutcome, PluginInput, PluginOutput,
-        PluginOutputOutcome,
-    };
-
-    <span class="macro">macro_rules! </span>test_newtype_eq_hash {
-        (<span class="macro-nonterminal">$newtype</span>:ty, <span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ty</span>) =&gt; {
-            <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
-            </span><span class="kw">struct </span>Foo {
-                key: u16,
-                data: u16,
-            }
-
-            <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>Foo {
-                <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, _f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
-                    <span class="macro">unimplemented!</span>();
-                }
-            }
-
-            <span class="kw">impl </span><span class="macro-nonterminal">$</span><span class="kw">trait for </span><span class="macro-nonterminal">Foo </span>{
-                <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey {
-                    <span class="self">self</span>.key
-                }
-            }
-
-            <span class="kw">let </span>a: <span class="macro-nonterminal">$newtype </span>= Foo { key: <span class="number">42</span>, data: <span class="number">0 </span>}.into();
-            <span class="kw">let </span>b: <span class="macro-nonterminal">$newtype </span>= Foo { key: <span class="number">21</span>, data: <span class="number">0 </span>}.into();
-            <span class="kw">let </span>c: <span class="macro-nonterminal">$newtype </span>= Foo { key: <span class="number">42</span>, data: <span class="number">1 </span>}.into();
-
-            <span class="macro">assert_eq!</span>(a, a);
-            <span class="macro">assert_ne!</span>(a, b);
-            <span class="macro">assert_ne!</span>(a, c);
-            <span class="macro">assert_ne!</span>(b, c);
-
-            <span class="macro">assert_eq!</span>(hash(<span class="kw-2">&amp;</span>a), hash(<span class="kw-2">&amp;</span>a));
-            <span class="macro">assert_ne!</span>(hash(<span class="kw-2">&amp;</span>a), hash(<span class="kw-2">&amp;</span>b));
-            <span class="macro">assert_ne!</span>(hash(<span class="kw-2">&amp;</span>a), hash(<span class="kw-2">&amp;</span>c));
-            <span class="macro">assert_ne!</span>(hash(<span class="kw-2">&amp;</span>b), hash(<span class="kw-2">&amp;</span>c));
-        };
-    }
-
-    <span class="kw">fn </span>hash&lt;T&gt;(item: <span class="kw-2">&amp;</span>T) -&gt; u64
-    <span class="kw">where
-        </span>T: Hash,
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>hasher = DefaultHasher::new();
-        item.hash(<span class="kw-2">&amp;mut </span>hasher);
-        hasher.finish()
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_dyn_eq_hash_input() {
-        <span class="macro">test_newtype_eq_hash!</span>(Input, PluginInput);
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_dyn_eq_hash_output() {
-        <span class="macro">test_newtype_eq_hash!</span>(Output, PluginOutput);
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_dyn_eq_hash_outcome() {
-        <span class="macro">test_newtype_eq_hash!</span>(OutputOutcome, PluginOutputOutcome);
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_dyn_eq_hash_ci() {
-        <span class="macro">test_newtype_eq_hash!</span>(ConsensusItem, PluginConsensusItem);
     }
 }
 </code></pre></div>

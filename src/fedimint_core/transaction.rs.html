@@ -307,6 +307,30 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>fedimint_api::core::{Input, Output};
@@ -476,6 +500,10 @@
 </span><span class="doccomment">/// Old transaction definition used by old client.
 </span><span class="kw">pub mod </span>legacy {
     <span class="kw">use </span>bitcoin_hashes::Hash;
+    <span class="kw">use </span>fedimint_api::core::{
+        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    };
     <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_api::{ServerModulePlugin, TransactionId};
     <span class="kw">use </span>secp256k1_zkp::{schnorr, XOnlyPublicKey};
@@ -530,20 +558,27 @@
 
         <span class="doccomment">/// Generate the transaction hash.
         </span><span class="kw">pub fn </span>tx_hash_from_parts(inputs: <span class="kw-2">&amp;</span>[Input], outputs: <span class="kw-2">&amp;</span>[Output]) -&gt; TransactionId {
+            <span class="kw">use </span>fedimint_api::core;
             <span class="kw">let </span>erased_inputs = inputs
                 .iter()
                 .map(|input| <span class="kw">match </span>input.clone() {
-                    Input::Mint(i) =&gt; i.into(),
-                    Input::Wallet(i) =&gt; i.into(),
-                    Input::LN(i) =&gt; i.into(),
+                    Input::Mint(i) =&gt; core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, i),
+                    Input::Wallet(i) =&gt; {
+                        core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
+                    }
+                    Input::LN(i) =&gt; core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
                 })
                 .collect::&lt;Vec&lt;fedimint_api::core::Input&gt;&gt;();
             <span class="kw">let </span>erased_outputs = outputs
                 .iter()
                 .map(|output| <span class="kw">match </span>output.clone() {
-                    Output::Mint(o) =&gt; o.into(),
-                    Output::Wallet(o) =&gt; o.into(),
-                    Output::LN(o) =&gt; o.into(),
+                    Output::Mint(o) =&gt; {
+                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
+                    }
+                    Output::Wallet(o) =&gt; {
+                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
+                    }
+                    Output::LN(o) =&gt; core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o),
                 })
                 .collect::&lt;Vec&lt;fedimint_api::core::Output&gt;&gt;();
 
@@ -592,23 +627,36 @@
         }
 
         <span class="kw">pub fn </span>into_type_erased(<span class="self">self</span>) -&gt; <span class="kw">super</span>::Transaction {
+            <span class="kw">use </span>fedimint_api::core;
             <span class="kw">super</span>::Transaction {
                 inputs: <span class="self">self
                     </span>.inputs
                     .into_iter()
                     .map(|input| <span class="kw">match </span>input {
-                        Input::Mint(input) =&gt; input.into(),
-                        Input::Wallet(input) =&gt; input.into(),
-                        Input::LN(input) =&gt; input.into(),
+                        Input::Mint(input) =&gt; {
+                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, input)
+                        }
+                        Input::Wallet(input) =&gt; {
+                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, input)
+                        }
+                        Input::LN(input) =&gt; {
+                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
+                        }
                     })
                     .collect(),
                 outputs: <span class="self">self
                     </span>.outputs
                     .into_iter()
                     .map(|output| <span class="kw">match </span>output {
-                        Output::Mint(output) =&gt; output.into(),
-                        Output::Wallet(output) =&gt; output.into(),
-                        Output::LN(output) =&gt; output.into(),
+                        Output::Mint(output) =&gt; {
+                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
+                        }
+                        Output::Wallet(output) =&gt; {
+                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
+                        }
+                        Output::LN(output) =&gt; {
+                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
+                        }
                     })
                     .collect(),
                 signature: <span class="self">self</span>.signature,

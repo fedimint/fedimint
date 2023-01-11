@@ -140,9 +140,6 @@
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -231,13 +228,10 @@
     .<span class="kw">await</span>;
     <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
-    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from([
-        (
-            <span class="string">&quot;wallet&quot;</span>,
-            Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
-        ),
-        (<span class="string">&quot;mint&quot;</span>, Arc::new(MintConfigGenerator)),
-        (<span class="string">&quot;ln&quot;</span>, Arc::new(LightningModuleConfigGen)),
+    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
+        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
 
     <span class="kw">let </span>result = ServerConfig::distributed_gen(

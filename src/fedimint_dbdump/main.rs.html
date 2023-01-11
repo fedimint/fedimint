@@ -694,8 +694,6 @@
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
-<a href="#697" id="697">697</a>
-<a href="#698" id="698">698</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -1373,17 +1371,15 @@ Options:
         }
     };
 
-    <span class="kw">let </span>module_inits = ModuleInitRegistry::from([
-        (
-            <span class="string">&quot;wallet&quot;</span>,
-            Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
-        ),
-        (<span class="string">&quot;mint&quot;</span>, Arc::new(MintConfigGenerator)),
-        (<span class="string">&quot;ln&quot;</span>, Arc::new(LightningModuleConfigGen)),
+    <span class="kw">let </span>_module_inits = ModuleInitRegistry::from(<span class="macro">vec!</span>[
+        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
+        Arc::new(MintConfigGenerator),
+        Arc::new(LightningModuleConfigGen),
     ]);
 
-    <span class="kw">let </span>serialized: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
-    <span class="kw">let </span>decoders = module_inits.decoders();
+    <span class="kw">let </span>decoders = Default::default(); <span class="comment">// TODO: read config and use it to create decoders
+
+    </span><span class="kw">let </span>serialized: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
     <span class="kw">let </span><span class="kw-2">mut </span>dbdump = DatabaseDump {
         serialized,
         read_only: DatabaseTransaction::new(Box::new(read_only), <span class="kw-2">&amp;</span>decoders),

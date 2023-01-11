@@ -371,6 +371,9 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -386,7 +389,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 <span class="kw">use </span><span class="kw">crate</span>::core::{
-    Decoder, PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
+    Decoder, ModuleInstanceId, ModuleKind, PluginConsensusItem, PluginDecode, PluginInput,
+    PluginOutput, PluginOutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseTransaction};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
@@ -533,7 +537,7 @@
 <span class="doccomment">/// Definition of an API endpoint defined by a module `M`.
 </span><span class="kw">pub struct </span>ApiEndpoint&lt;M&gt; {
     <span class="doccomment">/// Path under which the API endpoint can be reached. It should start with a `/`
-    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module_name/transaction`
+    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module/module_instance_id/transaction`
     /// depending on the module name returned by `[FedertionModule::api_base_name]`.
     </span><span class="kw">pub </span>path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
     <span class="doccomment">/// Handler for the API call that takes the following arguments:
@@ -576,6 +580,10 @@
 /// Once the module config is ready, the module can be instantiated via `[Self::init]`.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ModuleInit {
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
+
     <span class="doccomment">/// Initialize the [`ServerModule`] instance from its config
     </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -583,8 +591,6 @@
         db: Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;ServerModule&gt;;
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleKey, Decoder);
 
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -596,6 +602,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
+        module_id: ModuleInstanceId,
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
@@ -614,6 +621,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ServerModulePlugin: Debug + Sized {
+    <span class="kw">const </span>KIND: ModuleKind;
+
     <span class="kw">type </span>Decoder: PluginDecode;
     <span class="kw">type </span>Input: PluginInput;
     <span class="kw">type </span>Output: PluginOutput;
@@ -621,9 +630,12 @@
     <span class="kw">type </span>ConsensusItem: PluginConsensusItem;
     <span class="kw">type </span>VerificationCache: PluginVerificationCache;
 
-    <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
+    <span class="kw">fn </span>module_kind() -&gt; ModuleKind {
+        <span class="comment">// Note: All modules should define kinds as &amp;&#39;static str, so this doesn&#39;t allocate
+        </span><span class="self">Self</span>::KIND
+    }
 
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">Self</span>::Decoder;
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
     </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);
@@ -732,12 +744,6 @@
     /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
     /// and consensus should halt.
     </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit);
-
-    <span class="doccomment">/// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module&#39;s base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    </span><span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
 
     <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
     /// to users as well as to other modules. They thus should be deterministic, only dependant on

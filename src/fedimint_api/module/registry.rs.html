@@ -88,7 +88,7 @@
 <a href="#88" id="88">88</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
-<span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
+<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, ModuleInstanceId};
 <span class="kw">use </span><span class="kw">crate</span>::server::ServerModule;
 
 <span class="comment">// TODO: unify and/or make a newtype?
@@ -96,7 +96,7 @@
 </span><span class="kw">pub type </span>ModuleKey = u16;
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>ModuleRegistry&lt;M&gt;(BTreeMap&lt;ModuleKey, M&gt;);
+</span><span class="kw">pub struct </span>ModuleRegistry&lt;M&gt;(BTreeMap&lt;ModuleInstanceId, M&gt;);
 
 <span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
@@ -116,8 +116,8 @@
     }
 
     <span class="doccomment">/// Return an iterator over all modules
-    </span><span class="kw">pub fn </span>iter_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>M&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.values()
+    </span><span class="kw">pub fn </span>iter_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>M)&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.iter().map(|(id, m)| (<span class="kw-2">*</span>id, m))
     }
 
     <span class="kw">pub fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>ModuleKey) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>M&gt; {
@@ -147,9 +147,9 @@
 
     <span class="comment">// TODO: move into `ModuleRegistry` impl by splitting `module_key` fn into separate trait
     </span><span class="doccomment">/// Add a module to the registry
-    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module: ServerModule) {
+    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, module: ServerModule) {
         <span class="macro">assert!</span>(
-            <span class="self">self</span>.<span class="number">0</span>.insert(module.module_key(), module).is_none(),
+            <span class="self">self</span>.<span class="number">0</span>.insert(id, module).is_none(),
             <span class="string">&quot;Module was already registered!&quot;
         </span>)
     }

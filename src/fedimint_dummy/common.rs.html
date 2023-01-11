@@ -37,10 +37,9 @@
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
 <a href="#39" id="39">39</a>
-<a href="#40" id="40">40</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 
-<span class="kw">use </span>fedimint_api::core::{ConsensusItem, Input, Output, OutputOutcome, PluginDecode};
+<span class="kw">use </span>fedimint_api::core::PluginDecode;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 
@@ -50,32 +49,31 @@
 </span><span class="kw">pub struct </span>DummyModuleDecoder;
 
 <span class="kw">impl </span>PluginDecode <span class="kw">for </span>DummyModuleDecoder {
-    <span class="kw">fn </span>decode_input(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(Input::from(DummyInput::consensus_decode(
-            <span class="kw-2">&amp;mut </span>d,
-            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-        )<span class="question-mark">?</span>))
-    }
-    <span class="kw">fn </span>decode_output(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(Output::from(DummyOutput::consensus_decode(
-            <span class="kw-2">&amp;mut </span>d,
-            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-        )<span class="question-mark">?</span>))
+    <span class="kw">type </span>Input = DummyInput;
+    <span class="kw">type </span>Output = DummyOutput;
+    <span class="kw">type </span>OutputOutcome = DummyOutputOutcome;
+    <span class="kw">type </span>ConsensusItem = DummyOutputConfirmation;
+
+    <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;DummyInput, DecodeError&gt; {
+        DummyInput::consensus_decode(<span class="kw-2">&amp;mut </span>d, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
     }
 
-    <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(OutputOutcome::from(DummyOutputOutcome::consensus_decode(
-            <span class="kw-2">&amp;mut </span>d,
-            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-        )<span class="question-mark">?</span>))
+    <span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;DummyOutput, DecodeError&gt; {
+        DummyOutput::consensus_decode(<span class="kw-2">&amp;mut </span>d, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
+    }
+
+    <span class="kw">fn </span>decode_output_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;DummyOutputOutcome, DecodeError&gt; {
+        DummyOutputOutcome::consensus_decode(<span class="kw-2">&amp;mut </span>d, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
     }
 
     <span class="kw">fn </span>decode_consensus_item(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::core::ConsensusItem, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(ConsensusItem::from(
-            DummyOutputConfirmation::consensus_decode(<span class="kw-2">&amp;mut </span>r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>,
-        ))
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;DummyOutputConfirmation, DecodeError&gt; {
+        DummyOutputConfirmation::consensus_decode(<span class="kw-2">&amp;mut </span>r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
     }
 }
 </code></pre></div>
