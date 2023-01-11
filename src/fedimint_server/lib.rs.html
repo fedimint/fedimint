@@ -687,7 +687,7 @@
     <span class="doccomment">/// Starts consensus by skipping to the last saved epoch history  and triggering a new epoch
     </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span>db = <span class="self">self</span>.consensus.db.clone();
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction(<span class="self">self</span>.consensus.decoders()).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(key) = tx.get_value(<span class="kw-2">&amp;</span>LastEpochKey).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>) {
             <span class="self">self</span>.last_processed_epoch = tx.get_value(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);

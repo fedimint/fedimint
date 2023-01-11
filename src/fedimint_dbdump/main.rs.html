@@ -695,6 +695,7 @@
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
 <a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -1382,9 +1383,10 @@ Options:
     ]);
 
     <span class="kw">let </span>serialized: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
+    <span class="kw">let </span>decoders = module_inits.decoders();
     <span class="kw">let </span><span class="kw-2">mut </span>dbdump = DatabaseDump {
         serialized,
-        read_only: DatabaseTransaction::new(read_only, module_inits.decoders()),
+        read_only: DatabaseTransaction::new(Box::new(read_only), <span class="kw-2">&amp;</span>decoders),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == <span class="string">&quot;All&quot;</span>,

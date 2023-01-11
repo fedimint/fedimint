@@ -825,7 +825,7 @@
     }
 
     <span class="kw">pub async fn </span>database_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await
+        <span class="self">self</span>.db.begin_transaction().<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>submit_transaction(
@@ -849,7 +849,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>pub_keys = Vec::new();
 
         <span class="comment">// Create read-only DB tx so that the read state is consistent
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
             <span class="kw">let </span>module = <span class="self">self</span>.modules.get(input.module_key());
@@ -929,7 +929,7 @@
                 .into_iter()
                 .into_group_map_by(|(_peer, mci)| mci.module_key());
 
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
                 <span class="self">self</span>.modules
                     .get(module_key)
@@ -943,7 +943,7 @@
         <span class="comment">// Process transactions
         </span><span class="kw">let </span><span class="kw-2">mut </span>rejected_txs: BTreeSet&lt;TransactionId&gt; = BTreeSet::new();
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
             <span class="kw">let </span>caches = <span class="self">self</span>.build_verification_caches(transaction_cis.iter().map(|(<span class="kw">_</span>, tx)| tx));
             <span class="kw">let </span><span class="kw-2">mut </span>processed_txs: HashSet&lt;TransactionId&gt; = HashSet::new();
@@ -1009,7 +1009,7 @@
 
         <span class="comment">// End consensus epoch
         </span><span class="kw">let </span>epoch_history = {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
             <span class="kw">let </span>epoch_history = <span class="self">self
@@ -1045,7 +1045,7 @@
 
     <span class="kw">pub async fn </span>get_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
         <span class="self">self</span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
+            .begin_transaction()
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>LastEpochKey)
             .<span class="kw">await
@@ -1055,7 +1055,7 @@
 
     <span class="kw">pub async fn </span>epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt; {
         <span class="self">self</span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
+            .begin_transaction()
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
             .<span class="kw">await
@@ -1073,7 +1073,7 @@
         <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = outcome.contributions.keys().cloned().collect();
         <span class="kw">let </span>maybe_prev_epoch = <span class="self">self
             </span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
+            .begin_transaction()
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>prev_epoch_key)
             .<span class="kw">await
@@ -1257,7 +1257,7 @@
 
         <span class="kw">let </span>rejected: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="self">self
             </span>.db
-            .begin_transaction(<span class="self">self</span>.decoders())
+            .begin_transaction()
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid))
             .<span class="kw">await

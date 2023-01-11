@@ -213,6 +213,9 @@
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
@@ -221,11 +224,10 @@
 <span class="kw">use </span>async_trait::async_trait;
 
 <span class="kw">use super</span>::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
-    IDatabase, IDatabaseTransaction,
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, IDatabase,
+    IDatabaseTransaction,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::PrefixIter;
-<span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
 
 <span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>MemDatabase {
@@ -261,9 +263,9 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IDatabase <span class="kw">for </span>MemDatabase {
-    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleDecoderRegistry) -&gt; DatabaseTransaction {
+    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>&gt; {
         <span class="kw">let </span>db_copy = <span class="self">self</span>.data.lock().unwrap().clone();
-        <span class="kw">let </span>memtx = MemTransaction {
+        <span class="kw">let </span><span class="kw-2">mut </span>memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
             db: <span class="self">self</span>,
@@ -272,9 +274,8 @@
             num_savepoint_operations: <span class="number">0</span>,
         };
 
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = DatabaseTransaction::new(memtx, decoders);
-        tx.set_tx_savepoint().<span class="kw">await</span>;
-        tx
+        memtx.set_tx_savepoint().<span class="kw">await</span>;
+        Box::new(memtx)
     }
 }
 
@@ -372,60 +373,65 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::MemDatabase;
+    <span class="kw">use crate</span>::{db::Database, module::registry::ModuleDecoderRegistry};
+
+    <span class="kw">fn </span>database() -&gt; Database {
+        Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())
+    }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_insert_elements(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_remove_nonexisting(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_remove_nonexisting(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_read_own_writes(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_prevent_dirty_reads(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_find_by_prefix(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_commit() {
-        fedimint_api::db::verify_commit(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_commit(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_prevent_nonrepeatable_reads() {
-        fedimint_api::db::verify_prevent_nonrepeatable_reads(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_rollback_to_savepoint(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_phantom_entry() {
-        fedimint_api::db::verify_phantom_entry(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_phantom_entry(database()).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(MemDatabase::new().into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_remove_by_prefix(database()).<span class="kw">await</span>;
     }
 }
 </code></pre></div>

@@ -335,17 +335,6 @@
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -359,7 +348,6 @@
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleInit, TransactionItemAmount};
-<span class="kw">use </span>fedimint_api::server::IServerModule;
 <span class="kw">use </span>fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
 
 <span class="kw">pub mod </span>btc;
@@ -404,9 +392,12 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>members = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>server_cfg {
-            <span class="kw">let </span>mem_db: Database = MemDatabase::new().into();
-            <span class="kw">let </span>member = constructor(cfg, mem_db.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-            members.push((peer, member, mem_db));
+            <span class="kw">let </span>db = Database::new(
+                MemDatabase::new(),
+                ModuleDecoderRegistry::from_iter([conf_gen.decoder()]),
+            );
+            <span class="kw">let </span>member = constructor(cfg, db.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+            members.push((peer, member, db));
         }
 
         <span class="prelude-val">Ok</span>(FakeFed {
@@ -442,7 +433,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             results.push(member_validate(member, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>fake_ic, input).<span class="kw">await</span>);
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB tx failed&quot;</span>);
         }
@@ -455,20 +446,12 @@
         <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="self">self</span>.members.iter() {
             results.push(
                 member
-                    .validate_output(<span class="kw-2">&amp;mut </span>db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>, output)
+                    .validate_output(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, output)
                     .<span class="kw">await
                     </span>.is_err(),
             );
         }
         assert_all_equal(results.into_iter())
-    }
-
-    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
-        <span class="kw">let </span>module = <span class="kw-2">&amp;</span><span class="self">self</span>.members.first().unwrap().<span class="number">1</span>;
-        ModuleDecoderRegistry::from_iter(std::iter::once((
-            module.module_key(),
-            IServerModule::decoder(module),
-        )))
     }
 
     <span class="comment">// TODO: add expected result to inputs/outputs
@@ -480,14 +463,12 @@
         </span>&lt;Module <span class="kw">as </span>ServerModulePlugin&gt;::Input: Send + Sync,
     {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
-
         <span class="comment">// TODO: only include some of the proposals for realism
         </span><span class="kw">let </span><span class="kw-2">mut </span>consensus = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(id, member, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             consensus.extend(
                 member
-                    .consensus_proposal(<span class="kw-2">&amp;mut </span>db.begin_transaction(decoders.clone()).<span class="kw">await</span>)
+                    .consensus_proposal(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>)
                     .<span class="kw">await
                     </span>.into_iter()
                     .map(|ci| (<span class="kw-2">*</span>id, ci)),
@@ -495,10 +476,9 @@
         }
 
         <span class="kw">let </span>peers: HashSet&lt;PeerId&gt; = <span class="self">self</span>.members.iter().map(|p| p.<span class="number">0</span>).collect();
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
         <span class="kw">for </span>(_peer, member, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             <span class="kw">let </span>database = db <span class="kw">as </span><span class="kw-2">&amp;mut </span>Database;
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction(decoders.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction().<span class="kw">await</span>;
 
             member
                 .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, consensus.clone())
@@ -521,7 +501,7 @@
 
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction(decoders.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction().<span class="kw">await</span>;
             member.end_consensus_epoch(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
 
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -537,7 +517,7 @@
         <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="self">self</span>.members.iter() {
             results.push(
                 member
-                    .output_status(<span class="kw-2">&amp;mut </span>db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>, out_point)
+                    .output_status(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, out_point)
                     .<span class="kw">await</span>,
             );
         }
@@ -548,18 +528,16 @@
     <span class="kw">where
         </span>U: Fn(<span class="kw-2">&amp;mut </span>DatabaseTransaction),
     {
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
         <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(decoders.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             update(<span class="kw-2">&amp;mut </span>dbtx);
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
     }
 
     <span class="kw">pub async fn </span>generate_fake_utxo(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
         <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction(decoders.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">let </span>out_point = bitcoin::OutPoint::default();
             <span class="kw">let </span>tweak = [<span class="number">42</span>; <span class="number">32</span>];
             <span class="kw">let </span>utxo = fedimint_wallet::SpendableUTXO {

@@ -267,15 +267,6 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
@@ -285,11 +276,9 @@
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::db::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
-    PrefixIter,
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, PrefixIter,
 };
 <span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">pub use </span>sled;
 <span class="kw">use </span>sled::transaction::TransactionError;
 
@@ -330,16 +319,15 @@
 <span class="comment">// TODO: maybe make the concrete impl its own crate
 </span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IDatabase <span class="kw">for </span>SledDb {
-    <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleDecoderRegistry) -&gt; DatabaseTransaction {
-        <span class="kw">let </span>sled_tx = SledTransaction {
+    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>sled_tx = SledTransaction {
             operations: Vec::new(),
             db: <span class="self">self</span>,
             num_pending_operations: <span class="number">0</span>,
             num_savepoint_operations: <span class="number">0</span>,
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = DatabaseTransaction::new(sled_tx, decoders);
-        tx.set_tx_savepoint().<span class="kw">await</span>;
-        tx
+        sled_tx.set_tx_savepoint().<span class="kw">await</span>;
+        Box::new(sled_tx)
     }
 }
 
@@ -475,83 +463,77 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_sled_tests {
+    <span class="kw">use </span>fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+
     <span class="kw">use </span><span class="kw">crate</span>::SledDb;
 
-    <span class="kw">fn </span>open_temp_db(temp_path: <span class="kw-2">&amp;</span>str) -&gt; SledDb {
+    <span class="kw">fn </span>open_temp_db(temp_path: <span class="kw-2">&amp;</span>str) -&gt; Database {
         <span class="kw">let </span>path = tempfile::Builder::new()
             .prefix(temp_path)
             .tempdir()
             .unwrap();
-        SledDb::open(path, <span class="string">&quot;default&quot;</span>).unwrap()
+        Database::new(
+            SledDb::open(path, <span class="string">&quot;default&quot;</span>).unwrap(),
+            ModuleDecoderRegistry::default(),
+        )
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-insert-elements&quot;</span>).into(),
-        )
-        .<span class="kw">await</span>;
+        fedimint_api::db::verify_insert_elements(open_temp_db(<span class="string">&quot;fcb-sled-test-insert-elements&quot;</span>))
+            .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-remove-nonexisting&quot;</span>).into(),
-        )
+        fedimint_api::db::verify_remove_nonexisting(open_temp_db(
+            <span class="string">&quot;fcb-sled-test-remove-nonexisting&quot;</span>,
+        ))
         .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_existing(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-remove-existing&quot;</span>).into(),
-        )
-        .<span class="kw">await</span>;
+        fedimint_api::db::verify_remove_existing(open_temp_db(<span class="string">&quot;fcb-sled-test-remove-existing&quot;</span>))
+            .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-read-own-writes&quot;</span>).into(),
-        )
-        .<span class="kw">await</span>;
+        fedimint_api::db::verify_read_own_writes(open_temp_db(<span class="string">&quot;fcb-sled-test-read-own-writes&quot;</span>))
+            .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-prevent-dirty-reads&quot;</span>).into(),
-        )
+        fedimint_api::db::verify_prevent_dirty_reads(open_temp_db(
+            <span class="string">&quot;fcb-sled-test-prevent-dirty-reads&quot;</span>,
+        ))
         .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-find-by-prefix&quot;</span>).into(),
-        )
-        .<span class="kw">await</span>;
+        fedimint_api::db::verify_find_by_prefix(open_temp_db(<span class="string">&quot;fcb-sled-test-find-by-prefix&quot;</span>)).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db(<span class="string">&quot;fcb-sled-test-commit&quot;</span>).into()).<span class="kw">await</span>;
+        fedimint_api::db::verify_commit(open_temp_db(<span class="string">&quot;fcb-sled-test-rollback-to-savepoint&quot;</span>)).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-rollback-to-savepoint&quot;</span>).into(),
-        )
+        fedimint_api::db::verify_rollback_to_savepoint(open_temp_db(
+            <span class="string">&quot;fcb-sled-test-rollback-to-savepoint&quot;</span>,
+        ))
         .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(
-            open_temp_db(<span class="string">&quot;fcb-sled-test-remove-by-prefix&quot;</span>).into(),
-        )
-        .<span class="kw">await</span>;
+        fedimint_api::db::verify_remove_by_prefix(open_temp_db(<span class="string">&quot;fcb-sled-test-remove-by-prefix&quot;</span>))
+            .<span class="kw">await</span>;
     }
 }
 </code></pre></div>

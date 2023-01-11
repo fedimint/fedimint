@@ -602,18 +602,6 @@
 <a href="#602" id="602">602</a>
 <a href="#603" id="603">603</a>
 <a href="#604" id="604">604</a>
-<a href="#605" id="605">605</a>
-<a href="#606" id="606">606</a>
-<a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a>
-<a href="#609" id="609">609</a>
-<a href="#610" id="610">610</a>
-<a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -627,7 +615,6 @@
 <span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
 <span class="kw">use </span>fedimint_api::core::{ModuleKey, MODULE_KEY_LN};
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::timeout;
 <span class="kw">use </span>fedimint_api::{Amount, ServerModulePlugin};
@@ -819,7 +806,7 @@
         <span class="comment">// TODO: unify block height type
         </span><span class="self">self</span>.context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction()
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentKeyPrefix)
             .<span class="kw">await
@@ -884,11 +871,7 @@
     }
 
     <span class="kw">pub async fn </span>save_confirmed_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>ConfirmedInvoice) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self
-            </span>.context
-            .db
-            .begin_transaction(ModuleDecoderRegistry::default())
-            .<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Db error&quot;</span>);
@@ -899,7 +882,7 @@
         <span class="kw">let </span>confirmed_invoice = <span class="self">self
             </span>.context
             .db
-            .begin_transaction(ModuleDecoderRegistry::default())
+            .begin_transaction()
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>ConfirmedInvoiceKey(contract_id))
             .<span class="kw">await
@@ -960,7 +943,7 @@
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
     <span class="kw">use </span>fedimint_api::core::OutputOutcome;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
     <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -978,7 +961,7 @@
 
     <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
     <span class="kw">use </span><span class="kw">crate</span>::ln::LnClient;
-    <span class="kw">use crate</span>::{ClientContext, LegacyTransaction};
+    <span class="kw">use crate</span>::{module_decode_stubs, ClientContext, LegacyTransaction};
 
     <span class="kw">type </span>Fed = FakeFed&lt;LightningModule&gt;;
 
@@ -1023,11 +1006,8 @@
                 .lock()
                 .<span class="kw">await
                 </span>.fetch_from_all(|m, db| <span class="kw">async </span>{
-                    m.get_contract_account(
-                        <span class="kw-2">&amp;mut </span>db.begin_transaction(ModuleDecoderRegistry::default()).<span class="kw">await</span>,
-                        contract,
-                    )
-                    .<span class="kw">await
+                    m.get_contract_account(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, contract)
+                        .<span class="kw">await
                 </span>})
                 .<span class="kw">await
                 </span>.unwrap())
@@ -1113,7 +1093,7 @@
         <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
         <span class="kw">let </span>client_context = ClientContext {
-            db: MemDatabase::new().into(),
+            db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
@@ -1159,11 +1139,7 @@
         };
         <span class="kw">let </span>timelock = <span class="number">42</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client
-            .context
-            .db
-            .begin_transaction(ModuleDecoderRegistry::default())
-            .<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>output = client
             .create_outgoing_output(<span class="kw-2">&amp;mut </span>dbtx, invoice.clone(), <span class="kw-2">&amp;</span>gateway, timelock, <span class="kw-2">&amp;mut </span>rng)
             .<span class="kw">await

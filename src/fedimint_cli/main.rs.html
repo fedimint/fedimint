@@ -704,6 +704,7 @@
 <a href="#704" id="704">704</a>
 <a href="#705" id="705">705</a>
 <a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -714,6 +715,7 @@
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
@@ -726,7 +728,7 @@
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     serialize_ecash,
 };
-<span class="kw">use </span>mint_client::{Client, UserClientConfig};
+<span class="kw">use </span>mint_client::{module_decode_stubs, Client, UserClientConfig};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
@@ -1096,8 +1098,8 @@
         <span class="kw">let </span>db_path = cli.workdir.join(<span class="string">&quot;client.db&quot;</span>);
         <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to parse config&quot;</span>);
         <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
-            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>)
-            .into();
+            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>);
+        <span class="kw">let </span>db = Database::new(db, module_decode_stubs());
 
         <span class="kw">let </span>rng = rand::rngs::OsRng;
 
