@@ -19,7 +19,6 @@ pub mod btc;
 #[derive(Debug)]
 pub struct FakeFed<Module> {
     members: Vec<(PeerId, Module, Database)>,
-    module_instance_id: ModuleInstanceId,
     client_cfg: ClientModuleConfig,
     block_height: Arc<std::sync::atomic::AtomicU64>,
 }
@@ -69,7 +68,6 @@ where
         Ok(FakeFed {
             members,
             client_cfg,
-            module_instance_id,
             block_height: Arc::new(AtomicU64::new(0)),
         })
     }

@@ -215,7 +215,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
                 module_inits,
-                |_cfg: ServerConfig| Box::pin(async { BTreeMap::default() }),
+                |_cfg: ServerConfig, _db| Box::pin(async { BTreeMap::default() }),
                 &mut task_group,
             )
             .await;
@@ -275,7 +275,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 module_inits,
                 // the things dealing with async makes us do...
                 // if you know how to make it better, please do --dpc
-                |cfg: ServerConfig| {
+                |cfg: ServerConfig, db: Database| {
                     Box::pin({
                         let bitcoin_rpc_2 = bitcoin_rpc_2.clone();
                         let mut task_group = task_group.clone();
@@ -283,17 +283,11 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                             BTreeMap::from([(
                                 "wallet",
                                 Wallet::new_with_bitcoind(
-<<<<<<< HEAD
-                                    cfg.get_module_config_typed("wallet").unwrap(),
-                                    // wallet module does not need any module specific types
-                                    fed_db(ModuleDecoderRegistry::default()),
-=======
                                     cfg.get_module_config_typed(
                                         cfg.get_module_id_by_kind("wallet").unwrap(),
                                     )
                                     .unwrap(),
-                                    fed_db(),
->>>>>>> ce1ab918fe (Split `ModuleKey` into `ModuleInstanceId` & `ModuleKind`)
+                                    db,
                                     bitcoin_rpc_2.clone(),
                                     &mut task_group,
                                 )
@@ -1023,21 +1017,18 @@ impl FederationTest {
         module_inits: ModuleInitRegistry,
         override_modules: impl Fn(
             ServerConfig,
+            Database,
         )
             -> Pin<Box<dyn Future<Output = BTreeMap<&'static str, ServerModule>>>>,
         task_group: &mut TaskGroup,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
             let btc_rpc = bitcoin_gen();
-<<<<<<< HEAD
-            let decoders = module_inits.decoders();
+            let decoders = module_inits.decoders(cfg.module_kinds_iter()).unwrap();
             let db = database_gen(decoders.clone());
-=======
-            let db = database_gen();
->>>>>>> ce1ab918fe (Split `ModuleKey` into `ModuleInstanceId` & `ModuleKind`)
             let mut task_group = task_group.clone();
 
-            let mut override_modules = override_modules(cfg.clone()).await;
+            let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
 
             let mut modules = BTreeMap::new();
 

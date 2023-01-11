@@ -1,6 +1,7 @@
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::config::ConfigGenParams;
+use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_api::{Amount, OutPoint};
 use fedimint_ln::config::LightningModuleClientConfig;
 use fedimint_ln::contracts::account::AccountContract;
