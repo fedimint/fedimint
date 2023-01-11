@@ -137,6 +137,8 @@ async fn main() -> anyhow::Result<()> {
 
     let consensus = FedimintConsensus::new(cfg.clone(), db, module_inits, &mut task_group).await?;
 
+    consensus.check_database_versions().await?;
+
     FedimintServer::run(cfg, consensus, decoders, &mut task_group).await?;
 
     local_task_set.await;

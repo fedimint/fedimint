@@ -9,9 +9,7 @@ use fedimint_api::config::{
     FederationId, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleKey, MODULE_KEY_GLOBAL};
-use fedimint_api::db::{
-    Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey, GLOBAL_DATABASE_VERSION,
-};
+use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_api::module::ModuleInit;
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
@@ -193,60 +191,10 @@ impl ModuleInitRegistry {
             let module = v
                 .init(cfg.get_module_config(k)?, db.clone(), task_group)
                 .await?;
-            self.check_module_db_version(
-                module.module_key(),
-                module.db_module_version(),
-                db.begin_transaction(ModuleDecoderRegistry::default()).await,
-            )
-            .await?;
             modules.insert(module.module_key(), module);
         }
 
-        self.check_module_db_version(
-            MODULE_KEY_GLOBAL,
-            GLOBAL_DATABASE_VERSION,
-            db.begin_transaction(ModuleDecoderRegistry::default()).await,
-        )
-        .await?;
-
         Ok(ModuleRegistry::from(modules))
-    }
-
-    async fn check_module_db_version(
-        &self,
-        module_key: ModuleKey,
-        db_code_version: DatabaseVersion,
-        mut dbtx: DatabaseTransaction<'_>,
-    ) -> Result<(), anyhow::Error> {
-        // Get database version of module from database
-        if let Some(db_version) = dbtx.get_value(&DatabaseVersionKey { module_key }).await? {
-            // Compare db version from db against the version in the code
-            if db_version.version == db_code_version.version {
-                tracing::info!(
-                    "Database version for module {} matches the code version {}",
-                    module_key,
-                    db_version
-                );
-            } else {
-                tracing::info!(
-                    "Database version {} for module {} does not match the code version {}",
-                    db_version,
-                    module_key,
-                    db_code_version
-                );
-            }
-        } else {
-            tracing::info!(
-                "Persisting database version {} for module {}",
-                db_code_version,
-                module_key
-            );
-            dbtx.insert_new_entry(&DatabaseVersionKey { module_key }, &db_code_version)
-                .await?;
-            dbtx.commit_tx().await?;
-        }
-
-        Ok(())
     }
 }
 
