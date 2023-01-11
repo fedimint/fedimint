@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/consensus/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-04897efae0a76fcd.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-bc1b32400f872ddb.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/consensus/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-fbcde169c4acde5f.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-bc1b32400f872ddb.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -821,7 +821,7 @@
 
 <span class="kw">impl </span>FedimintConsensus {
     <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
-        <span class="self">self</span>.modules.decoders()
+        <span class="self">self</span>.modules.decoder_registry()
     }
 
     <span class="kw">pub async fn </span>database_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
@@ -852,7 +852,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
-            <span class="kw">let </span>module = <span class="self">self</span>.modules.module(input.module_key());
+            <span class="kw">let </span>module = <span class="self">self</span>.modules.get(input.module_key());
 
             <span class="kw">let </span>cache = module.build_verification_cache(<span class="kw-2">&amp;</span>[input.clone()]);
             <span class="kw">let </span>interconnect = <span class="self">self</span>.build_interconnect();
@@ -869,7 +869,7 @@
         <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.outputs {
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
-                .module(output.module_key())
+                .get(output.module_key())
                 .validate_output(<span class="kw-2">&amp;mut </span>dbtx, output)
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
@@ -932,7 +932,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction(<span class="self">self</span>.decoders()).<span class="kw">await</span>;
             <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
                 <span class="self">self</span>.modules
-                    .module(module_key)
+                    .get(module_key)
                     .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, module_cis)
                     .<span class="kw">await</span>;
             }
@@ -1016,7 +1016,7 @@
                 </span>.save_epoch_history(outcome, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>drop_peers, rejected_txs)
                 .<span class="kw">await</span>;
 
-            <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.modules() {
+            <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
                 <span class="kw">let </span>module_drop_peers = module.end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
                 drop_peers.extend(module_drop_peers);
             }
@@ -1122,7 +1122,7 @@
     <span class="kw">pub async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>proposal_futures = <span class="self">self
             </span>.modules
-            .modules()
+            .iter_modules()
             .map(|module| {
                 Box::pin(<span class="kw">async </span>{
                     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
@@ -1155,7 +1155,7 @@
             })
             .collect();
 
-        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.modules() {
+        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             items.extend(
                 module
                     .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx)
@@ -1189,7 +1189,7 @@
         <span class="kw">for </span>input <span class="kw">in </span>transaction.inputs.iter() {
             <span class="kw">let </span>meta = <span class="self">self
                 </span>.modules
-                .module(input.module_key())
+                .get(input.module_key())
                 .apply_input(
                     <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
                     dbtx,
@@ -1210,7 +1210,7 @@
             };
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
-                .module(output.module_key())
+                .get(output.module_key())
                 .apply_output(dbtx, <span class="kw-2">&amp;</span>output, out_point)
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
@@ -1242,7 +1242,7 @@
                 };
                 <span class="kw">let </span>outcome = <span class="self">self
                     </span>.modules
-                    .module(output.module_key())
+                    .get(output.module_key())
                     .output_status(<span class="kw-2">&amp;mut </span>dbtx, outpoint)
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
@@ -1283,7 +1283,7 @@
         </span><span class="kw">let </span>caches = module_inputs
             .into_iter()
             .map(|(module_key, inputs)| {
-                <span class="kw">let </span>module = <span class="self">self</span>.modules.module(module_key);
+                <span class="kw">let </span>module = <span class="self">self</span>.modules.get(module_key);
                 (module_key, module.build_verification_cache(<span class="kw-2">&amp;</span>inputs))
             })
             .collect();
@@ -1294,7 +1294,7 @@
     <span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
-        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.modules() {
+        <span class="kw">for </span>module <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             module.audit(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>audit).<span class="kw">await
         </span>}
         audit
@@ -1349,4 +1349,4 @@
     </span>TransactionConflictError,
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (3020239de 2023-01-09)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (0442fbabe 2023-01-10)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
