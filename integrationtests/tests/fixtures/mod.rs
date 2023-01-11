@@ -20,6 +20,7 @@ use cln_rpc::ClnRpc;
 use fake::FakeLightningTest;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
+use fedimint_api::core;
 use fedimint_api::core::{
     ConsensusItem as PerModuleConsensusItem, PluginConsensusItem,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -810,11 +811,10 @@ impl FederationTest {
                     let mut dbtx = svr.database.begin_transaction().await;
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
-                        outputs: vec![(
-                            MintOutput(tokens.clone()),
+                        outputs: vec![core::Output::from_typed(
                             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                        )
-                            .into()],
+                            MintOutput(tokens.clone()),
+                        )],
                         signature: None,
                     };
 
@@ -834,11 +834,10 @@ impl FederationTest {
                         .get(LEGACY_HARDCODED_INSTANCE_ID_MINT)
                         .apply_output(
                             &mut dbtx,
-                            &(
-                                MintOutput(tokens.clone()),
+                            &core::Output::from_typed(
                                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                            )
-                                .into(),
+                                MintOutput(tokens.clone()),
+                            ),
                             out_point,
                         )
                         .await

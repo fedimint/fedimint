@@ -348,14 +348,13 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .decrypt_share_no_verify(&SecretKey::random().public_key().encrypt(""));
         fed.subset_peers(&[3])
             .override_proposal(vec![ConsensusItem::Module(
-                (
+                fedimint_api::core::ConsensusItem::from_typed(
+                    LEGACY_HARDCODED_INSTANCE_ID_LN,
                     LightningConsensusItem {
                         contract_id,
                         share: PreimageDecryptionShare(share),
                     },
-                    LEGACY_HARDCODED_INSTANCE_ID_LN,
-                )
-                    .into(),
+                ),
             )]);
         drop_peer_3_during_epoch(&fed).await.unwrap(); // preimage decryption
 
@@ -395,14 +394,13 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
             .await;
         let out_point = fed.database_add_coins_for_user(&user, sats(2000)).await;
         let bad_proposal = vec![ConsensusItem::Module(
-            (
+            fedimint_api::core::ConsensusItem::from_typed(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 MintOutputConfirmation {
                     out_point,
                     signatures: OutputConfirmationSignatures(TieredMulti::default()),
                 },
-                LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            )
-                .into(),
+            ),
         )];
 
         fed.subset_peers(&[3]).override_proposal(bad_proposal);

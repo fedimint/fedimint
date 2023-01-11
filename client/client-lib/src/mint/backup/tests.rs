@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use fedimint_api::{
-    core::LEGACY_HARDCODED_INSTANCE_ID_MINT, msats, Amount, OutPoint, PeerId, Tiered, TieredMulti,
+    core::{self, Output, LEGACY_HARDCODED_INSTANCE_ID_MINT},
+    msats, Amount, OutPoint, PeerId, Tiered, TieredMulti,
 };
 use fedimint_core::{
     epoch::ConsensusItem,
@@ -343,7 +344,10 @@ fn sanity_check_recovery_fresh_backup() {
 
     let tx_a = Transaction {
         inputs: vec![],
-        outputs: vec![(output_c1_a.clone(), LEGACY_HARDCODED_INSTANCE_ID_MINT).into()],
+        outputs: vec![Output::from_typed(
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            output_c1_a.clone(),
+        )],
         signature: None,
     };
 
@@ -371,13 +375,10 @@ fn sanity_check_recovery_fresh_backup() {
     for _ in 0..3 {
         tracker.handle_consensus_item(
             confirmations_c1_a[0].0,
-            &ConsensusItem::Module(
-                (
-                    confirmations_c1_a[0].1.clone(),
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                )
-                    .into(),
-            ),
+            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                confirmations_c1_a[0].1.clone(),
+            )),
             &mut Default::default(),
             &Default::default(),
         );
@@ -397,13 +398,10 @@ fn sanity_check_recovery_fresh_backup() {
     for wrong_peer_i in 1..2 {
         tracker.handle_consensus_item(
             confirmations_c1_a[wrong_peer_i].0,
-            &ConsensusItem::Module(
-                (
-                    confirmations_c1_a[0].1.clone(),
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                )
-                    .into(),
-            ),
+            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                confirmations_c1_a[0].1.clone(),
+            )),
             &mut Default::default(),
             &Default::default(),
         );
@@ -423,13 +421,10 @@ fn sanity_check_recovery_fresh_backup() {
     for (peer_id, mint_output_confirmation) in &confirmations_c1_a {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(
-                (
-                    mint_output_confirmation.clone(),
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                )
-                    .into(),
-            ),
+            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                mint_output_confirmation.clone(),
+            )),
             &mut Default::default(),
             &Default::default(),
         );
@@ -447,12 +442,14 @@ fn sanity_check_recovery_fresh_backup() {
 
     // Spend the notes, which should remove them from the tracker
     let tx_b = Transaction {
-        inputs: vec![(
-            c1.generate_input(notes_c1_a),
+        inputs: vec![core::Input::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        )
-            .into()],
-        outputs: vec![(output_c1_a, LEGACY_HARDCODED_INSTANCE_ID_MINT).into()],
+            c1.generate_input(notes_c1_a),
+        )],
+        outputs: vec![core::Output::from_typed(
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            output_c1_a,
+        )],
         signature: None,
     };
 
@@ -486,8 +483,8 @@ fn sanity_check_recovery_non_empty_backup() {
     let tx_a = Transaction {
         inputs: vec![],
         outputs: vec![
-            (output_c1_a0.clone(), LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
-            (output_c1_a1.clone(), LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
+            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output_c1_a0.clone()),
+            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output_c1_a1.clone()),
         ],
         signature: None,
     };
@@ -527,11 +524,10 @@ fn sanity_check_recovery_non_empty_backup() {
 
     // Spend the notes, which should remove them from the tracker
     let tx_b = Transaction {
-        inputs: vec![(
-            c1.generate_input(notes_c1_a0),
+        inputs: vec![core::Input::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        )
-            .into()],
+            c1.generate_input(notes_c1_a0),
+        )],
         outputs: vec![],
         signature: None,
     };
@@ -547,13 +543,10 @@ fn sanity_check_recovery_non_empty_backup() {
     for (peer_id, mint_output_confirmation) in &confirmations_c1_a1 {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(
-                (
-                    mint_output_confirmation.clone(),
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                )
-                    .into(),
-            ),
+            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                mint_output_confirmation.clone(),
+            )),
             &mut Default::default(),
             &Default::default(),
         );
@@ -604,7 +597,10 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
 
     let tx_a = Transaction {
         inputs: vec![],
-        outputs: vec![(output_c2_a.clone(), LEGACY_HARDCODED_INSTANCE_ID_MINT).into()],
+        outputs: vec![core::Output::from_typed(
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            output_c2_a.clone(),
+        )],
         signature: None,
     };
     let output_c1_a_out_point = OutPoint {
@@ -614,7 +610,10 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
 
     let tx_b = Transaction {
         inputs: vec![],
-        outputs: vec![(output_c1_b, LEGACY_HARDCODED_INSTANCE_ID_MINT).into()],
+        outputs: vec![core::Output::from_typed(
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            output_c1_b,
+        )],
         signature: None,
     };
     let output_c1_b_out_point = OutPoint {
@@ -680,7 +679,10 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
 
     let tx_a = Transaction {
         inputs: vec![],
-        outputs: vec![(output_c2_a.clone(), LEGACY_HARDCODED_INSTANCE_ID_MINT).into()],
+        outputs: vec![core::Output::from_typed(
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            output_c2_a.clone(),
+        )],
         signature: None,
     };
     let output_c2_a_out_point = OutPoint {
@@ -690,7 +692,10 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
 
     let tx_b = Transaction {
         inputs: vec![],
-        outputs: vec![(output_c1_b.clone(), LEGACY_HARDCODED_INSTANCE_ID_MINT).into()],
+        outputs: vec![core::Output::from_typed(
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            output_c1_b.clone(),
+        )],
         signature: None,
     };
     let output_c1_b_out_point = OutPoint {
@@ -723,13 +728,10 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     for (peer_id, mint_output_confirmation) in &confirmations_c2_a {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(
-                (
-                    mint_output_confirmation.clone(),
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                )
-                    .into(),
-            ),
+            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                mint_output_confirmation.clone(),
+            )),
             &mut Default::default(),
             &Default::default(),
         );
@@ -742,13 +744,10 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     for (peer_id, mint_output_confirmation) in &confirmations_c1_b {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(
-                (
-                    mint_output_confirmation.clone(),
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                )
-                    .into(),
-            ),
+            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                mint_output_confirmation.clone(),
+            )),
             &mut Default::default(),
             &Default::default(),
         );

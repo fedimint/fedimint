@@ -198,7 +198,7 @@ where
         <Self as ServerModulePlugin>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
-            .map(|v| (v, module_instance_id).into())
+            .map(|v| ConsensusItem::from_typed(module_instance_id, v))
             .collect()
     }
 
@@ -378,7 +378,7 @@ where
     ) -> Option<OutputOutcome> {
         <Self as ServerModulePlugin>::output_status(self, dbtx, out_point)
             .await
-            .map(|v| (v, module_instance_id).into())
+            .map(|v| OutputOutcome::from_typed(module_instance_id, v))
     }
 
     /// Queries the database and returns all assets and liabilities of the module.

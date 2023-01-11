@@ -157,7 +157,7 @@ macro_rules! module_plugin_trait_define{
             }
 
             fn clone(&self, instance_id: ::fedimint_api::core::ModuleInstanceId) -> $newtype_ty {
-                (<Self as Clone>::clone(self), instance_id).into()
+                $newtype_ty::from_typed(instance_id, <Self as Clone>::clone(self))
             }
 
             fn dyn_hash(&self) -> u64 {
@@ -327,7 +327,10 @@ where
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
     ) -> Result<Input, DecodeError> {
-        Ok((<Self as PluginDecode>::decode_input(self, r)?, instance_id).into())
+        Ok(Input::from_typed(
+            instance_id,
+            <Self as PluginDecode>::decode_input(self, r)?,
+        ))
     }
 
     fn decode_output(
@@ -335,7 +338,10 @@ where
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
     ) -> Result<Output, DecodeError> {
-        Ok((<Self as PluginDecode>::decode_output(self, r)?, instance_id).into())
+        Ok(Output::from_typed(
+            instance_id,
+            <Self as PluginDecode>::decode_output(self, r)?,
+        ))
     }
 
     fn decode_output_outcome(
@@ -344,11 +350,10 @@ where
 
         instance_id: ModuleInstanceId,
     ) -> Result<OutputOutcome, DecodeError> {
-        Ok((
-            <Self as PluginDecode>::decode_output_outcome(self, r)?,
+        Ok(OutputOutcome::from_typed(
             instance_id,
-        )
-            .into())
+            <Self as PluginDecode>::decode_output_outcome(self, r)?,
+        ))
     }
 
     fn decode_consensus_item(
@@ -356,11 +361,10 @@ where
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
     ) -> Result<ConsensusItem, DecodeError> {
-        Ok((
-            <Self as PluginDecode>::decode_consensus_item(self, r)?,
+        Ok(ConsensusItem::from_typed(
             instance_id,
-        )
-            .into())
+            <Self as PluginDecode>::decode_consensus_item(self, r)?,
+        ))
     }
 }
 

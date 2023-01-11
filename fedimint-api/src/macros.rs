@@ -160,14 +160,12 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
             pub fn module_instance_id(&self) -> ::fedimint_api::core::ModuleInstanceId {
                 self.1
             }
-        }
 
-        impl<I> From<(I, ::fedimint_api::core::ModuleInstanceId)> for $name
-        where
-            I: $trait + Send + Sync + 'static,
-        {
-            fn from(v: (I, ::fedimint_api::core::ModuleInstanceId)) -> Self {
-                Self($container::new(v.0), v.1)
+            pub fn from_typed<I>(module_instance_id: ::fedimint_api::core::ModuleInstanceId, typed: I) -> Self
+            where
+                I: $trait + Send + Sync + 'static {
+
+                Self($container::new(typed), module_instance_id)
             }
         }
 
@@ -187,6 +185,13 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
             pub fn module_instance_id(&self) -> ::fedimint_api::core::ModuleInstanceId {
                 self.1
             }
+
+            pub fn from_typed<I>(module_instance_id: ::fedimint_api::core::ModuleInstanceId, typed: I) -> Self
+            where
+                I: $trait + Send + Sync + 'static {
+
+                Self($container::new(typed), module_instance_id)
+            }
         }
 
         impl<$lifetime> std::ops::Deref for $name<$lifetime> {
@@ -194,15 +199,6 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
 
             fn deref(&self) -> &<Self as std::ops::Deref>::Target {
                 &*self.0
-            }
-        }
-
-        impl<$lifetime, I> From<(I, ::fedimint_api::core::ModuleInstanceId)> for $name<$lifetime>
-        where
-            I: $trait<$lifetime> + Send + $lifetime,
-        {
-            fn from(v: (I, ::fedimint_api::core::ModuleInstanceId)) -> Self {
-                Self($container::new(v.0), v.1)
             }
         }
     };

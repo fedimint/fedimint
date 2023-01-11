@@ -707,16 +707,15 @@ mod tests {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
                 outputs: vec![SerdeOutputOutcome::from(
-                    &((
+                    &(fedimint_api::core::OutputOutcome::from_typed(
+                        LEGACY_HARDCODED_INSTANCE_ID_MINT,
                         mint.output_outcome(OutPoint {
                             txid: tx,
                             out_idx: 0,
                         })
                         .await
                         .unwrap(),
-                        LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                    )
-                        .into()),
+                    )),
                 )],
             })
         }

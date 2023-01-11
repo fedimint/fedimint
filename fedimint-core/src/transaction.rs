@@ -225,20 +225,27 @@ pub mod legacy {
 
         /// Generate the transaction hash.
         pub fn tx_hash_from_parts(inputs: &[Input], outputs: &[Output]) -> TransactionId {
+            use fedimint_api::core;
             let erased_inputs = inputs
                 .iter()
                 .map(|input| match input.clone() {
-                    Input::Mint(i) => (i, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
-                    Input::Wallet(i) => (i, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into(),
-                    Input::LN(i) => (i, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
+                    Input::Mint(i) => core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, i),
+                    Input::Wallet(i) => {
+                        core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
+                    }
+                    Input::LN(i) => core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
                 })
                 .collect::<Vec<fedimint_api::core::Input>>();
             let erased_outputs = outputs
                 .iter()
                 .map(|output| match output.clone() {
-                    Output::Mint(o) => (o, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
-                    Output::Wallet(o) => (o, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into(),
-                    Output::LN(o) => (o, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
+                    Output::Mint(o) => {
+                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
+                    }
+                    Output::Wallet(o) => {
+                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
+                    }
+                    Output::LN(o) => core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o),
                 })
                 .collect::<Vec<fedimint_api::core::Output>>();
 
@@ -287,25 +294,36 @@ pub mod legacy {
         }
 
         pub fn into_type_erased(self) -> super::Transaction {
+            use fedimint_api::core;
             super::Transaction {
                 inputs: self
                     .inputs
                     .into_iter()
                     .map(|input| match input {
-                        Input::Mint(input) => (input, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
-                        Input::Wallet(input) => (input, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into(),
-                        Input::LN(input) => (input, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
+                        Input::Mint(input) => {
+                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, input)
+                        }
+                        Input::Wallet(input) => {
+                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, input)
+                        }
+                        Input::LN(input) => {
+                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
+                        }
                     })
                     .collect(),
                 outputs: self
                     .outputs
                     .into_iter()
                     .map(|output| match output {
-                        Output::Mint(output) => (output, LEGACY_HARDCODED_INSTANCE_ID_MINT).into(),
-                        Output::Wallet(output) => {
-                            (output, LEGACY_HARDCODED_INSTANCE_ID_WALLET).into()
+                        Output::Mint(output) => {
+                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
                         }
-                        Output::LN(output) => (output, LEGACY_HARDCODED_INSTANCE_ID_LN).into(),
+                        Output::Wallet(output) => {
+                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
+                        }
+                        Output::LN(output) => {
+                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
+                        }
                     })
                     .collect(),
                 signature: self.signature,
