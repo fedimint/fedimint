@@ -25,7 +25,7 @@ Fedimint is alpha software. Use cautiously, with small amounts of money. There a
 
 * <a id="community" />Community:
   * [Telegram group](https://t.me/fedimint) for high-level non-technical discussion
-  * [Developer discord](https://discord.gg/dZYajBMsEB) for technical discussion
+  * [Developer discord](https://chat.fedimint.org) for technical discussion
 * For developers:
   * [Introduction for contributors](./docs/contributing.md)
   * [Setting up dev environment](./docs/dev-env.md)
