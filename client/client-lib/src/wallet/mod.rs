@@ -6,7 +6,6 @@ use db::PegInKey;
 use fedimint_api::core::client::ClientModulePlugin;
 use fedimint_api::core::{ModuleKey, MODULE_KEY_WALLET};
 use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModulePlugin};
 use fedimint_core::modules::wallet::common::WalletModuleDecoder;
@@ -113,7 +112,7 @@ impl WalletClient {
                 let result = self
                     .context
                     .db
-                    .begin_transaction(ModuleDecoderRegistry::default())
+                    .begin_transaction()
                     .await
                     .get_value(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
@@ -200,7 +199,7 @@ mod tests {
     use bitcoin_hashes::Hash;
     use fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
+    use fedimint_api::db::Database;
     use fedimint_api::task::TaskGroup;
     use fedimint_api::{Feerate, OutPoint, TransactionId};
     use fedimint_core::epoch::SignedEpochOutcome;
@@ -220,7 +219,7 @@ mod tests {
 
     use crate::api::IFederationApi;
     use crate::wallet::WalletClient;
-    use crate::{ClientContext, LegacyTransaction};
+    use crate::{module_decode_stubs, ClientContext, LegacyTransaction};
 
     type Fed = FakeFed<Wallet>;
     type SharedFed = Arc<tokio::sync::Mutex<Fed>>;
@@ -366,7 +365,7 @@ mod tests {
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client = ClientContext {
-            db: MemDatabase::new().into(),
+            db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api,
             secp: secp256k1_zkp::Secp256k1::new(),
         };
@@ -440,9 +439,7 @@ mod tests {
             .await
             .fetch_from_all(|wallet, db| async {
                 wallet
-                    .get_wallet_value(
-                        &mut db.begin_transaction(ModuleDecoderRegistry::default()).await,
-                    )
+                    .get_wallet_value(&mut db.begin_transaction().await)
                     .await
             })
             .await;
@@ -458,9 +455,7 @@ mod tests {
             .await
             .fetch_from_all(|wallet, db| async {
                 wallet
-                    .get_wallet_value(
-                        &mut db.begin_transaction(ModuleDecoderRegistry::default()).await,
-                    )
+                    .get_wallet_value(&mut db.begin_transaction().await)
                     .await
             })
             .await;

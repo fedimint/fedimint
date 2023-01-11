@@ -2,9 +2,8 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::{DatabaseTransaction, PrefixIter};
+use fedimint_api::db::PrefixIter;
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 use tracing::warn;
@@ -50,16 +49,15 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
 
 #[async_trait]
 impl IDatabase for RocksDb {
-    async fn begin_transaction(&self, decoders: ModuleDecoderRegistry) -> DatabaseTransaction {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
-        let rocksdb_tx = RocksDbTransaction(
+        let mut rocksdb_tx = RocksDbTransaction(
             self.0
                 .transaction_opt(&WriteOptions::default(), &optimistic_options),
         );
-        let mut tx = DatabaseTransaction::new(rocksdb_tx, decoders);
-        tx.set_tx_savepoint().await;
-        tx
+        rocksdb_tx.set_tx_savepoint().await;
+        Box::new(rocksdb_tx)
     }
 }
 
@@ -165,107 +163,100 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
 
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
+    use fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+
     use crate::RocksDb;
 
-    fn open_temp_db(temp_path: &str) -> RocksDb {
+    fn open_temp_db(temp_path: &str) -> Database {
         let path = tempfile::Builder::new()
             .prefix(temp_path)
             .tempdir()
             .unwrap();
 
-        RocksDb::open(path).unwrap()
+        Database::new(
+            RocksDb::open(path).unwrap(),
+            ModuleDecoderRegistry::default(),
+        )
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(
-            open_temp_db("fcb-rocksdb-test-insert-elements").into(),
-        )
-        .await;
+        fedimint_api::db::verify_insert_elements(open_temp_db("fcb-rocksdb-test-insert-elements"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(
-            open_temp_db("fcb-rocksdb-test-remove-nonexisting").into(),
-        )
+        fedimint_api::db::verify_remove_nonexisting(open_temp_db(
+            "fcb-rocksdb-test-remove-nonexisting",
+        ))
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_existing(
-            open_temp_db("fcb-rocksdb-test-remove-existing").into(),
-        )
-        .await;
+        fedimint_api::db::verify_remove_existing(open_temp_db("fcb-rocksdb-test-remove-existing"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(
-            open_temp_db("fcb-rocksdb-test-read-own-writes").into(),
-        )
-        .await;
+        fedimint_api::db::verify_read_own_writes(open_temp_db("fcb-rocksdb-test-read-own-writes"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(
-            open_temp_db("fcb-rocksdb-test-prevent-dirty-reads").into(),
-        )
+        fedimint_api::db::verify_prevent_dirty_reads(open_temp_db(
+            "fcb-rocksdb-test-prevent-dirty-reads",
+        ))
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(
-            open_temp_db("fcb-rocksdb-test-find-by-prefix").into(),
-        )
-        .await;
+        fedimint_api::db::verify_find_by_prefix(open_temp_db("fcb-rocksdb-test-find-by-prefix"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit").into()).await;
+        fedimint_api::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit")).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_nonrepeatable_reads() {
-        fedimint_api::db::verify_prevent_nonrepeatable_reads(
-            open_temp_db("fcb-rocksdb-test-prevent-nonrepeatable-reads").into(),
-        )
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(open_temp_db(
+            "fcb-rocksdb-test-prevent-nonrepeatable-reads",
+        ))
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(
-            open_temp_db("fcb-rocksdb-test-rollback-to-savepoint").into(),
-        )
+        fedimint_api::db::verify_rollback_to_savepoint(open_temp_db(
+            "fcb-rocksdb-test-rollback-to-savepoint",
+        ))
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_phantom_entry() {
-        fedimint_api::db::verify_phantom_entry(
-            open_temp_db("fcb-rocksdb-test-phantom-entry").into(),
-        )
-        .await;
+        fedimint_api::db::verify_phantom_entry(open_temp_db("fcb-rocksdb-test-phantom-entry"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_write_conflict() {
-        fedimint_api::db::expect_write_conflict(
-            open_temp_db("fcb-rocksdb-test-write-conflict").into(),
-        )
-        .await;
+        fedimint_api::db::expect_write_conflict(open_temp_db("fcb-rocksdb-test-write-conflict"))
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(
-            open_temp_db("fcb-rocksdb-test-remove-by-prefix").into(),
-        )
+        fedimint_api::db::verify_remove_by_prefix(open_temp_db(
+            "fcb-rocksdb-test-remove-by-prefix",
+        ))
         .await;
     }
 }

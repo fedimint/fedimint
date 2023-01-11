@@ -6,15 +6,16 @@ use std::{
 };
 
 use async_trait::async_trait;
-use fedimint_api::config::FederationId;
 use fedimint_api::{
     config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define, NumPeers,
 };
+use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_server::config::load_from_file;
 use mint_client::{
     api::{WsFederationApi, WsFederationConnect},
+    module_decode_stubs,
     query::CurrentConsensus,
     Client, GatewayClientConfig,
 };
@@ -25,7 +26,12 @@ use url::Url;
 use crate::{LnGatewayError, Result};
 
 pub trait IDbFactory: Debug {
-    fn create_database(&self, federation_id: FederationId, path: PathBuf) -> Result<Database>;
+    fn create_database(
+        &self,
+        federation_id: FederationId,
+        path: PathBuf,
+        decoders: ModuleDecoderRegistry,
+    ) -> Result<Database>;
 }
 
 dyn_newtype_define!(
@@ -39,8 +45,13 @@ dyn_newtype_define!(
 pub struct MemDbFactory;
 
 impl IDbFactory for MemDbFactory {
-    fn create_database(&self, _federation_id: FederationId, _path: PathBuf) -> Result<Database> {
-        Ok(MemDatabase::new().into())
+    fn create_database(
+        &self,
+        _federation_id: FederationId,
+        _path: PathBuf,
+        decoders: ModuleDecoderRegistry,
+    ) -> Result<Database> {
+        Ok(Database::new(MemDatabase::new(), decoders))
     }
 }
 
@@ -49,12 +60,15 @@ impl IDbFactory for MemDbFactory {
 pub struct RocksDbFactory;
 
 impl IDbFactory for RocksDbFactory {
-    fn create_database(&self, federation_id: FederationId, path: PathBuf) -> Result<Database> {
+    fn create_database(
+        &self,
+        federation_id: FederationId,
+        path: PathBuf,
+        decoders: ModuleDecoderRegistry,
+    ) -> Result<Database> {
         let db_path = path.join(format!("{}.db", federation_id.to_string()));
-        let db = fedimint_rocksdb::RocksDb::open(db_path)
-            .expect("Error opening new rocks DB")
-            .into();
-        Ok(db)
+        let db = fedimint_rocksdb::RocksDb::open(db_path).expect("Error opening new rocks DB");
+        Ok(Database::new(db, decoders))
     }
 }
 
@@ -106,9 +120,11 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
     async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
         let federation_id = config.client_config.federation_id.clone();
 
-        let db = self
-            .db_factory
-            .create_database(federation_id, self.work_dir.clone())?;
+        let db = self.db_factory.create_database(
+            federation_id,
+            self.work_dir.clone(),
+            module_decode_stubs(),
+        )?;
         let ctx = secp256k1::Secp256k1::new();
 
         Ok(Client::new(config, db, ctx).await)

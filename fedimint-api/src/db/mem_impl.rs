@@ -6,11 +6,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use super::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
-    IDatabase, IDatabaseTransaction,
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, IDatabase,
+    IDatabaseTransaction,
 };
 use crate::db::PrefixIter;
-use crate::ModuleDecoderRegistry;
 
 #[derive(Debug, Default)]
 pub struct MemDatabase {
@@ -46,9 +45,9 @@ impl MemDatabase {
 
 #[async_trait]
 impl IDatabase for MemDatabase {
-    async fn begin_transaction(&self, decoders: ModuleDecoderRegistry) -> DatabaseTransaction {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
         let db_copy = self.data.lock().unwrap().clone();
-        let memtx = MemTransaction {
+        let mut memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
             db: self,
@@ -57,9 +56,8 @@ impl IDatabase for MemDatabase {
             num_savepoint_operations: 0,
         };
 
-        let mut tx = DatabaseTransaction::new(memtx, decoders);
-        tx.set_tx_savepoint().await;
-        tx
+        memtx.set_tx_savepoint().await;
+        Box::new(memtx)
     }
 }
 
@@ -157,59 +155,64 @@ impl Iterator for MemDbIter {
 #[cfg(test)]
 mod tests {
     use super::MemDatabase;
+    use crate::{db::Database, module::registry::ModuleDecoderRegistry};
+
+    fn database() -> Database {
+        Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())
+    }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_insert_elements(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_remove_nonexisting(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_nonexisting(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_remove_nonexisting(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_read_own_writes(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_prevent_dirty_reads(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_find_by_prefix(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_commit(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_nonrepeatable_reads() {
-        fedimint_api::db::verify_prevent_nonrepeatable_reads(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_prevent_nonrepeatable_reads(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_rollback_to_savepoint(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_phantom_entry() {
-        fedimint_api::db::verify_phantom_entry(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_phantom_entry(database()).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(MemDatabase::new().into()).await;
+        fedimint_api::db::verify_remove_by_prefix(database()).await;
     }
 }

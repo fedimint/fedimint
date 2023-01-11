@@ -65,6 +65,7 @@ use ln_gateway::{
     rpc::GatewayRequest,
     LnGateway,
 };
+use mint_client::module_decode_stubs;
 use mint_client::{
     api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
     UserClient, UserClientConfig,
@@ -208,7 +209,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
-            let fed_db = || rocks(dir.clone()).into();
+            let fed_db = |decoders| Database::new(rocks(dir.clone()), decoders);
             let fed = FederationTest::new(
                 server_config,
                 &fed_db,
@@ -222,9 +223,9 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let user_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
                 let db_name = format!("client-{}", rng().next_u64());
-                sqlite(dir.clone(), db_name).await.into()
+                Database::new(sqlite(dir.clone(), db_name).await, module_decode_stubs())
             } else {
-                rocks(dir.clone()).into()
+                Database::new(rocks(dir.clone()), module_decode_stubs())
             };
 
             let user_cfg = UserClientConfig(client_config.clone());
@@ -266,7 +267,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let connect_gen =
                 move |cfg: &ServerConfig| net_ref.connector(cfg.local.identity).into_dyn();
 
-            let fed_db = || MemDatabase::new().into();
+            let fed_db = |decoders| Database::new(MemDatabase::new(), decoders);
             let fed = FederationTest::new(
                 server_config,
                 &fed_db,
@@ -284,7 +285,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                                 "wallet",
                                 Wallet::new_with_bitcoind(
                                     cfg.get_module_config_typed("wallet").unwrap(),
-                                    fed_db(),
+                                    // wallet module does not need any module specific types
+                                    fed_db(ModuleDecoderRegistry::default()),
                                     bitcoin_rpc_2.clone(),
                                     &mut task_group,
                                 )
@@ -299,7 +301,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .await;
 
-            let user_db = MemDatabase::new().into();
+            let user_db = Database::new(MemDatabase::new(), module_decode_stubs());
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
             user.client.await_consensus_block_height(0).await?;
@@ -528,7 +530,12 @@ pub struct UserTest<C> {
 impl UserTest<UserClientConfig> {
     /// Create a user that communicates only with a subset of peers
     pub async fn new_user_with_peers(&self, peers: Vec<PeerId>) -> UserTest<UserClientConfig> {
-        let user = create_user_client(self.config.clone(), peers, MemDatabase::new().into()).await;
+        let user = create_user_client(
+            self.config.clone(),
+            peers,
+            Database::new(MemDatabase::new(), module_decode_stubs()),
+        )
+        .await;
         UserTest::new(Arc::new(user))
     }
 }
@@ -743,7 +750,7 @@ impl FederationTest {
         for server in &self.servers {
             block_on(async {
                 let svr = server.borrow_mut();
-                let mut dbtx = svr.database.begin_transaction(self.decoders.clone()).await;
+                let mut dbtx = svr.database.begin_transaction().await;
 
                 dbtx.insert_new_entry(
                     &UTXOKey(input.outpoint()),
@@ -794,7 +801,7 @@ impl FederationTest {
             .receive_coins(amount, |tokens| async move {
                 for server in &self.servers {
                     let svr = server.borrow_mut();
-                    let mut dbtx = svr.database.begin_transaction(self.decoders.clone()).await;
+                    let mut dbtx = svr.database.begin_transaction().await;
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![MintOutput(tokens.clone()).into()],
@@ -831,7 +838,7 @@ impl FederationTest {
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
             let svr = server.borrow();
-            let dbtx = block_on(svr.database.begin_transaction(self.decoders.clone()));
+            let dbtx = block_on(svr.database.begin_transaction());
             block_on(fedimint_wallet::broadcast_pending_tx(
                 dbtx,
                 &svr.bitcoin_rpc,
@@ -883,12 +890,7 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
-        let mut dbtx = block_on(
-            server
-                .consensus
-                .db
-                .begin_transaction(server.decoders.clone()),
-        );
+        let mut dbtx = block_on(server.consensus.db.begin_transaction());
         let height = block_on(wallet.consensus_height(&mut dbtx)).unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
@@ -998,7 +1000,7 @@ impl FederationTest {
 
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
-        database_gen: &impl Fn() -> Database,
+        database_gen: &impl Fn(ModuleDecoderRegistry) -> Database,
         bitcoin_gen: &impl Fn() -> BitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
         module_inits: ModuleInitRegistry,
@@ -1010,10 +1012,9 @@ impl FederationTest {
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
             let btc_rpc = bitcoin_gen();
-            let db = database_gen();
-            let mut task_group = task_group.clone();
-
             let decoders = module_inits.decoders();
+            let db = database_gen(decoders.clone());
+            let mut task_group = task_group.clone();
 
             let mut override_modules = override_modules(cfg.clone()).await;
 

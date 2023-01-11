@@ -685,9 +685,10 @@ async fn main() {
     ]);
 
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
+    let decoders = module_inits.decoders();
     let mut dbdump = DatabaseDump {
         serialized,
-        read_only: DatabaseTransaction::new(read_only, module_inits.decoders()),
+        read_only: DatabaseTransaction::new(Box::new(read_only), &decoders),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == "All",

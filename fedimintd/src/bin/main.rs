@@ -115,10 +115,6 @@ async fn main() -> anyhow::Result<()> {
     let key = get_key(opts.password, salt_path);
     let cfg = read_server_configs(&key, opts.data_dir.clone());
 
-    let db: Database = fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))
-        .expect("Error opening DB")
-        .into();
-
     let local_task_set = tokio::task::LocalSet::new();
     let _guard = local_task_set.enter();
 
@@ -134,6 +130,10 @@ async fn main() -> anyhow::Result<()> {
     ]);
 
     let decoders = module_inits.decoders();
+
+    let db =
+        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).expect("Error opening DB");
+    let db = Database::new(db, decoders.clone());
 
     let consensus = FedimintConsensus::new(cfg.clone(), db, module_inits, &mut task_group).await?;
 

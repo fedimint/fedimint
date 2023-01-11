@@ -8,6 +8,7 @@ use std::process::exit;
 use bitcoin::{secp256k1, Address, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_api::config::ClientConfig;
+use fedimint_api::db::Database;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::config::load_from_file;
@@ -20,7 +21,7 @@ use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     serialize_ecash,
 };
-use mint_client::{Client, UserClientConfig};
+use mint_client::{module_decode_stubs, Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing_subscriber::EnvFilter;
@@ -390,8 +391,8 @@ async fn main() {
         let db_path = cli.workdir.join("client.db");
         let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
         let db = fedimint_rocksdb::RocksDb::open(db_path)
-            .or_terminate(CliErrorKind::IOError, "could not open transaction db")
-            .into();
+            .or_terminate(CliErrorKind::IOError, "could not open transaction db");
+        let db = Database::new(db, module_decode_stubs());
 
         let rng = rand::rngs::OsRng;
 

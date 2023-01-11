@@ -1,8 +1,6 @@
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::config::ConfigGenParams;
-use fedimint_api::core::{Decoder, MODULE_KEY_LN};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{Amount, OutPoint};
 use fedimint_ln::config::LightningModuleClientConfig;
 use fedimint_ln::contracts::account::AccountContract;
@@ -19,13 +17,6 @@ use fedimint_ln::{
 };
 use fedimint_testing::FakeFed;
 use secp256k1::KeyPair;
-
-fn ln_decoders() -> ModuleDecoderRegistry {
-    ModuleDecoderRegistry::from_iter([(
-        MODULE_KEY_LN,
-        Decoder::from_typed(&fedimint_ln::common::LightningModuleDecoder),
-    )])
-}
 
 #[test_log::test(tokio::test)]
 async fn test_account() {
@@ -216,10 +207,7 @@ async fn test_incoming() {
     fed.consensus_round(&[], &[(offer_out_point, offer_output)])
         .await;
     let offers = fed
-        .fetch_from_all(|m, db| async {
-            m.get_offers(&mut db.begin_transaction(ln_decoders()).await)
-                .await
-        })
+        .fetch_from_all(|m, db| async { m.get_offers(&mut db.begin_transaction().await).await })
         .await;
     assert_eq!(offers, vec![offer.clone()]);
 
