@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use fedimint_api::cancellable::Cancellable;
+use anyhow::ensure;
 use fedimint_api::module::ModuleInit;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -29,10 +29,10 @@ pub fn create_cert(
     api_url: Url,
     guardian_name: String,
     password: Option<String>,
-) -> String {
+) -> anyhow::Result<String> {
     let salt: [u8; 16] = rand::random();
-    fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect("write error");
-    let key = get_key(password, dir_out_path.join(SALT_FILE));
+    fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt))?;
+    let key = get_key(password, dir_out_path.join(SALT_FILE))?;
     gen_tls(&dir_out_path, p2p_url, api_url, guardian_name, &key)
 }
 
@@ -49,22 +49,21 @@ pub async fn run_dkg(
     finality_delay: u32,
     pk: rustls::PrivateKey,
     task_group: &mut TaskGroup,
-) -> Cancellable<ServerConfig> {
-    let peers: BTreeMap<PeerId, PeerServerParams> = certs
-        .into_iter()
-        .sorted()
-        .enumerate()
-        .map(|(idx, cert)| (PeerId::from(idx as u16), parse_peer_params(cert)))
-        .collect();
+) -> anyhow::Result<ServerConfig> {
+    let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
+    for (idx, cert) in certs.into_iter().sorted().enumerate() {
+        peers.insert(PeerId::from(idx as u16), parse_peer_params(cert)?);
+    }
 
-    let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT)).expect("Can't read file.");
+    let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))?;
 
-    let our_params = parse_peer_params(cert_string);
+    let our_params = parse_peer_params(cert_string)?;
     let our_id = peers
         .iter()
         .find(|(_peer, params)| params.cert == our_params.cert)
         .map(|(peer, _)| *peer)
-        .expect("could not find our cert among peers");
+        .ok_or_else(|| anyhow::Error::msg("Our id not found"))?;
+
     let params = ServerConfigParams::gen_params(
         bind_p2p,
         bind_api,
@@ -84,6 +83,7 @@ pub async fn run_dkg(
         task_group,
     )
     .await;
+
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
     let module_config_gens = ModuleInitRegistry::from(vec![
@@ -102,26 +102,26 @@ pub async fn run_dkg(
         OsRng,
         task_group,
     )
-    .await
-    .expect("failed to run DKG to generate configs");
+    .await?;
 
     drop(connections);
 
-    result
+    Ok(result?)
 }
 
-pub fn parse_peer_params(url: String) -> PeerServerParams {
+pub fn parse_peer_params(url: String) -> anyhow::Result<PeerServerParams> {
     let split: Vec<&str> = url.split('@').collect();
-    assert_eq!(split.len(), 4, "Cannot parse cert string");
-    let p2p_url = split[0].parse().expect("could not parse URL");
-    let api_url = split[1].parse().expect("could not parse URL");
-    let hex_cert = hex::decode(split[3]).expect("cert was not hex encoded");
-    PeerServerParams {
+
+    ensure!(split.len() == 4, "Cert string has wrong number of fields");
+    let p2p_url = split[0].parse()?;
+    let api_url = split[1].parse()?;
+    let hex_cert = hex::decode(split[3])?;
+    Ok(PeerServerParams {
         cert: rustls::Certificate(hex_cert),
         p2p_url,
         api_url,
         name: split[2].to_string(),
-    }
+    })
 }
 
 fn gen_tls(
@@ -130,13 +130,13 @@ fn gen_tls(
     api_url: Url,
     name: String,
     key: &LessSafeKey,
-) -> String {
-    let (cert, pk) = fedimint_server::config::gen_cert_and_key(&name).expect("TLS gen failed");
-    encrypted_write(pk.0, key, dir_out_path.join(TLS_PK));
+) -> anyhow::Result<String> {
+    let (cert, pk) = fedimint_server::config::gen_cert_and_key(&name)?;
+    encrypted_write(pk.0, key, dir_out_path.join(TLS_PK))?;
 
-    rustls::ServerName::try_from(name.as_str()).expect("Valid DNS name");
+    rustls::ServerName::try_from(name.as_str())?;
     // TODO Base64 encode name, hash fingerprint cert_string
     let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, hex::encode(cert.0));
-    fs::write(dir_out_path.join(TLS_CERT), &cert_url).unwrap();
-    cert_url
+    fs::write(dir_out_path.join(TLS_CERT), &cert_url)?;
+    Ok(cert_url)
 }
