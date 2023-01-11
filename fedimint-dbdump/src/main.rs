@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use docopt::Docopt;
 use erased_serde::Serialize;
+use fedimint_api::db as VersionRange;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
 use fedimint_api::module::ModuleInit;
@@ -120,6 +121,9 @@ impl<'a> DatabaseDump<'a> {
                 }
                 "client" => {
                     self.get_client_data().await;
+                }
+                "versions" => {
+                    self.retrieve_module_versions().await;
                 }
                 _ => {}
             }
@@ -612,6 +616,30 @@ impl<'a> DatabaseDump<'a> {
         self.serialized
             .insert("Client".to_string(), Box::new(client));
     }
+
+    async fn retrieve_module_versions(&mut self) {
+        let mut versions: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
+
+        for table in VersionRange::DbKeyPrefix::iter() {
+            filter_prefixes!(table, self);
+
+            match table {
+                VersionRange::DbKeyPrefix::DatabaseVersion => {
+                    push_db_pair_items!(
+                        self,
+                        VersionRange::DatabaseVersionKeyPrefix,
+                        VersionRange::DatabaseVersionKey,
+                        VersionRange::DatabaseVersion,
+                        versions,
+                        "Module Versions"
+                    );
+                }
+            }
+        }
+
+        self.serialized
+            .insert("Versions".to_string(), Box::new(versions));
+    }
 }
 
 const USAGE: &str = "
@@ -625,7 +653,7 @@ Options:
     RANGES=consensus,mint,wallet,lightning,mintclient,lightningclient,walletclient,client
 ";
 
-const RANGES: [&str; 8] = [
+const RANGES: [&str; 9] = [
     "consensus",
     "mint",
     "wallet",
@@ -634,6 +662,7 @@ const RANGES: [&str; 8] = [
     "lightningclient",
     "walletclient",
     "client",
+    "versions",
 ];
 
 #[derive(Debug, Deserialize)]

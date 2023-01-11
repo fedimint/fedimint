@@ -1,4 +1,5 @@
-use fedimint_api::db::DatabaseKeyPrefixConst;
+use fedimint_api::core::MODULE_KEY_LN;
+use fedimint_api::db::{DatabaseKeyPrefixConst, DatabaseVersion};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{OutPoint, PeerId};
 use secp256k1::PublicKey;
@@ -7,6 +8,8 @@ use strum_macros::EnumIter;
 
 use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
 use crate::{ContractAccount, LightningGateway, LightningOutputOutcome};
+
+pub const DATABASE_VERSION: DatabaseVersion = DatabaseVersion { version: 1 };
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -29,6 +32,7 @@ impl std::fmt::Display for DbKeyPrefix {
 pub struct ContractKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for ContractKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::Contract as u8;
     type Key = Self;
     type Value = ContractAccount;
@@ -38,6 +42,7 @@ impl DatabaseKeyPrefixConst for ContractKey {
 pub struct ContractKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ContractKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::Contract as u8;
     type Key = ContractKey;
     type Value = ContractAccount;
@@ -47,6 +52,7 @@ impl DatabaseKeyPrefixConst for ContractKeyPrefix {
 pub struct ContractUpdateKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for ContractUpdateKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate as u8;
     type Key = Self;
     type Value = LightningOutputOutcome;
@@ -56,6 +62,7 @@ impl DatabaseKeyPrefixConst for ContractUpdateKey {
 pub struct ContractUpdateKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ContractUpdateKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate as u8;
     type Key = ContractUpdateKey;
     type Value = LightningOutputOutcome;
@@ -65,6 +72,7 @@ impl DatabaseKeyPrefixConst for ContractUpdateKeyPrefix {
 pub struct OfferKey(pub bitcoin_hashes::sha256::Hash);
 
 impl DatabaseKeyPrefixConst for OfferKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::Offer as u8;
     type Key = Self;
     type Value = IncomingContractOffer;
@@ -74,6 +82,7 @@ impl DatabaseKeyPrefixConst for OfferKey {
 pub struct OfferKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OfferKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::Offer as u8;
     type Key = OfferKey;
     type Value = IncomingContractOffer;
@@ -84,6 +93,7 @@ impl DatabaseKeyPrefixConst for OfferKeyPrefix {
 pub struct ProposeDecryptionShareKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for ProposeDecryptionShareKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare as u8;
     type Key = Self;
     type Value = PreimageDecryptionShare;
@@ -94,6 +104,7 @@ impl DatabaseKeyPrefixConst for ProposeDecryptionShareKey {
 pub struct ProposeDecryptionShareKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ProposeDecryptionShareKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare as u8;
     type Key = ProposeDecryptionShareKey;
     type Value = PreimageDecryptionShare;
@@ -104,6 +115,7 @@ impl DatabaseKeyPrefixConst for ProposeDecryptionShareKeyPrefix {
 pub struct AgreedDecryptionShareKey(pub ContractId, pub PeerId);
 
 impl DatabaseKeyPrefixConst for AgreedDecryptionShareKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare as u8;
     type Key = Self;
     type Value = PreimageDecryptionShare;
@@ -114,6 +126,7 @@ impl DatabaseKeyPrefixConst for AgreedDecryptionShareKey {
 pub struct AgreedDecryptionShareKeyPrefix;
 
 impl DatabaseKeyPrefixConst for AgreedDecryptionShareKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare as u8;
     type Key = AgreedDecryptionShareKey;
     type Value = PreimageDecryptionShare;
@@ -123,6 +136,7 @@ impl DatabaseKeyPrefixConst for AgreedDecryptionShareKeyPrefix {
 pub struct LightningGatewayKey(pub PublicKey);
 
 impl DatabaseKeyPrefixConst for LightningGatewayKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
     type Key = Self;
     type Value = LightningGateway;
@@ -132,6 +146,7 @@ impl DatabaseKeyPrefixConst for LightningGatewayKey {
 pub struct LightningGatewayKeyPrefix;
 
 impl DatabaseKeyPrefixConst for LightningGatewayKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_LN;
     const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
     type Key = LightningGatewayKey;
     type Value = LightningGateway;

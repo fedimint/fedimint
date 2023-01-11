@@ -18,6 +18,7 @@ use bitcoin::{
 };
 use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
+use db::DATABASE_VERSION;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
@@ -25,7 +26,7 @@ use fedimint_api::config::{
     ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_WALLET};
-use fedimint_api::db::{Database, DatabaseTransaction};
+use fedimint_api::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
@@ -394,6 +395,10 @@ impl ServerModulePlugin for Wallet {
 
     fn module_key(&self) -> ModuleKey {
         MODULE_KEY_WALLET
+    }
+
+    fn db_module_version(&self) -> DatabaseVersion {
+        DATABASE_VERSION
     }
 
     fn decoder(&self) -> &'static Self::Decoder {

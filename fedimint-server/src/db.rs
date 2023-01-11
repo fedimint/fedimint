@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use fedimint_api::core::MODULE_KEY_GLOBAL;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{PeerId, TransactionId};
@@ -31,6 +32,7 @@ impl std::fmt::Display for DbKeyPrefix {
 pub struct ProposedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for ProposedTransactionKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction as u8;
     type Key = Self;
     type Value = Transaction;
@@ -40,6 +42,7 @@ impl DatabaseKeyPrefixConst for ProposedTransactionKey {
 pub struct ProposedTransactionKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ProposedTransactionKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction as u8;
     type Key = ProposedTransactionKey;
     type Value = Transaction;
@@ -49,6 +52,7 @@ impl DatabaseKeyPrefixConst for ProposedTransactionKeyPrefix {
 pub struct AcceptedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::AcceptedTransaction as u8;
     type Key = Self;
     type Value = AcceptedTransaction;
@@ -58,6 +62,7 @@ impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
 pub struct AcceptedTransactionKeyPrefix;
 
 impl DatabaseKeyPrefixConst for AcceptedTransactionKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::AcceptedTransaction as u8;
     type Key = AcceptedTransactionKey;
     type Value = AcceptedTransaction;
@@ -67,6 +72,7 @@ impl DatabaseKeyPrefixConst for AcceptedTransactionKeyPrefix {
 pub struct RejectedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for RejectedTransactionKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::RejectedTransaction as u8;
     type Key = Self;
     type Value = String;
@@ -76,6 +82,7 @@ impl DatabaseKeyPrefixConst for RejectedTransactionKey {
 pub struct RejectedTransactionKeyPrefix;
 
 impl DatabaseKeyPrefixConst for RejectedTransactionKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::RejectedTransaction as u8;
     type Key = RejectedTransactionKey;
     type Value = String;
@@ -85,6 +92,7 @@ impl DatabaseKeyPrefixConst for RejectedTransactionKeyPrefix {
 pub struct DropPeerKey(pub PeerId);
 
 impl DatabaseKeyPrefixConst for DropPeerKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::DropPeer as u8;
     type Key = Self;
     type Value = ();
@@ -94,6 +102,7 @@ impl DatabaseKeyPrefixConst for DropPeerKey {
 pub struct DropPeerKeyPrefix;
 
 impl DatabaseKeyPrefixConst for DropPeerKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::DropPeer as u8;
     type Key = DropPeerKey;
     type Value = ();
@@ -103,6 +112,7 @@ impl DatabaseKeyPrefixConst for DropPeerKeyPrefix {
 pub struct EpochHistoryKey(pub u64);
 
 impl DatabaseKeyPrefixConst for EpochHistoryKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
     type Key = Self;
     type Value = SignedEpochOutcome;
@@ -112,6 +122,7 @@ impl DatabaseKeyPrefixConst for EpochHistoryKey {
 pub struct EpochHistoryKeyPrefix;
 
 impl DatabaseKeyPrefixConst for EpochHistoryKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
     type Key = EpochHistoryKey;
     type Value = SignedEpochOutcome;
@@ -121,6 +132,7 @@ impl DatabaseKeyPrefixConst for EpochHistoryKeyPrefix {
 pub struct LastEpochKey;
 
 impl DatabaseKeyPrefixConst for LastEpochKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
     const DB_PREFIX: u8 = DbKeyPrefix::LastEpoch as u8;
     type Key = Self;
     type Value = EpochHistoryKey;

@@ -14,8 +14,9 @@ use fedimint_api::{
 };
 
 use super::*;
-use crate::module::{
-    ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount,
+use crate::{
+    db::DatabaseVersion,
+    module::{ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount},
 };
 
 pub trait ModuleVerificationCache: Debug {
@@ -55,6 +56,8 @@ where
 #[async_trait]
 pub trait IServerModule: Debug {
     fn module_key(&self) -> ModuleKey;
+
+    fn db_module_version(&self) -> DatabaseVersion;
 
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> Decoder;
@@ -187,6 +190,10 @@ where
 {
     fn module_key(&self) -> ModuleKey {
         <Self as ServerModulePlugin>::module_key(self)
+    }
+
+    fn db_module_version(&self) -> DatabaseVersion {
+        <Self as ServerModulePlugin>::db_module_version(self)
     }
 
     fn decoder(&self) -> Decoder {

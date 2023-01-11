@@ -1,3 +1,4 @@
+use fedimint_api::core::CLIENT_KEY;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
@@ -30,6 +31,7 @@ pub struct CoinKey {
 }
 
 impl DatabaseKeyPrefixConst for CoinKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::Coin as u8;
     type Key = Self;
     type Value = SpendableNote;
@@ -39,6 +41,7 @@ impl DatabaseKeyPrefixConst for CoinKey {
 pub struct CoinKeyPrefix;
 
 impl DatabaseKeyPrefixConst for CoinKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::Coin as u8;
     type Key = CoinKey;
     type Value = SpendableNote;
@@ -48,6 +51,7 @@ impl DatabaseKeyPrefixConst for CoinKeyPrefix {
 pub struct PendingCoinsKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for PendingCoinsKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::PendingCoins as u8;
     type Key = Self;
     type Value = TieredMulti<SpendableNote>;
@@ -57,6 +61,7 @@ impl DatabaseKeyPrefixConst for PendingCoinsKey {
 pub struct PendingCoinsKeyPrefix;
 
 impl DatabaseKeyPrefixConst for PendingCoinsKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::PendingCoins as u8;
     type Key = PendingCoinsKey;
     type Value = TieredMulti<SpendableNote>;
@@ -66,6 +71,7 @@ impl DatabaseKeyPrefixConst for PendingCoinsKeyPrefix {
 pub struct OutputFinalizationKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputFinalizationKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutputFinalizationData as u8;
     type Key = Self;
     type Value = NoteIssuanceRequests;
@@ -75,6 +81,7 @@ impl DatabaseKeyPrefixConst for OutputFinalizationKey {
 pub struct OutputFinalizationKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutputFinalizationData as u8;
     type Key = OutputFinalizationKey;
     type Value = NoteIssuanceRequests;
@@ -84,6 +91,7 @@ impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
 pub struct NextECashNoteIndexKeyPrefix;
 
 impl DatabaseKeyPrefixConst for NextECashNoteIndexKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::NextECashNoteIndex as u8;
     type Key = NextECashNoteIndexKey;
     type Value = u64;
@@ -93,6 +101,7 @@ impl DatabaseKeyPrefixConst for NextECashNoteIndexKeyPrefix {
 pub struct NextECashNoteIndexKey(pub Amount);
 
 impl DatabaseKeyPrefixConst for NextECashNoteIndexKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::NextECashNoteIndex as u8;
     type Key = Self;
     type Value = u64;
@@ -102,6 +111,7 @@ impl DatabaseKeyPrefixConst for NextECashNoteIndexKey {
 pub struct NotesPerDenominationKey;
 
 impl DatabaseKeyPrefixConst for NotesPerDenominationKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = 0;
     type Key = Self;
     type Value = u16;

@@ -1,3 +1,4 @@
+use fedimint_api::core::CLIENT_KEY;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use serde::Serialize;
@@ -21,6 +22,7 @@ impl std::fmt::Display for DbKeyPrefix {
 pub struct ClientSecretKey;
 
 impl DatabaseKeyPrefixConst for ClientSecretKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::ClientSecret as u8;
     type Key = ClientSecretKey;
     type Value = ClientSecret;

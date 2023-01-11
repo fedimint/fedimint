@@ -36,6 +36,8 @@ pub const MODULE_KEY_MINT: u16 = 1;
 pub const MODULE_KEY_LN: u16 = 2;
 // not really a module
 pub const MODULE_KEY_GLOBAL: u16 = 1024;
+// need a key for the client
+pub const CLIENT_KEY: u16 = 3;
 
 /// Implement `Encodable` and `Decodable` for a "module dyn newtype"
 ///

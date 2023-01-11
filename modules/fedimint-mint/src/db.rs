@@ -1,12 +1,15 @@
 use std::time::SystemTime;
 
-use fedimint_api::db::DatabaseKeyPrefixConst;
+use fedimint_api::core::MODULE_KEY_MINT;
+use fedimint_api::db::{DatabaseKeyPrefixConst, DatabaseVersion};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 use crate::{Nonce, OutputConfirmationSignatures, OutputOutcome};
+
+pub const DATABASE_VERSION: DatabaseVersion = DatabaseVersion { version: 1 };
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -29,6 +32,7 @@ impl std::fmt::Display for DbKeyPrefix {
 pub struct NonceKey(pub Nonce);
 
 impl DatabaseKeyPrefixConst for NonceKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::CoinNonce as u8;
     type Key = Self;
     type Value = ();
@@ -38,6 +42,7 @@ impl DatabaseKeyPrefixConst for NonceKey {
 pub struct NonceKeyPrefix;
 
 impl DatabaseKeyPrefixConst for NonceKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::CoinNonce as u8;
     type Key = NonceKey;
     type Value = ();
@@ -49,6 +54,7 @@ pub struct ProposedPartialSignatureKey {
 }
 
 impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
     type Key = Self;
     type Value = OutputConfirmationSignatures;
@@ -58,6 +64,7 @@ impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {
 pub struct ProposedPartialSignaturesKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ProposedPartialSignaturesKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
     type Key = ProposedPartialSignatureKey;
     type Value = OutputConfirmationSignatures;
@@ -70,6 +77,7 @@ pub struct ReceivedPartialSignatureKey {
 }
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = Self;
     type Value = OutputConfirmationSignatures;
@@ -81,6 +89,7 @@ pub struct ReceivedPartialSignatureKeyOutputPrefix {
 }
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = ReceivedPartialSignatureKey;
     type Value = OutputConfirmationSignatures;
@@ -90,6 +99,7 @@ impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
 pub struct ReceivedPartialSignaturesKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = ReceivedPartialSignatureKey;
     type Value = OutputConfirmationSignatures;
@@ -100,6 +110,7 @@ impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
 pub struct OutputOutcomeKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputOutcomeKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
     type Key = Self;
     type Value = OutputOutcome;
@@ -109,6 +120,7 @@ impl DatabaseKeyPrefixConst for OutputOutcomeKey {
 pub struct OutputOutcomeKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutputOutcomeKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
     type Key = OutputOutcomeKey;
     type Value = OutputOutcome;
@@ -124,6 +136,7 @@ pub enum MintAuditItemKey {
 }
 
 impl DatabaseKeyPrefixConst for MintAuditItemKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
     type Key = Self;
     type Value = Amount;
@@ -133,6 +146,7 @@ impl DatabaseKeyPrefixConst for MintAuditItemKey {
 pub struct MintAuditItemKeyPrefix;
 
 impl DatabaseKeyPrefixConst for MintAuditItemKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
     type Key = MintAuditItemKey;
     type Value = Amount;
@@ -146,6 +160,7 @@ pub struct EcashBackupKeyPrefix;
 pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
 
 impl DatabaseKeyPrefixConst for EcashBackupKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
     type Key = EcashBackupKey;
     type Value = ECashUserBackupSnapshot;
@@ -160,6 +175,7 @@ pub struct ECashUserBackupSnapshot {
 }
 
 impl DatabaseKeyPrefixConst for EcashBackupKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_MINT;
     const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
     type Key = Self;
     type Value = ECashUserBackupSnapshot;

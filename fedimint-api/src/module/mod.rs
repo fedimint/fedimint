@@ -15,7 +15,7 @@ use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModul
 use crate::core::{
     Decoder, PluginConsensusItem, PluginDecode, PluginInput, PluginOutput, PluginOutputOutcome,
 };
-use crate::db::{Database, DatabaseTransaction};
+use crate::db::{Database, DatabaseTransaction, DatabaseVersion};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
@@ -249,6 +249,8 @@ pub trait ServerModulePlugin: Debug + Sized {
     type VerificationCache: PluginVerificationCache;
 
     fn module_key(&self) -> ModuleKey;
+
+    fn db_module_version(&self) -> DatabaseVersion;
 
     fn decoder(&self) -> &'static Self::Decoder;
 

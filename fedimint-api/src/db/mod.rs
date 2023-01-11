@@ -4,9 +4,12 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use serde::Serialize;
+use strum_macros::EnumIter;
 use thiserror::Error;
 use tracing::{trace, warn};
 
+use crate::core::MODULE_KEY_GLOBAL;
 use crate::dyn_newtype_define;
 use crate::encoding::{Decodable, Encodable};
 
@@ -15,6 +18,8 @@ pub mod mem_impl;
 pub use tests::*;
 
 use crate::module::registry::ModuleDecoderRegistry;
+
+pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion { version: 1 };
 
 #[derive(Debug, Default)]
 pub struct DatabaseInsertOperation {
@@ -34,6 +39,7 @@ pub enum DatabaseOperation {
 }
 
 pub trait DatabaseKeyPrefixConst {
+    const MODULE_PREFIX: u16; // TODO: Change to InstanceId
     const DB_PREFIX: u8;
     type Key: DatabaseKey;
     type Value: DatabaseValue;
@@ -56,6 +62,59 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
 }
 
 pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct DatabaseVersionKey {
+    pub module_key: u16,
+}
+
+// DatabaseVersion is persisted by all modules, so we also need to track the module to be able to
+// tell the difference between each module.
+#[derive(Debug, Encodable, Decodable, Serialize, Clone)]
+pub struct DatabaseVersion {
+    pub version: u32,
+}
+
+impl DatabaseVersion {
+    pub fn new(version: u32) -> DatabaseVersion {
+        DatabaseVersion { version }
+    }
+}
+
+impl std::fmt::Display for DatabaseVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.version)
+    }
+}
+
+impl DatabaseKeyPrefixConst for DatabaseVersionKey {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
+    const DB_PREFIX: u8 = DbKeyPrefix::DatabaseVersion as u8;
+    type Key = Self;
+    type Value = DatabaseVersion;
+}
+
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+pub struct DatabaseVersionKeyPrefix;
+
+impl DatabaseKeyPrefixConst for DatabaseVersionKeyPrefix {
+    const MODULE_PREFIX: u16 = MODULE_KEY_GLOBAL;
+    const DB_PREFIX: u8 = DbKeyPrefix::DatabaseVersion as u8;
+    type Key = DatabaseVersionKey;
+    type Value = DatabaseVersion;
+}
+
+#[repr(u8)]
+#[derive(Clone, EnumIter, Debug)]
+pub enum DbKeyPrefix {
+    DatabaseVersion = 0x50,
+}
 
 #[async_trait]
 pub trait IDatabase: Debug + Send + Sync {
@@ -309,7 +368,11 @@ where
     T: DatabaseKeyPrefixConst + crate::encoding::Encodable + Debug,
 {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut data = vec![Self::DB_PREFIX];
+        let mut data = vec![
+            (Self::MODULE_PREFIX >> 8) as u8,
+            (Self::MODULE_PREFIX & 0xff) as u8,
+            Self::DB_PREFIX,
+        ];
         self.consensus_encode(&mut data)
             .expect("Writing to vec is infallible");
         data
@@ -327,12 +390,26 @@ where
             return Err(DecodingError::wrong_length(1, 0));
         }
 
-        if data[0] != Self::DB_PREFIX {
-            return Err(DecodingError::wrong_prefix(Self::DB_PREFIX, data[0]));
+        if data[0] != (Self::MODULE_PREFIX >> 8) as u8 {
+            return Err(DecodingError::wrong_prefix(
+                (Self::MODULE_PREFIX >> 8) as u8,
+                data[0],
+            ));
+        }
+
+        if data[1] != (Self::MODULE_PREFIX & 0xff) as u8 {
+            return Err(DecodingError::wrong_prefix(
+                (Self::MODULE_PREFIX & 0xff) as u8,
+                data[1],
+            ));
+        }
+
+        if data[2] != Self::DB_PREFIX {
+            return Err(DecodingError::wrong_prefix(Self::DB_PREFIX, data[2]));
         }
 
         <Self as crate::encoding::Decodable>::consensus_decode(
-            &mut std::io::Cursor::new(&data[1..]),
+            &mut std::io::Cursor::new(&data[3..]),
             modules,
         )
         .map_err(|decode_error| DecodingError::Other(decode_error.0))
@@ -391,6 +468,8 @@ mod tests {
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
 
+    const TEST_MODULE: u16 = 0;
+
     #[repr(u8)]
     #[derive(Clone)]
     pub enum TestDbKeyPrefix {
@@ -403,6 +482,7 @@ mod tests {
     struct TestKey(u64);
 
     impl DatabaseKeyPrefixConst for TestKey {
+        const MODULE_PREFIX: u16 = TEST_MODULE;
         const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
         type Key = Self;
         type Value = TestVal;
@@ -412,6 +492,7 @@ mod tests {
     struct DbPrefixTestPrefix;
 
     impl DatabaseKeyPrefixConst for DbPrefixTestPrefix {
+        const MODULE_PREFIX: u16 = TEST_MODULE;
         const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
         type Key = TestKey;
         type Value = TestVal;
@@ -421,6 +502,7 @@ mod tests {
     struct AltTestKey(u64);
 
     impl DatabaseKeyPrefixConst for AltTestKey {
+        const MODULE_PREFIX: u16 = TEST_MODULE;
         const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
         type Key = Self;
         type Value = TestVal;
@@ -430,6 +512,7 @@ mod tests {
     struct AltDbPrefixTestPrefix;
 
     impl DatabaseKeyPrefixConst for AltDbPrefixTestPrefix {
+        const MODULE_PREFIX: u16 = TEST_MODULE;
         const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
         type Key = AltTestKey;
         type Value = TestVal;
@@ -439,6 +522,7 @@ mod tests {
     struct PercentTestKey(u64);
 
     impl DatabaseKeyPrefixConst for PercentTestKey {
+        const MODULE_PREFIX: u16 = TEST_MODULE;
         const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
         type Key = Self;
         type Value = TestVal;
@@ -448,6 +532,7 @@ mod tests {
     struct PercentPrefixTestPrefix;
 
     impl DatabaseKeyPrefixConst for PercentPrefixTestPrefix {
+        const MODULE_PREFIX: u16 = TEST_MODULE;
         const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
         type Key = PercentTestKey;
         type Value = TestVal;

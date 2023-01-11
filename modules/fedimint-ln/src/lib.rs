@@ -20,7 +20,7 @@ use std::ops::Sub;
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
-use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
+use db::{LightningGatewayKey, LightningGatewayKeyPrefix, DATABASE_VERSION};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
@@ -28,7 +28,7 @@ use fedimint_api::config::{
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{Decoder, ModuleKey, MODULE_KEY_LN};
-use fedimint_api::db::{Database, DatabaseTransaction};
+use fedimint_api::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -339,6 +339,10 @@ impl ServerModulePlugin for LightningModule {
 
     fn module_key(&self) -> ModuleKey {
         MODULE_KEY_LN
+    }
+
+    fn db_module_version(&self) -> DatabaseVersion {
+        DATABASE_VERSION
     }
 
     fn decoder(&self) -> &'static Self::Decoder {

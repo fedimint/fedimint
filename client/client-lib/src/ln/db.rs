@@ -1,3 +1,4 @@
+use fedimint_api::core::CLIENT_KEY;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_core::modules::ln::contracts::ContractId;
@@ -29,6 +30,7 @@ impl std::fmt::Display for DbKeyPrefix {
 pub struct OutgoingPaymentKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment as u8;
     type Key = Self;
     type Value = OutgoingContractData;
@@ -38,6 +40,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
 pub struct OutgoingPaymentKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment as u8;
     type Key = OutgoingPaymentKey;
     type Value = OutgoingContractData;
@@ -47,6 +50,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
 pub struct OutgoingPaymentClaimKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim as u8;
     type Key = Self;
     type Value = ();
@@ -56,6 +60,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
 pub struct OutgoingPaymentClaimKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim as u8;
     type Key = OutgoingPaymentClaimKey;
     type Value = ();
@@ -65,6 +70,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
 pub struct OutgoingContractAccountKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for OutgoingContractAccountKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount as u8;
     type Key = Self;
     type Value = OutgoingContractAccount;
@@ -74,6 +80,7 @@ impl DatabaseKeyPrefixConst for OutgoingContractAccountKey {
 pub struct OutgoingContractAccountKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutgoingContractAccountKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount as u8;
     type Key = OutgoingContractAccountKey;
     type Value = OutgoingContractAccount;
@@ -83,6 +90,7 @@ impl DatabaseKeyPrefixConst for OutgoingContractAccountKeyPrefix {
 pub struct ConfirmedInvoiceKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for ConfirmedInvoiceKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice as u8;
     type Key = Self;
     type Value = ConfirmedInvoice;
@@ -92,6 +100,7 @@ impl DatabaseKeyPrefixConst for ConfirmedInvoiceKey {
 pub struct ConfirmedInvoiceKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ConfirmedInvoiceKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice as u8;
     type Key = ConfirmedInvoiceKey;
     type Value = ConfirmedInvoice;
@@ -101,6 +110,7 @@ impl DatabaseKeyPrefixConst for ConfirmedInvoiceKeyPrefix {
 pub struct LightningGatewayKey;
 
 impl DatabaseKeyPrefixConst for LightningGatewayKey {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
     type Key = Self;
     type Value = LightningGateway;
@@ -110,6 +120,7 @@ impl DatabaseKeyPrefixConst for LightningGatewayKey {
 pub struct LightningGatewayKeyPrefix;
 
 impl DatabaseKeyPrefixConst for LightningGatewayKeyPrefix {
+    const MODULE_PREFIX: u16 = CLIENT_KEY;
     const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
     type Key = LightningGatewayKey;
     type Value = LightningGateway;
