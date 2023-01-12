@@ -24,7 +24,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError};
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleInstanceId;
-<span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
+<span class="kw">use </span><span class="kw">crate</span>::core::DynDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="kw">pub fn </span>module_decode_key_prefixed_decodable&lt;T, F, R&gt;(
@@ -34,7 +34,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;
 <span class="kw">where
     </span>R: io::Read,
-    F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>Decoder, ModuleInstanceId) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
+    F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>DynDecoder, ModuleInstanceId) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
 {
     <span class="kw">let </span>key = ModuleInstanceId::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
 

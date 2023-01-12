@@ -390,8 +390,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 <span class="kw">use </span><span class="kw">crate</span>::core::{
-    Decoder, ModuleInstanceId, ModuleKind, PluginConsensusItem, PluginDecode, PluginInput,
-    PluginOutput, PluginOutputOutcome,
+    Decoder, DynDecoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
+    OutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseTransaction};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
@@ -579,7 +579,7 @@
 /// Once the module config is ready, the module can be instantiated via `[Self::init]`.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ModuleInit {
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder;
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
 
@@ -623,11 +623,11 @@
 </span><span class="kw">pub trait </span>ServerModule: Debug + Sized {
     <span class="kw">const </span>KIND: ModuleKind;
 
-    <span class="kw">type </span>Decoder: PluginDecode;
-    <span class="kw">type </span>Input: PluginInput;
-    <span class="kw">type </span>Output: PluginOutput;
-    <span class="kw">type </span>OutputOutcome: PluginOutputOutcome;
-    <span class="kw">type </span>ConsensusItem: PluginConsensusItem;
+    <span class="kw">type </span>Decoder: Decoder;
+    <span class="kw">type </span>Input: Input;
+    <span class="kw">type </span>Output: Output;
+    <span class="kw">type </span>OutputOutcome: OutputOutcome;
+    <span class="kw">type </span>ConsensusItem: ModuleConsensusItem;
     <span class="kw">type </span>VerificationCache: VerificationCache;
 
     <span class="kw">fn </span>module_kind() -&gt; ModuleKind {

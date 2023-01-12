@@ -331,9 +331,13 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
-<span class="kw">use </span>fedimint_api::core::{Input, Output};
+<span class="kw">use </span>fedimint_api::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{serde_module_encoding_wrapper, Amount, TransactionId};
 <span class="kw">use </span>rand::Rng;
@@ -345,10 +349,10 @@
 /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Transaction {
-    <span class="doccomment">/// [`Input`]s consumed by the transaction
-    </span><span class="kw">pub </span>inputs: Vec&lt;Input&gt;,
-    <span class="doccomment">/// [`Output`]s created as a result of the transaction
-    </span><span class="kw">pub </span>outputs: Vec&lt;Output&gt;,
+    <span class="doccomment">/// [`DynInput`]s consumed by the transaction
+    </span><span class="kw">pub </span>inputs: Vec&lt;DynInput&gt;,
+    <span class="doccomment">/// [`DynOutput`]s created as a result of the transaction
+    </span><span class="kw">pub </span>outputs: Vec&lt;DynOutput&gt;,
     <span class="doccomment">/// Aggregated MuSig2 signature over all the public keys of the inputs
     </span><span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;schnorr::Signature&gt;,
 }
@@ -365,7 +369,7 @@
     }
 
     <span class="doccomment">/// Generate the transaction hash.
-    </span><span class="kw">pub fn </span>tx_hash_from_parts(inputs: <span class="kw-2">&amp;</span>[Input], outputs: <span class="kw-2">&amp;</span>[Output]) -&gt; TransactionId {
+    </span><span class="kw">pub fn </span>tx_hash_from_parts(inputs: <span class="kw-2">&amp;</span>[DynInput], outputs: <span class="kw-2">&amp;</span>[DynOutput]) -&gt; TransactionId {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = TransactionId::engine();
         inputs
             .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
@@ -562,25 +566,29 @@
             <span class="kw">let </span>erased_inputs = inputs
                 .iter()
                 .map(|input| <span class="kw">match </span>input.clone() {
-                    Input::Mint(i) =&gt; core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, i),
-                    Input::Wallet(i) =&gt; {
-                        core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
+                    Input::Mint(i) =&gt; {
+                        core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, i)
                     }
-                    Input::LN(i) =&gt; core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
+                    Input::Wallet(i) =&gt; {
+                        core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
+                    }
+                    Input::LN(i) =&gt; core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
                 })
-                .collect::&lt;Vec&lt;fedimint_api::core::Input&gt;&gt;();
+                .collect::&lt;Vec&lt;fedimint_api::core::DynInput&gt;&gt;();
             <span class="kw">let </span>erased_outputs = outputs
                 .iter()
                 .map(|output| <span class="kw">match </span>output.clone() {
                     Output::Mint(o) =&gt; {
-                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
                     }
                     Output::Wallet(o) =&gt; {
-                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
                     }
-                    Output::LN(o) =&gt; core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o),
+                    Output::LN(o) =&gt; {
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o)
+                    }
                 })
-                .collect::&lt;Vec&lt;fedimint_api::core::Output&gt;&gt;();
+                .collect::&lt;Vec&lt;fedimint_api::core::DynOutput&gt;&gt;();
 
             <span class="kw">let </span><span class="kw-2">mut </span>engine = TransactionId::engine();
             erased_inputs
@@ -634,13 +642,13 @@
                     .into_iter()
                     .map(|input| <span class="kw">match </span>input {
                         Input::Mint(input) =&gt; {
-                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, input)
+                            core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, input)
                         }
                         Input::Wallet(input) =&gt; {
-                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, input)
+                            core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, input)
                         }
                         Input::LN(input) =&gt; {
-                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
+                            core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
                         }
                     })
                     .collect(),
@@ -649,13 +657,13 @@
                     .into_iter()
                     .map(|output| <span class="kw">match </span>output {
                         Output::Mint(output) =&gt; {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
                         }
                         Output::Wallet(output) =&gt; {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
                         }
                         Output::LN(output) =&gt; {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
                         }
                     })
                     .collect(),

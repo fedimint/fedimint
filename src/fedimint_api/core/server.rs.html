@@ -456,7 +456,7 @@
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IServerModule: Debug {
     <span class="doccomment">/// Returns the decoder belonging to the server module
-    </span><span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
+    </span><span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder;
 
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any;
 
@@ -468,7 +468,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; Vec&lt;ConsensusItem&gt;;
+    ) -&gt; Vec&lt;DynModuleConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -477,14 +477,14 @@
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        consensus_items: Vec&lt;(PeerId, ConsensusItem)&gt;,
+        consensus_items: Vec&lt;(PeerId, DynModuleConsensusItem)&gt;,
     );
 
     <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction processing. If the
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    </span><span class="kw">fn </span>build_verification_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[Input]) -&gt; DynVerificationCache;
+    </span><span class="kw">fn </span>build_verification_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[DynInput]) -&gt; DynVerificationCache;
 
     <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -495,7 +495,7 @@
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
-        input: <span class="kw-2">&amp;</span>Input,
+        input: <span class="kw-2">&amp;</span>DynInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
     <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the
@@ -509,7 +509,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>Input,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DynInput,
         verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
@@ -520,7 +520,7 @@
     </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
-        output: <span class="kw-2">&amp;</span>Output,
+        output: <span class="kw-2">&amp;</span>DynOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
@@ -536,7 +536,7 @@
     </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        output: <span class="kw-2">&amp;</span>Output,
+        output: <span class="kw-2">&amp;</span>DynOutput,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
@@ -559,7 +559,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;OutputOutcome&gt;;
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;DynOutputOutcome&gt;;
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
     ///
@@ -583,8 +583,8 @@
 <span class="kw">where
     </span>T: ServerModule + <span class="lifetime">&#39;static </span>+ Sync,
 {
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(ServerModule::decoder(<span class="self">self</span>))
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
+        DynDecoder::from_typed(ServerModule::decoder(<span class="self">self</span>))
     }
 
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any {
@@ -601,11 +601,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; Vec&lt;ConsensusItem&gt; {
+    ) -&gt; Vec&lt;DynModuleConsensusItem&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::consensus_proposal(<span class="self">self</span>, dbtx)
             .<span class="kw">await
             </span>.into_iter()
-            .map(|v| ConsensusItem::from_typed(module_instance_id, v))
+            .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
             .collect()
     }
 
@@ -616,7 +616,7 @@
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        consensus_items: Vec&lt;(PeerId, ConsensusItem)&gt;,
+        consensus_items: Vec&lt;(PeerId, DynModuleConsensusItem)&gt;,
     ) {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::begin_consensus_epoch(
             <span class="self">self</span>,
@@ -642,7 +642,7 @@
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[Input]) -&gt; DynVerificationCache {
+    </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[DynInput]) -&gt; DynVerificationCache {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::build_verification_cache(
             <span class="self">self</span>,
             inputs.iter().map(|i| {
@@ -663,7 +663,7 @@
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
-        input: <span class="kw-2">&amp;</span>Input,
+        input: <span class="kw-2">&amp;</span>DynInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::validate_input(
             <span class="self">self</span>,
@@ -693,7 +693,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>Input,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DynInput,
         verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::apply_input(
@@ -720,7 +720,7 @@
     </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
-        output: <span class="kw-2">&amp;</span>Output,
+        output: <span class="kw-2">&amp;</span>DynOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::validate_output(
             <span class="self">self</span>,
@@ -746,7 +746,7 @@
     </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        output: <span class="kw-2">&amp;</span>Output,
+        output: <span class="kw-2">&amp;</span>DynOutput,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::apply_output(
@@ -782,10 +782,10 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;OutputOutcome&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;DynOutputOutcome&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::output_status(<span class="self">self</span>, dbtx, out_point)
             .<span class="kw">await
-            </span>.map(|v| OutputOutcome::from_typed(module_instance_id, v))
+            </span>.map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
     }
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.

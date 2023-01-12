@@ -96,7 +96,7 @@
 <span class="kw">use </span>std::io;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>fedimint_api::core::PluginDecode;
+<span class="kw">use </span>fedimint_api::core::Decoder;
 <span class="kw">use </span>fedimint_api::encoding::DecodeError;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -158,7 +158,7 @@
 <span class="attr">#[derive(Debug, Default, Clone)]
 </span><span class="kw">pub struct </span>MintDecoder;
 
-<span class="kw">impl </span>PluginDecode <span class="kw">for </span>MintDecoder {
+<span class="kw">impl </span>Decoder <span class="kw">for </span>MintDecoder {
     <span class="kw">type </span>Input = MintInput;
     <span class="kw">type </span>Output = MintOutput;
     <span class="kw">type </span>OutputOutcome = MintOutputOutcome;

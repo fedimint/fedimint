@@ -1390,7 +1390,7 @@
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::core::{
-    Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_api::db::Database;
@@ -2622,15 +2622,15 @@
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            Decoder::from_typed(LightningDecoder),
+            DynDecoder::from_typed(LightningDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            Decoder::from_typed(WalletDecoder),
+            DynDecoder::from_typed(WalletDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            Decoder::from_typed(MintDecoder),
+            DynDecoder::from_typed(MintDecoder),
         ),
     ])
 }

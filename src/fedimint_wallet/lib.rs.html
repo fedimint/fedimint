@@ -1635,7 +1635,7 @@
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_api::core::{DynDecoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
@@ -1832,8 +1832,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>WalletConfigGenerator {
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(WalletDecoder)
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
+        DynDecoder::from_typed(WalletDecoder)
     }
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {

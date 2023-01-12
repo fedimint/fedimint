@@ -1056,7 +1056,7 @@
     TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{
-    Decoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    DynDecoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -1262,8 +1262,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>LightningModuleConfigGen {
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(LightningDecoder)
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
+        DynDecoder::from_typed(LightningDecoder)
     }
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {

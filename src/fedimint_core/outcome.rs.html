@@ -181,7 +181,7 @@
     },
 }
 
-<span class="macro">serde_module_encoding_wrapper!</span>(SerdeOutputOutcome, fedimint_api::core::OutputOutcome);
+<span class="macro">serde_module_encoding_wrapper!</span>(SerdeOutputOutcome, fedimint_api::core::DynOutputOutcome);
 
 <span class="kw">pub mod </span>legacy {
     <span class="kw">use </span>fedimint_api::core::{
@@ -208,8 +208,8 @@
         LN(&lt;LightningModule <span class="kw">as </span>ServerModule&gt;::OutputOutcome),
     }
 
-    <span class="kw">impl </span>From&lt;fedimint_api::core::OutputOutcome&gt; <span class="kw">for </span>OutputOutcome {
-        <span class="kw">fn </span>from(oo: fedimint_api::core::OutputOutcome) -&gt; <span class="self">Self </span>{
+    <span class="kw">impl </span>From&lt;fedimint_api::core::DynOutputOutcome&gt; <span class="kw">for </span>OutputOutcome {
+        <span class="kw">fn </span>from(oo: fedimint_api::core::DynOutputOutcome) -&gt; <span class="self">Self </span>{
             <span class="kw">match </span>oo.module_instance_id() {
                 LEGACY_HARDCODED_INSTANCE_ID_LN =&gt; OutputOutcome::LN(
                     oo.as_any()

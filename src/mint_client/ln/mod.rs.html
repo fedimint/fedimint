@@ -938,7 +938,7 @@
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
     <span class="kw">use </span>fedimint_api::core::{
-        OutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     };
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
@@ -977,7 +977,7 @@
             <span class="kw">let </span>mint = <span class="self">self</span>.mint.lock().<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
                 epoch: <span class="number">0</span>,
-                outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>OutputOutcome::from_typed(
+                outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
                     LEGACY_HARDCODED_INSTANCE_ID_MINT,
                     mint.output_outcome(OutPoint {
                         txid: tx,
