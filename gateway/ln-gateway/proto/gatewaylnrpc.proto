@@ -103,19 +103,11 @@ message CompleteHtlcsRequest {
   message Settle {
     // The preimage for settling an intercepted HTLC
     bytes preimage = 1;
-
-    // A unique identifier for every intercepted HTLC
-    // Used to identify an intercepted HTLC through processing and settlement
-    bytes intercepted_htlc_id = 2;
   }
 
   message Cancel {
     // The reason for the cancellation of an intercepted HTLC
     string reason = 1;
-
-    // A unique identifier for every intercepted HTLC
-    // Used to identify an intercepted HTLC through processing and settlement
-    bytes intercepted_htlc_id = 2;
   }
 
   oneof action {
@@ -135,6 +127,10 @@ message CompleteHtlcsRequest {
     // with reason provided.
     Cancel cancel = 2;
   }
+
+  // A unique identifier for every intercepted HTLC
+  // Used to identify an intercepted HTLC through processing and settlement
+  bytes intercepted_htlc_id = 3;
 }
 
 message CompleteHtlcsResponse {}
