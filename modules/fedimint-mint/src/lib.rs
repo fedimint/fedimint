@@ -45,7 +45,7 @@ use thiserror::Error;
 use threshold_crypto::group::Curve;
 use tracing::{debug, error, info, warn};
 
-use crate::common::MintModuleDecoder;
+use crate::common::MintDecoder;
 use crate::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -139,7 +139,7 @@ pub struct MintConfigGenerator;
 #[async_trait]
 impl ModuleInit for MintConfigGenerator {
     fn decoder(&self) -> Decoder {
-        Decoder::from_typed(MintModuleDecoder)
+        Decoder::from_typed(MintDecoder)
     }
 
     fn module_kind(&self) -> ModuleKind {
@@ -360,7 +360,7 @@ impl std::fmt::Display for MintOutputConfirmation {
 #[async_trait]
 impl ServerModule for Mint {
     const KIND: ModuleKind = KIND;
-    type Decoder = MintModuleDecoder;
+    type Decoder = MintDecoder;
     type Input = MintInput;
     type Output = MintOutput;
     type OutputOutcome = MintOutputOutcome;
@@ -368,7 +368,7 @@ impl ServerModule for Mint {
     type VerificationCache = VerifiedNotes;
 
     fn decoder(&self) -> Self::Decoder {
-        MintModuleDecoder
+        MintDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {

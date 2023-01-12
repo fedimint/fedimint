@@ -7,9 +7,9 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use crate::{WalletConsensusItem, WalletInput, WalletOutput, WalletOutputOutcome};
 
 #[derive(Debug, Default, Clone)]
-pub struct WalletModuleDecoder;
+pub struct WalletDecoder;
 
-impl PluginDecode for WalletModuleDecoder {
+impl PluginDecode for WalletDecoder {
     type Input = WalletInput;
     type Output = WalletOutput;
     type OutputOutcome = WalletOutputOutcome;

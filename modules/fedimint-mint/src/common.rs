@@ -62,9 +62,9 @@ impl SignedBackupRequest {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct MintModuleDecoder;
+pub struct MintDecoder;
 
-impl PluginDecode for MintModuleDecoder {
+impl PluginDecode for MintDecoder {
     type Input = MintInput;
     type Output = MintOutput;
     type OutputOutcome = MintOutputOutcome;
