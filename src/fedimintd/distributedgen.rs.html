@@ -146,7 +146,7 @@
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>fedimint_api::cancellable::Cancellable;
+<span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>fedimint_api::module::ModuleInit;
 <span class="kw">use </span>fedimint_api::net::peers::IMuxPeerConnections;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
@@ -171,10 +171,10 @@
     api_url: Url,
     guardian_name: String,
     password: <span class="prelude-ty">Option</span>&lt;String&gt;,
-) -&gt; String {
+) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>salt: [u8; <span class="number">16</span>] = rand::random();
-    fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt)).expect(<span class="string">&quot;write error&quot;</span>);
-    <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE));
+    fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt))<span class="question-mark">?</span>;
+    <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
     gen_tls(<span class="kw-2">&amp;</span>dir_out_path, p2p_url, api_url, guardian_name, <span class="kw-2">&amp;</span>key)
 }
 
@@ -191,22 +191,21 @@
     finality_delay: u32,
     pk: rustls::PrivateKey,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-) -&gt; Cancellable&lt;ServerConfig&gt; {
-    <span class="kw">let </span>peers: BTreeMap&lt;PeerId, PeerServerParams&gt; = certs
-        .into_iter()
-        .sorted()
-        .enumerate()
-        .map(|(idx, cert)| (PeerId::from(idx <span class="kw">as </span>u16), parse_peer_params(cert)))
-        .collect();
+) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>peers = BTreeMap::&lt;PeerId, PeerServerParams&gt;::new();
+    <span class="kw">for </span>(idx, cert) <span class="kw">in </span>certs.into_iter().sorted().enumerate() {
+        peers.insert(PeerId::from(idx <span class="kw">as </span>u16), parse_peer_params(cert)<span class="question-mark">?</span>);
+    }
 
-    <span class="kw">let </span>cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT)).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
+    <span class="kw">let </span>cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>our_params = parse_peer_params(cert_string);
+    <span class="kw">let </span>our_params = parse_peer_params(cert_string)<span class="question-mark">?</span>;
     <span class="kw">let </span>our_id = peers
         .iter()
         .find(|(_peer, params)| params.cert == our_params.cert)
         .map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer)
-        .expect(<span class="string">&quot;could not find our cert among peers&quot;</span>);
+        .ok_or_else(|| anyhow::Error::msg(<span class="string">&quot;Our id not found&quot;</span>))<span class="question-mark">?</span>;
+
     <span class="kw">let </span>params = ServerConfigParams::gen_params(
         bind_p2p,
         bind_api,
@@ -226,6 +225,7 @@
         task_group,
     )
     .<span class="kw">await</span>;
+
     <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
     <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
@@ -244,26 +244,26 @@
         OsRng,
         task_group,
     )
-    .<span class="kw">await
-    </span>.expect(<span class="string">&quot;failed to run DKG to generate configs&quot;</span>);
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     drop(connections);
 
-    result
+    <span class="prelude-val">Ok</span>(result<span class="question-mark">?</span>)
 }
 
-<span class="kw">pub fn </span>parse_peer_params(url: String) -&gt; PeerServerParams {
+<span class="kw">pub fn </span>parse_peer_params(url: String) -&gt; anyhow::Result&lt;PeerServerParams&gt; {
     <span class="kw">let </span>split: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = url.split(<span class="string">&#39;@&#39;</span>).collect();
-    <span class="macro">assert_eq!</span>(split.len(), <span class="number">4</span>, <span class="string">&quot;Cannot parse cert string&quot;</span>);
-    <span class="kw">let </span>p2p_url = split[<span class="number">0</span>].parse().expect(<span class="string">&quot;could not parse URL&quot;</span>);
-    <span class="kw">let </span>api_url = split[<span class="number">1</span>].parse().expect(<span class="string">&quot;could not parse URL&quot;</span>);
-    <span class="kw">let </span>hex_cert = hex::decode(split[<span class="number">3</span>]).expect(<span class="string">&quot;cert was not hex encoded&quot;</span>);
-    PeerServerParams {
+
+    <span class="macro">ensure!</span>(split.len() == <span class="number">4</span>, <span class="string">&quot;Cert string has wrong number of fields&quot;</span>);
+    <span class="kw">let </span>p2p_url = split[<span class="number">0</span>].parse()<span class="question-mark">?</span>;
+    <span class="kw">let </span>api_url = split[<span class="number">1</span>].parse()<span class="question-mark">?</span>;
+    <span class="kw">let </span>hex_cert = hex::decode(split[<span class="number">3</span>])<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(PeerServerParams {
         cert: rustls::Certificate(hex_cert),
         p2p_url,
         api_url,
         name: split[<span class="number">2</span>].to_string(),
-    }
+    })
 }
 
 <span class="kw">fn </span>gen_tls(
@@ -272,15 +272,15 @@
     api_url: Url,
     name: String,
     key: <span class="kw-2">&amp;</span>LessSafeKey,
-) -&gt; String {
-    <span class="kw">let </span>(cert, pk) = fedimint_server::config::gen_cert_and_key(<span class="kw-2">&amp;</span>name).expect(<span class="string">&quot;TLS gen failed&quot;</span>);
-    encrypted_write(pk.<span class="number">0</span>, key, dir_out_path.join(TLS_PK));
+) -&gt; anyhow::Result&lt;String&gt; {
+    <span class="kw">let </span>(cert, pk) = fedimint_server::config::gen_cert_and_key(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>;
+    encrypted_write(pk.<span class="number">0</span>, key, dir_out_path.join(TLS_PK))<span class="question-mark">?</span>;
 
-    rustls::ServerName::try_from(name.as_str()).expect(<span class="string">&quot;Valid DNS name&quot;</span>);
+    rustls::ServerName::try_from(name.as_str())<span class="question-mark">?</span>;
     <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string
     </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}@{}@{}@{}&quot;</span>, p2p_url, api_url, name, hex::encode(cert.<span class="number">0</span>));
-    fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url).unwrap();
-    cert_url
+    fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(cert_url)
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (1e4f90061 2023-01-11)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>

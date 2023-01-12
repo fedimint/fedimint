@@ -86,6 +86,7 @@
 <span class="kw">use </span>std::num::NonZeroU32;
 <span class="kw">use </span>std::path::PathBuf;
 
+<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>ring::aead::{LessSafeKey, UnboundKey};
 <span class="kw">use </span>ring::{digest, pbkdf2};
 
@@ -93,33 +94,31 @@
 <span class="kw">const </span>ITERATIONS_DEBUG: <span class="prelude-ty">Option</span>&lt;NonZeroU32&gt; = NonZeroU32::new(<span class="number">1</span>);
 
 <span class="doccomment">/// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
-</span><span class="comment">// TODO: Use anyhow to handle errors
-</span><span class="kw">pub fn </span>encrypted_write(data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) {
-    <span class="kw">let </span>bytes = aead::encrypt(data, key).expect(<span class="string">&quot;encryption should not fail&quot;</span>);
-    fs::write(file, hex::encode(bytes)).expect(<span class="string">&quot;Can&#39;t write file.&quot;</span>);
+</span><span class="kw">pub fn </span>encrypted_write(data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>bytes = aead::encrypt(data, key)<span class="question-mark">?</span>;
+    fs::write(file.clone(), hex::encode(bytes))
+        .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to write file {:?}&quot;</span>, file))<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="doccomment">/// Reads encrypted data from a file
-</span><span class="comment">// TODO: Use anyhow to handle errors
-</span><span class="kw">pub fn </span>encrypted_read(key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; Vec&lt;u8&gt; {
+</span><span class="kw">pub fn </span>encrypted_read(key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; anyhow::Result&lt;Vec&lt;u8&gt;&gt; {
     <span class="macro">tracing::warn!</span>(<span class="string">&quot;READ {:?}&quot;</span>, file);
-    <span class="kw">let </span>hex = fs::read_to_string(file).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>bytes = hex::decode(hex).expect(<span class="string">&quot;not hex encoded&quot;</span>);
+    <span class="kw">let </span>hex = fs::read_to_string(file)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = hex::decode(hex)<span class="question-mark">?</span>;
 
-    aead::decrypt(<span class="kw-2">&amp;mut </span>bytes, key)
-        .expect(<span class="string">&quot;decryption failed&quot;</span>)
-        .to_vec()
+    <span class="prelude-val">Ok</span>(aead::decrypt(<span class="kw-2">&amp;mut </span>bytes, key)<span class="question-mark">?</span>.to_vec())
 }
 
 <span class="comment">// TODO: Move to `aead` crate?
-</span><span class="kw">pub fn </span>get_key(password: <span class="prelude-ty">Option</span>&lt;String&gt;, salt_path: PathBuf) -&gt; LessSafeKey {
+</span><span class="kw">pub fn </span>get_key(password: <span class="prelude-ty">Option</span>&lt;String&gt;, salt_path: PathBuf) -&gt; anyhow::Result&lt;LessSafeKey&gt; {
     <span class="kw">let </span>password = <span class="kw">match </span>password {
         <span class="prelude-val">None </span>=&gt; rpassword::prompt_password(<span class="string">&quot;Enter a password to encrypt configs: &quot;</span>).unwrap(),
         <span class="prelude-val">Some</span>(password) =&gt; password,
     };
 
-    <span class="kw">let </span>salt_str = fs::read_to_string(salt_path).expect(<span class="string">&quot;Can&#39;t read salt file&quot;</span>);
-    <span class="kw">let </span>salt = hex::decode(salt_str).expect(<span class="string">&quot;Can&#39;t decode hex&quot;</span>);
+    <span class="kw">let </span>salt_str = fs::read_to_string(salt_path)<span class="question-mark">?</span>;
+    <span class="kw">let </span>salt = hex::decode(salt_str)<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>key = [<span class="number">0u8</span>; digest::SHA256_OUTPUT_LEN];
     <span class="kw">let </span>algo = pbkdf2::PBKDF2_HMAC_SHA256;
     pbkdf2::derive(
@@ -133,8 +132,9 @@
         password.as_bytes(),
         <span class="kw-2">&amp;mut </span>key,
     );
-    <span class="kw">let </span>key = UnboundKey::new(<span class="kw-2">&amp;</span>ring::aead::CHACHA20_POLY1305, <span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;created key&quot;</span>);
-    LessSafeKey::new(key)
+    <span class="kw">let </span>key = UnboundKey::new(<span class="kw-2">&amp;</span>ring::aead::CHACHA20_POLY1305, <span class="kw-2">&amp;</span>key)
+        .map_err(|<span class="kw">_</span>| anyhow::Error::msg(<span class="string">&quot;Unable to create key&quot;</span>))<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(LessSafeKey::new(key))
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (1e4f90061 2023-01-11)" data-search-js="search-181581080540673f.js" data-settings-js="settings-bebeae96e00e4617.js" data-settings-css="settings-58836c674e2f7bd2.css" ></div></body></html>
