@@ -374,6 +374,11 @@
 <a href="#374" id="374">374</a>
 <a href="#375" id="375">375</a>
 <a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -574,11 +579,16 @@
     }
 }
 
-<span class="doccomment">/// Logic responsible for module&#39;s initialization, config generation and validation
+<span class="doccomment">/// Module Generation
 ///
-/// Once the module config is ready, the module can be instantiated via `[Self::init]`.
+/// This trait contains the methods responsible for the module&#39;s
+/// - initialization
+/// - config generation
+/// - config validation
+///
+/// Once the module configuration is ready, the module can be instantiated via `[Self::init]`.
 </span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>ModuleInit {
+</span><span class="kw">pub trait </span>ModuleGen {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder;
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;

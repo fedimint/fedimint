@@ -601,7 +601,6 @@
 <a href="#601" id="601">601</a>
 <a href="#602" id="602">602</a>
 <a href="#603" id="603">603</a>
-<a href="#604" id="604">604</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -618,15 +617,14 @@
 <span class="kw">use </span>fedimint_api::task::timeout;
 <span class="kw">use </span>fedimint_api::{Amount, ServerModule};
 <span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
-<span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
+<span class="kw">use </span>fedimint_core::modules::ln::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::{
     Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
 };
 <span class="kw">use </span>fedimint_core::modules::ln::{
-    ContractAccount, ContractOutput, LightningGateway, LightningInput, LightningModule,
-    LightningOutput,
+    ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
 };
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -643,14 +641,14 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LnClient {
-    <span class="kw">pub </span>config: LightningModuleClientConfig,
+    <span class="kw">pub </span>config: LightningClientConfig,
     <span class="kw">pub </span>context: Arc&lt;ClientContext&gt;,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>LnClient {
     <span class="kw">const </span>KIND: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;ln&quot;</span>;
-    <span class="kw">type </span>Decoder = &lt;LightningModule <span class="kw">as </span>ServerModule&gt;::Decoder;
-    <span class="kw">type </span>Module = LightningModule;
+    <span class="kw">type </span>Decoder = &lt;Lightning <span class="kw">as </span>ServerModule&gt;::Decoder;
+    <span class="kw">type </span>Module = Lightning;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
         LightningDecoder
@@ -944,10 +942,10 @@
     <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
-    <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
+    <span class="kw">use </span>fedimint_core::modules::ln::config::LightningClientConfig;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
+    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, Lightning, LightningConfigGenerator};
     <span class="kw">use </span>fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
@@ -961,7 +959,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::ln::LnClient;
     <span class="kw">use crate</span>::{module_decode_stubs, ClientContext, LegacyTransaction};
 
-    <span class="kw">type </span>Fed = FakeFed&lt;LightningModule&gt;;
+    <span class="kw">type </span>Fed = FakeFed&lt;Lightning&gt;;
 
     <span class="attr">#[derive(Debug)]
     </span><span class="kw">struct </span>FakeApi {
@@ -1075,15 +1073,15 @@
 
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
         Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
-        LightningModuleClientConfig,
+        LightningClientConfig,
         ClientContext,
     ) {
         <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::&lt;LightningModule&gt;::new(
+            FakeFed::&lt;Lightning&gt;::new(
                 <span class="number">4</span>,
-                |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>)) },
+                |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>)) },
                 <span class="kw-2">&amp;</span>ConfigGenParams::new(),
-                <span class="kw-2">&amp;</span>LightningModuleConfigGen,
+                <span class="kw-2">&amp;</span>LightningConfigGenerator,
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
             )
             .<span class="kw">await

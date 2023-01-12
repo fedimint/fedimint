@@ -1372,7 +1372,7 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleInit,
+    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
@@ -1489,7 +1489,7 @@
 <span class="kw">pub struct </span>MintConfigGenerator;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>MintConfigGenerator {
+</span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>MintConfigGenerator {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
         DynDecoder::from_typed(MintDecoder)
     }
@@ -2483,7 +2483,7 @@
     <span class="kw">use </span>fedimint_api::config::{
         ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
-    <span class="kw">use </span>fedimint_api::module::ModuleInit;
+    <span class="kw">use </span>fedimint_api::module::ModuleGen;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 

@@ -137,14 +137,14 @@
     </span><span class="kw">pub </span>threshold_sec_key: SerdeSecret&lt;threshold_crypto::SecretKeyShare&gt;,
 }
 
-<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>LightningModuleClientConfig {
+<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>LightningClientConfig {
     <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
         KIND
     }
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>LightningModuleClientConfig {
+</span><span class="kw">pub struct </span>LightningClientConfig {
     <span class="kw">pub </span>threshold_pub_key: threshold_crypto::PublicKey,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
@@ -153,7 +153,7 @@
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
         ClientModuleConfig::new(
             KIND,
-            serde_json::to_value(<span class="kw-2">&amp;</span>LightningModuleClientConfig {
+            serde_json::to_value(<span class="kw-2">&amp;</span>LightningClientConfig {
                 threshold_pub_key: <span class="self">self</span>.threshold_pub_keys.public_key(),
                 fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
             })

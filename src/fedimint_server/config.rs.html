@@ -934,7 +934,7 @@
 };
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-<span class="kw">use </span>fedimint_api::module::ModuleInit;
+<span class="kw">use </span>fedimint_api::module::ModuleGen;
 <span class="kw">use </span>fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
@@ -1066,7 +1066,7 @@
 }
 
 <span class="kw">impl </span>ServerConfigConsensus {
-    <span class="kw">pub fn </span>to_client_config_try(
+    <span class="kw">pub fn </span>try_to_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry,
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
@@ -1095,19 +1095,19 @@
     }
 
     <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry) -&gt; ClientConfig {
-        <span class="self">self</span>.to_client_config_try(module_config_gens)
+        <span class="self">self</span>.try_to_client_config(module_config_gens)
             .expect(<span class="string">&quot;configuration mismatch&quot;</span>)
     }
 }
 
 <span class="comment">// TODO: turn into newtype
-</span><span class="kw">pub type </span>DynModuleInit = Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;;
+</span><span class="kw">pub type </span>DynModuleGen = Arc&lt;<span class="kw">dyn </span>ModuleGen + Send + Sync&gt;;
 
 <span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>ModuleInitRegistry(BTreeMap&lt;ModuleKind, DynModuleInit&gt;);
+</span><span class="kw">pub struct </span>ModuleInitRegistry(BTreeMap&lt;ModuleKind, DynModuleGen&gt;);
 
-<span class="kw">impl </span>From&lt;Vec&lt;DynModuleInit&gt;&gt; <span class="kw">for </span>ModuleInitRegistry {
-    <span class="kw">fn </span>from(value: Vec&lt;DynModuleInit&gt;) -&gt; <span class="self">Self </span>{
+<span class="kw">impl </span>From&lt;Vec&lt;DynModuleGen&gt;&gt; <span class="kw">for </span>ModuleInitRegistry {
+    <span class="kw">fn </span>from(value: Vec&lt;DynModuleGen&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(BTreeMap::from_iter(
             value.into_iter().map(|i| (i.module_kind(), i)),
         ))
@@ -1115,7 +1115,7 @@
 }
 
 <span class="kw">impl </span>ModuleInitRegistry {
-    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, k: <span class="kw-2">&amp;</span>ModuleKind) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>DynModuleInit&gt; {
+    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, k: <span class="kw-2">&amp;</span>ModuleKind) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>DynModuleGen&gt; {
         <span class="self">self</span>.<span class="number">0</span>.get(k)
     }
 
@@ -1197,11 +1197,11 @@
 </span><span class="kw">pub struct </span>LegacyInitOrderIter {
     <span class="doccomment">/// Counter of what module id will this returned value get assigned
     </span>next_id: ModuleInstanceId,
-    rest: BTreeMap&lt;ModuleKind, DynModuleInit&gt;,
+    rest: BTreeMap&lt;ModuleKind, DynModuleGen&gt;,
 }
 
 <span class="kw">impl </span>Iterator <span class="kw">for </span>LegacyInitOrderIter {
-    <span class="kw">type </span>Item = (ModuleKind, DynModuleInit);
+    <span class="kw">type </span>Item = (ModuleKind, DynModuleGen);
 
     <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
         <span class="kw">let </span>ret = <span class="kw">match </span><span class="self">self</span>.next_id {

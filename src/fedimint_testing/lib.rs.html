@@ -350,7 +350,7 @@
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleInit, TransactionItemAmount};
+<span class="kw">use </span>fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleGen, TransactionItemAmount};
 <span class="kw">use </span>fedimint_api::{OutPoint, PeerId, ServerModule};
 
 <span class="kw">pub mod </span>btc;
@@ -384,7 +384,7 @@
         module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;FakeFed&lt;Module&gt;&gt;
     <span class="kw">where
-        </span>ConfGen: ModuleInit,
+        </span>ConfGen: ModuleGen,
         F: Fn(ServerModuleConfig, Database) -&gt; FF,
         FF: Future&lt;Output = anyhow::Result&lt;Module&gt;&gt;,
     {

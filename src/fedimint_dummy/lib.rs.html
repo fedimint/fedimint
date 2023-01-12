@@ -330,7 +330,7 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleInit, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleGen, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
@@ -362,7 +362,7 @@
 <span class="kw">pub struct </span>DummyConfigGenerator;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>DummyConfigGenerator {
+</span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>DummyConfigGenerator {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
         DynDecoder::from_typed(DummyDecoder)
     }

@@ -539,7 +539,7 @@
         <span class="comment">// TODO: maybe treat every coin as a seperate input?
         </span>Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Input),
         Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Input),
-        LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>ServerModule&gt;::Input),
+        LN(&lt;fedimint_ln::Lightning <span class="kw">as </span>ServerModule&gt;::Input),
     }
 
     <span class="comment">// TODO: check if clippy is right
@@ -548,7 +548,7 @@
     </span><span class="kw">pub enum </span>Output {
         Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Output),
         Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Output),
-        LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>ServerModule&gt;::Output),
+        LN(&lt;fedimint_ln::Lightning <span class="kw">as </span>ServerModule&gt;::Output),
     }
 
     <span class="kw">impl </span>Transaction {

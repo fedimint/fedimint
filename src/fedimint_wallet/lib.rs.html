@@ -1642,7 +1642,7 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, InputMeta, IntoModuleError, ModuleInit, TransactionItemAmount,
+    api_endpoint, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
@@ -1831,7 +1831,7 @@
 <span class="kw">pub struct </span>WalletConfigGenerator;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>WalletConfigGenerator {
+</span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>WalletConfigGenerator {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
         DynDecoder::from_typed(WalletDecoder)
     }

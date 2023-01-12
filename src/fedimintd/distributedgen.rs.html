@@ -145,11 +145,11 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::ensure;
-<span class="kw">use </span>fedimint_api::module::ModuleInit;
+<span class="kw">use </span>fedimint_api::module::ModuleGen;
 <span class="kw">use </span>fedimint_api::net::peers::IMuxPeerConnections;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
-<span class="kw">use </span>fedimint_ln::LightningModuleConfigGen;
+<span class="kw">use </span>fedimint_ln::LightningConfigGenerator;
 <span class="kw">use </span>fedimint_mint::MintConfigGenerator;
 <span class="kw">use </span>fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
 <span class="kw">use </span>fedimint_server::multiplexed::PeerConnectionMultiplexer;
@@ -225,9 +225,9 @@
     <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
     <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
+        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleGen + Send + Sync&gt;,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     <span class="kw">let </span>result = ServerConfig::distributed_gen(

@@ -1402,7 +1402,7 @@
 <span class="kw">use </span>fedimint_api::{ServerModule, TieredMulti};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
 <span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
-<span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
+<span class="kw">use </span>fedimint_core::modules::ln::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::common::MintDecoder;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
@@ -1566,7 +1566,7 @@
             config: <span class="self">self
                 </span>.config
                 .as_ref()
-                .get_first_module_by_kind::&lt;LightningModuleClientConfig&gt;(<span class="string">&quot;ln&quot;</span>)
+                .get_first_module_by_kind::&lt;LightningClientConfig&gt;(<span class="string">&quot;ln&quot;</span>)
                 .expect(<span class="string">&quot;needs lightning module client config&quot;</span>)
                 .<span class="number">1</span>,
             context: <span class="self">self</span>.context.clone(),

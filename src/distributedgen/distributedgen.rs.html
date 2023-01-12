@@ -235,10 +235,10 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>fedimint_api::module::ModuleInit;
+<span class="kw">use </span>fedimint_api::module::ModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
-<span class="kw">use </span>fedimint_ln::LightningModuleConfigGen;
+<span class="kw">use </span>fedimint_ln::LightningConfigGenerator;
 <span class="kw">use </span>fedimint_mint::MintConfigGenerator;
 <span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
 <span class="kw">use </span>fedimint_wallet::WalletConfigGenerator;
@@ -363,9 +363,9 @@
         .init();
 
     <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
+        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleGen + Send + Sync&gt;,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();

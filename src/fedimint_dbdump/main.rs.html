@@ -701,8 +701,8 @@
 <span class="kw">use </span>erased_serde::Serialize;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::Encodable;
-<span class="kw">use </span>fedimint_api::module::ModuleInit;
-<span class="kw">use </span>fedimint_ln::{db <span class="kw">as </span>LightningRange, LightningModuleConfigGen};
+<span class="kw">use </span>fedimint_api::module::ModuleGen;
+<span class="kw">use </span>fedimint_ln::{db <span class="kw">as </span>LightningRange, LightningConfigGenerator};
 <span class="kw">use </span>fedimint_mint::{db <span class="kw">as </span>MintRange, MintConfigGenerator};
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
 <span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
@@ -1313,7 +1313,7 @@
 <span class="kw">const </span>USAGE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;
 Usage:
     fedimint-dbdump &lt;path&gt; [--range=&lt;range&gt;] [--prefix=&lt;prefix&gt;]
-    
+
 Options:
     --range=&lt;range&gt;    A CSV list of the ranges of the database to dump [default: All].
     --prefix=&lt;prefix&gt;  A CSV list of he prefixes within the range of the database to dump [default: All].
@@ -1372,9 +1372,9 @@ Options:
     };
 
     <span class="kw">let </span>_module_inits = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleInit + Send + Sync&gt;,
+        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleGen + Send + Sync&gt;,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     <span class="kw">let </span>decoders = Default::default(); <span class="comment">// TODO: read config and use it to create decoders
