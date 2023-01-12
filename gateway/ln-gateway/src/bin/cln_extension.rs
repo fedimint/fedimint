@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use bitcoin::XOnlyPublicKey;
 use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
@@ -11,6 +12,7 @@ use cln_rpc::{model, ClnRpc};
 use fedimint_api::{task::TaskGroup, Amount};
 use futures::Stream;
 use ln_gateway::gatewaylnrpc::{
+    complete_htlcs_request::{Action, Cancel, Settle},
     gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
@@ -265,13 +267,86 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(ReceiverStream::new(receiver)))
     }
 
-    type CompleteHtlcsStream = tonic::Streaming<CompleteHtlcsResponse>;
+    type CompleteHtlcsStream =
+        Pin<Box<dyn Stream<Item = Result<CompleteHtlcsResponse, tonic::Status>> + Send + 'static>>;
 
     async fn complete_htlcs(
         &self,
-        _request: tonic::Request<tonic::Streaming<CompleteHtlcsRequest>>,
+        request: tonic::Request<tonic::Streaming<CompleteHtlcsRequest>>,
     ) -> Result<tonic::Response<Self::CompleteHtlcsStream>, Status> {
-        unimplemented!()
+        let mut requests = request.into_inner();
+
+        let mut results: Vec<Result<CompleteHtlcsResponse, tonic::Status>> = Vec::new();
+
+        while let Some(CompleteHtlcsRequest {
+            action,
+            intercepted_htlc_id,
+        }) = requests.message().await?
+        {
+            let hash = match sha256::Hash::from_slice(&intercepted_htlc_id) {
+                Ok(hash) => hash,
+                Err(e) => {
+                    error!("Invalid intercepted_htlc_id: {:?}", e);
+                    results.push(Err(Status::invalid_argument(e.to_string())));
+                    continue;
+                }
+            };
+
+            // TODO: Implement non-blocking access to the outcomes map sowe can multithread complete_htlcs
+            if let Some(outcome) = self.interceptor.outcomes.lock().await.remove(&hash) {
+                // Translate action request into a cln rpc response for `htlc_accepted` event
+                let htlca_res = match action {
+                    Some(Action::Settle(Settle { preimage })) => {
+                        if let Ok(pk) = XOnlyPublicKey::from_slice(&preimage) {
+                            serde_json::json!({ "result": "resolve", "payment_key": pk.to_string() })
+                        } else {
+                            temp_node_failure()
+                        }
+                    }
+                    Some(Action::Cancel(Cancel { reason: _ })) => {
+                        // TODO: Translate the reason into a BOLT 4 failure message
+                        // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                        temp_node_failure()
+                    }
+                    None => {
+                        error!("No action specified for intercepted htlc id: {:?}", hash);
+                        results.push(Err(Status::internal(
+                            "No action specified on this intercepted htlc",
+                        )));
+                        continue;
+                    }
+                };
+
+                // Send translated response to the HTLC interceptor for submission to the cln rpc
+                match outcome.send(htlca_res) {
+                    Ok(_) => {
+                        results.push(Ok(CompleteHtlcsResponse {}));
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to send htlc_accepted response to interceptor: {:?}",
+                            e
+                        );
+                        results.push(Err(Status::internal(
+                            "Failed to send htlc_accepted outcome to interceptor",
+                        )));
+                    }
+                };
+                continue;
+            }
+
+            error!(
+                "No reference found for this intercepted and processed htlc id: {:?}",
+                intercepted_htlc_id
+            );
+            results.push(Err(Status::internal(
+                "No reference found for this intercepted and processed htlc",
+            )))
+        }
+
+        Ok(tonic::Response::new(
+            Box::pin(tokio_stream::iter(results)) as Self::CompleteHtlcsStream
+        ))
     }
 }
 
