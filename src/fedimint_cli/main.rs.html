@@ -705,6 +705,8 @@
 <a href="#705" id="705">705</a>
 <a href="#706" id="706">706</a>
 <a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -779,6 +781,7 @@
     },
 
     Info {
+        network: String,
         total_amount: Amount,
         total_num_notes: usize,
         details: BTreeMap&lt;Amount, usize&gt;,
@@ -1222,6 +1225,7 @@
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))
                 .collect();
             <span class="prelude-val">Ok</span>(CliOutput::Info {
+                network: client.wallet_client().config.network.to_string(),
                 total_amount: (coins.total_amount()),
                 total_num_notes: (coins.item_count()),
                 details: (details_vec),
