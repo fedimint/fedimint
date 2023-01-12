@@ -312,12 +312,12 @@ impl std::ops::Deref for DynDecoder {
     }
 }
 
-impl<T> From<T> for Decoder
+impl<T> From<T> for DynDecoder
 where
-    T: PluginDecode + Send + Sync + 'static,
+    T: Decoder + Send + Sync + 'static,
 {
     fn from(value: T) -> Self {
-        Decoder(Arc::new(value))
+        DynDecoder(Arc::new(value))
     }
 }
 
