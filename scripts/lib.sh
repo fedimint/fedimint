@@ -8,17 +8,17 @@ function mine_blocks() {
 }
 
 function open_channel() {
-    LN_ADDR="$($FM_LN1 newaddr | jq -r '.bech32')"
+    LN_ADDR="$($FM_LN1 newaddr | jq -e -r '.bech32')"
     $FM_BTC_CLIENT sendtoaddress $LN_ADDR 1
     mine_blocks 10
-    FM_LN2_PUB_KEY="$($FM_LN2 getinfo | jq -r '.id')"
+    FM_LN2_PUB_KEY="$($FM_LN2 getinfo | jq -e -r '.id')"
     export FM_LN2_PUB_KEY
-    FM_LN1_PUB_KEY="$($FM_LN1 getinfo | jq -r '.id')"
+    FM_LN1_PUB_KEY="$($FM_LN1 getinfo | jq -e -r '.id')"
     export FM_LN1_PUB_KEY
     $FM_LN1 connect $FM_LN2_PUB_KEY@127.0.0.1:9001
     until $FM_LN1 -k fundchannel id=$FM_LN2_PUB_KEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
     mine_blocks 10
-    until [[ $($FM_LN1 listpeers | jq -r ".peers[] | select(.id == \"$FM_LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
+    until [[ $($FM_LN1 listpeers | jq -e -r ".peers[] | select(.id == \"$FM_LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
 }
 
 function await_bitcoin_rpc() {
@@ -38,7 +38,7 @@ function await_cln_rpc() {
 
 function await_fedimint_block_sync() {
   FINALITY_DELAY=$(get_finality_delay)
-  EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALITY_DELAY ))"
+  EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks') - $FINALITY_DELAY ))"
   echo "Node at ${EXPECTED_BLOCK_HEIGHT}H"
   $FM_MINT_CLIENT wait-block-height $EXPECTED_BLOCK_HEIGHT
   echo "Mint at ${EXPECTED_BLOCK_HEIGHT}H"
@@ -58,16 +58,16 @@ function await_server_on_port() {
 # Check that core-lightning block-proccessing is caught up
 # CLI integration tests should call this before attempting to pay invoices
 function await_cln_block_processing() {
-  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks')"
+  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
 
   # ln1
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN1 getinfo | jq -r '.blockheight')" ]
+  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN1 getinfo | jq -e -r '.blockheight')" ]
   do
       sleep $POLL_INTERVAL
   done
 
   # ln2
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN2 getinfo | jq -r '.blockheight')" ]
+  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN2 getinfo | jq -e -r '.blockheight')" ]
   do
       sleep $POLL_INTERVAL
   done
@@ -90,7 +90,7 @@ function start_gateway() {
 
 function gw_connect_fed() {
   # connect federation with the gateway
-  FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -r '.connect_info')"
+  FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info')"
   $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
 }
 
@@ -133,7 +133,7 @@ function get_raw_transaction() {
 }
 
 function get_federation_id() {
-    cat $FM_CFG_DIR/client.json | jq -r '.federation_id'
+    cat $FM_CFG_DIR/client.json | jq -e -r '.federation_id'
 }
 
 function show_verbose_output()

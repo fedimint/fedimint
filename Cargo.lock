@@ -961,8 +961,8 @@ dependencies = [
  "fedimint-api",
  "rand",
  "serde",
- "thiserror",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1313,6 +1313,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "validator",
 ]
 
