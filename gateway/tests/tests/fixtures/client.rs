@@ -60,7 +60,6 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
             federation_name: "".to_string(),
             federation_id: FederationId(auth_pk),
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
-            auth_pk,
             nodes: [].into(),
             modules: [].into(),
         };

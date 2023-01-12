@@ -84,12 +84,10 @@ pub struct ApiEndpoint {
 pub struct ClientConfig {
     /// name of the federation
     pub federation_name: String,
-    // Stable and unique id of the federation
+    // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
     pub nodes: Vec<ApiEndpoint>,
-    /// Threshold pubkey for authenticating configs
-    pub auth_pk: threshold_crypto::PublicKey,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules

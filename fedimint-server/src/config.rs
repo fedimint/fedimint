@@ -151,7 +151,6 @@ impl ServerConfigConsensus {
             federation_name: self.federation_name.clone(),
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
-            auth_pk: self.auth_pk_set.public_key(),
             nodes: self.api.values().cloned().collect(),
             modules: self
                 .modules
