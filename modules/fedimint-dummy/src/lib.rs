@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
+use std::ffi::OsString;
 use std::fmt;
 
 use async_trait::async_trait;
@@ -62,6 +63,7 @@ impl ModuleInit for DummyConfigGenerator {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
+        _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(Dummy::new(cfg.to_typed()?).into())

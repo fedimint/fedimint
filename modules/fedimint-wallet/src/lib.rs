@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::{Infallible, TryInto};
+use std::ffi::OsString;
 use std::hash::Hasher;
 use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
@@ -234,9 +235,12 @@ impl ModuleInit for WalletConfigGenerator {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
+        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
+        Ok(Wallet::new(cfg.to_typed()?, db, env, task_group)
+            .await?
+            .into())
     }
 
     fn trusted_dealer_gen(
@@ -806,6 +810,7 @@ impl Wallet {
     pub async fn new(
         cfg: WalletConfig,
         db: Database,
+        _env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
         let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(

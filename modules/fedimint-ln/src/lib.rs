@@ -15,6 +15,7 @@ pub mod config;
 pub mod contracts;
 pub mod db;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::OsString;
 use std::ops::Sub;
 
 use async_trait::async_trait;
@@ -246,6 +247,7 @@ impl ModuleInit for LightningModuleConfigGen {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
+        _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(LightningModule::new(cfg.to_typed()?).into())

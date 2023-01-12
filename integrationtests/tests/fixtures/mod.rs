@@ -1049,6 +1049,7 @@ impl FederationTest {
                         .init(
                             cfg.get_module_config(id).unwrap(),
                             db.clone(),
+                            &[],
                             &mut task_group,
                         )
                         .await

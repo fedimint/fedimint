@@ -3,6 +3,7 @@ pub mod interconnect;
 pub mod registry;
 
 use std::collections::{BTreeMap, HashSet};
+use std::ffi::OsString;
 use std::fmt::Debug;
 
 use async_trait::async_trait;
@@ -213,6 +214,7 @@ pub trait ModuleInit {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
+        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
 
