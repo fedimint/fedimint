@@ -25,8 +25,8 @@ start_gateway
 #### BEGIN TESTS ####
 
 # reissue
-TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -r '.token')
-[[ $($FM_MINT_CLIENT info | jq -r '.total_amount') = "9958000" ]]
+TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.token')
+[[ $($FM_MINT_CLIENT info | jq -e -r '.total_amount') = "9958000" ]]
 $FM_MINT_CLIENT validate $TOKENS
 $FM_MINT_CLIENT reissue $TOKENS
 $FM_MINT_CLIENT fetch
@@ -44,20 +44,20 @@ RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 [[ "$RECEIVED" = "0.00000500" ]]
 
 # outgoing lightning
-INVOICE="$($FM_LN2 invoice 100000 test test 1m | jq -r '.bolt11')"
+INVOICE="$($FM_LN2 invoice 100000 test test 1m | jq -e -r '.bolt11')"
 await_cln_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
 FED_ID="$(get_federation_id)"
-LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -r '.balance_msat')"
+LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -e -r '.balance_msat')"
 [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
 INVOICE_RESULT="$($FM_LN2 waitinvoice test)"
-INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
+INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
 # incoming lightning
-INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -r '.invoice')"
+INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
 INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
-INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
+INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "complete" ]]
