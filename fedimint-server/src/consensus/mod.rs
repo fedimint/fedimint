@@ -229,7 +229,7 @@ impl FedimintConsensus {
         &self,
         consensus_outcome: HbbftConsensusOutcome,
         reference_rejected_txs: &Option<BTreeSet<TransactionId>>,
-    ) -> SignedEpochOutcome {
+    ) -> Option<SignedEpochOutcome> {
         let epoch = consensus_outcome.epoch;
         let epoch_peers: HashSet<PeerId> =
             consensus_outcome.contributions.keys().copied().collect();
@@ -263,6 +263,11 @@ impl FedimintConsensus {
             }
 
             dbtx.commit_tx().await.expect("DB Error");
+        }
+
+        warn!("{:?}, epoch {}", self.cfg.local.identity, epoch);
+        if self.cfg.local.identity == PeerId::from(0) && epoch == 1 {
+            return None;
         }
 
         // Process transactions
@@ -365,7 +370,7 @@ impl FedimintConsensus {
             )
         }
 
-        epoch_history
+        Some(epoch_history)
     }
 
     pub async fn get_last_epoch(&self) -> Option<u64> {

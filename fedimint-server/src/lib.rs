@@ -281,7 +281,9 @@ impl FedimintServer {
                             &rejected_txs,
                         )
                         .await;
-                    self.last_processed_epoch = Some(epoch);
+                    if epoch != None {
+                        self.last_processed_epoch = epoch;
+                    }
                 }
             }
         }

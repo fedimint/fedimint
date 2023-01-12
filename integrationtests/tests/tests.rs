@@ -1018,6 +1018,17 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn simulate_failure() -> Result<()> {
+    test(4, |fed, user_send, bitcoin, _, _| async move {
+        fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
+        user_send.client.reissue(user_send.client.coins().await, rng()).await.unwrap();
+        fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+        fed.subset_peers(&[3]).run_consensus_epochs(1).await;
+        fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    }).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn ecash_can_be_recovered() -> Result<()> {
     test(2, |fed, user_send, bitcoin, _, _| async move {
         let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
