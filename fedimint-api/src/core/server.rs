@@ -111,7 +111,7 @@ pub trait IServerModule: Debug {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Output,
+        output: &DynOutput,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
@@ -127,7 +127,7 @@ pub trait IServerModule: Debug {
     async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        output: &Output,
+        output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -311,7 +311,7 @@ where
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Output,
+        output: &DynOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModule>::validate_output(
             self,
@@ -337,7 +337,7 @@ where
     async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        output: &Output,
+        output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModule>::apply_output(

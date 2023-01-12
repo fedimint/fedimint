@@ -810,7 +810,7 @@ impl FederationTest {
                     let mut dbtx = svr.database.begin_transaction().await;
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
-                        outputs: vec![core::Output::from_typed(
+                        outputs: vec![core::DynOutput::from_typed(
                             LEGACY_HARDCODED_INSTANCE_ID_MINT,
                             MintOutput(tokens.clone()),
                         )],
@@ -833,7 +833,7 @@ impl FederationTest {
                         .get(LEGACY_HARDCODED_INSTANCE_ID_MINT)
                         .apply_output(
                             &mut dbtx,
-                            &core::Output::from_typed(
+                            &core::DynOutput::from_typed(
                                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                                 MintOutput(tokens.clone()),
                             ),

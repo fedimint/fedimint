@@ -1,6 +1,6 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
-use fedimint_api::core::{DynInput, Output};
+use fedimint_api::core::{DynInput, DynOutput};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{serde_module_encoding_wrapper, Amount, TransactionId};
 use rand::Rng;
@@ -14,8 +14,8 @@ use thiserror::Error;
 pub struct Transaction {
     /// [`DynInput`]s consumed by the transaction
     pub inputs: Vec<DynInput>,
-    /// [`Output`]s created as a result of the transaction
-    pub outputs: Vec<Output>,
+    /// [`DynOutput`]s created as a result of the transaction
+    pub outputs: Vec<DynOutput>,
     /// Aggregated MuSig2 signature over all the public keys of the inputs
     pub signature: Option<schnorr::Signature>,
 }
@@ -32,7 +32,7 @@ impl Transaction {
     }
 
     /// Generate the transaction hash.
-    pub fn tx_hash_from_parts(inputs: &[DynInput], outputs: &[Output]) -> TransactionId {
+    pub fn tx_hash_from_parts(inputs: &[DynInput], outputs: &[DynOutput]) -> TransactionId {
         let mut engine = TransactionId::engine();
         inputs
             .consensus_encode(&mut engine)
@@ -242,14 +242,16 @@ pub mod legacy {
                 .iter()
                 .map(|output| match output.clone() {
                     Output::Mint(o) => {
-                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
                     }
                     Output::Wallet(o) => {
-                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
                     }
-                    Output::LN(o) => core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o),
+                    Output::LN(o) => {
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o)
+                    }
                 })
-                .collect::<Vec<fedimint_api::core::Output>>();
+                .collect::<Vec<fedimint_api::core::DynOutput>>();
 
             let mut engine = TransactionId::engine();
             erased_inputs
@@ -318,13 +320,13 @@ pub mod legacy {
                     .into_iter()
                     .map(|output| match output {
                         Output::Mint(output) => {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
                         }
                         Output::Wallet(output) => {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
                         }
                         Output::LN(output) => {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
                         }
                     })
                     .collect(),

@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use fedimint_api::{
-    core::{self, Output, LEGACY_HARDCODED_INSTANCE_ID_MINT},
+    core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT},
     msats, Amount, OutPoint, PeerId, Tiered, TieredMulti,
 };
 use fedimint_core::{
@@ -344,7 +344,7 @@ fn sanity_check_recovery_fresh_backup() {
 
     let tx_a = Transaction {
         inputs: vec![],
-        outputs: vec![Output::from_typed(
+        outputs: vec![DynOutput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             output_c1_a.clone(),
         )],
@@ -446,7 +446,7 @@ fn sanity_check_recovery_fresh_backup() {
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             c1.generate_input(notes_c1_a),
         )],
-        outputs: vec![core::Output::from_typed(
+        outputs: vec![core::DynOutput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             output_c1_a,
         )],
@@ -483,8 +483,8 @@ fn sanity_check_recovery_non_empty_backup() {
     let tx_a = Transaction {
         inputs: vec![],
         outputs: vec![
-            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output_c1_a0.clone()),
-            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output_c1_a1.clone()),
+            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output_c1_a0.clone()),
+            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output_c1_a1.clone()),
         ],
         signature: None,
     };
@@ -597,7 +597,7 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
 
     let tx_a = Transaction {
         inputs: vec![],
-        outputs: vec![core::Output::from_typed(
+        outputs: vec![core::DynOutput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             output_c2_a.clone(),
         )],
@@ -610,7 +610,7 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
 
     let tx_b = Transaction {
         inputs: vec![],
-        outputs: vec![core::Output::from_typed(
+        outputs: vec![core::DynOutput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             output_c1_b,
         )],
@@ -679,7 +679,7 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
 
     let tx_a = Transaction {
         inputs: vec![],
-        outputs: vec![core::Output::from_typed(
+        outputs: vec![core::DynOutput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             output_c2_a.clone(),
         )],
@@ -692,7 +692,7 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
 
     let tx_b = Transaction {
         inputs: vec![],
-        outputs: vec![core::Output::from_typed(
+        outputs: vec![core::DynOutput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             output_c1_b.clone(),
         )],
