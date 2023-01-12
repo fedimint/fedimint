@@ -75,7 +75,7 @@ pub trait IServerModule: Debug {
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    fn build_verification_cache(&self, inputs: &[Input]) -> DynVerificationCache;
+    fn build_verification_cache(&self, inputs: &[DynInput]) -> DynVerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -86,7 +86,7 @@ pub trait IServerModule: Debug {
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
-        input: &Input,
+        input: &DynInput,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
@@ -100,7 +100,7 @@ pub trait IServerModule: Debug {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Input,
+        input: &'b DynInput,
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
@@ -233,7 +233,7 @@ where
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    fn build_verification_cache<'a>(&self, inputs: &[Input]) -> DynVerificationCache {
+    fn build_verification_cache<'a>(&self, inputs: &[DynInput]) -> DynVerificationCache {
         <Self as ServerModule>::build_verification_cache(
             self,
             inputs.iter().map(|i| {
@@ -254,7 +254,7 @@ where
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
-        input: &Input,
+        input: &DynInput,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModule>::validate_input(
             self,
@@ -284,7 +284,7 @@ where
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Input,
+        input: &'b DynInput,
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModule>::apply_input(

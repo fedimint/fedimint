@@ -442,7 +442,7 @@ fn sanity_check_recovery_fresh_backup() {
 
     // Spend the notes, which should remove them from the tracker
     let tx_b = Transaction {
-        inputs: vec![core::Input::from_typed(
+        inputs: vec![core::DynInput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             c1.generate_input(notes_c1_a),
         )],
@@ -524,7 +524,7 @@ fn sanity_check_recovery_non_empty_backup() {
 
     // Spend the notes, which should remove them from the tracker
     let tx_b = Transaction {
-        inputs: vec![core::Input::from_typed(
+        inputs: vec![core::DynInput::from_typed(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             c1.generate_input(notes_c1_a0),
         )],

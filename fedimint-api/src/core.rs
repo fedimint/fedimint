@@ -177,7 +177,7 @@ macro_rules! module_plugin_trait_define{
 #[macro_export]
 macro_rules! plugin_types_trait_impl {
     ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
-        impl fedimint_api::core::PluginInput for $input {}
+        impl fedimint_api::core::Input for $input {}
 
         impl fedimint_api::core::PluginOutput for $output {}
 
@@ -245,7 +245,7 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleInstanceId`]s
 pub trait Decoder: Debug + Send + Sync + 'static {
-    type Input: PluginInput;
+    type Input: Input;
     type Output: PluginOutput;
     type OutputOutcome: PluginOutputOutcome;
     type ConsensusItem: PluginConsensusItem;
@@ -275,7 +275,7 @@ pub trait IDecoder: Debug {
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Input, DecodeError>;
+    ) -> Result<DynInput, DecodeError>;
 
     /// Decode `Output` compatible with this module, after the module key prefix was already decoded
     fn decode_output(
@@ -335,8 +335,8 @@ where
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Input, DecodeError> {
-        Ok(Input::from_typed(
+    ) -> Result<DynInput, DecodeError> {
+        Ok(DynInput::from_typed(
             instance_id,
             <Self as Decoder>::decode_input(self, r)?,
         ))
@@ -382,7 +382,7 @@ impl IDecoder for DynDecoder {
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Input, DecodeError> {
+    ) -> Result<DynInput, DecodeError> {
         self.0.decode_input(r, instance_id)
     }
 
@@ -418,36 +418,36 @@ impl DynDecoder {
     }
 }
 
-/// Something that can be an [`Input`] in a [`Transaction`]
+/// Something that can be an [`DynInput`] in a [`Transaction`]
 ///
-/// General purpose code should use [`Input`] instead
-pub trait ModuleInput: Debug + Display + DynEncodable {
+/// General purpose code should use [`DynInput`] instead
+pub trait IInput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self, instance_id: ModuleInstanceId) -> Input;
+    fn clone(&self, instance_id: ModuleInstanceId) -> DynInput;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq_no_instance_id(&self, other: &Input) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynInput) -> bool;
 }
 
 module_plugin_trait_define! {
-    Input, PluginInput, ModuleInput,
+    DynInput, Input, IInput,
     { }
     {
-        erased_eq_no_instance_id!(Input);
+        erased_eq_no_instance_id!(DynInput);
     }
 }
 
 dyn_newtype_define_with_instance_id! {
     /// An owned, immutable input to a [`Transaction`]
-    pub Input(Box<ModuleInput>)
+    pub DynInput(Box<IInput>)
 }
 module_dyn_newtype_impl_encode_decode! {
-    Input, decode_input
+    DynInput, decode_input
 }
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(Input);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynInput);
 
-newtype_impl_eq_passthrough_with_instance_id!(Input);
+newtype_impl_eq_passthrough_with_instance_id!(DynInput);
 
-newtype_impl_display_passthrough_with_instance_id!(Input);
+newtype_impl_display_passthrough_with_instance_id!(DynInput);
 
 /// Something that can be an [`Output`] in a [`Transaction`]
 ///
@@ -544,14 +544,14 @@ pub struct Signature;
 /// Transaction that was already signed
 #[derive(Encodable)]
 pub struct Transaction {
-    inputs: Vec<Input>,
+    inputs: Vec<DynInput>,
     outputs: Vec<Output>,
     signature: Signature,
 }
 
 impl Decodable for Transaction
 where
-    Input: Decodable,
+    DynInput: Decodable,
     Output: Decodable,
 {
     fn consensus_decode<R: std::io::Read>(
