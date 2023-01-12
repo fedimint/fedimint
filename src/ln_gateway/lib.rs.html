@@ -383,6 +383,8 @@
 <a href="#383" id="383">383</a>
 <a href="#384" id="384">384</a>
 <a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -590,7 +592,9 @@
         })
     }
 
-    <span class="kw">async fn </span>handle_receive_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ReceivePaymentPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
+    <span class="doccomment">/// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
+    /// a federation user.
+    </span><span class="kw">async fn </span>handle_receive_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ReceivePaymentPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">let </span>ReceivePaymentPayload { htlc_accepted } = payload;
 
         <span class="kw">let </span>invoice_amount = htlc_accepted.htlc.amount;
@@ -704,7 +708,7 @@
                     }
                     GatewayRequest::ReceivePayment(inner) =&gt; {
                         inner
-                            .handle(|payload| <span class="self">self</span>.handle_receive_invoice_msg(payload))
+                            .handle(|payload| <span class="self">self</span>.handle_receive_payment(payload))
                             .<span class="kw">await</span>;
                     }
                     GatewayRequest::PayInvoice(inner) =&gt; {
