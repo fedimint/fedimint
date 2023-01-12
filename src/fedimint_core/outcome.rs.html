@@ -189,7 +189,7 @@
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-    <span class="kw">use </span>fedimint_api::ServerModulePlugin;
+    <span class="kw">use </span>fedimint_api::ServerModule;
     <span class="kw">use </span>fedimint_ln::contracts::incoming::OfferId;
     <span class="kw">use </span>fedimint_ln::contracts::{
         AccountContractOutcome, ContractOutcome, DecryptedPreimage, OutgoingContractOutcome,
@@ -203,9 +203,9 @@
 
     <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>OutputOutcome {
-        Mint(&lt;Mint <span class="kw">as </span>ServerModulePlugin&gt;::OutputOutcome),
-        Wallet(&lt;Wallet <span class="kw">as </span>ServerModulePlugin&gt;::OutputOutcome),
-        LN(&lt;LightningModule <span class="kw">as </span>ServerModulePlugin&gt;::OutputOutcome),
+        Mint(&lt;Mint <span class="kw">as </span>ServerModule&gt;::OutputOutcome),
+        Wallet(&lt;Wallet <span class="kw">as </span>ServerModule&gt;::OutputOutcome),
+        LN(&lt;LightningModule <span class="kw">as </span>ServerModule&gt;::OutputOutcome),
     }
 
     <span class="kw">impl </span>From&lt;fedimint_api::core::OutputOutcome&gt; <span class="kw">for </span>OutputOutcome {

@@ -968,10 +968,10 @@
 }
 
 <span class="macro">dyn_newtype_define! </span>{
-    <span class="kw">pub </span>FederationApi(Arc&lt;IFederationApi&gt;)
+    <span class="kw">pub </span>DynFederationApi(Arc&lt;IFederationApi&gt;)
 }
 
-<span class="kw">impl </span>FederationApi {
+<span class="kw">impl </span>DynFederationApi {
     <span class="kw">pub async fn </span>fetch_output_outcome&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt;
     <span class="kw">where
         </span>T: TryIntoOutcome + Send,

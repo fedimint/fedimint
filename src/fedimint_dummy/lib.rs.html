@@ -330,9 +330,9 @@
     api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleInit, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::server::ServerModule;
+<span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModulePlugin};
+<span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
@@ -374,7 +374,7 @@
         cfg: ServerModuleConfig,
         _db: Database,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;ServerModule&gt; {
+    ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(Dummy::new(cfg.to_typed()<span class="question-mark">?</span>).into())
     }
 
@@ -494,7 +494,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>Dummy {
+</span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Dummy {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
     <span class="kw">type </span>Decoder = DummyModuleDecoder;

@@ -407,8 +407,6 @@
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -425,31 +423,29 @@
 };
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<span class="kw">use </span><span class="kw">crate</span>::module::{
-    ApiEndpoint, InputMeta, ModuleError, ServerModulePlugin, TransactionItemAmount,
-};
+<span class="kw">use </span><span class="kw">crate</span>::module::{ApiEndpoint, InputMeta, ModuleError, ServerModule, TransactionItemAmount};
 
-<span class="kw">pub trait </span>ModuleVerificationCache: Debug {
+<span class="kw">pub trait </span>IVerificationCache: Debug {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VerificationCache;
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynVerificationCache;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
-    <span class="kw">pub </span>VerificationCache(Box&lt;ModuleVerificationCache&gt;)
+    <span class="kw">pub </span>DynVerificationCache(Box&lt;IVerificationCache&gt;)
 }
 
 <span class="comment">// TODO: make macro impl that doesn&#39;t force en/decodable
-</span><span class="kw">pub trait </span>PluginVerificationCache: Clone + Debug + Send + Sync + <span class="lifetime">&#39;static </span>{}
+</span><span class="kw">pub trait </span>VerificationCache: Clone + Debug + Send + Sync + <span class="lifetime">&#39;static </span>{}
 
-<span class="kw">impl</span>&lt;T&gt; ModuleVerificationCache <span class="kw">for </span>T
+<span class="kw">impl</span>&lt;T&gt; IVerificationCache <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: PluginVerificationCache + <span class="lifetime">&#39;static</span>,
+    </span>T: VerificationCache + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync) {
         <span class="self">self
     </span>}
 
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VerificationCache {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynVerificationCache {
         &lt;<span class="self">Self </span><span class="kw">as </span>Clone&gt;::clone(<span class="self">self</span>).into()
     }
 }
@@ -488,7 +484,7 @@
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    </span><span class="kw">fn </span>build_verification_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[Input]) -&gt; VerificationCache;
+    </span><span class="kw">fn </span>build_verification_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[Input]) -&gt; DynVerificationCache;
 
     <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -498,7 +494,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        verification_cache: <span class="kw-2">&amp;</span>VerificationCache,
+        verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
         input: <span class="kw-2">&amp;</span>Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
@@ -514,7 +510,7 @@
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>Input,
-        verification_cache: <span class="kw-2">&amp;</span>VerificationCache,
+        verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
     <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
@@ -574,21 +570,21 @@
     <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
     /// their input and the current epoch.
-    </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;ServerModule&gt;&gt;;
+    </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;DynServerModule&gt;&gt;;
 }
 
 <span class="macro">dyn_newtype_define!</span>(
     <span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>ServerModule(Arc&lt;IServerModule&gt;)
+    </span><span class="kw">pub </span>DynServerModule(Arc&lt;IServerModule&gt;)
 );
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;T&gt; IServerModule <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: ServerModulePlugin + <span class="lifetime">&#39;static </span>+ Sync,
+    </span>T: ServerModule + <span class="lifetime">&#39;static </span>+ Sync,
 {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(ServerModulePlugin::decoder(<span class="self">self</span>))
+        Decoder::from_typed(ServerModule::decoder(<span class="self">self</span>))
     }
 
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any {
@@ -597,7 +593,7 @@
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
     </span><span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::await_consensus_proposal(<span class="self">self</span>, dbtx).<span class="kw">await
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::await_consensus_proposal(<span class="self">self</span>, dbtx).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
@@ -606,7 +602,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
     ) -&gt; Vec&lt;ConsensusItem&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::consensus_proposal(<span class="self">self</span>, dbtx)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::consensus_proposal(<span class="self">self</span>, dbtx)
             .<span class="kw">await
             </span>.into_iter()
             .map(|v| ConsensusItem::from_typed(module_instance_id, v))
@@ -622,7 +618,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, ConsensusItem)&gt;,
     ) {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::begin_consensus_epoch(
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::begin_consensus_epoch(
             <span class="self">self</span>,
             dbtx,
             consensus_items
@@ -632,7 +628,7 @@
                         peer,
                         Clone::clone(
                             item.as_any()
-                                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::ConsensusItem&gt;()
+                                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::ConsensusItem&gt;()
                                 .expect(<span class="string">&quot;incorrect consensus item type passed to module plugin&quot;</span>),
                         ),
                     )
@@ -646,12 +642,12 @@
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[Input]) -&gt; VerificationCache {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::build_verification_cache(
+    </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[Input]) -&gt; DynVerificationCache {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::build_verification_cache(
             <span class="self">self</span>,
             inputs.iter().map(|i| {
                 i.as_any()
-                    .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Input&gt;()
+                    .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Input&gt;()
                     .expect(<span class="string">&quot;incorrect input type passed to module plugin&quot;</span>)
             }),
         )
@@ -666,20 +662,20 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        verification_cache: <span class="kw-2">&amp;</span>VerificationCache,
+        verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
         input: <span class="kw-2">&amp;</span>Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::validate_input(
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::validate_input(
             <span class="self">self</span>,
             interconnect,
             dbtx,
             verification_cache
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::VerificationCache&gt;()
+                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::VerificationCache&gt;()
                 .expect(<span class="string">&quot;incorrect verification cache type passed to module plugin&quot;</span>),
             input
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Input&gt;()
+                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Input&gt;()
                 .expect(<span class="string">&quot;incorrect input type passed to module plugin&quot;</span>),
         )
         .<span class="kw">await
@@ -698,19 +694,19 @@
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>Input,
-        verification_cache: <span class="kw-2">&amp;</span>VerificationCache,
+        verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::apply_input(
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::apply_input(
             <span class="self">self</span>,
             interconnect,
             dbtx,
             input
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Input&gt;()
+                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Input&gt;()
                 .expect(<span class="string">&quot;incorrect input type passed to module plugin&quot;</span>),
             verification_cache
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::VerificationCache&gt;()
+                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::VerificationCache&gt;()
                 .expect(<span class="string">&quot;incorrect verification cache type passed to module plugin&quot;</span>),
         )
         .<span class="kw">await
@@ -726,12 +722,12 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span>Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::validate_output(
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::validate_output(
             <span class="self">self</span>,
             dbtx,
             output
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Output&gt;()
+                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Output&gt;()
                 .expect(<span class="string">&quot;incorrect output type passed to module plugin&quot;</span>),
         )
         .<span class="kw">await
@@ -753,12 +749,12 @@
         output: <span class="kw-2">&amp;</span>Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::apply_output(
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::apply_output(
             <span class="self">self</span>,
             dbtx,
             output
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Output&gt;()
+                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Output&gt;()
                 .expect(<span class="string">&quot;incorrect output type passed to module plugin&quot;</span>),
             out_point,
         )
@@ -775,7 +771,7 @@
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::end_consensus_epoch(<span class="self">self</span>, consensus_peers, dbtx).<span class="kw">await
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::end_consensus_epoch(<span class="self">self</span>, consensus_peers, dbtx).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
@@ -787,7 +783,7 @@
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;OutputOutcome&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::output_status(<span class="self">self</span>, dbtx, out_point)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::output_status(<span class="self">self</span>, dbtx, out_point)
             .<span class="kw">await
             </span>.map(|v| OutputOutcome::from_typed(module_instance_id, v))
     }
@@ -797,16 +793,16 @@
     /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
     /// and consensus should halt.
     </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::audit(<span class="self">self</span>, dbtx, audit).<span class="kw">await
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::audit(<span class="self">self</span>, dbtx, audit).<span class="kw">await
     </span>}
 
-    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;ServerModule&gt;&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::api_endpoints(<span class="self">self</span>)
+    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;DynServerModule&gt;&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::api_endpoints(<span class="self">self</span>)
             .into_iter()
             .map(|ApiEndpoint { path, handler }| ApiEndpoint {
                 path,
                 handler: Box::new(
-                    <span class="kw">move </span>|module: <span class="kw-2">&amp;</span>ServerModule,
+                    <span class="kw">move </span>|module: <span class="kw-2">&amp;</span>DynServerModule,
                           dbtx: fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
                           value: serde_json::Value| {
                         <span class="kw">let </span>typed_module = module

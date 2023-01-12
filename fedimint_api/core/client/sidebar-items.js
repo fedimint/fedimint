@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["ClientModule",""]],"trait":[["ClientModulePlugin",""],["IClientModule",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["DynClientModule",""]],"trait":[["ClientModule",""],["IClientModule",""]]};

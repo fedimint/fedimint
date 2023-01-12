@@ -82,7 +82,7 @@
 <span class="kw">use </span>fedimint_api::{ParseAmountError, TieredMulti};
 <span class="kw">use </span>lightning_invoice::Currency;
 
-<span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
+<span class="kw">use </span><span class="kw">crate</span>::api::DynFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::mint::SpendableNote;
 
 <span class="kw">pub fn </span>parse_ecash(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
@@ -136,7 +136,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientContext {
     <span class="kw">pub </span>db: Database,
-    <span class="kw">pub </span>api: FederationApi,
+    <span class="kw">pub </span>api: DynFederationApi,
     <span class="kw">pub </span>secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
 }
 

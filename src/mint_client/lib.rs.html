@@ -1384,7 +1384,7 @@
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>std::time::SystemTime;
 
-<span class="kw">use </span>api::FederationApi;
+<span class="kw">use </span>api::DynFederationApi;
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
@@ -1399,7 +1399,7 @@
 <span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_api::{ServerModulePlugin, TieredMulti};
+<span class="kw">use </span>fedimint_api::{ServerModule, TieredMulti};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
 <span class="kw">use </span>fedimint_core::modules::ln::common::LightningModuleDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -1612,7 +1612,7 @@
     <span class="kw">pub async fn </span>new_with_api(
         config: T,
         db: Database,
-        api: FederationApi,
+        api: DynFederationApi,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; Client&lt;T&gt; {
         <span class="kw">let </span>root_secret = <span class="self">Self</span>::get_secret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
@@ -2561,7 +2561,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.context
             .api
-            .await_output_outcome::&lt;&lt;fedimint_core::modules::mint::Mint <span class="kw">as </span>ServerModulePlugin&gt;::OutputOutcome&gt;(outpoint, Duration::from_secs(<span class="number">10</span>))
+            .await_output_outcome::&lt;&lt;fedimint_core::modules::mint::Mint <span class="kw">as </span>ServerModule&gt;::OutputOutcome&gt;(outpoint, Duration::from_secs(<span class="number">10</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need

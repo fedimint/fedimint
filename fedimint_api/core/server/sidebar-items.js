@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["ServerModule",""],["VerificationCache",""]],"trait":[["IServerModule","Backend side module interface"],["ModuleVerificationCache",""],["PluginVerificationCache",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["DynServerModule",""],["DynVerificationCache",""]],"trait":[["IServerModule","Backend side module interface"],["IVerificationCache",""],["VerificationCache",""]]};

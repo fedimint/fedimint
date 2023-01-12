@@ -89,7 +89,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, ModuleInstanceId};
-<span class="kw">use </span><span class="kw">crate</span>::server::ServerModule;
+<span class="kw">use </span><span class="kw">crate</span>::server::DynServerModule;
 
 <span class="comment">// TODO: unify and/or make a newtype?
 </span><span class="doccomment">/// Fedimint module identifier
@@ -136,7 +136,7 @@
 }
 
 <span class="doccomment">/// Collection of server modules
-</span><span class="kw">pub type </span>ServerModuleRegistry = ModuleRegistry&lt;ServerModule&gt;;
+</span><span class="kw">pub type </span>ServerModuleRegistry = ModuleRegistry&lt;DynServerModule&gt;;
 
 <span class="kw">impl </span>ServerModuleRegistry {
     <span class="doccomment">/// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
@@ -147,7 +147,7 @@
 
     <span class="comment">// TODO: move into `ModuleRegistry` impl by splitting `module_key` fn into separate trait
     </span><span class="doccomment">/// Add a module to the registry
-    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, module: ServerModule) {
+    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, module: DynServerModule) {
         <span class="macro">assert!</span>(
             <span class="self">self</span>.<span class="number">0</span>.insert(id, module).is_none(),
             <span class="string">&quot;Module was already registered!&quot;

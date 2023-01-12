@@ -351,7 +351,7 @@
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleInit, TransactionItemAmount};
-<span class="kw">use </span>fedimint_api::{OutPoint, PeerId, ServerModulePlugin};
+<span class="kw">use </span>fedimint_api::{OutPoint, PeerId, ServerModule};
 
 <span class="kw">pub mod </span>btc;
 
@@ -371,7 +371,7 @@
 
 <span class="kw">impl</span>&lt;Module&gt; FakeFed&lt;Module&gt;
 <span class="kw">where
-    </span>Module: ServerModulePlugin + <span class="lifetime">&#39;static </span>+ Send + Sync,
+    </span>Module: ServerModule + <span class="lifetime">&#39;static </span>+ Send + Sync,
     Module::ConsensusItem: Clone,
     Module::OutputOutcome: Eq + Debug,
     Module::Decoder: Sync + Send + <span class="lifetime">&#39;static</span>,
@@ -418,7 +418,7 @@
     <span class="kw">pub async fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>Module::Input) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
-        <span class="kw">async fn </span>member_validate&lt;M: ServerModulePlugin&gt;(
+        <span class="kw">async fn </span>member_validate&lt;M: ServerModule&gt;(
             member: <span class="kw-2">&amp;</span>M,
             dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
             fake_ic: <span class="kw-2">&amp;</span>FakeInterconnect,
@@ -464,7 +464,7 @@
         inputs: <span class="kw-2">&amp;</span>[Module::Input],
         outputs: <span class="kw-2">&amp;</span>[(OutPoint, Module::Output)],
     ) <span class="kw">where
-        </span>&lt;Module <span class="kw">as </span>ServerModulePlugin&gt;::Input: Send + Sync,
+        </span>&lt;Module <span class="kw">as </span>ServerModule&gt;::Input: Send + Sync,
     {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
         <span class="comment">// TODO: only include some of the proposals for realism

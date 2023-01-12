@@ -239,7 +239,7 @@
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_api::server::ServerModule;
+<span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="kw">use </span>fedimint_api::{
     config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
@@ -366,7 +366,7 @@
 <span class="kw">fn </span>attach_endpoints_erased(
     rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&gt;,
     module_instance: ModuleInstanceId,
-    server_module: <span class="kw-2">&amp;</span>ServerModule,
+    server_module: <span class="kw-2">&amp;</span>DynServerModule,
 ) {
     <span class="kw">let </span>endpoints = server_module.api_endpoints();
 

@@ -1599,8 +1599,6 @@
 <a href="#1599" id="1599">1599</a>
 <a href="#1600" id="1600">1600</a>
 <a href="#1601" id="1601">1601</a>
-<a href="#1602" id="1602">1602</a>
-<a href="#1603" id="1603">1603</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1638,14 +1636,12 @@
 };
 <span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::server::ServerModule;
+<span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>fedimint_api::task::sleep;
 <span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_api::{
-    plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModulePlugin,
-};
-<span class="kw">use </span>fedimint_bitcoind::BitcoindRpc;
+<span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModule};
+<span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
@@ -1727,7 +1723,7 @@
 </span><span class="kw">pub struct </span>Wallet {
     cfg: WalletConfig,
     secp: Secp256k1&lt;All&gt;,
-    btc_rpc: BitcoindRpc,
+    btc_rpc: DynBitcoindRpc,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -1839,7 +1835,7 @@
         cfg: ServerModuleConfig,
         db: Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;ServerModule&gt; {
+    ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(Wallet::new(cfg.to_typed()<span class="question-mark">?</span>, db, task_group).<span class="kw">await</span><span class="question-mark">?</span>.into())
     }
 
@@ -1997,7 +1993,7 @@
 </span><span class="kw">pub struct </span>WalletVerificationCache;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>Wallet {
+</span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Wallet {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
     <span class="kw">type </span>Decoder = WalletModuleDecoder;
@@ -2423,7 +2419,7 @@
     <span class="kw">pub async fn </span>new_with_bitcoind(
         cfg: WalletConfig,
         db: Database,
-        bitcoind: BitcoindRpc,
+        bitcoind: DynBitcoindRpc,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletError&gt; {
         <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind.clone();
@@ -3101,7 +3097,7 @@
 }
 
 <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all)]
-</span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc, tg_handle: <span class="kw-2">&amp;</span>TaskHandle) {
+</span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: <span class="kw-2">&amp;</span>TaskHandle) {
     <span class="kw">while </span>!tg_handle.is_shutting_down() {
         broadcast_pending_tx(db.begin_transaction().<span class="kw">await</span>, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
         <span class="comment">// FIXME: remove after modularization finishes
@@ -3110,7 +3106,7 @@
     }
 }
 
-<span class="kw">pub async fn </span>broadcast_pending_tx(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, rpc: <span class="kw-2">&amp;</span>BitcoindRpc) {
+<span class="kw">pub async fn </span>broadcast_pending_tx(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, rpc: <span class="kw-2">&amp;</span>DynBitcoindRpc) {
     <span class="kw">let </span>pending_tx = dbtx
         .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
         .<span class="kw">await

@@ -421,7 +421,7 @@
 
 <span class="kw">use crate</span>::{
     actor::GatewayActor,
-    client::GatewayClientBuilder,
+    client::DynGatewayClientBuilder,
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
@@ -439,7 +439,7 @@
     ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
     sender: mpsc::Sender&lt;GatewayRequest&gt;,
     receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
-    client_builder: GatewayClientBuilder,
+    client_builder: DynGatewayClientBuilder,
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
 }
@@ -448,7 +448,7 @@
     <span class="kw">pub async fn </span>new(
         config: GatewayConfig,
         ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
-        client_builder: GatewayClientBuilder,
+        client_builder: DynGatewayClientBuilder,
         <span class="comment">// TODO: consider encapsulating message channel within LnGateway
         </span>sender: mpsc::Sender&lt;GatewayRequest&gt;,
         receiver: mpsc::Receiver&lt;GatewayRequest&gt;,

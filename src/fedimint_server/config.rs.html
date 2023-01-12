@@ -1134,7 +1134,7 @@
         cfg: <span class="kw-2">&amp;</span>ServerConfig,
         db: <span class="kw-2">&amp;</span>Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;ModuleRegistry&lt;fedimint_api::server::ServerModule&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;ModuleRegistry&lt;fedimint_api::server::DynServerModule&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
 
         <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {

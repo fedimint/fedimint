@@ -1064,10 +1064,10 @@
     TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::server::ServerModule;
+<span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
-<span class="kw">use </span>fedimint_api::{OutPoint, ServerModulePlugin};
+<span class="kw">use </span>fedimint_api::{OutPoint, ServerModule};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1272,7 +1272,7 @@
         cfg: ServerModuleConfig,
         _db: Database,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;ServerModule&gt; {
+    ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>).into())
     }
 
@@ -1366,7 +1366,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ServerModulePlugin <span class="kw">for </span>LightningModule {
+</span><span class="kw">impl </span>ServerModule <span class="kw">for </span>LightningModule {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
     <span class="kw">type </span>Decoder = LightningModuleDecoder;

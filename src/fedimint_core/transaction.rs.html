@@ -505,7 +505,7 @@
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-    <span class="kw">use </span>fedimint_api::{ServerModulePlugin, TransactionId};
+    <span class="kw">use </span>fedimint_api::{ServerModule, TransactionId};
     <span class="kw">use </span>secp256k1_zkp::{schnorr, XOnlyPublicKey};
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -533,18 +533,18 @@
     </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>Input {
         <span class="comment">// TODO: maybe treat every coin as a seperate input?
-        </span>Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModulePlugin&gt;::Input),
-        Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModulePlugin&gt;::Input),
-        LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>ServerModulePlugin&gt;::Input),
+        </span>Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Input),
+        Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Input),
+        LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>ServerModule&gt;::Input),
     }
 
     <span class="comment">// TODO: check if clippy is right
     </span><span class="attr">#[allow(clippy::large_enum_variant)]
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>Output {
-        Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModulePlugin&gt;::Output),
-        Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModulePlugin&gt;::Output),
-        LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>ServerModulePlugin&gt;::Output),
+        Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Output),
+        Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Output),
+        LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>ServerModule&gt;::Output),
     }
 
     <span class="kw">impl </span>Transaction {

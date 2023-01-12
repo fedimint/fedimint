@@ -602,9 +602,6 @@
 <a href="#602" id="602">602</a>
 <a href="#603" id="603">603</a>
 <a href="#604" id="604">604</a>
-<a href="#605" id="605">605</a>
-<a href="#606" id="606">606</a>
-<a href="#607" id="607">607</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -615,11 +612,11 @@
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::config::FederationId;
-<span class="kw">use </span>fedimint_api::core::client::ClientModulePlugin;
+<span class="kw">use </span>fedimint_api::core::client::ClientModule;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::timeout;
-<span class="kw">use </span>fedimint_api::{Amount, ServerModulePlugin};
+<span class="kw">use </span>fedimint_api::{Amount, ServerModule};
 <span class="kw">use </span>fedimint_core::modules::ln::common::LightningModuleDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -650,19 +647,16 @@
     <span class="kw">pub </span>context: Arc&lt;ClientContext&gt;,
 }
 
-<span class="kw">impl </span>ClientModulePlugin <span class="kw">for </span>LnClient {
+<span class="kw">impl </span>ClientModule <span class="kw">for </span>LnClient {
     <span class="kw">const </span>KIND: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;ln&quot;</span>;
-    <span class="kw">type </span>Decoder = &lt;LightningModule <span class="kw">as </span>ServerModulePlugin&gt;::Decoder;
+    <span class="kw">type </span>Decoder = &lt;LightningModule <span class="kw">as </span>ServerModule&gt;::Decoder;
     <span class="kw">type </span>Module = LightningModule;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
         LightningModuleDecoder
     }
 
-    <span class="kw">fn </span>input_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModulePlugin&gt;::Input,
-    ) -&gt; TransactionItemAmount {
+    <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Input) -&gt; TransactionItemAmount {
         TransactionItemAmount {
             amount: input.amount,
             fee: <span class="self">self</span>.config.fee_consensus.contract_input,
@@ -671,7 +665,7 @@
 
     <span class="kw">fn </span>output_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModulePlugin&gt;::Output,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Output,
     ) -&gt; TransactionItemAmount {
         <span class="kw">match </span>output {
             LightningOutput::Contract(account_output) =&gt; TransactionItemAmount {

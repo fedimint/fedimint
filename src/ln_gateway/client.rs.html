@@ -256,7 +256,7 @@
 <span class="macro">dyn_newtype_define!</span>(
     <span class="doccomment">/// Arc reference to a database factory
     </span><span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>DbFactory(Arc&lt;IDbFactory&gt;)
+    </span><span class="kw">pub </span>DynDbFactory(Arc&lt;IDbFactory&gt;)
 );
 
 <span class="doccomment">/// A factory that creates in-memory databases
@@ -316,17 +316,17 @@
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// dyn newtype for a Gateway federation client builder
     </span><span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>GatewayClientBuilder(Arc&lt;IGatewayClientBuilder&gt;)
+    </span><span class="kw">pub </span>DynGatewayClientBuilder(Arc&lt;IGatewayClientBuilder&gt;)
 }
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>StandardGatewayClientBuilder {
     work_dir: PathBuf,
-    db_factory: DbFactory,
+    db_factory: DynDbFactory,
 }
 
 <span class="kw">impl </span>StandardGatewayClientBuilder {
-    <span class="kw">pub fn </span>new(work_dir: PathBuf, db_factory: DbFactory) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(work_dir: PathBuf, db_factory: DynDbFactory) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             work_dir,
             db_factory,

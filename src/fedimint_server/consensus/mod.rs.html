@@ -688,7 +688,7 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry};
 <span class="kw">use </span>fedimint_api::module::{ModuleError, TransactionItemAmount};
-<span class="kw">use </span>fedimint_api::server::{ServerModule, VerificationCache};
+<span class="kw">use </span>fedimint_api::server::{DynServerModule, DynVerificationCache};
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::<span class="kw-2">*</span>;
@@ -767,7 +767,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>VerificationCaches {
-    caches: HashMap&lt;ModuleInstanceId, VerificationCache&gt;,
+    caches: HashMap&lt;ModuleInstanceId, DynVerificationCache&gt;,
 }
 
 <span class="kw">struct </span>FundingVerifier {
@@ -798,7 +798,7 @@
         cfg: ServerConfig,
         db: Database,
         module_inits: ModuleInitRegistry,
-        modules: ModuleRegistry&lt;ServerModule&gt;,
+        modules: ModuleRegistry&lt;DynServerModule&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             rng_gen: Box::new(OsRngGen),
@@ -812,7 +812,7 @@
 }
 
 <span class="kw">impl </span>VerificationCaches {
-    <span class="kw">fn </span>get_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>VerificationCache {
+    <span class="kw">fn </span>get_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>DynVerificationCache {
         <span class="self">self</span>.caches
             .get(<span class="kw-2">&amp;</span>module_key)
             .expect(<span class="string">&quot;Verification caches were built for all modules&quot;</span>)

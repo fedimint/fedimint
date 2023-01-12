@@ -56,10 +56,6 @@
 <a href="#56" id="56">56</a>
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -70,13 +66,13 @@
 <span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
 <span class="kw">use </span><span class="kw">crate</span>::core::PluginDecode;
 <span class="kw">use </span><span class="kw">crate</span>::module::TransactionItemAmount;
-<span class="kw">use crate</span>::{dyn_newtype_define, ServerModulePlugin};
+<span class="kw">use crate</span>::{dyn_newtype_define, ServerModule};
 
 <span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>ClientModulePlugin: Debug {
+</span><span class="kw">pub trait </span>ClientModule: Debug {
     <span class="kw">const </span>KIND: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
     <span class="kw">type </span>Decoder: PluginDecode;
-    <span class="kw">type </span>Module: ServerModulePlugin;
+    <span class="kw">type </span>Module: ServerModule;
 
     <span class="kw">fn </span>module_kind() -&gt; ModuleKind {
         ModuleKind::from_static_str(<span class="self">Self</span>::KIND)
@@ -85,15 +81,12 @@
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
 
     <span class="doccomment">/// Returns the amount represented by the input and the fee its processing requires
-    </span><span class="kw">fn </span>input_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModulePlugin&gt;::Input,
-    ) -&gt; TransactionItemAmount;
+    </span><span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Input) -&gt; TransactionItemAmount;
 
     <span class="doccomment">/// Returns the amount represented by the output and the fee its processing requires
     </span><span class="kw">fn </span>output_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModulePlugin&gt;::Output,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Output,
     ) -&gt; TransactionItemAmount;
 }
 
@@ -106,20 +99,19 @@
 
 <span class="macro">dyn_newtype_define!</span>(
     <span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>ClientModule(Arc&lt;IClientModule&gt;)
+    </span><span class="kw">pub </span>DynClientModule(Arc&lt;IClientModule&gt;)
 );
 
 <span class="kw">impl</span>&lt;T&gt; IClientModule <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: ClientModulePlugin + <span class="lifetime">&#39;static</span>,
-    &lt;T <span class="kw">as </span>ClientModulePlugin&gt;::Decoder: Sync + Send + <span class="lifetime">&#39;static</span>,
+    </span>T: ClientModule + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any {
         <span class="self">self
     </span>}
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(&lt;T <span class="kw">as </span>ClientModulePlugin&gt;::decoder(<span class="self">self</span>))
+        Decoder::from_typed(&lt;T <span class="kw">as </span>ClientModule&gt;::decoder(<span class="self">self</span>))
     }
 }
 </code></pre></div>
