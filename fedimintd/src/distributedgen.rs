@@ -44,7 +44,6 @@ pub async fn run_dkg(
     max_denomination: Amount,
     federation_name: String,
     certs: Vec<String>,
-    bitcoind_rpc: &Url,
     network: bitcoin::network::constants::Network,
     finality_delay: u32,
     pk: rustls::PrivateKey,
@@ -72,7 +71,6 @@ pub async fn run_dkg(
         max_denomination,
         &peers,
         federation_name,
-        bitcoind_rpc,
         network,
         finality_delay,
     );

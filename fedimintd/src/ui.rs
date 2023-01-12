@@ -165,7 +165,6 @@ async fn post_guardians(
                 max_denomination,
                 params.federation_name,
                 connection_strings,
-                &params.bitcoind_rpc,
                 params.network,
                 params.finality_delay,
                 rustls::PrivateKey(pk_bytes),
@@ -269,8 +268,6 @@ async fn post_federation_params(
     // Update state
     state.params = Some(FederationParameters {
         federation_name: form.federation_name,
-        // TODO: check that bitcoinrpc actually works here
-        bitcoind_rpc: form.bitcoind_rpc,
         num_guardians: form.guardians_count,
         bind_api: form.bind_api,
         bind_p2p: form.bind_p2p,
@@ -326,7 +323,6 @@ struct FederationParameters {
     federation_name: String,
     guardian: Guardian,
     num_guardians: u32,
-    bitcoind_rpc: Url,
     finality_delay: u32,
     network: Network,
     bind_api: SocketAddr,

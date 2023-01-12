@@ -708,7 +708,6 @@ impl ServerConfigParams {
         max_denomination: Amount,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        bitcoind_rpc: &Url,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
     ) -> ServerConfigParams {
@@ -738,7 +737,6 @@ impl ServerConfigParams {
                 .attach(WalletConfigGenParams {
                     network,
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
-                    bitcoin_rpc: bitcoind_rpc.clone(),
                     finality_delay,
                 })
                 .attach(MintConfigGenParams {
@@ -772,7 +770,6 @@ impl ServerConfigParams {
         max_denomination: Amount,
         base_port: u16,
         federation_name: &str,
-        bitcoind_rpc: &Url,
     ) -> HashMap<PeerId, ServerConfigParams> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
@@ -813,7 +810,6 @@ impl ServerConfigParams {
                     max_denomination,
                     &peer_params,
                     federation_name.to_string(),
-                    bitcoind_rpc,
                     bitcoin::network::constants::Network::Regtest,
                     10,
                 );
