@@ -138,31 +138,79 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
 </pre><pre class="rust"><code><span class="kw">use </span>::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <span class="kw">use </span>::bitcoincore_rpc::jsonrpc::error::RpcError;
 <span class="kw">use </span>::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
-<span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
+<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json::Value;
 <span class="kw">use </span>jsonrpc::error::Error <span class="kw">as </span>JsonError;
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>tracing::warn;
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
 <span class="comment">// &lt;https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48&gt;
 </span><span class="kw">const </span>RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -<span class="number">27</span>;
 
-<span class="kw">pub fn </span>make_bitcoind_rpc(cfg: <span class="kw-2">&amp;</span>BitcoindRpcCfg, task_handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
-    <span class="kw">let </span>bitcoind_client = ::bitcoincore_rpc::Client::new(
-        <span class="kw-2">&amp;</span>cfg.btc_rpc_address,
-        Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-    )
-    .map_err(anyhow::Error::from)<span class="question-mark">?</span>;
+<span class="kw">pub fn </span>from_url_to_url_auth(url: <span class="kw-2">&amp;</span>Url) -&gt; <span class="prelude-ty">Result</span>&lt;(String, Auth)&gt; {
+    <span class="prelude-val">Ok</span>((
+        (<span class="kw">if let </span><span class="prelude-val">Some</span>(port) = url.port() {
+            <span class="macro">format!</span>(
+                <span class="string">&quot;{}://{}:{port}&quot;</span>,
+                url.scheme(),
+                url.host_str().unwrap_or(<span class="string">&quot;127.0.0.1&quot;</span>)
+            )
+        } <span class="kw">else </span>{
+            <span class="macro">format!</span>(
+                <span class="string">&quot;{}://{}&quot;</span>,
+                url.scheme(),
+                url.host_str().unwrap_or(<span class="string">&quot;127.0.0.1&quot;</span>)
+            )
+        }),
+        <span class="kw">if </span>url.username().is_empty() {
+            Auth::None
+        } <span class="kw">else </span>{
+            Auth::UserPass(
+                url.username().to_owned(),
+                url.password()
+                    .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Password missing for {}&quot;</span>, url.username()))<span class="question-mark">?
+                    </span>.to_owned(),
+            )
+        },
+    ))
+}
+
+<span class="kw">pub fn </span>make_bitcoind_rpc(url: <span class="kw-2">&amp;</span>Url, task_handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
+    <span class="kw">let </span>(url, auth) = from_url_to_url_auth(url)<span class="question-mark">?</span>;
+    <span class="kw">let </span>bitcoind_client =
+        ::bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>url, auth).map_err(anyhow::Error::from)<span class="question-mark">?</span>;
     <span class="kw">let </span>retry_client = RetryClient::new(
-        Client(ErrorReporting::new(
-            cfg.btc_rpc_address.clone(),
-            bitcoind_client,
-        )),
+        Client(ErrorReporting::new(url, bitcoind_client)),
         task_handle,
     );
 
@@ -273,7 +321,7 @@
                 code: RPC_VERIFY_ALREADY_IN_CHAIN,
                 ..
             }))) =&gt; <span class="prelude-val">Ok</span>(()),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(anyhow::Error::from(e).into()),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(anyhow::Error::from(e)),
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
         })
     }

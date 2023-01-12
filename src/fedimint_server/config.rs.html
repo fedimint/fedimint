@@ -896,9 +896,6 @@
 <a href="#896" id="896">896</a>
 <a href="#897" id="897">897</a>
 <a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
-<a href="#900" id="900">900</a>
-<a href="#901" id="901">901</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -906,8 +903,8 @@
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    ApiEndpoint, BitcoindRpcCfg, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner,
-    FederationId, JsonWithKind, ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, FederationId, JsonWithKind,
+    ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
@@ -1597,7 +1594,7 @@
         max_denomination: Amount,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
         federation_name: String,
-        bitcoind_rpc: String,
+        bitcoind_rpc: <span class="kw-2">&amp;</span>Url,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
     ) -&gt; ServerConfigParams {
@@ -1626,11 +1623,8 @@
             modules: ConfigGenParams::new()
                 .attach(WalletConfigGenParams {
                     network,
-                    bitcoin_rpc: BitcoindRpcCfg {
-                        btc_rpc_address: bitcoind_rpc,
-                        btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
-                        btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
-                    },
+                    <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit anyway
+                    </span>bitcoin_rpc: bitcoind_rpc.clone(),
                     finality_delay,
                 })
                 .attach(MintConfigGenParams {
@@ -1664,7 +1658,7 @@
         max_denomination: Amount,
         base_port: u16,
         federation_name: <span class="kw-2">&amp;</span>str,
-        bitcoind_rpc: <span class="kw-2">&amp;</span>str,
+        bitcoind_rpc: <span class="kw-2">&amp;</span>Url,
     ) -&gt; HashMap&lt;PeerId, ServerConfigParams&gt; {
         <span class="kw">let </span>keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers
             .iter()
@@ -1705,7 +1699,7 @@
                     max_denomination,
                     <span class="kw-2">&amp;</span>peer_params,
                     federation_name.to_string(),
-                    bitcoind_rpc.to_string(),
+                    bitcoind_rpc,
                     bitcoin::network::constants::Network::Regtest,
                     <span class="number">10</span>,
                 );

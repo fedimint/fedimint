@@ -1599,6 +1599,7 @@
 <a href="#1599" id="1599">1599</a>
 <a href="#1600" id="1600">1600</a>
 <a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1622,8 +1623,8 @@
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
-    BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
-    ServerModuleConfig, TypedServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
@@ -1651,6 +1652,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::common::WalletModuleDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
@@ -1957,7 +1959,7 @@
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfigGenParams {
     <span class="kw">pub </span>network: bitcoin::network::constants::Network,
-    <span class="kw">pub </span>bitcoin_rpc: BitcoindRpcCfg,
+    <span class="kw">pub </span>bitcoin_rpc: Url,
     <span class="kw">pub </span>finality_delay: u32,
 }
 
@@ -2435,7 +2437,7 @@
         <span class="kw">let </span>bitcoind_net = bitcoind_rpc
             .get_network()
             .<span class="kw">await
-            </span>.map_err(|e| WalletError::RpcError(e.into()))<span class="question-mark">?</span>;
+            </span>.map_err(WalletError::RpcError)<span class="question-mark">?</span>;
         <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
                 cfg.consensus.network,

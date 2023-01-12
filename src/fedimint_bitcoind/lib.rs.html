@@ -130,35 +130,19 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">pub use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Block, BlockHash, Network, Transaction};
 <span class="kw">use </span>fedimint_api::{dyn_newtype_define, task::TaskHandle, Feerate};
-<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::info;
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
 </span><span class="kw">pub mod </span>bitcoincore_rpc;
-
-<span class="attr">#[derive(Error, Debug)]
-</span><span class="kw">pub enum </span>Error {
-    <span class="attr">#[error(<span class="string">&quot;Bitcoind Rpc error {0}&quot;</span>)]
-    </span>Rpc(<span class="attr">#[from] </span>anyhow::Error),
-}
-
-<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
 
 <span class="doccomment">/// Trait that allows interacting with the Bitcoin blockchain
 ///

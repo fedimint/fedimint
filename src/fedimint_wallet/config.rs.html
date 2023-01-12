@@ -183,8 +183,8 @@
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>fedimint_api::config::ClientModuleConfig;
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConfig;
-<span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
 <span class="kw">use </span>fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::ModuleKind;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
@@ -192,6 +192,7 @@
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use </span><span class="kw">crate</span>::PegInDescriptor;
@@ -208,9 +209,8 @@
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfigLocal {
-    <span class="attr">#[serde(flatten)]
-    </span><span class="doccomment">/// Configuration for connecting to our Bitcoin node
-    </span><span class="kw">pub </span>btc_rpc: BitcoindRpcCfg,
+    <span class="doccomment">/// Configuration for connecting to our Bitcoin node
+    </span><span class="kw">pub </span>btc_rpc: Url,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
@@ -321,7 +321,7 @@
         pubkeys: BTreeMap&lt;PeerId, CompressedPublicKey&gt;,
         sk: SecretKey,
         threshold: usize,
-        btc_rpc: BitcoindRpcCfg,
+        btc_rpc: Url,
         network: Network,
         finality_delay: u32,
     ) -&gt; <span class="self">Self </span>{

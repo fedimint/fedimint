@@ -460,9 +460,6 @@
 <a href="#460" id="460">460</a>
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
-<a href="#464" id="464">464</a>
-<a href="#465" id="465">465</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -658,7 +655,7 @@
     <span class="kw">use </span>bitcoin::hashes::sha256;
     <span class="kw">use </span>bitcoin::{Address, Txid};
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, ConfigGenParams};
+    <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
     <span class="kw">use </span>fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
@@ -677,6 +674,7 @@
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     <span class="kw">use </span>fedimint_testing::FakeFed;
+    <span class="kw">use </span>reqwest::Url;
     <span class="kw">use </span>threshold_crypto::PublicKey;
 
     <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
@@ -813,11 +811,7 @@
                 },
                 <span class="kw-2">&amp;</span>ConfigGenParams::new().attach(WalletConfigGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
-                    bitcoin_rpc: BitcoindRpcCfg {
-                        btc_rpc_address: <span class="string">&quot;localhst&quot;</span>.to_string(),
-                        btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
-                        btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
-                    },
+                    bitcoin_rpc: Url::parse(<span class="string">&quot;http://bitcoin:bitcoin@localhost&quot;</span>).unwrap(),
                     finality_delay: <span class="number">10</span>,
                 }),
                 <span class="kw-2">&amp;</span>WalletConfigGenerator,

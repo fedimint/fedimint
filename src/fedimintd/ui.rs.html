@@ -525,7 +525,7 @@
                 max_denomination,
                 params.federation_name,
                 connection_strings,
-                params.bitcoind_rpc,
+                <span class="kw-2">&amp;</span>params.bitcoind_rpc,
                 params.network,
                 params.finality_delay,
                 rustls::PrivateKey(pk_bytes),
@@ -597,7 +597,7 @@
     <span class="doccomment">/// Address we bind to for federation communication
     </span>bind_p2p: SocketAddr,
     <span class="doccomment">/// `bitcoind` json rpc endpoint
-    </span>bitcoind_rpc: String,
+    </span>bitcoind_rpc: Url,
     <span class="doccomment">/// How many participants in federation consensus
     </span>guardians_count: u32,
     <span class="doccomment">/// Which bitcoin network the federation is using
@@ -668,7 +668,7 @@
     federation_name: String,
     guardian: Guardian,
     num_guardians: u32,
-    bitcoind_rpc: String,
+    bitcoind_rpc: Url,
     finality_delay: u32,
     network: Network,
     bind_api: SocketAddr,

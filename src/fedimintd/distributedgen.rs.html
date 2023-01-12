@@ -186,7 +186,7 @@
     max_denomination: Amount,
     federation_name: String,
     certs: Vec&lt;String&gt;,
-    bitcoind_rpc: String,
+    bitcoind_rpc: <span class="kw-2">&amp;</span>Url,
     network: bitcoin::network::constants::Network,
     finality_delay: u32,
     pk: rustls::PrivateKey,
