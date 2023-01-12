@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::XOnlyPublicKey;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
 use fedimint_api::{task::TaskGroup, Amount};
@@ -9,6 +9,7 @@ use futures::Stream;
 use ln_gateway::{
     config::ClnRpcConfig,
     gatewaylnrpc::{
+        complete_htlcs_request::{Action, Cancel, Settle},
         gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
         CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
         PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
@@ -304,7 +305,7 @@ pub enum ClnRpcError {
 struct ClnHtlcInterceptor {
     subscriptions:
         Mutex<HashMap<u64, mpsc::Sender<Result<SubscribeInterceptHtlcsResponse, Status>>>>,
-    outcomes: Mutex<HashMap<u64, oneshot::Sender<Action>>>,
+    pub outcomes: Mutex<HashMap<Hash, oneshot::Sender<serde_json::Value>>>,
 }
 
 impl ClnHtlcInterceptor {
@@ -321,6 +322,7 @@ impl ClnHtlcInterceptor {
 
         if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
             let payment_hash = payload.htlc.payment_hash.to_vec();
+            let intercepted_htlc_id = payment_hash.clone();
 
             match subscription
                 .send(Ok(SubscribeInterceptHtlcsResponse {
@@ -336,32 +338,33 @@ impl ClnHtlcInterceptor {
             {
                 Ok(_) => {
                     // Open a channel to receive the outcome of the HTLC processing
-                    let (sender, receiver) = oneshot::channel::<Action>();
+                    // Use BOLT 4 failure message in case of error. See
+                    // https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+
+                    let (sender, receiver) = oneshot::channel::<serde_json::Value>();
                     self.outcomes.lock().await.insert(short_channel_id, sender);
 
                     // If the gateway does not respond within the HTLC expiry,
                     // Automatically respond with a failure message.
-                    return tokio::time::timeout(
-                        Duration::from_secs(5),
-                        self.await_htlc_processing(receiver, payment_hash.clone()),
-                    )
+                    return tokio::time::timeout(Duration::from_secs(5), async {
+                        receiver.await.unwrap_or_else(|e| {
+                            error!("Failed to receive outcome of intercepted htlc: {:?}", e);
+                            // 2002 failure code reports general temporary failure of this processing node.
+                            serde_json::json!({ "result": "fail", "failure_message": "2002" })
+                        })
+                    })
                     .await
                     .unwrap_or_else(|e| {
                         error!("await_htlc_processing error {:?}", e);
 
-                        // Bolt 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                        // 2002 error code reports general temporary failure of this processing node.
-                        serde_json::json!({
-                            "result": "fail",
-                            "failure_message": "2002"
-                        })
+                        // 2002 failure code reports general temporary failure of this processing node.
+                        serde_json::json!({ "result": "fail", "failure_message": "2002" })
                     });
                 }
                 Err(e) => {
                     error!("Failed to send htlc to subscription: {:?}", e);
 
-                    // BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                    // 2002 error code reports general temporary failure of this processing node.
+                    // 2002 failure code reports general temporary failure of this processing node.
                     return serde_json::json!({
                         "result": "fail",
                         "failure_message": "2002"
@@ -373,18 +376,6 @@ impl ClnHtlcInterceptor {
         // We have no subscription for this HTLC.
         // Ignore it by requesting the node to continue
         serde_json::json!({ "result": "continue" })
-    }
-
-    // Await outcome of HTLC processing by the gateway.
-    // If the gateway does not respond within the HTLC expiry `cltv_expiry_relative`,
-    // Automatically respond with a failure message.
-    async fn await_htlc_processing(
-        &self,
-        receiver: oneshot::Receiver<Action>,
-        htlc_id: Vec<u8>,
-    ) -> serde_json::Value {
-        // TODO: Return outcome of HTLC processing by the gateway
-        json!({ "result": "continue" })
     }
 
     async fn add_htlc_subscriber(
