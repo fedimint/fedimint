@@ -1061,7 +1061,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingCoinsKey};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use crate</span>::{ChildId, DerivableSecret, MintModuleDecoder};
+<span class="kw">use crate</span>::{ChildId, DerivableSecret, MintDecoder};
 
 <span class="kw">pub mod </span>backup;
 
@@ -1187,7 +1187,7 @@
     <span class="kw">type </span>Module = Mint;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
-        MintModuleDecoder
+        MintDecoder
     }
 
     <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Input) -&gt; TransactionItemAmount {

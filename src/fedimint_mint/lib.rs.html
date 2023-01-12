@@ -1394,7 +1394,7 @@
 <span class="kw">use </span>threshold_crypto::group::Curve;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::common::MintModuleDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::common::MintDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -1488,7 +1488,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>MintConfigGenerator {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(MintModuleDecoder)
+        Decoder::from_typed(MintDecoder)
     }
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
@@ -1709,7 +1709,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Mint {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
-    <span class="kw">type </span>Decoder = MintModuleDecoder;
+    <span class="kw">type </span>Decoder = MintDecoder;
     <span class="kw">type </span>Input = MintInput;
     <span class="kw">type </span>Output = MintOutput;
     <span class="kw">type </span>OutputOutcome = MintOutputOutcome;
@@ -1717,7 +1717,7 @@
     <span class="kw">type </span>VerificationCache = VerifiedNotes;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
-        MintModuleDecoder
+        MintDecoder
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {

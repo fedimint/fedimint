@@ -46,9 +46,9 @@
 <span class="kw">use crate</span>::{DummyInput, DummyOutput, DummyOutputConfirmation, DummyOutputOutcome};
 
 <span class="attr">#[derive(Debug, Default, Clone)]
-</span><span class="kw">pub struct </span>DummyModuleDecoder;
+</span><span class="kw">pub struct </span>DummyDecoder;
 
-<span class="kw">impl </span>PluginDecode <span class="kw">for </span>DummyModuleDecoder {
+<span class="kw">impl </span>PluginDecode <span class="kw">for </span>DummyDecoder {
     <span class="kw">type </span>Input = DummyInput;
     <span class="kw">type </span>Output = DummyOutput;
     <span class="kw">type </span>OutputOutcome = DummyOutputOutcome;

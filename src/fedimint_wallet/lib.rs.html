@@ -1654,7 +1654,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::common::WalletModuleDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::common::WalletDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
@@ -1825,7 +1825,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>WalletConfigGenerator {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(WalletModuleDecoder)
+        Decoder::from_typed(WalletDecoder)
     }
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
@@ -1998,7 +1998,7 @@
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Wallet {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
-    <span class="kw">type </span>Decoder = WalletModuleDecoder;
+    <span class="kw">type </span>Decoder = WalletDecoder;
     <span class="kw">type </span>Input = WalletInput;
     <span class="kw">type </span>Output = WalletOutput;
     <span class="comment">// TODO: implement outcome
@@ -2007,7 +2007,7 @@
     <span class="kw">type </span>VerificationCache = WalletVerificationCache;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
-        WalletModuleDecoder
+        WalletDecoder
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {

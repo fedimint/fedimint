@@ -1075,7 +1075,7 @@
 <span class="kw">use </span>tracing::{debug, error, info_span, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::common::LightningModuleDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::common::LightningDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::config::{LightningConfig, LightningConfigConsensus, LightningConfigPrivate};
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{
     incoming::{IncomingContractOffer, OfferId},
@@ -1260,7 +1260,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>LightningModuleConfigGen {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        Decoder::from_typed(LightningModuleDecoder)
+        Decoder::from_typed(LightningDecoder)
     }
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
@@ -1369,7 +1369,7 @@
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>LightningModule {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
-    <span class="kw">type </span>Decoder = LightningModuleDecoder;
+    <span class="kw">type </span>Decoder = LightningDecoder;
     <span class="kw">type </span>Input = LightningInput;
     <span class="kw">type </span>Output = LightningOutput;
     <span class="kw">type </span>OutputOutcome = LightningOutputOutcome;
@@ -1377,7 +1377,7 @@
     <span class="kw">type </span>VerificationCache = LightningVerificationCache;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
-        LightningModuleDecoder
+        LightningDecoder
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {

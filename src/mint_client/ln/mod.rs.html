@@ -617,7 +617,7 @@
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::timeout;
 <span class="kw">use </span>fedimint_api::{Amount, ServerModule};
-<span class="kw">use </span>fedimint_core::modules::ln::common::LightningModuleDecoder;
+<span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
@@ -653,7 +653,7 @@
     <span class="kw">type </span>Module = LightningModule;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
-        LightningModuleDecoder
+        LightningDecoder
     }
 
     <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Input) -&gt; TransactionItemAmount {

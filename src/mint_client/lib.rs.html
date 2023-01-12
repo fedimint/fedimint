@@ -1401,12 +1401,12 @@
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_api::{ServerModule, TieredMulti};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
-<span class="kw">use </span>fedimint_core::modules::ln::common::LightningModuleDecoder;
+<span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::common::MintModuleDecoder;
+<span class="kw">use </span>fedimint_core::modules::mint::common::MintDecoder;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
-<span class="kw">use </span>fedimint_core::modules::wallet::common::WalletModuleDecoder;
+<span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
@@ -2622,15 +2622,15 @@
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            Decoder::from_typed(LightningModuleDecoder),
+            Decoder::from_typed(LightningDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            Decoder::from_typed(WalletModuleDecoder),
+            Decoder::from_typed(WalletDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            Decoder::from_typed(MintModuleDecoder),
+            Decoder::from_typed(MintDecoder),
         ),
     ])
 }

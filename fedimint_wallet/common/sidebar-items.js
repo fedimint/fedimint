@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["WalletModuleDecoder",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["WalletDecoder",""]]};

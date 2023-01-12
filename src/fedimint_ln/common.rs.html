@@ -48,9 +48,9 @@
 <span class="kw">use crate</span>::{LightningConsensusItem, LightningInput, LightningOutput, LightningOutputOutcome};
 
 <span class="attr">#[derive(Debug, Default, Clone)]
-</span><span class="kw">pub struct </span>LightningModuleDecoder;
+</span><span class="kw">pub struct </span>LightningDecoder;
 
-<span class="kw">impl </span>PluginDecode <span class="kw">for </span>LightningModuleDecoder {
+<span class="kw">impl </span>PluginDecode <span class="kw">for </span>LightningDecoder {
     <span class="kw">type </span>Input = LightningInput;
     <span class="kw">type </span>Output = LightningOutput;
     <span class="kw">type </span>OutputOutcome = LightningOutputOutcome;

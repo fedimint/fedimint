@@ -46,9 +46,9 @@
 <span class="kw">use crate</span>::{WalletConsensusItem, WalletInput, WalletOutput, WalletOutputOutcome};
 
 <span class="attr">#[derive(Debug, Default, Clone)]
-</span><span class="kw">pub struct </span>WalletModuleDecoder;
+</span><span class="kw">pub struct </span>WalletDecoder;
 
-<span class="kw">impl </span>PluginDecode <span class="kw">for </span>WalletModuleDecoder {
+<span class="kw">impl </span>PluginDecode <span class="kw">for </span>WalletDecoder {
     <span class="kw">type </span>Input = WalletInput;
     <span class="kw">type </span>Output = WalletOutput;
     <span class="kw">type </span>OutputOutcome = WalletOutputOutcome;

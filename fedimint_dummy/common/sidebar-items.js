@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["DummyModuleDecoder",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["DummyDecoder",""]]};
