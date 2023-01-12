@@ -48,6 +48,7 @@ $ fedimint-cli info
 
 {
   "info": {
+    "network" : "Regtest",
     "total_amount": 120005000,
     "total_num_notes": 17,
     "details":  {

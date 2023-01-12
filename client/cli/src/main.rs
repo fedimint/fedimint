@@ -72,6 +72,7 @@ enum CliOutput {
     },
 
     Info {
+        network: String,
         total_amount: Amount,
         total_num_notes: usize,
         details: BTreeMap<Amount, usize>,
@@ -515,6 +516,7 @@ async fn handle_command(
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))
                 .collect();
             Ok(CliOutput::Info {
+                network: client.wallet_client().config.network.to_string(),
                 total_amount: (coins.total_amount()),
                 total_num_notes: (coins.item_count()),
                 details: (details_vec),
