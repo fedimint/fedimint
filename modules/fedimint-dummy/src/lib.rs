@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
 use async_trait::async_trait;
-use common::DummyModuleDecoder;
+use common::DummyDecoder;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
@@ -50,7 +50,7 @@ pub struct DummyConfigGenerator;
 #[async_trait]
 impl ModuleInit for DummyConfigGenerator {
     fn decoder(&self) -> Decoder {
-        Decoder::from_typed(DummyModuleDecoder)
+        Decoder::from_typed(DummyDecoder)
     }
 
     fn module_kind(&self) -> ModuleKind {
@@ -186,7 +186,7 @@ impl fmt::Display for DummyOutputConfirmation {
 impl ServerModule for Dummy {
     const KIND: ModuleKind = KIND;
 
-    type Decoder = DummyModuleDecoder;
+    type Decoder = DummyDecoder;
     type Input = DummyInput;
     type Output = DummyOutput;
     type OutputOutcome = DummyOutputOutcome;
@@ -194,7 +194,7 @@ impl ServerModule for Dummy {
     type VerificationCache = DummyVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
-        DummyModuleDecoder
+        DummyDecoder
     }
 
     async fn await_consensus_proposal(&self, _dbtx: &mut DatabaseTransaction<'_>) {}

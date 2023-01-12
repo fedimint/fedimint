@@ -7,9 +7,9 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use crate::{DummyInput, DummyOutput, DummyOutputConfirmation, DummyOutputOutcome};
 
 #[derive(Debug, Default, Clone)]
-pub struct DummyModuleDecoder;
+pub struct DummyDecoder;
 
-impl PluginDecode for DummyModuleDecoder {
+impl PluginDecode for DummyDecoder {
     type Input = DummyInput;
     type Output = DummyOutput;
     type OutputOutcome = DummyOutputOutcome;
