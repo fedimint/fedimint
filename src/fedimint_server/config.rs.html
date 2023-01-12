@@ -895,7 +895,6 @@
 <a href="#895" id="895">895</a>
 <a href="#896" id="896">896</a>
 <a href="#897" id="897">897</a>
-<a href="#898" id="898">898</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1049,7 +1048,6 @@
             federation_name: <span class="self">self</span>.federation_name.clone(),
             federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
-            auth_pk: <span class="self">self</span>.auth_pk_set.public_key(),
             nodes: <span class="self">self</span>.api.values().cloned().collect(),
             modules: <span class="self">self
                 </span>.modules

@@ -880,8 +880,6 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -968,12 +966,10 @@
 </span><span class="kw">pub struct </span>ClientConfig {
     <span class="doccomment">/// name of the federation
     </span><span class="kw">pub </span>federation_name: String,
-    <span class="comment">// Stable and unique id of the federation
+    <span class="comment">// Stable and unique id and threshold pubkey of the federation for authenticating configs
     </span><span class="kw">pub </span>federation_id: FederationId,
     <span class="doccomment">/// API endpoints for each federation member
     </span><span class="kw">pub </span>nodes: Vec&lt;ApiEndpoint&gt;,
-    <span class="doccomment">/// Threshold pubkey for authenticating configs
-    </span><span class="kw">pub </span>auth_pk: threshold_crypto::PublicKey,
     <span class="doccomment">/// Threshold pubkey for authenticating epoch history
     </span><span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
     <span class="doccomment">/// Configs from other client modules
