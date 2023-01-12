@@ -14,7 +14,7 @@ use super::HtlcInterceptPayload;
 use crate::{
     gatewaylnrpc::{
         gateway_lightning_client::GatewayLightningClient, GetPubKeyRequest, GetPubKeyResponse,
-        PayInvoiceRequest, PayInvoiceResponse,
+        PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     },
     LightningError, LnGatewayError, Result,
 };
@@ -141,9 +141,23 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn subscribe_intercept_htlcs(
         &self,
-        _short_channel_id: u64,
+        short_channel_id: u64,
     ) -> Result<mpsc::Receiver<HtlcInterceptPayload>> {
-        unimplemented!()
+        let mut client = self.client.lock().await.clone();
+
+        let mut response_stream = client
+            .subscribe_intercept_htlcs(Request::new(SubscribeInterceptHtlcsRequest {
+                short_channel_id,
+            }))
+            .await
+            .expect("Failed to subscribe intercept htlcs")
+            .into_inner();
+
+        let (_, rx) = mpsc::channel::<HtlcInterceptPayload>(100);
+
+        // TODO: Send intercepted HTLCs from stream to gateway actors for processing
+
+        Ok(rx)
     }
 }
 
