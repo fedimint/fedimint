@@ -1,6 +1,6 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
-use fedimint_api::core::{Input, Output};
+use fedimint_api::core::{DynInput, DynOutput};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{serde_module_encoding_wrapper, Amount, TransactionId};
 use rand::Rng;
@@ -12,10 +12,10 @@ use thiserror::Error;
 /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct Transaction {
-    /// [`Input`]s consumed by the transaction
-    pub inputs: Vec<Input>,
-    /// [`Output`]s created as a result of the transaction
-    pub outputs: Vec<Output>,
+    /// [`DynInput`]s consumed by the transaction
+    pub inputs: Vec<DynInput>,
+    /// [`DynOutput`]s created as a result of the transaction
+    pub outputs: Vec<DynOutput>,
     /// Aggregated MuSig2 signature over all the public keys of the inputs
     pub signature: Option<schnorr::Signature>,
 }
@@ -32,7 +32,7 @@ impl Transaction {
     }
 
     /// Generate the transaction hash.
-    pub fn tx_hash_from_parts(inputs: &[Input], outputs: &[Output]) -> TransactionId {
+    pub fn tx_hash_from_parts(inputs: &[DynInput], outputs: &[DynOutput]) -> TransactionId {
         let mut engine = TransactionId::engine();
         inputs
             .consensus_encode(&mut engine)
@@ -229,25 +229,29 @@ pub mod legacy {
             let erased_inputs = inputs
                 .iter()
                 .map(|input| match input.clone() {
-                    Input::Mint(i) => core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, i),
-                    Input::Wallet(i) => {
-                        core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
+                    Input::Mint(i) => {
+                        core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, i)
                     }
-                    Input::LN(i) => core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
+                    Input::Wallet(i) => {
+                        core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
+                    }
+                    Input::LN(i) => core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
                 })
-                .collect::<Vec<fedimint_api::core::Input>>();
+                .collect::<Vec<fedimint_api::core::DynInput>>();
             let erased_outputs = outputs
                 .iter()
                 .map(|output| match output.clone() {
                     Output::Mint(o) => {
-                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, o)
                     }
                     Output::Wallet(o) => {
-                        core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
                     }
-                    Output::LN(o) => core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o),
+                    Output::LN(o) => {
+                        core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o)
+                    }
                 })
-                .collect::<Vec<fedimint_api::core::Output>>();
+                .collect::<Vec<fedimint_api::core::DynOutput>>();
 
             let mut engine = TransactionId::engine();
             erased_inputs
@@ -301,13 +305,13 @@ pub mod legacy {
                     .into_iter()
                     .map(|input| match input {
                         Input::Mint(input) => {
-                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, input)
+                            core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, input)
                         }
                         Input::Wallet(input) => {
-                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, input)
+                            core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, input)
                         }
                         Input::LN(input) => {
-                            core::Input::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
+                            core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
                         }
                     })
                     .collect(),
@@ -316,13 +320,13 @@ pub mod legacy {
                     .into_iter()
                     .map(|output| match output {
                         Output::Mint(output) => {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_MINT, output)
                         }
                         Output::Wallet(output) => {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, output)
                         }
                         Output::LN(output) => {
-                            core::Output::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
+                            core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
                         }
                     })
                     .collect(),

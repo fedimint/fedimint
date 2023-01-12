@@ -47,7 +47,7 @@ where
 #[async_trait]
 pub trait IServerModule: Debug {
     /// Returns the decoder belonging to the server module
-    fn decoder(&self) -> Decoder;
+    fn decoder(&self) -> DynDecoder;
 
     fn as_any(&self) -> &dyn Any;
 
@@ -59,7 +59,7 @@ pub trait IServerModule: Debug {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<ConsensusItem>;
+    ) -> Vec<DynModuleConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -68,14 +68,14 @@ pub trait IServerModule: Debug {
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        consensus_items: Vec<(PeerId, ConsensusItem)>,
+        consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
     );
 
     /// Some modules may have slow to verify inputs that would block transaction processing. If the
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    fn build_verification_cache(&self, inputs: &[Input]) -> DynVerificationCache;
+    fn build_verification_cache(&self, inputs: &[DynInput]) -> DynVerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -86,7 +86,7 @@ pub trait IServerModule: Debug {
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
-        input: &Input,
+        input: &DynInput,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
@@ -100,7 +100,7 @@ pub trait IServerModule: Debug {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Input,
+        input: &'b DynInput,
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
@@ -111,7 +111,7 @@ pub trait IServerModule: Debug {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Output,
+        output: &DynOutput,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
@@ -127,7 +127,7 @@ pub trait IServerModule: Debug {
     async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        output: &Output,
+        output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -150,7 +150,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
-    ) -> Option<OutputOutcome>;
+    ) -> Option<DynOutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///
@@ -174,8 +174,8 @@ impl<T> IServerModule for T
 where
     T: ServerModule + 'static + Sync,
 {
-    fn decoder(&self) -> Decoder {
-        Decoder::from_typed(ServerModule::decoder(self))
+    fn decoder(&self) -> DynDecoder {
+        DynDecoder::from_typed(ServerModule::decoder(self))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -192,11 +192,11 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<ConsensusItem> {
+    ) -> Vec<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
-            .map(|v| ConsensusItem::from_typed(module_instance_id, v))
+            .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
             .collect()
     }
 
@@ -207,7 +207,7 @@ where
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        consensus_items: Vec<(PeerId, ConsensusItem)>,
+        consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
     ) {
         <Self as ServerModule>::begin_consensus_epoch(
             self,
@@ -233,7 +233,7 @@ where
     /// slow part of verification can be modeled as a pure function not involving any system state
     /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
-    fn build_verification_cache<'a>(&self, inputs: &[Input]) -> DynVerificationCache {
+    fn build_verification_cache<'a>(&self, inputs: &[DynInput]) -> DynVerificationCache {
         <Self as ServerModule>::build_verification_cache(
             self,
             inputs.iter().map(|i| {
@@ -254,7 +254,7 @@ where
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
-        input: &Input,
+        input: &DynInput,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModule>::validate_input(
             self,
@@ -284,7 +284,7 @@ where
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Input,
+        input: &'b DynInput,
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModule>::apply_input(
@@ -311,7 +311,7 @@ where
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Output,
+        output: &DynOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModule>::validate_output(
             self,
@@ -337,7 +337,7 @@ where
     async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        output: &Output,
+        output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModule>::apply_output(
@@ -373,10 +373,10 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
-    ) -> Option<OutputOutcome> {
+    ) -> Option<DynOutputOutcome> {
         <Self as ServerModule>::output_status(self, dbtx, out_point)
             .await
-            .map(|v| OutputOutcome::from_typed(module_instance_id, v))
+            .map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
     }
 
     /// Queries the database and returns all assets and liabilities of the module.

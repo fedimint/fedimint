@@ -173,17 +173,17 @@ macro_rules! module_plugin_trait_define{
     };
 }
 
-/// Implements the `Plugin*` traits for all associated types of a `FederationServerPlugin`.
+/// Implements the necessary traits for all associated types of a `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl {
     ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
-        impl fedimint_api::core::PluginInput for $input {}
+        impl fedimint_api::core::Input for $input {}
 
-        impl fedimint_api::core::PluginOutput for $output {}
+        impl fedimint_api::core::Output for $output {}
 
-        impl fedimint_api::core::PluginOutputOutcome for $outcome {}
+        impl fedimint_api::core::OutputOutcome for $outcome {}
 
-        impl fedimint_api::core::PluginConsensusItem for $ci {}
+        impl fedimint_api::core::ModuleConsensusItem for $ci {}
 
         impl fedimint_api::server::VerificationCache for $cache {}
     };
@@ -240,15 +240,15 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
 
 /// Module Decoder trait
 ///
-/// Static-polymorphism version of [`ModuleDecode`]
+/// Static-polymorphism version of [`IDecoder`]
 ///
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleInstanceId`]s
-pub trait PluginDecode: Debug + Send + Sync + 'static {
-    type Input: PluginInput;
-    type Output: PluginOutput;
-    type OutputOutcome: PluginOutputOutcome;
-    type ConsensusItem: PluginConsensusItem;
+pub trait Decoder: Debug + Send + Sync + 'static {
+    type Input: Input;
+    type Output: Output;
+    type OutputOutcome: OutputOutcome;
+    type ConsensusItem: ModuleConsensusItem;
 
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Self::Input, DecodeError>;
@@ -269,76 +269,76 @@ pub trait PluginDecode: Debug + Send + Sync + 'static {
     ) -> Result<Self::ConsensusItem, DecodeError>;
 }
 
-pub trait ModuleDecode: Debug {
+pub trait IDecoder: Debug {
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Input, DecodeError>;
+    ) -> Result<DynInput, DecodeError>;
 
     /// Decode `Output` compatible with this module, after the module key prefix was already decoded
     fn decode_output(
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Output, DecodeError>;
+    ) -> Result<DynOutput, DecodeError>;
 
     /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
     fn decode_output_outcome(
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<OutputOutcome, DecodeError>;
+    ) -> Result<DynOutputOutcome, DecodeError>;
 
     /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
     fn decode_consensus_item(
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<ConsensusItem, DecodeError>;
+    ) -> Result<DynModuleConsensusItem, DecodeError>;
 }
 
 // TODO: use macro again
 /// Decoder for module associated types
 #[derive(Clone)]
-pub struct Decoder(Arc<dyn ModuleDecode + Send + Sync>);
+pub struct DynDecoder(Arc<dyn IDecoder + Send + Sync>);
 
-impl std::ops::Deref for Decoder {
-    type Target = dyn ModuleDecode + Send + Sync + 'static;
+impl std::ops::Deref for DynDecoder {
+    type Target = dyn IDecoder + Send + Sync + 'static;
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.0
     }
 }
 
-impl<T> From<T> for Decoder
+impl<T> From<T> for DynDecoder
 where
-    T: PluginDecode + Send + Sync + 'static,
+    T: Decoder + Send + Sync + 'static,
 {
     fn from(value: T) -> Self {
-        Decoder(Arc::new(value))
+        DynDecoder(Arc::new(value))
     }
 }
 
-impl std::fmt::Debug for Decoder {
+impl std::fmt::Debug for DynDecoder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl<T> ModuleDecode for T
+impl<T> IDecoder for T
 where
-    T: PluginDecode + 'static,
+    T: Decoder + 'static,
 {
     fn decode_input(
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Input, DecodeError> {
-        Ok(Input::from_typed(
+    ) -> Result<DynInput, DecodeError> {
+        Ok(DynInput::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_input(self, r)?,
+            <Self as Decoder>::decode_input(self, r)?,
         ))
     }
 
@@ -346,10 +346,10 @@ where
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Output, DecodeError> {
-        Ok(Output::from_typed(
+    ) -> Result<DynOutput, DecodeError> {
+        Ok(DynOutput::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_output(self, r)?,
+            <Self as Decoder>::decode_output(self, r)?,
         ))
     }
 
@@ -358,10 +358,10 @@ where
         r: &mut dyn Read,
 
         instance_id: ModuleInstanceId,
-    ) -> Result<OutputOutcome, DecodeError> {
-        Ok(OutputOutcome::from_typed(
+    ) -> Result<DynOutputOutcome, DecodeError> {
+        Ok(DynOutputOutcome::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_output_outcome(self, r)?,
+            <Self as Decoder>::decode_output_outcome(self, r)?,
         ))
     }
 
@@ -369,20 +369,20 @@ where
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<ConsensusItem, DecodeError> {
-        Ok(ConsensusItem::from_typed(
+    ) -> Result<DynModuleConsensusItem, DecodeError> {
+        Ok(DynModuleConsensusItem::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_consensus_item(self, r)?,
+            <Self as Decoder>::decode_consensus_item(self, r)?,
         ))
     }
 }
 
-impl ModuleDecode for Decoder {
+impl IDecoder for DynDecoder {
     fn decode_input(
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Input, DecodeError> {
+    ) -> Result<DynInput, DecodeError> {
         self.0.decode_input(r, instance_id)
     }
 
@@ -390,7 +390,7 @@ impl ModuleDecode for Decoder {
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<Output, DecodeError> {
+    ) -> Result<DynOutput, DecodeError> {
         self.0.decode_output(r, instance_id)
     }
 
@@ -398,7 +398,7 @@ impl ModuleDecode for Decoder {
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<OutputOutcome, DecodeError> {
+    ) -> Result<DynOutputOutcome, DecodeError> {
         self.0.decode_output_outcome(r, instance_id)
     }
 
@@ -406,137 +406,137 @@ impl ModuleDecode for Decoder {
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<ConsensusItem, DecodeError> {
+    ) -> Result<DynModuleConsensusItem, DecodeError> {
         self.0.decode_consensus_item(r, instance_id)
     }
 }
 
-impl Decoder {
+impl DynDecoder {
     /// Create [`Self`] form a typed version defined by the plugin
-    pub fn from_typed(decoder: impl PluginDecode + Send + Sync + 'static) -> Decoder {
-        Decoder(Arc::new(decoder))
+    pub fn from_typed(decoder: impl Decoder + Send + Sync + 'static) -> DynDecoder {
+        DynDecoder(Arc::new(decoder))
     }
 }
 
-/// Something that can be an [`Input`] in a [`Transaction`]
+/// Something that can be an [`DynInput`] in a [`Transaction`]
 ///
-/// General purpose code should use [`Input`] instead
-pub trait ModuleInput: Debug + Display + DynEncodable {
+/// General purpose code should use [`DynInput`] instead
+pub trait IInput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self, instance_id: ModuleInstanceId) -> Input;
+    fn clone(&self, instance_id: ModuleInstanceId) -> DynInput;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq_no_instance_id(&self, other: &Input) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynInput) -> bool;
 }
 
 module_plugin_trait_define! {
-    Input, PluginInput, ModuleInput,
+    DynInput, Input, IInput,
     { }
     {
-        erased_eq_no_instance_id!(Input);
+        erased_eq_no_instance_id!(DynInput);
     }
 }
 
 dyn_newtype_define_with_instance_id! {
     /// An owned, immutable input to a [`Transaction`]
-    pub Input(Box<ModuleInput>)
+    pub DynInput(Box<IInput>)
 }
 module_dyn_newtype_impl_encode_decode! {
-    Input, decode_input
+    DynInput, decode_input
 }
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(Input);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynInput);
 
-newtype_impl_eq_passthrough_with_instance_id!(Input);
+newtype_impl_eq_passthrough_with_instance_id!(DynInput);
 
-newtype_impl_display_passthrough_with_instance_id!(Input);
+newtype_impl_display_passthrough_with_instance_id!(DynInput);
 
-/// Something that can be an [`Output`] in a [`Transaction`]
+/// Something that can be an [`DynOutput`] in a [`Transaction`]
 ///
-/// General purpose code should use [`Output`] instead
-pub trait ModuleOutput: Debug + Display + DynEncodable {
+/// General purpose code should use [`DynOutput`] instead
+pub trait IOutput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self, instance_id: ModuleInstanceId) -> Output;
+    fn clone(&self, instance_id: ModuleInstanceId) -> DynOutput;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq_no_instance_id(&self, other: &Output) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynOutput) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`]
-    pub Output(Box<ModuleOutput>)
+    pub DynOutput(Box<IOutput>)
 }
 module_plugin_trait_define! {
-    Output, PluginOutput, ModuleOutput,
+    DynOutput, Output, IOutput,
     { }
     {
-        erased_eq_no_instance_id!(Output);
+        erased_eq_no_instance_id!(DynOutput);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
-    Output, decode_output
+    DynOutput, decode_output
 }
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(Output);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutput);
 
-newtype_impl_eq_passthrough_with_instance_id!(Output);
+newtype_impl_eq_passthrough_with_instance_id!(DynOutput);
 
-newtype_impl_display_passthrough_with_instance_id!(Output);
+newtype_impl_display_passthrough_with_instance_id!(DynOutput);
 
 pub enum FinalizationError {
     SomethingWentWrong,
 }
 
-pub trait ModuleOutputOutcome: Debug + Display + DynEncodable {
+pub trait IOutputOutcome: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self, module_instance_id: ModuleInstanceId) -> OutputOutcome;
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynOutputOutcome;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq_no_instance_id(&self, other: &OutputOutcome) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynOutputOutcome) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
-    pub OutputOutcome(Box<ModuleOutputOutcome>)
+    pub DynOutputOutcome(Box<IOutputOutcome>)
 }
 module_plugin_trait_define! {
-    OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
+    DynOutputOutcome, OutputOutcome, IOutputOutcome,
     { }
     {
-        erased_eq_no_instance_id!(OutputOutcome);
+        erased_eq_no_instance_id!(DynOutputOutcome);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
-    OutputOutcome, decode_output_outcome
+    DynOutputOutcome, decode_output_outcome
 }
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(OutputOutcome);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutputOutcome);
 
-newtype_impl_eq_passthrough_with_instance_id!(OutputOutcome);
+newtype_impl_eq_passthrough_with_instance_id!(DynOutputOutcome);
 
-newtype_impl_display_passthrough!(OutputOutcome);
+newtype_impl_display_passthrough!(DynOutputOutcome);
 
-pub trait ModuleConsensusItem: Debug + Display + DynEncodable {
+pub trait IModuleConsensusItem: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self, module_instance_id: ModuleInstanceId) -> ConsensusItem;
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynModuleConsensusItem;
     fn dyn_hash(&self) -> u64;
 
-    fn erased_eq_no_instance_id(&self, other: &ConsensusItem) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynModuleConsensusItem) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
-    pub ConsensusItem(Box<ModuleConsensusItem>)
+    pub DynModuleConsensusItem(Box<IModuleConsensusItem>)
 }
 module_plugin_trait_define! {
-    ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
+    DynModuleConsensusItem, ModuleConsensusItem, IModuleConsensusItem,
     { }
     {
-        erased_eq_no_instance_id!(ConsensusItem);
+        erased_eq_no_instance_id!(DynModuleConsensusItem);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
-    ConsensusItem, decode_consensus_item
+    DynModuleConsensusItem, decode_consensus_item
 }
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(ConsensusItem);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynModuleConsensusItem);
 
-newtype_impl_eq_passthrough_with_instance_id!(ConsensusItem);
+newtype_impl_eq_passthrough_with_instance_id!(DynModuleConsensusItem);
 
-newtype_impl_display_passthrough!(ConsensusItem);
+newtype_impl_display_passthrough!(DynModuleConsensusItem);
 
 #[derive(Encodable, Decodable)]
 pub struct Signature;
@@ -544,15 +544,15 @@ pub struct Signature;
 /// Transaction that was already signed
 #[derive(Encodable)]
 pub struct Transaction {
-    inputs: Vec<Input>,
-    outputs: Vec<Output>,
+    inputs: Vec<DynInput>,
+    outputs: Vec<DynOutput>,
     signature: Signature,
 }
 
 impl Decodable for Transaction
 where
-    Input: Decodable,
-    Output: Decodable,
+    DynInput: Decodable,
+    DynOutput: Decodable,
 {
     fn consensus_decode<R: std::io::Read>(
         r: &mut R,

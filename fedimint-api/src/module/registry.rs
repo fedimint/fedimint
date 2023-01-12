@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::core::Decoder;
+use crate::core::DynDecoder;
 pub use crate::core::ModuleInstanceId;
 use crate::server::DynServerModule;
 
@@ -66,20 +66,20 @@ impl ServerModuleRegistry {
 
 /// Collection of decoders belonging to modules, typically obtained from a `ModuleRegistry`
 #[derive(Debug, Default, Clone)]
-pub struct ModuleDecoderRegistry(BTreeMap<ModuleInstanceId, Decoder>);
+pub struct ModuleDecoderRegistry(BTreeMap<ModuleInstanceId, DynDecoder>);
 
 impl ModuleDecoderRegistry {
     /// Return the decoder belonging to the module identified by the supplied `module_key`
     ///
     /// # Panics
     /// If the decoder isn't in the registry
-    pub fn get(&self, module_key: ModuleInstanceId) -> &Decoder {
+    pub fn get(&self, module_key: ModuleInstanceId) -> &DynDecoder {
         self.0.get(&module_key).expect("Module not found")
     }
 }
 
-impl FromIterator<(ModuleInstanceId, Decoder)> for ModuleDecoderRegistry {
-    fn from_iter<T: IntoIterator<Item = (ModuleInstanceId, Decoder)>>(iter: T) -> Self {
+impl FromIterator<(ModuleInstanceId, DynDecoder)> for ModuleDecoderRegistry {
+    fn from_iter<T: IntoIterator<Item = (ModuleInstanceId, DynDecoder)>>(iter: T) -> Self {
         ModuleDecoderRegistry(iter.into_iter().collect())
     }
 }

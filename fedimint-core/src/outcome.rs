@@ -14,7 +14,7 @@ pub enum TransactionStatus {
     },
 }
 
-serde_module_encoding_wrapper!(SerdeOutputOutcome, fedimint_api::core::OutputOutcome);
+serde_module_encoding_wrapper!(SerdeOutputOutcome, fedimint_api::core::DynOutputOutcome);
 
 pub mod legacy {
     use fedimint_api::core::{
@@ -41,8 +41,8 @@ pub mod legacy {
         LN(<LightningModule as ServerModule>::OutputOutcome),
     }
 
-    impl From<fedimint_api::core::OutputOutcome> for OutputOutcome {
-        fn from(oo: fedimint_api::core::OutputOutcome) -> Self {
+    impl From<fedimint_api::core::DynOutputOutcome> for OutputOutcome {
+        fn from(oo: fedimint_api::core::DynOutputOutcome) -> Self {
             match oo.module_instance_id() {
                 LEGACY_HARDCODED_INSTANCE_ID_LN => OutputOutcome::LN(
                     oo.as_any()

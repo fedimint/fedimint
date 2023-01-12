@@ -29,7 +29,7 @@ use fedimint_api::config::{
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{
-    Decoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    DynDecoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -235,8 +235,8 @@ pub struct LightningModuleConfigGen;
 
 #[async_trait]
 impl ModuleInit for LightningModuleConfigGen {
-    fn decoder(&self) -> Decoder {
-        Decoder::from_typed(LightningDecoder)
+    fn decoder(&self) -> DynDecoder {
+        DynDecoder::from_typed(LightningDecoder)
     }
 
     fn module_kind(&self) -> ModuleKind {
