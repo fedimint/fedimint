@@ -6,11 +6,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, Address, Transaction};
-use bitcoincore_rpc::{Auth, Client, RpcApi};
+use bitcoincore_rpc::{Client, RpcApi};
 use cln_rpc::model::requests;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{ClnRpc, Request, Response};
-use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::Amount;
@@ -18,6 +17,7 @@ use fedimint_testing::btc::BitcoinTest;
 use fedimint_wallet::txoproof::TxOutProof;
 use futures::lock::Mutex;
 use lightning_invoice::Invoice;
+use url::Url;
 
 use crate::fixtures::LightningTest;
 
@@ -127,12 +127,10 @@ pub struct RealBitcoinTest {
 impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
-    pub fn new(rpc_cfg: &BitcoindRpcCfg) -> Self {
-        let client = Client::new(
-            &(rpc_cfg.btc_rpc_address),
-            Auth::UserPass(rpc_cfg.btc_rpc_user.clone(), rpc_cfg.btc_rpc_pass.clone()),
-        )
-        .expect(Self::ERROR);
+    pub fn new(url: &Url) -> Self {
+        let (host, auth) =
+            fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(url).expect("corrent url");
+        let client = Client::new(&host, auth).expect(Self::ERROR);
 
         Self { client }
     }

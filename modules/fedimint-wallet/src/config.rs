@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use anyhow::bail;
 use anyhow::format_err;
 use bitcoin::Network;
+use fedimint_api::config::ClientModuleConfig;
 use fedimint_api::config::TypedServerModuleConfig;
-use fedimint_api::config::{BitcoindRpcCfg, ClientModuleConfig};
 use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
 use fedimint_api::core::ModuleKind;
 use fedimint_api::module::__reexports::serde_json;
@@ -12,6 +12,7 @@ use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::keys::CompressedPublicKey;
 use crate::PegInDescriptor;
@@ -28,9 +29,8 @@ pub struct WalletConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigLocal {
-    #[serde(flatten)]
     /// Configuration for connecting to our Bitcoin node
-    pub btc_rpc: BitcoindRpcCfg,
+    pub btc_rpc: Url,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -141,7 +141,7 @@ impl WalletConfig {
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
         threshold: usize,
-        btc_rpc: BitcoindRpcCfg,
+        btc_rpc: Url,
         network: Network,
         finality_delay: u32,
     ) -> Self {

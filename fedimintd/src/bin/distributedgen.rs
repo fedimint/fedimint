@@ -75,8 +75,8 @@ enum Command {
         certs: Vec<String>,
 
         /// `bitcoind` json rpc endpoint
-        #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
-        bitcoind_rpc: String,
+        #[arg(long = "bitcoind-rpc", default_value = "http://127.0.0.1:18443")]
+        bitcoind_rpc: Url,
 
         /// Max denomination of notes issued by the federation (in millisats)
         /// default = 1 BTC
@@ -177,7 +177,7 @@ async fn main() {
                 max_denomination,
                 federation_name,
                 certs,
-                bitcoind_rpc,
+                &bitcoind_rpc,
                 network,
                 finality_delay,
                 rustls::PrivateKey(pk_bytes),
