@@ -49,6 +49,39 @@ impl JsonWithKind {
         Self { kind, value }
     }
 
+    /// Workaround for a serde `flatten` quirk
+    ///
+    /// We serialize config with no fields as: eg. `{ kind: "ln" }`.
+    ///
+    /// When `kind` gets removed and `value` is parsed, it will
+    /// parse as `Value::Object` that is empty.
+    ///
+    /// Howerver empty module structs, like `struct FooConfigLocal;` (unit struct),
+    /// will fail to deserialize with this value, as they expect
+    /// `Value::Null`.
+    ///
+    /// We can turn manually empty object into null, and that's what
+    /// we do in this function. This fixes the deserialization into
+    /// unit type, but in turn breaks deserialization into `struct Foo{}`,
+    /// which is arguably much less common, but valid.
+    ///
+    /// TODO: In the future, we should have a typed and erased versions of
+    /// module construction traits, and then we can try with and
+    /// without the workaround to have both cases working.
+    /// See https://github.com/fedimint/fedimint/issues/1303
+    pub fn with_fixed_empty_value(self) -> Self {
+        if let serde_json::Value::Object(ref o) = self.value {
+            if o.is_empty() {
+                return Self {
+                    kind: self.kind,
+                    value: serde_json::Value::Null,
+                };
+            }
+        }
+
+        self
+    }
+
     pub fn value(&self) -> &serde_json::Value {
         &self.value
     }
@@ -56,6 +89,7 @@ impl JsonWithKind {
     pub fn kind(&self) -> &ModuleKind {
         &self.kind
     }
+
     pub fn is_kind(&self, kind: &ModuleKind) -> bool {
         &self.kind == kind
     }
