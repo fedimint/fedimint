@@ -173,7 +173,7 @@ macro_rules! module_plugin_trait_define{
     };
 }
 
-/// Implements the `Plugin*` traits for all associated types of a `FederationServerPlugin`.
+/// Implements the necessary traits for all associated types of a `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl {
     ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
