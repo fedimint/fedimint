@@ -1,5 +1,7 @@
 # shellcheck shell=bash
 
+export LEGACY_HARDCODED_INSTANCE_ID_WALLET="2"
+
 function mine_blocks() {
     PEG_IN_ADDR="$($FM_BTC_CLIENT getnewaddress)"
     $FM_BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR
@@ -43,7 +45,7 @@ function await_fedimint_block_sync() {
 }
 
 function await_all_peers() {
-  $FM_MINT_CLIENT api /wallet/block_height
+  $FM_MINT_CLIENT api /module/${LEGACY_HARDCODED_INSTANCE_ID_WALLET}/block_height
 }
 
 function await_server_on_port() {
@@ -93,7 +95,7 @@ function gw_connect_fed() {
 }
 
 function get_finality_delay() {
-    cat $FM_CFG_DIR/client.json | jq -e -r '.modules.wallet.finality_delay'
+    cat $FM_CFG_DIR/client.json | jq -e -r ".modules.\"${LEGACY_HARDCODED_INSTANCE_ID_WALLET}\".finality_delay"
 }
 
 function sat_to_btc() {

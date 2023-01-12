@@ -52,7 +52,7 @@ use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 use url::Url;
 
-use crate::common::WalletModuleDecoder;
+use crate::common::WalletDecoder;
 use crate::config::WalletConfig;
 use crate::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
@@ -223,7 +223,7 @@ pub struct WalletConfigGenerator;
 #[async_trait]
 impl ModuleInit for WalletConfigGenerator {
     fn decoder(&self) -> Decoder {
-        Decoder::from_typed(WalletModuleDecoder)
+        Decoder::from_typed(WalletDecoder)
     }
 
     fn module_kind(&self) -> ModuleKind {
@@ -396,7 +396,7 @@ pub struct WalletVerificationCache;
 impl ServerModule for Wallet {
     const KIND: ModuleKind = KIND;
 
-    type Decoder = WalletModuleDecoder;
+    type Decoder = WalletDecoder;
     type Input = WalletInput;
     type Output = WalletOutput;
     // TODO: implement outcome
@@ -405,7 +405,7 @@ impl ServerModule for Wallet {
     type VerificationCache = WalletVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
-        WalletModuleDecoder
+        WalletDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {

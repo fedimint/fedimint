@@ -30,12 +30,12 @@ use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_api::{ServerModule, TieredMulti};
 use fedimint_core::epoch::SignedEpochOutcome;
-use fedimint_core::modules::ln::common::LightningModuleDecoder;
+use fedimint_core::modules::ln::common::LightningDecoder;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
-use fedimint_core::modules::mint::common::MintModuleDecoder;
+use fedimint_core::modules::mint::common::MintDecoder;
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
-use fedimint_core::modules::wallet::common::WalletModuleDecoder;
+use fedimint_core::modules::wallet::common::WalletDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
@@ -1251,15 +1251,15 @@ pub fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            Decoder::from_typed(LightningModuleDecoder),
+            Decoder::from_typed(LightningDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            Decoder::from_typed(WalletModuleDecoder),
+            Decoder::from_typed(WalletDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            Decoder::from_typed(MintModuleDecoder),
+            Decoder::from_typed(MintDecoder),
         ),
     ])
 }

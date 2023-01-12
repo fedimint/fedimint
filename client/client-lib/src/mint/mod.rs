@@ -28,7 +28,7 @@ use tracing::{debug, trace, warn};
 use crate::api::ApiError;
 use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingCoinsKey};
 use crate::utils::ClientContext;
-use crate::{ChildId, DerivableSecret, MintModuleDecoder};
+use crate::{ChildId, DerivableSecret, MintDecoder};
 
 pub mod backup;
 
@@ -154,7 +154,7 @@ impl ClientModule for MintClient {
     type Module = Mint;
 
     fn decoder(&self) -> Self::Decoder {
-        MintModuleDecoder
+        MintDecoder
     }
 
     fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {

@@ -50,7 +50,7 @@ use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
-use crate::common::LightningModuleDecoder;
+use crate::common::LightningDecoder;
 use crate::config::{LightningConfig, LightningConfigConsensus, LightningConfigPrivate};
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
@@ -235,7 +235,7 @@ pub struct LightningModuleConfigGen;
 #[async_trait]
 impl ModuleInit for LightningModuleConfigGen {
     fn decoder(&self) -> Decoder {
-        Decoder::from_typed(LightningModuleDecoder)
+        Decoder::from_typed(LightningDecoder)
     }
 
     fn module_kind(&self) -> ModuleKind {
@@ -344,7 +344,7 @@ impl ModuleInit for LightningModuleConfigGen {
 impl ServerModule for LightningModule {
     const KIND: ModuleKind = KIND;
 
-    type Decoder = LightningModuleDecoder;
+    type Decoder = LightningDecoder;
     type Input = LightningInput;
     type Output = LightningOutput;
     type OutputOutcome = LightningOutputOutcome;
@@ -352,7 +352,7 @@ impl ServerModule for LightningModule {
     type VerificationCache = LightningVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
-        LightningModuleDecoder
+        LightningDecoder
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {

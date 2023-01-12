@@ -129,7 +129,7 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -153,8 +153,8 @@ async fn main() {
             name,
             password,
         } => {
-            let config_str = create_cert(dir_out_path, p2p_url, api_url, name, password);
-            println!("{}", config_str);
+            let config_str = create_cert(dir_out_path, p2p_url, api_url, name, password)?;
+            Ok(println!("{}", config_str))
         }
         Command::Run {
             dir_out_path,
@@ -168,8 +168,8 @@ async fn main() {
             finality_delay,
             password,
         } => {
-            let key = get_key(password, dir_out_path.join(SALT_FILE));
-            let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK));
+            let key = get_key(password, dir_out_path.join(SALT_FILE))?;
+            let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
             let server = if let Ok(v) = run_dkg(
                 bind_p2p,
                 bind_api,
@@ -188,15 +188,13 @@ async fn main() {
                 v
             } else {
                 info!("Canceled");
-                return;
+                return Ok(());
             };
 
-            encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG));
-            write_nonprivate_configs(&server, dir_out_path, &module_config_gens);
+            encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
+            write_nonprivate_configs(&server, dir_out_path, &module_config_gens)
         }
-        Command::VersionHash => {
-            println!("{}", CODE_VERSION);
-        }
+        Command::VersionHash => Ok(println!("{}", CODE_VERSION)),
         Command::ConfigDecrypt {
             in_file,
             out_file,
@@ -204,12 +202,13 @@ async fn main() {
             password,
         } => {
             let salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&in_file));
-            let key = get_key(password, salt_file);
-            let decrypted_bytes = encrypted_read(&key, in_file);
+            let key = get_key(password, salt_file)?;
+            let decrypted_bytes = encrypted_read(&key, in_file)?;
 
             let mut out_file_handle =
                 fs::File::create(out_file).expect("Could not create output cfg file");
-            out_file_handle.write_all(&decrypted_bytes).unwrap();
+            out_file_handle.write_all(&decrypted_bytes)?;
+            Ok(())
         }
         Command::ConfigEncrypt {
             in_file,
@@ -223,8 +222,8 @@ async fn main() {
             in_file_handle.read_to_end(&mut plaintext_bytes).unwrap();
 
             let salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&out_file));
-            let key = get_key(password, salt_file);
-            encrypted_write(plaintext_bytes, &key, out_file);
+            let key = get_key(password, salt_file)?;
+            encrypted_write(plaintext_bytes, &key, out_file)
         }
     }
 }

@@ -17,6 +17,7 @@ use std::fs;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 
+use anyhow::format_err;
 use ring::aead::{LessSafeKey, UnboundKey};
 use ring::{digest, pbkdf2};
 
@@ -24,33 +25,31 @@ const ITERATIONS_PROD: Option<NonZeroU32> = NonZeroU32::new(1_000_000);
 const ITERATIONS_DEBUG: Option<NonZeroU32> = NonZeroU32::new(1);
 
 /// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
-// TODO: Use anyhow to handle errors
-pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) {
-    let bytes = aead::encrypt(data, key).expect("encryption should not fail");
-    fs::write(file, hex::encode(bytes)).expect("Can't write file.");
+pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> anyhow::Result<()> {
+    let bytes = aead::encrypt(data, key)?;
+    fs::write(file.clone(), hex::encode(bytes))
+        .map_err(|_| format_err!("Unable to write file {:?}", file))?;
+    Ok(())
 }
 
 /// Reads encrypted data from a file
-// TODO: Use anyhow to handle errors
-pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Vec<u8> {
+pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> anyhow::Result<Vec<u8>> {
     tracing::warn!("READ {:?}", file);
-    let hex = fs::read_to_string(file).expect("Can't read file.");
-    let mut bytes = hex::decode(hex).expect("not hex encoded");
+    let hex = fs::read_to_string(file)?;
+    let mut bytes = hex::decode(hex)?;
 
-    aead::decrypt(&mut bytes, key)
-        .expect("decryption failed")
-        .to_vec()
+    Ok(aead::decrypt(&mut bytes, key)?.to_vec())
 }
 
 // TODO: Move to `aead` crate?
-pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
+pub fn get_key(password: Option<String>, salt_path: PathBuf) -> anyhow::Result<LessSafeKey> {
     let password = match password {
         None => rpassword::prompt_password("Enter a password to encrypt configs: ").unwrap(),
         Some(password) => password,
     };
 
-    let salt_str = fs::read_to_string(salt_path).expect("Can't read salt file");
-    let salt = hex::decode(salt_str).expect("Can't decode hex");
+    let salt_str = fs::read_to_string(salt_path)?;
+    let salt = hex::decode(salt_str)?;
     let mut key = [0u8; digest::SHA256_OUTPUT_LEN];
     let algo = pbkdf2::PBKDF2_HMAC_SHA256;
     pbkdf2::derive(
@@ -64,6 +63,7 @@ pub fn get_key(password: Option<String>, salt_path: PathBuf) -> LessSafeKey {
         password.as_bytes(),
         &mut key,
     );
-    let key = UnboundKey::new(&ring::aead::CHACHA20_POLY1305, &key).expect("created key");
-    LessSafeKey::new(key)
+    let key = UnboundKey::new(&ring::aead::CHACHA20_POLY1305, &key)
+        .map_err(|_| anyhow::Error::msg("Unable to create key"))?;
+    Ok(LessSafeKey::new(key))
 }

@@ -8,9 +8,9 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use crate::{LightningConsensusItem, LightningInput, LightningOutput, LightningOutputOutcome};
 
 #[derive(Debug, Default, Clone)]
-pub struct LightningModuleDecoder;
+pub struct LightningDecoder;
 
-impl PluginDecode for LightningModuleDecoder {
+impl PluginDecode for LightningDecoder {
     type Input = LightningInput;
     type Output = LightningOutput;
     type OutputOutcome = LightningOutputOutcome;

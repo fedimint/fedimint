@@ -7,7 +7,7 @@ use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModule};
-use fedimint_core::modules::wallet::common::WalletModuleDecoder;
+use fedimint_core::modules::wallet::common::WalletDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
@@ -35,7 +35,7 @@ impl ClientModule for WalletClient {
     type Module = Wallet;
 
     fn decoder(&self) -> Self::Decoder {
-        WalletModuleDecoder
+        WalletDecoder
     }
 
     fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {

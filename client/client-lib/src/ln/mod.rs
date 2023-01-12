@@ -13,7 +13,7 @@ use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::{Amount, ServerModule};
-use fedimint_core::modules::ln::common::LightningModuleDecoder;
+use fedimint_core::modules::ln::common::LightningDecoder;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
@@ -49,7 +49,7 @@ impl ClientModule for LnClient {
     type Module = LightningModule;
 
     fn decoder(&self) -> Self::Decoder {
-        LightningModuleDecoder
+        LightningDecoder
     }
 
     fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
