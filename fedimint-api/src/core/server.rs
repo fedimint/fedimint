@@ -59,7 +59,7 @@ pub trait IServerModule: Debug {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<ConsensusItem>;
+    ) -> Vec<DynModuleConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
@@ -68,7 +68,7 @@ pub trait IServerModule: Debug {
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        consensus_items: Vec<(PeerId, ConsensusItem)>,
+        consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
     );
 
     /// Some modules may have slow to verify inputs that would block transaction processing. If the
@@ -192,11 +192,11 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<ConsensusItem> {
+    ) -> Vec<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
             .await
             .into_iter()
-            .map(|v| ConsensusItem::from_typed(module_instance_id, v))
+            .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
             .collect()
     }
 
@@ -207,7 +207,7 @@ where
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        consensus_items: Vec<(PeerId, ConsensusItem)>,
+        consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
     ) {
         <Self as ServerModule>::begin_consensus_epoch(
             self,

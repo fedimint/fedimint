@@ -22,7 +22,7 @@ use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core;
 use fedimint_api::core::{
-    ConsensusItem as PerModuleConsensusItem, PluginConsensusItem,
+    DynModuleConsensusItem as PerModuleConsensusItem, ModuleConsensusItem,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::mem_impl::MemDatabase;
@@ -1115,7 +1115,7 @@ impl FederationTest {
     }
 }
 
-pub fn assert_ci<M: PluginConsensusItem>(ci: &ConsensusItem) -> &M {
+pub fn assert_ci<M: ModuleConsensusItem>(ci: &ConsensusItem) -> &M {
     if let ConsensusItem::Module(mci) = ci {
         assert_module_ci(mci)
     } else {
@@ -1123,7 +1123,7 @@ pub fn assert_ci<M: PluginConsensusItem>(ci: &ConsensusItem) -> &M {
     }
 }
 
-pub fn assert_module_ci<M: PluginConsensusItem>(mci: &PerModuleConsensusItem) -> &M {
+pub fn assert_module_ci<M: ModuleConsensusItem>(mci: &PerModuleConsensusItem) -> &M {
     debug!(
         module_instance_id = mci.module_instance_id(),
         "Checking module consensus item"

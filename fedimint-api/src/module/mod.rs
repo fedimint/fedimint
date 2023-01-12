@@ -13,8 +13,8 @@ use thiserror::Error;
 use crate::cancellable::Cancellable;
 use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
-    Decoder, DynDecoder, Input, ModuleInstanceId, ModuleKind, Output, OutputOutcome,
-    PluginConsensusItem,
+    Decoder, DynDecoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
+    OutputOutcome,
 };
 use crate::db::{Database, DatabaseTransaction};
 use crate::module::audit::Audit;
@@ -249,7 +249,7 @@ pub trait ServerModule: Debug + Sized {
     type Input: Input;
     type Output: Output;
     type OutputOutcome: OutputOutcome;
-    type ConsensusItem: PluginConsensusItem;
+    type ConsensusItem: ModuleConsensusItem;
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {

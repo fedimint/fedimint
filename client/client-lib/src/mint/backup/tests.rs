@@ -375,7 +375,7 @@ fn sanity_check_recovery_fresh_backup() {
     for _ in 0..3 {
         tracker.handle_consensus_item(
             confirmations_c1_a[0].0,
-            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+            &ConsensusItem::Module(core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 confirmations_c1_a[0].1.clone(),
             )),
@@ -398,7 +398,7 @@ fn sanity_check_recovery_fresh_backup() {
     for wrong_peer_i in 1..2 {
         tracker.handle_consensus_item(
             confirmations_c1_a[wrong_peer_i].0,
-            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+            &ConsensusItem::Module(core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 confirmations_c1_a[0].1.clone(),
             )),
@@ -421,7 +421,7 @@ fn sanity_check_recovery_fresh_backup() {
     for (peer_id, mint_output_confirmation) in &confirmations_c1_a {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+            &ConsensusItem::Module(core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 mint_output_confirmation.clone(),
             )),
@@ -543,7 +543,7 @@ fn sanity_check_recovery_non_empty_backup() {
     for (peer_id, mint_output_confirmation) in &confirmations_c1_a1 {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+            &ConsensusItem::Module(core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 mint_output_confirmation.clone(),
             )),
@@ -728,7 +728,7 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     for (peer_id, mint_output_confirmation) in &confirmations_c2_a {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+            &ConsensusItem::Module(core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 mint_output_confirmation.clone(),
             )),
@@ -744,7 +744,7 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     for (peer_id, mint_output_confirmation) in &confirmations_c1_b {
         tracker.handle_consensus_item(
             *peer_id,
-            &ConsensusItem::Module(core::ConsensusItem::from_typed(
+            &ConsensusItem::Module(core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 mint_output_confirmation.clone(),
             )),

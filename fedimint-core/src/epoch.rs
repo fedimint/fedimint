@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use fedimint_api::core::ConsensusItem as ModuleConsensusItem;
+use fedimint_api::core::DynModuleConsensusItem as ModuleConsensusItem;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId, TransactionId};

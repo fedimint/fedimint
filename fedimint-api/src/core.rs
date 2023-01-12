@@ -183,7 +183,7 @@ macro_rules! plugin_types_trait_impl {
 
         impl fedimint_api::core::OutputOutcome for $outcome {}
 
-        impl fedimint_api::core::PluginConsensusItem for $ci {}
+        impl fedimint_api::core::ModuleConsensusItem for $ci {}
 
         impl fedimint_api::server::VerificationCache for $cache {}
     };
@@ -248,7 +248,7 @@ pub trait Decoder: Debug + Send + Sync + 'static {
     type Input: Input;
     type Output: Output;
     type OutputOutcome: OutputOutcome;
-    type ConsensusItem: PluginConsensusItem;
+    type ConsensusItem: ModuleConsensusItem;
 
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Self::Input, DecodeError>;
@@ -296,7 +296,7 @@ pub trait IDecoder: Debug {
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<ConsensusItem, DecodeError>;
+    ) -> Result<DynModuleConsensusItem, DecodeError>;
 }
 
 // TODO: use macro again
@@ -369,8 +369,8 @@ where
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<ConsensusItem, DecodeError> {
-        Ok(ConsensusItem::from_typed(
+    ) -> Result<DynModuleConsensusItem, DecodeError> {
+        Ok(DynModuleConsensusItem::from_typed(
             instance_id,
             <Self as Decoder>::decode_consensus_item(self, r)?,
         ))
@@ -406,7 +406,7 @@ impl IDecoder for DynDecoder {
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<ConsensusItem, DecodeError> {
+    ) -> Result<DynModuleConsensusItem, DecodeError> {
         self.0.decode_consensus_item(r, instance_id)
     }
 }
@@ -510,33 +510,33 @@ newtype_impl_eq_passthrough_with_instance_id!(DynOutputOutcome);
 
 newtype_impl_display_passthrough!(DynOutputOutcome);
 
-pub trait ModuleConsensusItem: Debug + Display + DynEncodable {
+pub trait IModuleConsensusItem: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self, module_instance_id: ModuleInstanceId) -> ConsensusItem;
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynModuleConsensusItem;
     fn dyn_hash(&self) -> u64;
 
-    fn erased_eq_no_instance_id(&self, other: &ConsensusItem) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynModuleConsensusItem) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
-    pub ConsensusItem(Box<ModuleConsensusItem>)
+    pub DynModuleConsensusItem(Box<IModuleConsensusItem>)
 }
 module_plugin_trait_define! {
-    ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
+    DynModuleConsensusItem, ModuleConsensusItem, IModuleConsensusItem,
     { }
     {
-        erased_eq_no_instance_id!(ConsensusItem);
+        erased_eq_no_instance_id!(DynModuleConsensusItem);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
-    ConsensusItem, decode_consensus_item
+    DynModuleConsensusItem, decode_consensus_item
 }
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(ConsensusItem);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynModuleConsensusItem);
 
-newtype_impl_eq_passthrough_with_instance_id!(ConsensusItem);
+newtype_impl_eq_passthrough_with_instance_id!(DynModuleConsensusItem);
 
-newtype_impl_display_passthrough!(ConsensusItem);
+newtype_impl_display_passthrough!(DynModuleConsensusItem);
 
 #[derive(Encodable, Decodable)]
 pub struct Signature;

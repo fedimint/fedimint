@@ -249,7 +249,7 @@ impl FedimintConsensus {
         {
             let per_module_cis: HashMap<
                 ModuleInstanceId,
-                Vec<(PeerId, fedimint_api::core::ConsensusItem)>,
+                Vec<(PeerId, fedimint_api::core::DynModuleConsensusItem)>,
             > = module_cis
                 .into_iter()
                 .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
