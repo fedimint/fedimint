@@ -233,7 +233,7 @@ impl ModuleInitRegistry {
         cfg: &ServerConfig,
         db: &Database,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::ServerModule>> {
+    ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::DynServerModule>> {
         let mut modules = BTreeMap::new();
 
         for (module_id, module_cfg) in &cfg.consensus.modules {

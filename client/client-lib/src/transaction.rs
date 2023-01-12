@@ -1,6 +1,6 @@
 use bitcoin::KeyPair;
 use fedimint_api::config::ClientConfig;
-use fedimint_api::core::client::ClientModulePlugin;
+use fedimint_api::core::client::ClientModule;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::Amount;
 use fedimint_core::modules::ln::contracts::ContractOutcome;

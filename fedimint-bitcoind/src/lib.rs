@@ -59,7 +59,7 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
 
 dyn_newtype_define! {
     #[derive(Clone)]
-    pub BitcoindRpc(Arc<IBitcoindRpc>)
+    pub DynBitcoindRpc(Arc<IBitcoindRpc>)
 }
 
 /// Wrapper around [`IBitcoindRpc`] that will retry failed calls

@@ -6,13 +6,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use fedimint_api::core::client::ClientModulePlugin;
+use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::{Amount, OutPoint, ServerModulePlugin, Tiered, TieredMulti, TransactionId};
+use fedimint_api::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{
     BlindNonce, Mint, MintInput, MintOutput, MintOutputOutcome, Nonce, Note, OutputOutcome,
@@ -148,19 +148,16 @@ pub struct SpendableNote {
     pub spend_key: KeyPair,
 }
 
-impl ClientModulePlugin for MintClient {
+impl ClientModule for MintClient {
     const KIND: &'static str = "mint";
-    type Decoder = <Mint as ServerModulePlugin>::Decoder;
+    type Decoder = <Mint as ServerModule>::Decoder;
     type Module = Mint;
 
     fn decoder(&self) -> Self::Decoder {
         MintModuleDecoder
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Module as ServerModulePlugin>::Input,
-    ) -> TransactionItemAmount {
+    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.total_amount(),
             fee: self.config.fee_consensus.coin_spend_abs * (input.item_count() as u64),
@@ -169,7 +166,7 @@ impl ClientModulePlugin for MintClient {
 
     fn output_amount(
         &self,
-        output: &<Self::Module as ServerModulePlugin>::Output,
+        output: &<Self::Module as ServerModule>::Output,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: output.total_amount(),

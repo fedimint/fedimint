@@ -3,10 +3,10 @@ use std::sync::Arc;
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
-use fedimint_api::core::client::ClientModulePlugin;
+use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::{Amount, ServerModulePlugin};
+use fedimint_api::{Amount, ServerModule};
 use fedimint_core::modules::wallet::common::WalletModuleDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
@@ -29,19 +29,16 @@ pub struct WalletClient {
     pub context: Arc<ClientContext>,
 }
 
-impl ClientModulePlugin for WalletClient {
+impl ClientModule for WalletClient {
     const KIND: &'static str = "wallet";
-    type Decoder = <Wallet as ServerModulePlugin>::Decoder;
+    type Decoder = <Wallet as ServerModule>::Decoder;
     type Module = Wallet;
 
     fn decoder(&self) -> Self::Decoder {
         WalletModuleDecoder
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Module as ServerModulePlugin>::Input,
-    ) -> TransactionItemAmount {
+    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: Amount::from_sats(input.tx_output().value),
             fee: self.config.fee_consensus.peg_in_abs,
@@ -50,7 +47,7 @@ impl ClientModulePlugin for WalletClient {
 
     fn output_amount(
         &self,
-        output: &<Self::Module as ServerModulePlugin>::Output,
+        output: &<Self::Module as ServerModule>::Output,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),

@@ -8,11 +8,11 @@ use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::config::FederationId;
-use fedimint_api::core::client::ClientModulePlugin;
+use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
-use fedimint_api::{Amount, ServerModulePlugin};
+use fedimint_api::{Amount, ServerModule};
 use fedimint_core::modules::ln::common::LightningModuleDecoder;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -43,19 +43,16 @@ pub struct LnClient {
     pub context: Arc<ClientContext>,
 }
 
-impl ClientModulePlugin for LnClient {
+impl ClientModule for LnClient {
     const KIND: &'static str = "ln";
-    type Decoder = <LightningModule as ServerModulePlugin>::Decoder;
+    type Decoder = <LightningModule as ServerModule>::Decoder;
     type Module = LightningModule;
 
     fn decoder(&self) -> Self::Decoder {
         LightningModuleDecoder
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Module as ServerModulePlugin>::Input,
-    ) -> TransactionItemAmount {
+    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.amount,
             fee: self.config.fee_consensus.contract_input,
@@ -64,7 +61,7 @@ impl ClientModulePlugin for LnClient {
 
     fn output_amount(
         &self,
-        output: &<Self::Module as ServerModulePlugin>::Output,
+        output: &<Self::Module as ServerModule>::Output,
     ) -> TransactionItemAmount {
         match output {
             LightningOutput::Contract(account_output) => TransactionItemAmount {

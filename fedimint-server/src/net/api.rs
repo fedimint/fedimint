@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use fedimint_api::core::ModuleInstanceId;
-use fedimint_api::server::ServerModule;
+use fedimint_api::server::DynServerModule;
 use fedimint_api::{
     config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
@@ -133,7 +133,7 @@ fn attach_endpoints(
 fn attach_endpoints_erased(
     rpc_module: &mut RpcModule<RpcHandlerCtx>,
     module_instance: ModuleInstanceId,
-    server_module: &ServerModule,
+    server_module: &DynServerModule,
 ) {
     let endpoints = server_module.api_endpoints();
 

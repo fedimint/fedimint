@@ -35,14 +35,12 @@ use fedimint_api::module::{
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::server::ServerModule;
+use fedimint_api::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_api::task::sleep;
 use fedimint_api::task::{TaskGroup, TaskHandle};
-use fedimint_api::{
-    plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModulePlugin,
-};
-use fedimint_bitcoind::BitcoindRpc;
+use fedimint_api::{plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModule};
+use fedimint_bitcoind::DynBitcoindRpc;
 use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
@@ -124,7 +122,7 @@ pub struct RoundConsensus {
 pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
-    btc_rpc: BitcoindRpc,
+    btc_rpc: DynBitcoindRpc,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -236,7 +234,7 @@ impl ModuleInit for WalletConfigGenerator {
         cfg: ServerModuleConfig,
         db: Database,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ServerModule> {
+    ) -> anyhow::Result<DynServerModule> {
         Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
     }
 
@@ -394,7 +392,7 @@ impl std::fmt::Display for WalletOutput {
 pub struct WalletVerificationCache;
 
 #[async_trait]
-impl ServerModulePlugin for Wallet {
+impl ServerModule for Wallet {
     const KIND: ModuleKind = KIND;
 
     type Decoder = WalletModuleDecoder;
@@ -820,7 +818,7 @@ impl Wallet {
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,
         db: Database,
-        bitcoind: BitcoindRpc,
+        bitcoind: DynBitcoindRpc,
         task_group: &mut TaskGroup,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
@@ -1498,7 +1496,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 }
 
 #[instrument(level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc, tg_handle: &TaskHandle) {
+pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
         broadcast_pending_tx(db.begin_transaction().await, &rpc).await;
         // FIXME: remove after modularization finishes
@@ -1507,7 +1505,7 @@ pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc, tg_handle:
     }
 }
 
-pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &BitcoindRpc) {
+pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBitcoindRpc) {
     let pending_tx = dbtx
         .find_by_prefix(&PendingTransactionPrefixKey)
         .await

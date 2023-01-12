@@ -2,7 +2,7 @@ use cln_plugin::Error;
 use fedimint_api::task::TaskGroup;
 use fedimint_server::config::load_from_file;
 use ln_gateway::{
-    client::{GatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
+    client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
     cln::{build_cln_rpc, ClnRpcRef},
     config::GatewayConfig,
     rpc::{GatewayRequest, GatewayRpcSender},
@@ -32,7 +32,7 @@ async fn main() -> Result<(), Error> {
     let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path).expect("Failed to parse config");
 
     // Create federation client builder
-    let client_builder: GatewayClientBuilder =
+    let client_builder: DynGatewayClientBuilder =
         StandardGatewayClientBuilder::new(work_dir.clone(), RocksDbFactory.into()).into();
 
     // Create gateway instance

@@ -19,9 +19,9 @@ use fedimint_api::module::{
     api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleInit, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::server::ServerModule;
+use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
-use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModulePlugin};
+use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -63,7 +63,7 @@ impl ModuleInit for DummyConfigGenerator {
         cfg: ServerModuleConfig,
         _db: Database,
         _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ServerModule> {
+    ) -> anyhow::Result<DynServerModule> {
         Ok(Dummy::new(cfg.to_typed()?).into())
     }
 
@@ -183,7 +183,7 @@ impl fmt::Display for DummyOutputConfirmation {
 }
 
 #[async_trait]
-impl ServerModulePlugin for Dummy {
+impl ServerModule for Dummy {
     const KIND: ModuleKind = KIND;
 
     type Decoder = DummyModuleDecoder;

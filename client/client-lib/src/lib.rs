@@ -13,7 +13,7 @@ use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
-use api::FederationApi;
+use api::DynFederationApi;
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
@@ -28,7 +28,7 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_api::{ServerModulePlugin, TieredMulti};
+use fedimint_api::{ServerModule, TieredMulti};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::modules::ln::common::LightningModuleDecoder;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
@@ -241,7 +241,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub async fn new_with_api(
         config: T,
         db: Database,
-        api: FederationApi,
+        api: DynFederationApi,
         secp: Secp256k1<All>,
     ) -> Client<T> {
         let root_secret = Self::get_secret(&db).await;
@@ -1190,7 +1190,7 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<<fedimint_core::modules::mint::Mint as ServerModulePlugin>::OutputOutcome>(outpoint, Duration::from_secs(10))
+            .await_output_outcome::<<fedimint_core::modules::mint::Mint as ServerModule>::OutputOutcome>(outpoint, Duration::from_secs(10))
             .await?;
         // We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need

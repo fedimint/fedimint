@@ -4,7 +4,7 @@ use anyhow::Result;
 use fedimint_api::task::TaskGroup;
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use ln_gateway::{
-    client::{GatewayClientBuilder, MemDbFactory},
+    client::{DynGatewayClientBuilder, MemDbFactory},
     config::GatewayConfig,
     rpc::GatewayRequest,
     LnGateway,
@@ -26,7 +26,7 @@ pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
 
     let ln_rpc = Arc::new(ln::MockLnRpc::new());
 
-    let client_builder: GatewayClientBuilder =
+    let client_builder: DynGatewayClientBuilder =
         client::TestGatewayClientBuilder::new(MemDbFactory.into()).into();
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
 

@@ -39,10 +39,10 @@ use fedimint_api::module::{
     TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::server::ServerModule;
+use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
-use fedimint_api::{OutPoint, ServerModulePlugin};
+use fedimint_api::{OutPoint, ServerModule};
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -247,7 +247,7 @@ impl ModuleInit for LightningModuleConfigGen {
         cfg: ServerModuleConfig,
         _db: Database,
         _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ServerModule> {
+    ) -> anyhow::Result<DynServerModule> {
         Ok(LightningModule::new(cfg.to_typed()?).into())
     }
 
@@ -341,7 +341,7 @@ impl ModuleInit for LightningModuleConfigGen {
 }
 
 #[async_trait]
-impl ServerModulePlugin for LightningModule {
+impl ServerModule for LightningModule {
     const KIND: ModuleKind = KIND;
 
     type Decoder = LightningModuleDecoder;
