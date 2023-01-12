@@ -83,17 +83,11 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
-<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, ModuleInstanceId};
+<span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
+<span class="kw">pub use </span><span class="kw">crate</span>::core::ModuleInstanceId;
 <span class="kw">use </span><span class="kw">crate</span>::server::DynServerModule;
-
-<span class="comment">// TODO: unify and/or make a newtype?
-</span><span class="doccomment">/// Fedimint module identifier
-</span><span class="kw">pub type </span>ModuleKey = u16;
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ModuleRegistry&lt;M&gt;(BTreeMap&lt;ModuleInstanceId, M&gt;);
@@ -104,14 +98,14 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; From&lt;BTreeMap&lt;ModuleKey, M&gt;&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
-    <span class="kw">fn </span>from(value: BTreeMap&lt;ModuleKey, M&gt;) -&gt; <span class="self">Self </span>{
+<span class="kw">impl</span>&lt;M&gt; From&lt;BTreeMap&lt;ModuleInstanceId, M&gt;&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
+    <span class="kw">fn </span>from(value: BTreeMap&lt;ModuleInstanceId, M&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(value)
     }
 }
 
 <span class="kw">impl</span>&lt;M&gt; ModuleRegistry&lt;M&gt; {
-    <span class="kw">pub fn </span>new(decoders: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleKey, M)&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(decoders: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleInstanceId, M)&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(decoders.into_iter().collect())
     }
 
@@ -120,7 +114,7 @@
         <span class="self">self</span>.<span class="number">0</span>.iter().map(|(id, m)| (<span class="kw-2">*</span>id, m))
     }
 
-    <span class="kw">pub fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>ModuleKey) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>M&gt; {
+    <span class="kw">pub fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>ModuleInstanceId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>M&gt; {
         <span class="self">self</span>.<span class="number">0</span>.get_mut(key)
     }
 
@@ -128,7 +122,7 @@
     ///
     /// # Panics
     /// If the module isn&#39;t in the registry
-    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleKey) -&gt; <span class="kw-2">&amp;</span>M {
+    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>M {
         <span class="self">self</span>.<span class="number">0
             </span>.get(<span class="kw-2">&amp;</span>module_key)
             .expect(<span class="string">&quot;CIs were decoded, so the module exists&quot;</span>)
@@ -157,20 +151,20 @@
 
 <span class="doccomment">/// Collection of decoders belonging to modules, typically obtained from a `ModuleRegistry`
 </span><span class="attr">#[derive(Debug, Default, Clone)]
-</span><span class="kw">pub struct </span>ModuleDecoderRegistry(BTreeMap&lt;ModuleKey, Decoder&gt;);
+</span><span class="kw">pub struct </span>ModuleDecoderRegistry(BTreeMap&lt;ModuleInstanceId, Decoder&gt;);
 
 <span class="kw">impl </span>ModuleDecoderRegistry {
     <span class="doccomment">/// Return the decoder belonging to the module identified by the supplied `module_key`
     ///
     /// # Panics
     /// If the decoder isn&#39;t in the registry
-    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleKey) -&gt; <span class="kw-2">&amp;</span>Decoder {
+    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>Decoder {
         <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>module_key).expect(<span class="string">&quot;Module not found&quot;</span>)
     }
 }
 
-<span class="kw">impl </span>FromIterator&lt;(ModuleKey, Decoder)&gt; <span class="kw">for </span>ModuleDecoderRegistry {
-    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (ModuleKey, Decoder)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
+<span class="kw">impl </span>FromIterator&lt;(ModuleInstanceId, Decoder)&gt; <span class="kw">for </span>ModuleDecoderRegistry {
+    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (ModuleInstanceId, Decoder)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
         ModuleDecoderRegistry(iter.into_iter().collect())
     }
 }

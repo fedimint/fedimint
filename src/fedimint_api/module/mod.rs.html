@@ -372,8 +372,6 @@
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
 <a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -521,8 +519,6 @@
 
 <span class="kw">pub use </span>__api_endpoint <span class="kw">as </span>api_endpoint;
 
-<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleKey;
-
 <span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; = BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;;
 <span class="kw">type </span>HandlerFn&lt;M&gt; = Box&lt;
     <span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(
@@ -600,7 +596,7 @@
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleKey, DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,
         module_id: ModuleInstanceId,
         peers: <span class="kw-2">&amp;</span>[PeerId],

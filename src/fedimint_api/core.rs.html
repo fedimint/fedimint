@@ -557,6 +557,14 @@
 <a href="#557" id="557">557</a>
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -567,9 +575,9 @@
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt::{Debug, Display};
+<span class="kw">use </span>std::io;
 <span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::{io, ops};
 
 <span class="kw">pub use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::{
@@ -643,14 +651,6 @@
     <span class="kw">fn </span>from(val: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
         ModuleKind::from_static_str(val)
     }
-}
-
-<span class="kw">impl </span>ops::Deref <span class="kw">for </span>ModuleKind {
-    <span class="kw">type </span>Target = str;
-
-    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
-    </span>}
 }
 
 <span class="doccomment">/// Implement `Encodable` and `Decodable` for a &quot;module dyn newtype&quot;
@@ -756,15 +756,10 @@
     };
 }
 
-<span class="macro">macro_rules! </span>erased_eq {
+<span class="macro">macro_rules! </span>erased_eq_no_instance_id {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
-        <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$newtype</span>) -&gt; bool {
-            <span class="comment">// TODO:?
-            // if self.module_key() != other.module_key() {
-            //     return false;
-            // }
-
-            </span><span class="kw">let </span>other: <span class="kw-2">&amp;</span>T = other
+        <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$newtype</span>) -&gt; bool {
+            <span class="kw">let </span>other: <span class="kw-2">&amp;</span>T = other
                 .as_any()
                 .downcast_ref()
                 .expect(<span class="string">&quot;Type is ensured in previous step&quot;</span>);
@@ -774,11 +769,14 @@
     };
 }
 
-<span class="macro">macro_rules! </span>newtype_impl_eq_passthrough {
+<span class="macro">macro_rules! </span>newtype_impl_eq_passthrough_with_instance_id {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>PartialEq <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
-                <span class="self">self</span>.erased_eq(other)
+                <span class="kw">if </span><span class="self">self</span>.<span class="number">1 </span>!= other.<span class="number">1 </span>{
+                    <span class="kw">return </span><span class="bool-val">false</span>;
+                }
+                <span class="self">self</span>.erased_eq_no_instance_id(other)
             }
         }
 
@@ -792,6 +790,16 @@
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
                 std::fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+            }
+        }
+    };
+}
+
+<span class="macro">macro_rules! </span>newtype_impl_display_passthrough_with_instance_id {
+    (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
+        <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+                f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="self">self</span>.<span class="number">1</span>, <span class="self">self</span>.<span class="number">0</span>))
             }
         }
     };
@@ -869,6 +877,15 @@
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
         <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
     </span>}
+}
+
+<span class="kw">impl</span>&lt;T&gt; From&lt;T&gt; <span class="kw">for </span>Decoder
+<span class="kw">where
+    </span>T: PluginDecode + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">fn </span>from(value: T) -&gt; <span class="self">Self </span>{
+        Decoder(Arc::new(value))
+    }
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Decoder {
@@ -962,8 +979,7 @@
 }
 
 <span class="kw">impl </span>Decoder {
-    <span class="doccomment">/// Creates a static, type-erased decoder. Only call this a limited amout of times since it uses
-    /// `Box::leak` internally.
+    <span class="doccomment">/// Create [`Self`] form a typed version defined by the plugin
     </span><span class="kw">pub fn </span>from_typed(decoder: <span class="kw">impl </span>PluginDecode + Send + Sync + <span class="lifetime">&#39;static</span>) -&gt; Decoder {
         Decoder(Arc::new(decoder))
     }
@@ -976,14 +992,14 @@
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; Input;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
-    <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Input) -&gt; bool;
+    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Input) -&gt; bool;
 }
 
 <span class="macro">module_plugin_trait_define! </span>{
     Input, PluginInput, ModuleInput,
     { }
     {
-        <span class="macro">erased_eq!</span>(Input);
+        <span class="macro">erased_eq_no_instance_id!</span>(Input);
     }
 }
 
@@ -996,9 +1012,9 @@
 }
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(Input);
 
-<span class="macro">newtype_impl_eq_passthrough!</span>(Input);
+<span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(Input);
 
-<span class="macro">newtype_impl_display_passthrough!</span>(Input);
+<span class="macro">newtype_impl_display_passthrough_with_instance_id!</span>(Input);
 
 <span class="doccomment">/// Something that can be an [`Output`] in a [`Transaction`]
 ///
@@ -1007,7 +1023,7 @@
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; Output;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
-    <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Output) -&gt; bool;
+    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Output) -&gt; bool;
 }
 
 <span class="macro">dyn_newtype_define_with_instance_id! </span>{
@@ -1018,7 +1034,7 @@
     Output, PluginOutput, ModuleOutput,
     { }
     {
-        <span class="macro">erased_eq!</span>(Output);
+        <span class="macro">erased_eq_no_instance_id!</span>(Output);
     }
 }
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
@@ -1026,9 +1042,9 @@
 }
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(Output);
 
-<span class="macro">newtype_impl_eq_passthrough!</span>(Output);
+<span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(Output);
 
-<span class="macro">newtype_impl_display_passthrough!</span>(Output);
+<span class="macro">newtype_impl_display_passthrough_with_instance_id!</span>(Output);
 
 <span class="kw">pub enum </span>FinalizationError {
     SomethingWentWrong,
@@ -1038,7 +1054,7 @@
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; OutputOutcome;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
-    <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>OutputOutcome) -&gt; bool;
+    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>OutputOutcome) -&gt; bool;
 }
 
 <span class="macro">dyn_newtype_define_with_instance_id! </span>{
@@ -1049,7 +1065,7 @@
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
     { }
     {
-        <span class="macro">erased_eq!</span>(OutputOutcome);
+        <span class="macro">erased_eq_no_instance_id!</span>(OutputOutcome);
     }
 }
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
@@ -1057,7 +1073,7 @@
 }
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(OutputOutcome);
 
-<span class="macro">newtype_impl_eq_passthrough!</span>(OutputOutcome);
+<span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(OutputOutcome);
 
 <span class="macro">newtype_impl_display_passthrough!</span>(OutputOutcome);
 
@@ -1066,7 +1082,7 @@
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; ConsensusItem;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
 
-    <span class="kw">fn </span>erased_eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ConsensusItem) -&gt; bool;
+    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ConsensusItem) -&gt; bool;
 }
 
 <span class="macro">dyn_newtype_define_with_instance_id! </span>{
@@ -1077,7 +1093,7 @@
     ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
     { }
     {
-        <span class="macro">erased_eq!</span>(ConsensusItem);
+        <span class="macro">erased_eq_no_instance_id!</span>(ConsensusItem);
     }
 }
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
@@ -1085,7 +1101,7 @@
 }
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(ConsensusItem);
 
-<span class="macro">newtype_impl_eq_passthrough!</span>(ConsensusItem);
+<span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(ConsensusItem);
 
 <span class="macro">newtype_impl_display_passthrough!</span>(ConsensusItem);
 

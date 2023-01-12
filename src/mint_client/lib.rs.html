@@ -1566,7 +1566,7 @@
             config: <span class="self">self
                 </span>.config
                 .as_ref()
-                .get_module_by_kind::&lt;LightningModuleClientConfig&gt;(<span class="string">&quot;ln&quot;</span>)
+                .get_first_module_by_kind::&lt;LightningModuleClientConfig&gt;(<span class="string">&quot;ln&quot;</span>)
                 .expect(<span class="string">&quot;needs lightning module client config&quot;</span>)
                 .<span class="number">1</span>,
             context: <span class="self">self</span>.context.clone(),
@@ -1578,7 +1578,7 @@
             config: <span class="self">self
                 </span>.config
                 .as_ref()
-                .get_module_by_kind::&lt;MintClientConfig&gt;(<span class="string">&quot;mint&quot;</span>)
+                .get_first_module_by_kind::&lt;MintClientConfig&gt;(<span class="string">&quot;mint&quot;</span>)
                 .expect(<span class="string">&quot;needs mint module client config&quot;</span>)
                 .<span class="number">1</span>,
             epoch_pk: <span class="self">self</span>.config.as_ref().epoch_pk,
@@ -1592,7 +1592,7 @@
             config: <span class="self">self
                 </span>.config
                 .as_ref()
-                .get_module_by_kind::&lt;WalletClientConfig&gt;(<span class="string">&quot;wallet&quot;</span>)
+                .get_first_module_by_kind::&lt;WalletClientConfig&gt;(<span class="string">&quot;wallet&quot;</span>)
                 .expect(<span class="string">&quot;needs wallet module client config&quot;</span>)
                 .<span class="number">1</span>,
 
@@ -1797,7 +1797,7 @@
         <span class="kw">let </span>funding_amount = <span class="self">self
             </span>.config
             .as_ref()
-            .get_module_by_kind::&lt;WalletClientConfig&gt;(<span class="string">&quot;wallet&quot;</span>)
+            .get_first_module_by_kind::&lt;WalletClientConfig&gt;(<span class="string">&quot;wallet&quot;</span>)
             .expect(<span class="string">&quot;missing wallet module config&quot;</span>)
             .<span class="number">1
             </span>.fee_consensus
@@ -2186,7 +2186,7 @@
         <span class="kw">let </span>invoice = InvoiceBuilder::new(network_to_currency(
             <span class="self">self</span>.config
                 .<span class="number">0
-                </span>.get_module_by_kind::&lt;WalletClientConfig&gt;(<span class="string">&quot;wallet&quot;</span>)
+                </span>.get_first_module_by_kind::&lt;WalletClientConfig&gt;(<span class="string">&quot;wallet&quot;</span>)
                 .expect(<span class="string">&quot;must have wallet config available&quot;</span>)
                 .<span class="number">1
                 </span>.network,
