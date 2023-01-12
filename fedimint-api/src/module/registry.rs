@@ -4,48 +4,101 @@ use crate::core::Decoder;
 pub use crate::core::ModuleInstanceId;
 use crate::server::DynServerModule;
 
-#[derive(Debug, Clone)]
-pub struct ModuleRegistry<M>(BTreeMap<ModuleInstanceId, M>);
+/// Define a registry type, with some common methods
+macro_rules! impl_registry_common {
+    (
+        $(#[$outer:meta])*
+        struct $name:ident$(<$bound:ident>)?($t:ident)
+    ) => {
+        $(#[$outer])*
+        #[derive(Debug, Clone)]
+        pub struct $name$(<$bound>)?(BTreeMap<ModuleInstanceId, $t>);
 
-impl<M> Default for ModuleRegistry<M> {
-    fn default() -> Self {
-        ModuleRegistry(BTreeMap::new())
+
+        impl$(<$bound>)? $name$(<$bound>)? {
+
+            /// Create from an iterator of values
+            pub fn new(decoders: impl IntoIterator<Item = (ModuleInstanceId, $t)>) -> Self {
+                Self(decoders.into_iter().collect())
+            }
+
+            /// Return $t for a given `id`
+            ///
+            /// # Panics
+            /// If the module isn't in the registry
+            pub fn get(&self, id: ModuleInstanceId) -> &$t {
+                self.0
+                    .get(&id)
+                    .expect("CIs were decoded, so the module exists")
+            }
+
+            pub fn get_mut(&mut self, key: &ModuleInstanceId) -> Option<&mut $t> {
+                self.0.get_mut(key)
+            }
+
+            /// Iterator over all elements
+            // The struct using this macro is free to define a better alias
+            #[allow(dead_code)]
+            fn iter(&self) -> impl Iterator<Item = (ModuleInstanceId, &$t)> {
+                self.0.iter().map(|(id, v)| (*id, v))
+            }
+        }
+
+        impl$(<$bound>)? Default for $name$(<$bound>)? {
+            fn default() -> Self {
+                Self(BTreeMap::new())
+            }
+        }
+
+        impl$(<$bound>)? From<BTreeMap<ModuleInstanceId, $t>> for $name$(<$bound>)? {
+            fn from(value: BTreeMap<ModuleInstanceId, $t>) -> Self {
+                Self(value)
+            }
+        }
+
+        impl$(<$bound>)? FromIterator<(ModuleInstanceId, $t)> for $name$(<$bound>)? {
+            fn from_iter<T: IntoIterator<Item = (ModuleInstanceId, $t)>>(iter: T) -> Self {
+                Self(iter.into_iter().collect())
+            }
+        }
+    };
+}
+
+/// Define a custom-named alias to `Self::iter`
+// would be nicer with `concat_idents` but that's unstable
+macro_rules! impl_registry_iter_alias{
+    (
+        $name:ident$(<$bound:ident>)?($t:ident)::$method:ident
+    ) => {
+        impl$(<$bound>)? $name$(<$bound>)? {
+            /// Iterator over all modules
+            pub fn $method(&self) -> impl Iterator<Item = (ModuleInstanceId, &$t)> {
+                self.iter()
+            }
+        }
     }
 }
 
-impl<M> From<BTreeMap<ModuleInstanceId, M>> for ModuleRegistry<M> {
-    fn from(value: BTreeMap<ModuleInstanceId, M>) -> Self {
-        Self(value)
-    }
+impl_registry_common! {
+    /// Collection of decoders for their corresponding modules
+    struct ModuleDecoderRegistry(Decoder)
 }
 
-impl<M> ModuleRegistry<M> {
-    pub fn new(decoders: impl IntoIterator<Item = (ModuleInstanceId, M)>) -> Self {
-        Self(decoders.into_iter().collect())
-    }
+impl_registry_iter_alias! {
+    ModuleDecoderRegistry(Decoder)::iter_decoders
+}
 
-    /// Return an iterator over all modules
-    pub fn iter_modules(&self) -> impl Iterator<Item = (ModuleInstanceId, &M)> {
-        self.0.iter().map(|(id, m)| (*id, m))
-    }
+impl_registry_common! {
+    /// Collection of fedimint modules - either client or server side
+    struct Registry<M>(M)
+}
 
-    pub fn get_mut(&mut self, key: &ModuleInstanceId) -> Option<&mut M> {
-        self.0.get_mut(key)
-    }
-
-    /// Return the server module belonging to the module identified by the supplied `module_key`
-    ///
-    /// # Panics
-    /// If the module isn't in the registry
-    pub fn get(&self, module_key: ModuleInstanceId) -> &M {
-        self.0
-            .get(&module_key)
-            .expect("CIs were decoded, so the module exists")
-    }
+impl_registry_iter_alias! {
+    Registry<M>(M)::iter_modules
 }
 
 /// Collection of server modules
-pub type ServerModuleRegistry = ModuleRegistry<DynServerModule>;
+pub type ServerModuleRegistry = Registry<DynServerModule>;
 
 impl ServerModuleRegistry {
     /// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
@@ -54,32 +107,11 @@ impl ServerModuleRegistry {
         ModuleDecoderRegistry::from_iter(self.0.iter().map(|(&id, module)| (id, module.decoder())))
     }
 
-    // TODO: move into `ModuleRegistry` impl by splitting `module_key` fn into separate trait
     /// Add a module to the registry
     pub fn register_module(&mut self, id: ModuleInstanceId, module: DynServerModule) {
         assert!(
             self.0.insert(id, module).is_none(),
             "Module was already registered!"
         )
-    }
-}
-
-/// Collection of decoders belonging to modules, typically obtained from a `ModuleRegistry`
-#[derive(Debug, Default, Clone)]
-pub struct ModuleDecoderRegistry(BTreeMap<ModuleInstanceId, Decoder>);
-
-impl ModuleDecoderRegistry {
-    /// Return the decoder belonging to the module identified by the supplied `module_key`
-    ///
-    /// # Panics
-    /// If the decoder isn't in the registry
-    pub fn get(&self, module_key: ModuleInstanceId) -> &Decoder {
-        self.0.get(&module_key).expect("Module not found")
-    }
-}
-
-impl FromIterator<(ModuleInstanceId, Decoder)> for ModuleDecoderRegistry {
-    fn from_iter<T: IntoIterator<Item = (ModuleInstanceId, Decoder)>>(iter: T) -> Self {
-        ModuleDecoderRegistry(iter.into_iter().collect())
     }
 }

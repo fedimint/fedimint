@@ -27,7 +27,7 @@ use fedimint_api::core::{
 };
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_api::module::registry::{ModuleDecoderRegistry, Registry};
 use fedimint_api::module::ModuleInit;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -1056,7 +1056,7 @@ impl FederationTest {
                 cfg.clone(),
                 db.clone(),
                 module_inits.clone(),
-                ModuleRegistry::from(modules),
+                Registry::from(modules),
             );
             let decoders = consensus.decoders();
 

@@ -14,7 +14,7 @@ use fedimint_api::core::{
     MODULE_INSTANCE_ID_GLOBAL,
 };
 use fedimint_api::db::Database;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_api::module::registry::{ModuleDecoderRegistry, Registry};
 use fedimint_api::module::ModuleInit;
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::TaskGroup;
@@ -238,7 +238,7 @@ impl ModuleInitRegistry {
         cfg: &ServerConfig,
         db: &Database,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::DynServerModule>> {
+    ) -> anyhow::Result<Registry<fedimint_api::server::DynServerModule>> {
         let mut modules = BTreeMap::new();
 
         for (module_id, module_cfg) in &cfg.consensus.modules {
@@ -253,7 +253,7 @@ impl ModuleInitRegistry {
                 .await?;
             modules.insert(*module_id, module);
         }
-        Ok(ModuleRegistry::from(modules))
+        Ok(Registry::from(modules))
     }
 }
 

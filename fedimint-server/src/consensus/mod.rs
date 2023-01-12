@@ -11,7 +11,7 @@ use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry};
+use fedimint_api::module::registry::{ModuleDecoderRegistry, Registry, ServerModuleRegistry};
 use fedimint_api::module::{ModuleError, TransactionItemAmount};
 use fedimint_api::server::{DynServerModule, DynVerificationCache};
 use fedimint_api::task::TaskGroup;
@@ -123,7 +123,7 @@ impl FedimintConsensus {
         cfg: ServerConfig,
         db: Database,
         module_inits: ModuleInitRegistry,
-        modules: ModuleRegistry<DynServerModule>,
+        modules: Registry<DynServerModule>,
     ) -> Self {
         Self {
             rng_gen: Box::new(OsRngGen),
