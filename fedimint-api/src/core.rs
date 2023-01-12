@@ -8,9 +8,9 @@ use core::fmt;
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt::{Debug, Display};
+use std::io;
 use std::io::Read;
 use std::sync::Arc;
-use std::{io, ops};
 
 pub use bitcoin::KeyPair;
 use fedimint_api::{
@@ -83,14 +83,6 @@ impl fmt::Display for ModuleKind {
 impl From<&'static str> for ModuleKind {
     fn from(val: &'static str) -> Self {
         ModuleKind::from_static_str(val)
-    }
-}
-
-impl ops::Deref for ModuleKind {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -197,14 +189,9 @@ macro_rules! plugin_types_trait_impl {
     };
 }
 
-macro_rules! erased_eq {
+macro_rules! erased_eq_no_instance_id {
     ($newtype:ty) => {
-        fn erased_eq(&self, other: &$newtype) -> bool {
-            // TODO:?
-            // if self.module_key() != other.module_key() {
-            //     return false;
-            // }
-
+        fn erased_eq_no_instance_id(&self, other: &$newtype) -> bool {
             let other: &T = other
                 .as_any()
                 .downcast_ref()
@@ -215,11 +202,14 @@ macro_rules! erased_eq {
     };
 }
 
-macro_rules! newtype_impl_eq_passthrough {
+macro_rules! newtype_impl_eq_passthrough_with_instance_id {
     ($newtype:ty) => {
         impl PartialEq for $newtype {
             fn eq(&self, other: &Self) -> bool {
-                self.erased_eq(other)
+                if self.1 != other.1 {
+                    return false;
+                }
+                self.erased_eq_no_instance_id(other)
             }
         }
 
@@ -233,6 +223,16 @@ macro_rules! newtype_impl_display_passthrough {
         impl std::fmt::Display for $newtype {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 std::fmt::Display::fmt(&self.0, f)
+            }
+        }
+    };
+}
+
+macro_rules! newtype_impl_display_passthrough_with_instance_id {
+    ($newtype:ty) => {
+        impl std::fmt::Display for $newtype {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_fmt(format_args!("{}-{}", self.1, self.0))
             }
         }
     };
@@ -309,6 +309,15 @@ impl std::ops::Deref for Decoder {
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.0
+    }
+}
+
+impl<T> From<T> for Decoder
+where
+    T: PluginDecode + Send + Sync + 'static,
+{
+    fn from(value: T) -> Self {
+        Decoder(Arc::new(value))
     }
 }
 
@@ -403,8 +412,7 @@ impl ModuleDecode for Decoder {
 }
 
 impl Decoder {
-    /// Creates a static, type-erased decoder. Only call this a limited amout of times since it uses
-    /// `Box::leak` internally.
+    /// Create [`Self`] form a typed version defined by the plugin
     pub fn from_typed(decoder: impl PluginDecode + Send + Sync + 'static) -> Decoder {
         Decoder(Arc::new(decoder))
     }
@@ -417,14 +425,14 @@ pub trait ModuleInput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
     fn clone(&self, instance_id: ModuleInstanceId) -> Input;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq(&self, other: &Input) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &Input) -> bool;
 }
 
 module_plugin_trait_define! {
     Input, PluginInput, ModuleInput,
     { }
     {
-        erased_eq!(Input);
+        erased_eq_no_instance_id!(Input);
     }
 }
 
@@ -437,9 +445,9 @@ module_dyn_newtype_impl_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(Input);
 
-newtype_impl_eq_passthrough!(Input);
+newtype_impl_eq_passthrough_with_instance_id!(Input);
 
-newtype_impl_display_passthrough!(Input);
+newtype_impl_display_passthrough_with_instance_id!(Input);
 
 /// Something that can be an [`Output`] in a [`Transaction`]
 ///
@@ -448,7 +456,7 @@ pub trait ModuleOutput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
     fn clone(&self, instance_id: ModuleInstanceId) -> Output;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq(&self, other: &Output) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &Output) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
@@ -459,7 +467,7 @@ module_plugin_trait_define! {
     Output, PluginOutput, ModuleOutput,
     { }
     {
-        erased_eq!(Output);
+        erased_eq_no_instance_id!(Output);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
@@ -467,9 +475,9 @@ module_dyn_newtype_impl_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(Output);
 
-newtype_impl_eq_passthrough!(Output);
+newtype_impl_eq_passthrough_with_instance_id!(Output);
 
-newtype_impl_display_passthrough!(Output);
+newtype_impl_display_passthrough_with_instance_id!(Output);
 
 pub enum FinalizationError {
     SomethingWentWrong,
@@ -479,7 +487,7 @@ pub trait ModuleOutputOutcome: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
     fn clone(&self, module_instance_id: ModuleInstanceId) -> OutputOutcome;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq(&self, other: &OutputOutcome) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &OutputOutcome) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
@@ -490,7 +498,7 @@ module_plugin_trait_define! {
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
     { }
     {
-        erased_eq!(OutputOutcome);
+        erased_eq_no_instance_id!(OutputOutcome);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
@@ -498,7 +506,7 @@ module_dyn_newtype_impl_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(OutputOutcome);
 
-newtype_impl_eq_passthrough!(OutputOutcome);
+newtype_impl_eq_passthrough_with_instance_id!(OutputOutcome);
 
 newtype_impl_display_passthrough!(OutputOutcome);
 
@@ -507,7 +515,7 @@ pub trait ModuleConsensusItem: Debug + Display + DynEncodable {
     fn clone(&self, module_instance_id: ModuleInstanceId) -> ConsensusItem;
     fn dyn_hash(&self) -> u64;
 
-    fn erased_eq(&self, other: &ConsensusItem) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &ConsensusItem) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
@@ -518,7 +526,7 @@ module_plugin_trait_define! {
     ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
     { }
     {
-        erased_eq!(ConsensusItem);
+        erased_eq_no_instance_id!(ConsensusItem);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
@@ -526,7 +534,7 @@ module_dyn_newtype_impl_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(ConsensusItem);
 
-newtype_impl_eq_passthrough!(ConsensusItem);
+newtype_impl_eq_passthrough_with_instance_id!(ConsensusItem);
 
 newtype_impl_display_passthrough!(ConsensusItem);
 

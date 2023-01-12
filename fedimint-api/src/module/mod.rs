@@ -145,8 +145,6 @@ macro_rules! __api_endpoint {
 
 pub use __api_endpoint as api_endpoint;
 
-use crate::module::registry::ModuleKey;
-
 type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
 type HandlerFn<M> = Box<
     dyn for<'a> Fn(
@@ -224,7 +222,7 @@ pub trait ModuleInit {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleKey, DkgPeerMsg>,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
         module_id: ModuleInstanceId,
         peers: &[PeerId],

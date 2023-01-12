@@ -52,8 +52,10 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
-    pub fn module_kinds_iter(&self) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
-        self.consensus.module_kinds_iter()
+    pub fn iter_module_instances(
+        &self,
+    ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
+        self.consensus.iter_module_instances()
     }
 }
 
@@ -72,7 +74,7 @@ pub struct ServerConfigPrivate {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
     /// Secret material from modules
-    pub modules: BTreeMap<ModuleInstanceId, serde_json::Value>,
+    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +99,9 @@ pub struct ServerConfigConsensus {
 }
 
 impl ServerConfigConsensus {
-    pub fn module_kinds_iter(&self) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
+    pub fn iter_module_instances(
+        &self,
+    ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
         self.modules.iter().map(|(k, v)| (*k, v.kind()))
     }
 }
@@ -118,7 +122,7 @@ pub struct ServerConfigLocal {
     /// How many API connections we will accept
     pub max_connections: u32,
     /// Non-consensus, non-private configuration from modules
-    pub modules: BTreeMap<ModuleInstanceId, serde_json::Value>,
+    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,7 +166,7 @@ impl ServerConfigConsensus {
                         module_config_gens
                             .get(kind)
                             .ok_or_else(|| {
-                                anyhow::format_err!("module config gen not found: {kind:?}")
+                                anyhow::format_err!("module config gen not found: {kind}")
                             })?
                             .to_client_config_from_consensus_value(v.value().clone())?,
                     ))
@@ -196,6 +200,7 @@ impl ModuleInitRegistry {
         self.0.get(k)
     }
 
+    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
     pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
         for hardcoded_module in ["mint", "ln", "wallet"] {
             if !self
@@ -207,7 +212,7 @@ impl ModuleInitRegistry {
         }
 
         LegacyInitOrderIter {
-            i: 0,
+            next_id: 0,
             rest: self.0.clone(),
         }
     }
@@ -219,7 +224,7 @@ impl ModuleInitRegistry {
         let mut modules = BTreeMap::new();
         for (id, kind) in module_kinds {
             let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind:?}")
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
             };
 
             modules.insert(id, init.decoder());
@@ -239,7 +244,7 @@ impl ModuleInitRegistry {
             let kind = module_cfg.kind();
 
             let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind:?}")
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
             };
             info!(module_instance_id = *module_id, kind = %kind, "Init  module");
             let module = init
@@ -252,8 +257,15 @@ impl ModuleInitRegistry {
 }
 
 /// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
+/// Returning each `kind` exactly once, so that `LEGACY_HARDCODED_` constants
+/// correspond to correct module kind.
+///
+/// We would like to get rid of it eventually, but old client and test code assumes
+/// it in multiple places, and it will take work to fix it, while we want new code
+/// to not assume this 1:1 relationship.
 pub struct LegacyInitOrderIter {
-    i: u16,
+    /// Counter of what module id will this returned value get assigned
+    next_id: ModuleInstanceId,
     rest: BTreeMap<ModuleKind, DynModuleInit>,
 }
 
@@ -261,7 +273,7 @@ impl Iterator for LegacyInitOrderIter {
     type Item = (ModuleKind, DynModuleInit);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let ret = match self.i {
+        let ret = match self.next_id {
             LEGACY_HARDCODED_INSTANCE_ID_LN => {
                 let kind = ModuleKind::from_static_str("ln");
                 Some((
@@ -287,7 +299,7 @@ impl Iterator for LegacyInitOrderIter {
         };
 
         if ret.is_some() {
-            self.i += 1;
+            self.next_id += 1;
         }
         ret
     }

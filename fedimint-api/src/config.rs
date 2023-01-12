@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::io::Write;
-use std::ops::{self, Mul};
+use std::ops::Mul;
 use std::str::FromStr;
 
 use anyhow::bail;
@@ -58,14 +58,6 @@ impl JsonWithKind {
     }
     pub fn is_kind(&self, kind: &ModuleKind) -> bool {
         &self.kind == kind
-    }
-}
-
-impl ops::Deref for JsonWithKind {
-    type Target = serde_json::Value;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
     }
 }
 
@@ -141,13 +133,18 @@ impl ClientConfig {
         }
     }
 
-    pub fn get_module_by_kind<T: DeserializeOwned>(
+    /// (soft-deprecated): Get the first instance of a module of a given kind in defined in config
+    ///
+    /// Since module ids are numerical and for time being we only support 1:1 mint, wallet, ln
+    /// module code in the client, this is useful, but please write any new code that avoids
+    /// assumptions about available modules.
+    pub fn get_first_module_by_kind<T: DeserializeOwned>(
         &self,
         kind: impl Into<ModuleKind>,
     ) -> anyhow::Result<(ModuleInstanceId, T)> {
         let kind: ModuleKind = kind.into();
         let Some((id, module_cfg)) = self.modules.iter().find(|(_, v)| v.is_kind(&kind)) else {
-            anyhow::bail!("Module kind {kind:?} not found")
+            anyhow::bail!("Module kind {kind} not found")
         };
 
         Ok((*id, serde_json::from_value(module_cfg.0.value().clone())?))
@@ -206,13 +203,17 @@ impl ClientModuleConfig {
     pub fn new(kind: ModuleKind, value: serde_json::Value) -> Self {
         Self(JsonWithKind::new(kind, value))
     }
-}
 
-impl ops::Deref for ClientModuleConfig {
-    type Target = JsonWithKind;
+    pub fn is_kind(&self, kind: &ModuleKind) -> bool {
+        self.0.is_kind(kind)
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    pub fn kind(&self) -> &ModuleKind {
+        self.0.kind()
+    }
+
+    pub fn value(&self) -> &serde_json::Value {
+        self.0.value()
     }
 }
 
@@ -227,17 +228,13 @@ impl ClientModuleConfig {
 /// See [`ClientModuleConfig`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ServerModuleConfig {
-    pub local: serde_json::Value,
-    pub private: serde_json::Value,
+    pub local: JsonWithKind,
+    pub private: JsonWithKind,
     pub consensus: JsonWithKind,
 }
 
 impl ServerModuleConfig {
-    pub fn from(
-        local: serde_json::Value,
-        private: serde_json::Value,
-        consensus: JsonWithKind,
-    ) -> Self {
+    pub fn from(local: JsonWithKind, private: JsonWithKind, consensus: JsonWithKind) -> Self {
         Self {
             local,
             private,
@@ -246,8 +243,8 @@ impl ServerModuleConfig {
     }
 
     pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
-        let local = serde_json::from_value(self.local.clone())?;
-        let private = serde_json::from_value(self.private.clone())?;
+        let local = serde_json::from_value(self.local.value().clone())?;
+        let private = serde_json::from_value(self.private.value().clone())?;
         let consensus = serde_json::from_value(self.consensus.value().clone())?;
 
         Ok(TypedServerModuleConfig::from_parts(
@@ -282,8 +279,14 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
         let (kind, local, private, consensus) = self.to_parts();
 
         ServerModuleConfig {
-            local: serde_json::to_value(local).expect("serialization can't fail"),
-            private: serde_json::to_value(private).expect("serialization can't fail"),
+            local: JsonWithKind::new(
+                kind.clone(),
+                serde_json::to_value(local).expect("serialization can't fail"),
+            ),
+            private: JsonWithKind::new(
+                kind.clone(),
+                serde_json::to_value(private).expect("serialization can't fail"),
+            ),
             consensus: JsonWithKind::new(
                 kind,
                 serde_json::to_value(consensus).expect("serialization can't fail"),
