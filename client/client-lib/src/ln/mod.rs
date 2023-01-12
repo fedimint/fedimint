@@ -334,7 +334,7 @@ mod tests {
     use bitcoin::Address;
     use fedimint_api::config::ConfigGenParams;
     use fedimint_api::core::{
-        OutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     };
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
@@ -373,7 +373,7 @@ mod tests {
             let mint = self.mint.lock().await;
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![SerdeOutputOutcome::from(&OutputOutcome::from_typed(
+                outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
                     LEGACY_HARDCODED_INSTANCE_ID_MINT,
                     mint.output_outcome(OutPoint {
                         txid: tx,

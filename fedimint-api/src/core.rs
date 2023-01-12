@@ -181,7 +181,7 @@ macro_rules! plugin_types_trait_impl {
 
         impl fedimint_api::core::Output for $output {}
 
-        impl fedimint_api::core::PluginOutputOutcome for $outcome {}
+        impl fedimint_api::core::OutputOutcome for $outcome {}
 
         impl fedimint_api::core::PluginConsensusItem for $ci {}
 
@@ -247,7 +247,7 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
 pub trait Decoder: Debug + Send + Sync + 'static {
     type Input: Input;
     type Output: Output;
-    type OutputOutcome: PluginOutputOutcome;
+    type OutputOutcome: OutputOutcome;
     type ConsensusItem: PluginConsensusItem;
 
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
@@ -289,7 +289,7 @@ pub trait IDecoder: Debug {
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<OutputOutcome, DecodeError>;
+    ) -> Result<DynOutputOutcome, DecodeError>;
 
     /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
     fn decode_consensus_item(
@@ -358,8 +358,8 @@ where
         r: &mut dyn Read,
 
         instance_id: ModuleInstanceId,
-    ) -> Result<OutputOutcome, DecodeError> {
-        Ok(OutputOutcome::from_typed(
+    ) -> Result<DynOutputOutcome, DecodeError> {
+        Ok(DynOutputOutcome::from_typed(
             instance_id,
             <Self as Decoder>::decode_output_outcome(self, r)?,
         ))
@@ -398,7 +398,7 @@ impl IDecoder for DynDecoder {
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
-    ) -> Result<OutputOutcome, DecodeError> {
+    ) -> Result<DynOutputOutcome, DecodeError> {
         self.0.decode_output_outcome(r, instance_id)
     }
 
@@ -483,32 +483,32 @@ pub enum FinalizationError {
     SomethingWentWrong,
 }
 
-pub trait ModuleOutputOutcome: Debug + Display + DynEncodable {
+pub trait IOutputOutcome: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
-    fn clone(&self, module_instance_id: ModuleInstanceId) -> OutputOutcome;
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynOutputOutcome;
     fn dyn_hash(&self) -> u64;
-    fn erased_eq_no_instance_id(&self, other: &OutputOutcome) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynOutputOutcome) -> bool;
 }
 
 dyn_newtype_define_with_instance_id! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
-    pub OutputOutcome(Box<ModuleOutputOutcome>)
+    pub DynOutputOutcome(Box<IOutputOutcome>)
 }
 module_plugin_trait_define! {
-    OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
+    DynOutputOutcome, OutputOutcome, IOutputOutcome,
     { }
     {
-        erased_eq_no_instance_id!(OutputOutcome);
+        erased_eq_no_instance_id!(DynOutputOutcome);
     }
 }
 module_dyn_newtype_impl_encode_decode! {
-    OutputOutcome, decode_output_outcome
+    DynOutputOutcome, decode_output_outcome
 }
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(OutputOutcome);
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutputOutcome);
 
-newtype_impl_eq_passthrough_with_instance_id!(OutputOutcome);
+newtype_impl_eq_passthrough_with_instance_id!(DynOutputOutcome);
 
-newtype_impl_display_passthrough!(OutputOutcome);
+newtype_impl_display_passthrough!(DynOutputOutcome);
 
 pub trait ModuleConsensusItem: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);

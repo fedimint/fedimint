@@ -150,7 +150,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
-    ) -> Option<OutputOutcome>;
+    ) -> Option<DynOutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///
@@ -373,10 +373,10 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
-    ) -> Option<OutputOutcome> {
+    ) -> Option<DynOutputOutcome> {
         <Self as ServerModule>::output_status(self, dbtx, out_point)
             .await
-            .map(|v| OutputOutcome::from_typed(module_instance_id, v))
+            .map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
     }
 
     /// Queries the database and returns all assets and liabilities of the module.

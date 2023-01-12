@@ -237,7 +237,7 @@ mod tests {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
                 outputs: vec![SerdeOutputOutcome::from(
-                    &fedimint_api::core::OutputOutcome::from_typed(
+                    &fedimint_api::core::DynOutputOutcome::from_typed(
                         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
                         WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()),
                     ),
