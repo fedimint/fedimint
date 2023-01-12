@@ -834,7 +834,7 @@ impl Wallet {
         let bitcoind_net = bitcoind_rpc
             .get_network()
             .await
-            .map_err(|e| WalletError::RpcError(e.into()))?;
+            .map_err(WalletError::RpcError)?;
         if bitcoind_net != cfg.consensus.network {
             return Err(WalletError::WrongNetwork(
                 cfg.consensus.network,

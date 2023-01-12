@@ -133,7 +133,7 @@ where
                 code: RPC_VERIFY_ALREADY_IN_CHAIN,
                 ..
             }))) => Ok(()),
-            Err(e) => Err(anyhow::Error::from(e).into()),
+            Err(e) => Err(anyhow::Error::from(e)),
             Ok(_) => Ok(()),
         })
     }
