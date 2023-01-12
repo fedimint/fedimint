@@ -173,11 +173,6 @@
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::bail;
@@ -192,7 +187,6 @@
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use </span><span class="kw">crate</span>::PegInDescriptor;
@@ -208,10 +202,7 @@
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>WalletConfigLocal {
-    <span class="doccomment">/// Configuration for connecting to our Bitcoin node
-    </span><span class="kw">pub </span>btc_rpc: Url,
-}
+</span><span class="kw">pub struct </span>WalletConfigLocal;
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfigPrivate {
@@ -321,7 +312,6 @@
         pubkeys: BTreeMap&lt;PeerId, CompressedPublicKey&gt;,
         sk: SecretKey,
         threshold: usize,
-        btc_rpc: Url,
         network: Network,
         finality_delay: u32,
     ) -&gt; <span class="self">Self </span>{
@@ -330,7 +320,7 @@
         );
 
         <span class="self">Self </span>{
-            local: WalletConfigLocal { btc_rpc },
+            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,

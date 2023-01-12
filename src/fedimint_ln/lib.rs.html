@@ -1023,6 +1023,8 @@
 <a href="#1023" id="1023">1023</a>
 <a href="#1024" id="1024">1024</a>
 <a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1040,6 +1042,7 @@
 <span class="kw">pub mod </span>contracts;
 <span class="kw">pub mod </span>db;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+<span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::ops::Sub;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -1271,6 +1274,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         _db: Database,
+        _env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(LightningModule::new(cfg.to_typed()<span class="question-mark">?</span>).into())

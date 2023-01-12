@@ -907,8 +907,18 @@
 <a href="#907" id="907">907</a>
 <a href="#908" id="908">908</a>
 <a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::os::unix::prelude::OsStrExt;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -1149,6 +1159,13 @@
     ) -&gt; anyhow::Result&lt;ModuleRegistry&lt;fedimint_api::server::DynServerModule&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
 
+        <span class="kw">let </span>env: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = std::env::vars_os()
+            <span class="comment">// We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            </span>.filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(<span class="string">b&quot;FM_&quot;</span>))
+            .collect();
+
         <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
             <span class="kw">let </span>kind = module_cfg.kind();
 
@@ -1157,7 +1174,12 @@
             };
             <span class="macro">info!</span>(module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">&quot;Init  module&quot;</span>);
             <span class="kw">let </span>module = init
-                .init(cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>, db.clone(), task_group)
+                .init(
+                    cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
+                    db.clone(),
+                    <span class="kw-2">&amp;</span>env,
+                    task_group,
+                )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             modules.insert(<span class="kw-2">*</span>module_id, module);
         }
@@ -1616,7 +1638,6 @@
         max_denomination: Amount,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
         federation_name: String,
-        bitcoind_rpc: <span class="kw-2">&amp;</span>Url,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
     ) -&gt; ServerConfigParams {
@@ -1646,8 +1667,7 @@
                 .attach(WalletConfigGenParams {
                     network,
                     <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit anyway
-                    </span>bitcoin_rpc: bitcoind_rpc.clone(),
-                    finality_delay,
+                    </span>finality_delay,
                 })
                 .attach(MintConfigGenParams {
                     mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
@@ -1680,7 +1700,6 @@
         max_denomination: Amount,
         base_port: u16,
         federation_name: <span class="kw-2">&amp;</span>str,
-        bitcoind_rpc: <span class="kw-2">&amp;</span>Url,
     ) -&gt; HashMap&lt;PeerId, ServerConfigParams&gt; {
         <span class="kw">let </span>keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers
             .iter()
@@ -1721,7 +1740,6 @@
                     max_denomination,
                     <span class="kw-2">&amp;</span>peer_params,
                     federation_name.to_string(),
-                    bitcoind_rpc,
                     bitcoin::network::constants::Network::Regtest,
                     <span class="number">10</span>,
                 );

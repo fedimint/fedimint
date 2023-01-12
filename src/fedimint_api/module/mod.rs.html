@@ -372,11 +372,14 @@
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
 <a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -585,6 +588,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         db: Database,
+        env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt;;
 

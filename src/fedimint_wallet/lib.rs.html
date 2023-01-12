@@ -1600,8 +1600,16 @@
 <a href="#1600" id="1600">1600</a>
 <a href="#1601" id="1601">1601</a>
 <a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
+<a href="#1605" id="1605">1605</a>
+<a href="#1606" id="1606">1606</a>
+<a href="#1607" id="1607">1607</a>
+<a href="#1608" id="1608">1608</a>
+<a href="#1609" id="1609">1609</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
+<span class="kw">use </span>std::ffi::{OsStr, OsString};
 <span class="kw">use </span>std::hash::Hasher;
 <span class="kw">use </span>std::ops::Sub;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1620,6 +1628,7 @@
 };
 <span class="kw">use </span>bitcoin::{PackedLockTime, Sequence};
 <span class="kw">use </span>config::WalletConfigConsensus;
+<span class="kw">use </span>fedimint_api::bitcoin_rpc::{fm_bitcoind_rpc_env_value_to_url, FM_BITCOIND_RPC_ENV};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
@@ -1652,7 +1661,6 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::common::WalletDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
@@ -1836,9 +1844,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         db: Database,
+        env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="prelude-val">Ok</span>(Wallet::new(cfg.to_typed()<span class="question-mark">?</span>, db, task_group).<span class="kw">await</span><span class="question-mark">?</span>.into())
+        <span class="prelude-val">Ok</span>(Wallet::new(cfg.to_typed()<span class="question-mark">?</span>, db, env, task_group)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1867,7 +1878,6 @@
                         .collect(),
                     <span class="kw-2">*</span>sk,
                     peers.threshold(),
-                    params.bitcoin_rpc.clone(),
                     params.network,
                     params.finality_delay,
                 );
@@ -1929,7 +1939,6 @@
             peer_peg_in_keys,
             sk,
             peers.threshold(),
-            params.bitcoin_rpc.clone(),
             params.network,
             params.finality_delay,
         );
@@ -1959,7 +1968,6 @@
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfigGenParams {
     <span class="kw">pub </span>network: bitcoin::network::constants::Network,
-    <span class="kw">pub </span>bitcoin_rpc: Url,
     <span class="kw">pub </span>finality_delay: u32,
 }
 
@@ -2408,10 +2416,16 @@
     <span class="kw">pub async fn </span>new(
         cfg: WalletConfig,
         db: Database,
+        env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Wallet&gt; {
+        <span class="kw">let </span>bitcoin_url = fm_bitcoind_rpc_env_value_to_url(
+            env.get(OsStr::new(FM_BITCOIND_RPC_ENV))
+                .map(OsString::as_os_str),
+        )<span class="question-mark">?</span>;
+
         <span class="kw">let </span>btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-            <span class="kw-2">&amp;</span>cfg.local.btc_rpc,
+            <span class="kw-2">&amp;</span>bitcoin_url,
             task_group.make_handle(),
         )<span class="question-mark">?</span>;
 

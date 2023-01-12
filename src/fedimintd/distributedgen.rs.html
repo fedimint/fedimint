@@ -138,8 +138,6 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -186,7 +184,6 @@
     max_denomination: Amount,
     federation_name: String,
     certs: Vec&lt;String&gt;,
-    bitcoind_rpc: <span class="kw-2">&amp;</span>Url,
     network: bitcoin::network::constants::Network,
     finality_delay: u32,
     pk: rustls::PrivateKey,
@@ -214,7 +211,6 @@
         max_denomination,
         <span class="kw-2">&amp;</span>peers,
         federation_name,
-        bitcoind_rpc,
         network,
         finality_delay,
     );

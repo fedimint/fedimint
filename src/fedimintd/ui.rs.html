@@ -376,10 +376,6 @@
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -547,7 +543,6 @@
                 max_denomination,
                 params.federation_name,
                 connection_strings,
-                <span class="kw-2">&amp;</span>params.bitcoind_rpc,
                 params.network,
                 params.finality_delay,
                 rustls::PrivateKey(pk_bytes),
@@ -651,8 +646,6 @@
     <span class="comment">// Update state
     </span>state.params = <span class="prelude-val">Some</span>(FederationParameters {
         federation_name: form.federation_name,
-        <span class="comment">// TODO: check that bitcoinrpc actually works here
-        </span>bitcoind_rpc: form.bitcoind_rpc,
         num_guardians: form.guardians_count,
         bind_api: form.bind_api,
         bind_p2p: form.bind_p2p,
@@ -708,7 +701,6 @@
     federation_name: String,
     guardian: Guardian,
     num_guardians: u32,
-    bitcoind_rpc: Url,
     finality_delay: u32,
     network: Network,
     bind_api: SocketAddr,

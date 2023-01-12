@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {};
+window.SIDEBAR_ITEMS = {"constant":[["FM_BITCOIND_RPC_DEFAULT_FALLBACK","Default url that will be used if [`FM_BITCOIND_RPC_ENV`] is not set"],["FM_BITCOIND_RPC_ENV","Name of the env value used for passing bitcoind rpc url to modules that need it"]],"fn":[["fm_bitcoind_rpc_env_value_to_url","Get the value of bitcoin rpc url to use, from the value of env variable"],["read_bitcoin_rpc_env_from_global_env","Get the value of url the module would use by reading it from process environemnt"]]};

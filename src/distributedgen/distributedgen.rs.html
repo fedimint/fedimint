@@ -228,12 +228,6 @@
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -309,10 +303,6 @@
         <span class="doccomment">/// Comma-separated list of connection certs from all peers (including ours)
         </span><span class="attr">#[arg(long = <span class="string">&quot;certs&quot;</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
         </span>certs: Vec&lt;String&gt;,
-
-        <span class="doccomment">/// `bitcoind` json rpc endpoint
-        </span><span class="attr">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;http://127.0.0.1:18443&quot;</span>)]
-        </span>bitcoind_rpc: Url,
 
         <span class="doccomment">/// Max denomination of notes issued by the federation (in millisats)
         /// default = 1 BTC
@@ -398,7 +388,6 @@
             certs,
             bind_p2p,
             bind_api,
-            bitcoind_rpc,
             max_denomination,
             network,
             finality_delay,
@@ -413,7 +402,6 @@
                 max_denomination,
                 federation_name,
                 certs,
-                <span class="kw-2">&amp;</span>bitcoind_rpc,
                 network,
                 finality_delay,
                 rustls::PrivateKey(pk_bytes),
