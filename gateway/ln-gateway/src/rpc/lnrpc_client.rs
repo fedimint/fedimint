@@ -3,17 +3,20 @@ use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 use async_trait::async_trait;
 use fedimint_api::{dyn_newtype_define, task::TaskGroup};
 use fedimint_server::modules::ln::contracts::Preimage;
+use futures::{stream, StreamExt};
 use lightning_invoice::Invoice;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tonic::{transport::Channel, Request};
+use tracing::error;
 
 use super::HtlcInterceptPayload;
 use crate::{
     gatewaylnrpc::{
         gateway_lightning_client::GatewayLightningClient, GetPubKeyRequest, GetPubKeyResponse,
+        PayInvoiceRequest, PayInvoiceResponse,
     },
-    Result,
+    LightningError, LnGatewayError, Result,
 };
 
 #[derive(Debug, Clone)]
@@ -99,8 +102,41 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(PublicKey::from_slice(&pub_key).expect("Failed to parse pubkey"))
     }
 
-    async fn pay_invoice(&self, _invoices: Vec<InvoiceInfo>) -> Result<Vec<Result<Preimage>>> {
-        unimplemented!()
+    async fn pay_invoice(&self, invoices: Vec<InvoiceInfo>) -> Result<Vec<Result<Preimage>>> {
+        let requests = stream::iter(invoices.into_iter().map(|ii| PayInvoiceRequest {
+            invoice: ii.invoice.to_string(),
+            max_delay: ii.max_delay,
+            max_fee_percent: ii.max_fee_percent,
+        }));
+
+        let mut stream = self
+            .client
+            .lock()
+            .await
+            .pay_invoice(Request::new(requests))
+            .await
+            .expect("Failed to pay invoice")
+            .into_inner();
+
+        let mut output: Vec<Result<Preimage>> = Vec::new();
+
+        while let Some(response) = stream.next().await {
+            let res = match response {
+                Ok(PayInvoiceResponse { preimage, .. }) => {
+                    let slice: [u8; 32] = preimage.try_into().expect("Failed to parse preimage");
+                    Ok(Preimage(slice))
+                }
+                Err(status) => {
+                    error!("Failed to pay invoice: {}", status.message());
+                    Err(LnGatewayError::CouldNotRoute(LightningError(Some(
+                        status.code().into(),
+                    ))))
+                }
+            };
+            output.push(res);
+        }
+
+        Ok(output)
     }
 
     async fn subscribe_intercept_htlcs(
