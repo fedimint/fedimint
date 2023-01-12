@@ -198,11 +198,16 @@ where
     }
 }
 
-/// Logic responsible for module's initialization, config generation and validation
+/// Module Generation
 ///
-/// Once the module config is ready, the module can be instantiated via `[Self::init]`.
+/// This trait contains the methods responsible for the module's
+/// - initialization
+/// - config generation
+/// - config validation
+///
+/// Once the module configuration is ready, the module can be instantiated via `[Self::init]`.
 #[async_trait]
-pub trait ModuleInit {
+pub trait ModuleGen {
     fn decoder(&self) -> DynDecoder;
 
     fn module_kind(&self) -> ModuleKind;

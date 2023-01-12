@@ -21,7 +21,7 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleInit,
+    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -138,7 +138,7 @@ pub struct VerifiedNotes {
 pub struct MintConfigGenerator;
 
 #[async_trait]
-impl ModuleInit for MintConfigGenerator {
+impl ModuleGen for MintConfigGenerator {
     fn decoder(&self) -> DynDecoder {
         DynDecoder::from_typed(MintDecoder)
     }
@@ -1132,7 +1132,7 @@ mod test {
     use fedimint_api::config::{
         ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
-    use fedimint_api::module::ModuleInit;
+    use fedimint_api::module::ModuleGen;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 

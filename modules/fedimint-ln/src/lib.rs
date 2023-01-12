@@ -36,7 +36,7 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleInit,
+    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -234,7 +234,7 @@ pub struct LightningVerificationCache;
 pub struct LightningModuleConfigGen;
 
 #[async_trait]
-impl ModuleInit for LightningModuleConfigGen {
+impl ModuleGen for LightningModuleConfigGen {
     fn decoder(&self) -> DynDecoder {
         DynDecoder::from_typed(LightningDecoder)
     }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use fedimint_api::db::Database;
-use fedimint_api::module::ModuleInit;
+use fedimint_api::module::ModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningModuleConfigGen;
 use fedimint_mint::MintConfigGenerator;
@@ -121,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
     task_group.install_kill_handler();
 
     let module_inits = ModuleInitRegistry::from(vec![
-        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
         Arc::new(MintConfigGenerator),
         Arc::new(LightningModuleConfigGen),
     ]);

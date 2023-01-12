@@ -33,7 +33,7 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, InputMeta, IntoModuleError, ModuleInit, TransactionItemAmount,
+    api_endpoint, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -222,7 +222,7 @@ impl std::fmt::Display for WalletOutputOutcome {
 pub struct WalletConfigGenerator;
 
 #[async_trait]
-impl ModuleInit for WalletConfigGenerator {
+impl ModuleGen for WalletConfigGenerator {
     fn decoder(&self) -> DynDecoder {
         DynDecoder::from_typed(WalletDecoder)
     }
