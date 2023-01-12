@@ -11,7 +11,7 @@ use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleInit, TransactionItemAmount};
+use fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleGen, TransactionItemAmount};
 use fedimint_api::{OutPoint, PeerId, ServerModule};
 
 pub mod btc;
@@ -45,7 +45,7 @@ where
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<FakeFed<Module>>
     where
-        ConfGen: ModuleInit,
+        ConfGen: ModuleGen,
         F: Fn(ServerModuleConfig, Database) -> FF,
         FF: Future<Output = anyhow::Result<Module>>,
     {

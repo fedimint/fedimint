@@ -35,14 +35,14 @@ pub struct LightningConfigPrivate {
     pub threshold_sec_key: SerdeSecret<threshold_crypto::SecretKeyShare>,
 }
 
-impl TypedClientModuleConfig for LightningModuleClientConfig {
+impl TypedClientModuleConfig for LightningClientConfig {
     fn kind(&self) -> ModuleKind {
         KIND
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct LightningModuleClientConfig {
+pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
 }
@@ -51,7 +51,7 @@ impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
         ClientModuleConfig::new(
             KIND,
-            serde_json::to_value(&LightningModuleClientConfig {
+            serde_json::to_value(&LightningClientConfig {
                 threshold_pub_key: self.threshold_pub_keys.public_key(),
                 fee_consensus: self.fee_consensus.clone(),
             })

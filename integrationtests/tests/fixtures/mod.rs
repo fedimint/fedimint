@@ -29,7 +29,7 @@ use fedimint_api::core::{
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_api::module::ModuleInit;
+use fedimint_api::module::ModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::{timeout, TaskGroup};
@@ -38,7 +38,7 @@ use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_ln::{LightningGateway, LightningModuleConfigGen};
+use fedimint_ln::{LightningConfigGenerator, LightningGateway};
 use fedimint_mint::{MintConfigGenerator, MintOutput};
 use fedimint_server::config::{connect, ServerConfig};
 use fedimint_server::config::{ModuleInitRegistry, ServerConfigParams};
@@ -161,9 +161,9 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_inits = ModuleInitRegistry::from(vec![
-        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     match env::var("FM_TEST_DISABLE_MOCKS") {

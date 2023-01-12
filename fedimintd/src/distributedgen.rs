@@ -5,11 +5,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::ensure;
-use fedimint_api::module::ModuleInit;
+use fedimint_api::module::ModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
-use fedimint_ln::LightningModuleConfigGen;
+use fedimint_ln::LightningConfigGenerator;
 use fedimint_mint::MintConfigGenerator;
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
@@ -85,9 +85,9 @@ pub async fn run_dkg(
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
     let module_config_gens = ModuleInitRegistry::from(vec![
-        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleInit + Send + Sync>,
+        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     let result = ServerConfig::distributed_gen(

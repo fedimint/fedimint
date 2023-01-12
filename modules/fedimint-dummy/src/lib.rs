@@ -17,7 +17,7 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleInit, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -49,7 +49,7 @@ pub struct DummyVerificationCache;
 pub struct DummyConfigGenerator;
 
 #[async_trait]
-impl ModuleInit for DummyConfigGenerator {
+impl ModuleGen for DummyConfigGenerator {
     fn decoder(&self) -> DynDecoder {
         DynDecoder::from_typed(DummyDecoder)
     }

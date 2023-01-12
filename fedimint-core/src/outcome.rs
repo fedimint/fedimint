@@ -28,7 +28,7 @@ pub mod legacy {
         AccountContractOutcome, ContractOutcome, DecryptedPreimage, OutgoingContractOutcome,
         Preimage,
     };
-    use fedimint_ln::{LightningModule, LightningOutputOutcome};
+    use fedimint_ln::{Lightning, LightningOutputOutcome};
     use fedimint_mint::{Mint, MintOutputOutcome};
     use fedimint_wallet::{Wallet, WalletOutputOutcome};
 
@@ -38,7 +38,7 @@ pub mod legacy {
     pub enum OutputOutcome {
         Mint(<Mint as ServerModule>::OutputOutcome),
         Wallet(<Wallet as ServerModule>::OutputOutcome),
-        LN(<LightningModule as ServerModule>::OutputOutcome),
+        LN(<Lightning as ServerModule>::OutputOutcome),
     }
 
     impl From<fedimint_api::core::DynOutputOutcome> for OutputOutcome {

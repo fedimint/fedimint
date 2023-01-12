@@ -202,7 +202,7 @@ pub mod legacy {
         // TODO: maybe treat every coin as a seperate input?
         Mint(<fedimint_mint::Mint as ServerModule>::Input),
         Wallet(<fedimint_wallet::Wallet as ServerModule>::Input),
-        LN(<fedimint_ln::LightningModule as ServerModule>::Input),
+        LN(<fedimint_ln::Lightning as ServerModule>::Input),
     }
 
     // TODO: check if clippy is right
@@ -211,7 +211,7 @@ pub mod legacy {
     pub enum Output {
         Mint(<fedimint_mint::Mint as ServerModule>::Output),
         Wallet(<fedimint_wallet::Wallet as ServerModule>::Output),
-        LN(<fedimint_ln::LightningModule as ServerModule>::Output),
+        LN(<fedimint_ln::Lightning as ServerModule>::Output),
     }
 
     impl Transaction {

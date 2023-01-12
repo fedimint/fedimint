@@ -16,7 +16,7 @@ use fedimint_api::core::{
 };
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_api::module::ModuleInit;
+use fedimint_api::module::ModuleGen;
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -148,7 +148,7 @@ pub struct ServerConfigParams {
 }
 
 impl ServerConfigConsensus {
-    pub fn to_client_config_try(
+    pub fn try_to_client_config(
         &self,
         module_config_gens: &ModuleInitRegistry,
     ) -> anyhow::Result<ClientConfig> {
@@ -177,19 +177,19 @@ impl ServerConfigConsensus {
     }
 
     pub fn to_client_config(&self, module_config_gens: &ModuleInitRegistry) -> ClientConfig {
-        self.to_client_config_try(module_config_gens)
+        self.try_to_client_config(module_config_gens)
             .expect("configuration mismatch")
     }
 }
 
 // TODO: turn into newtype
-pub type DynModuleInit = Arc<dyn ModuleInit + Send + Sync>;
+pub type DynModuleGen = Arc<dyn ModuleGen + Send + Sync>;
 
 #[derive(Clone)]
-pub struct ModuleInitRegistry(BTreeMap<ModuleKind, DynModuleInit>);
+pub struct ModuleInitRegistry(BTreeMap<ModuleKind, DynModuleGen>);
 
-impl From<Vec<DynModuleInit>> for ModuleInitRegistry {
-    fn from(value: Vec<DynModuleInit>) -> Self {
+impl From<Vec<DynModuleGen>> for ModuleInitRegistry {
+    fn from(value: Vec<DynModuleGen>) -> Self {
         Self(BTreeMap::from_iter(
             value.into_iter().map(|i| (i.module_kind(), i)),
         ))
@@ -197,7 +197,7 @@ impl From<Vec<DynModuleInit>> for ModuleInitRegistry {
 }
 
 impl ModuleInitRegistry {
-    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleInit> {
+    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
         self.0.get(k)
     }
 
@@ -279,11 +279,11 @@ impl ModuleInitRegistry {
 pub struct LegacyInitOrderIter {
     /// Counter of what module id will this returned value get assigned
     next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, DynModuleInit>,
+    rest: BTreeMap<ModuleKind, DynModuleGen>,
 }
 
 impl Iterator for LegacyInitOrderIter {
-    type Item = (ModuleKind, DynModuleInit);
+    type Item = (ModuleKind, DynModuleGen);
 
     fn next(&mut self) -> Option<Self::Item> {
         let ret = match self.next_id {
