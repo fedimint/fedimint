@@ -6,10 +6,15 @@ use fedimint_server::modules::ln::contracts::Preimage;
 use lightning_invoice::Invoice;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
-use tonic::transport::Channel;
+use tonic::{transport::Channel, Request};
 
 use super::HtlcInterceptPayload;
-use crate::{gatewaylnrpc::gateway_lightning_client::GatewayLightningClient, Result};
+use crate::{
+    gatewaylnrpc::{
+        gateway_lightning_client::GatewayLightningClient, GetPubKeyRequest, GetPubKeyResponse,
+    },
+    Result,
+};
 
 #[derive(Debug, Clone)]
 
@@ -80,7 +85,18 @@ impl NetworkLnRpcClient {
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
     async fn get_pubkey(&self) -> Result<PublicKey> {
-        unimplemented!()
+        let request = Request::new(GetPubKeyRequest {});
+        let GetPubKeyResponse { pub_key } = self
+            .client
+            .lock()
+            .await
+            .get_pub_key(request)
+            .await
+            .expect("Failed to get pubkey")
+            .into_inner();
+
+        println!("NODE PUBKEY={:?}", pub_key);
+        Ok(PublicKey::from_slice(&pub_key).expect("Failed to parse pubkey"))
     }
 
     async fn pay_invoice(&self, _invoices: Vec<InvoiceInfo>) -> Result<Vec<Result<Preimage>>> {
