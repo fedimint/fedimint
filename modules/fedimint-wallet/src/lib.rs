@@ -21,8 +21,8 @@ use config::WalletConfigConsensus;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    BitcoindRpcCfg, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams,
-    ServerModuleConfig, TypedServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
@@ -50,6 +50,7 @@ use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
+use url::Url;
 
 use crate::common::WalletModuleDecoder;
 use crate::config::WalletConfig;
@@ -356,7 +357,7 @@ impl ModuleInit for WalletConfigGenerator {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletConfigGenParams {
     pub network: bitcoin::network::constants::Network,
-    pub bitcoin_rpc: BitcoindRpcCfg,
+    pub bitcoin_rpc: Url,
     pub finality_delay: u32,
 }
 

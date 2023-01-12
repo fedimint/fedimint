@@ -1,28 +1,52 @@
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
 use ::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
-use fedimint_api::config::BitcoindRpcCfg;
+use anyhow::format_err;
 use fedimint_api::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
 use tracing::warn;
+use url::Url;
 
 use super::*;
 
 // <https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48>
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
 
-pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
-    let bitcoind_client = ::bitcoincore_rpc::Client::new(
-        &cfg.btc_rpc_address,
-        Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-    )
-    .map_err(anyhow::Error::from)?;
+pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
+    Ok((
+        (if let Some(port) = url.port() {
+            format!(
+                "{}://{}:{port}",
+                url.scheme(),
+                url.host_str().unwrap_or("127.0.0.1")
+            )
+        } else {
+            format!(
+                "{}://{}",
+                url.scheme(),
+                url.host_str().unwrap_or("127.0.0.1")
+            )
+        }),
+        if url.username().is_empty() {
+            Auth::None
+        } else {
+            Auth::UserPass(
+                url.username().to_owned(),
+                url.password()
+                    .ok_or_else(|| format_err!("Password missing for {}", url.username()))?
+                    .to_owned(),
+            )
+        },
+    ))
+}
+
+pub fn make_bitcoind_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
+    let (url, auth) = from_url_to_url_auth(url)?;
+    let bitcoind_client =
+        ::bitcoincore_rpc::Client::new(&url, auth).map_err(anyhow::Error::from)?;
     let retry_client = RetryClient::new(
-        Client(ErrorReporting::new(
-            cfg.btc_rpc_address.clone(),
-            bitcoind_client,
-        )),
+        Client(ErrorReporting::new(url, bitcoind_client)),
         task_handle,
     );
 

@@ -962,6 +962,7 @@ dependencies = [
  "rand",
  "serde",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1312,6 +1313,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "validator",
 ]
 
