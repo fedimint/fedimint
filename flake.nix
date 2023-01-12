@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane?rev=98894bb39b03bfb379c5e10523cd61160e1ac782"; # https://github.com/ipetkov/crane/releases/tag/v0.11.0
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
@@ -18,12 +19,17 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, flake-compat, fenix, crane, advisory-db }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, flake-utils, flake-compat, fenix, crane, advisory-db }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
         };
+
+        pkgs-unstable = import nixpkgs-unstable {
+          inherit system;
+        };
+
         lib = pkgs.lib;
         stdenv = pkgs.stdenv;
 
@@ -885,6 +891,7 @@
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.rnix-lsp
+                pkgs-unstable.convco
                 pkgs.nodePackages.bash-language-server
               ] ++ cliTestsDeps;
               RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
@@ -950,6 +957,7 @@
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.git
+                pkgs-unstable.convco
               ];
             };
 
