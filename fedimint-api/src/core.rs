@@ -240,11 +240,11 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
 
 /// Module Decoder trait
 ///
-/// Static-polymorphism version of [`ModuleDecode`]
+/// Static-polymorphism version of [`IDecoder`]
 ///
 /// All methods are static, as the decoding code is supposed to be instance-independent,
 /// at least until we start to support modules with overriden [`ModuleInstanceId`]s
-pub trait PluginDecode: Debug + Send + Sync + 'static {
+pub trait Decoder: Debug + Send + Sync + 'static {
     type Input: PluginInput;
     type Output: PluginOutput;
     type OutputOutcome: PluginOutputOutcome;
@@ -269,7 +269,7 @@ pub trait PluginDecode: Debug + Send + Sync + 'static {
     ) -> Result<Self::ConsensusItem, DecodeError>;
 }
 
-pub trait ModuleDecode: Debug {
+pub trait IDecoder: Debug {
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
     fn decode_input(
         &self,
@@ -302,10 +302,10 @@ pub trait ModuleDecode: Debug {
 // TODO: use macro again
 /// Decoder for module associated types
 #[derive(Clone)]
-pub struct Decoder(Arc<dyn ModuleDecode + Send + Sync>);
+pub struct DynDecoder(Arc<dyn IDecoder + Send + Sync>);
 
-impl std::ops::Deref for Decoder {
-    type Target = dyn ModuleDecode + Send + Sync + 'static;
+impl std::ops::Deref for DynDecoder {
+    type Target = dyn IDecoder + Send + Sync + 'static;
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.0
@@ -321,15 +321,15 @@ where
     }
 }
 
-impl std::fmt::Debug for Decoder {
+impl std::fmt::Debug for DynDecoder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl<T> ModuleDecode for T
+impl<T> IDecoder for T
 where
-    T: PluginDecode + 'static,
+    T: Decoder + 'static,
 {
     fn decode_input(
         &self,
@@ -338,7 +338,7 @@ where
     ) -> Result<Input, DecodeError> {
         Ok(Input::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_input(self, r)?,
+            <Self as Decoder>::decode_input(self, r)?,
         ))
     }
 
@@ -349,7 +349,7 @@ where
     ) -> Result<Output, DecodeError> {
         Ok(Output::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_output(self, r)?,
+            <Self as Decoder>::decode_output(self, r)?,
         ))
     }
 
@@ -361,7 +361,7 @@ where
     ) -> Result<OutputOutcome, DecodeError> {
         Ok(OutputOutcome::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_output_outcome(self, r)?,
+            <Self as Decoder>::decode_output_outcome(self, r)?,
         ))
     }
 
@@ -372,12 +372,12 @@ where
     ) -> Result<ConsensusItem, DecodeError> {
         Ok(ConsensusItem::from_typed(
             instance_id,
-            <Self as PluginDecode>::decode_consensus_item(self, r)?,
+            <Self as Decoder>::decode_consensus_item(self, r)?,
         ))
     }
 }
 
-impl ModuleDecode for Decoder {
+impl IDecoder for DynDecoder {
     fn decode_input(
         &self,
         r: &mut dyn Read,
@@ -411,10 +411,10 @@ impl ModuleDecode for Decoder {
     }
 }
 
-impl Decoder {
+impl DynDecoder {
     /// Create [`Self`] form a typed version defined by the plugin
-    pub fn from_typed(decoder: impl PluginDecode + Send + Sync + 'static) -> Decoder {
-        Decoder(Arc::new(decoder))
+    pub fn from_typed(decoder: impl Decoder + Send + Sync + 'static) -> DynDecoder {
+        DynDecoder(Arc::new(decoder))
     }
 }
 

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::io;
 
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::core::PluginDecode;
+use fedimint_api::core::Decoder;
 use fedimint_api::encoding::DecodeError;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -64,7 +64,7 @@ impl SignedBackupRequest {
 #[derive(Debug, Default, Clone)]
 pub struct MintDecoder;
 
-impl PluginDecode for MintDecoder {
+impl Decoder for MintDecoder {
     type Input = MintInput;
     type Output = MintOutput;
     type OutputOutcome = MintOutputOutcome;

@@ -6,14 +6,14 @@ use async_trait::async_trait;
 
 use super::ModuleKind;
 use crate::core::Decoder;
-use crate::core::PluginDecode;
+use crate::core::DynDecoder;
 use crate::module::TransactionItemAmount;
 use crate::{dyn_newtype_define, ServerModule};
 
 #[async_trait]
 pub trait ClientModule: Debug {
     const KIND: &'static str;
-    type Decoder: PluginDecode;
+    type Decoder: Decoder;
     type Module: ServerModule;
 
     fn module_kind() -> ModuleKind {
@@ -36,7 +36,7 @@ pub trait IClientModule: Debug {
     fn as_any(&self) -> &dyn Any;
 
     /// Return the type-erased decoder of the module
-    fn decoder(&self) -> Decoder;
+    fn decoder(&self) -> DynDecoder;
 }
 
 dyn_newtype_define!(
@@ -52,7 +52,7 @@ where
         self
     }
 
-    fn decoder(&self) -> Decoder {
-        Decoder::from_typed(<T as ClientModule>::decoder(self))
+    fn decoder(&self) -> DynDecoder {
+        DynDecoder::from_typed(<T as ClientModule>::decoder(self))
     }
 }

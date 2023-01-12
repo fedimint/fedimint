@@ -1,6 +1,6 @@
 use std::io;
 
-use fedimint_api::core::PluginDecode;
+use fedimint_api::core::Decoder;
 use fedimint_api::encoding::{Decodable, DecodeError};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 
@@ -9,7 +9,7 @@ use crate::{DummyInput, DummyOutput, DummyOutputConfirmation, DummyOutputOutcome
 #[derive(Debug, Default, Clone)]
 pub struct DummyDecoder;
 
-impl PluginDecode for DummyDecoder {
+impl Decoder for DummyDecoder {
     type Input = DummyInput;
     type Output = DummyOutput;
     type OutputOutcome = DummyOutputOutcome;

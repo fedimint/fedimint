@@ -19,7 +19,7 @@ use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::{
-    Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::Database;
@@ -1251,15 +1251,15 @@ pub fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            Decoder::from_typed(LightningDecoder),
+            DynDecoder::from_typed(LightningDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            Decoder::from_typed(WalletDecoder),
+            DynDecoder::from_typed(WalletDecoder),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            Decoder::from_typed(MintDecoder),
+            DynDecoder::from_typed(MintDecoder),
         ),
     ])
 }

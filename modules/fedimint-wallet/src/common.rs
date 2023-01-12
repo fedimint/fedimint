@@ -1,6 +1,6 @@
 use std::io;
 
-use fedimint_api::core::PluginDecode;
+use fedimint_api::core::Decoder;
 use fedimint_api::encoding::{Decodable, DecodeError};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 
@@ -9,7 +9,7 @@ use crate::{WalletConsensusItem, WalletInput, WalletOutput, WalletOutputOutcome}
 #[derive(Debug, Default, Clone)]
 pub struct WalletDecoder;
 
-impl PluginDecode for WalletDecoder {
+impl Decoder for WalletDecoder {
     type Input = WalletInput;
     type Output = WalletOutput;
     type OutputOutcome = WalletOutputOutcome;

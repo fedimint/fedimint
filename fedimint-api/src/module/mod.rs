@@ -13,7 +13,7 @@ use thiserror::Error;
 use crate::cancellable::Cancellable;
 use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
-    Decoder, ModuleInstanceId, ModuleKind, PluginConsensusItem, PluginDecode, PluginInput,
+    Decoder, DynDecoder, ModuleInstanceId, ModuleKind, PluginConsensusItem, PluginInput,
     PluginOutput, PluginOutputOutcome,
 };
 use crate::db::{Database, DatabaseTransaction};
@@ -202,7 +202,7 @@ where
 /// Once the module config is ready, the module can be instantiated via `[Self::init]`.
 #[async_trait]
 pub trait ModuleInit {
-    fn decoder(&self) -> Decoder;
+    fn decoder(&self) -> DynDecoder;
 
     fn module_kind(&self) -> ModuleKind;
 
@@ -245,7 +245,7 @@ pub trait ModuleInit {
 pub trait ServerModule: Debug + Sized {
     const KIND: ModuleKind;
 
-    type Decoder: PluginDecode;
+    type Decoder: Decoder;
     type Input: PluginInput;
     type Output: PluginOutput;
     type OutputOutcome: PluginOutputOutcome;

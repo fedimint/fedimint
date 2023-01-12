@@ -24,7 +24,7 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{Decoder, ModuleInstanceId, ModuleKind};
+use fedimint_api::core::{DynDecoder, ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
@@ -222,8 +222,8 @@ pub struct WalletConfigGenerator;
 
 #[async_trait]
 impl ModuleInit for WalletConfigGenerator {
-    fn decoder(&self) -> Decoder {
-        Decoder::from_typed(WalletDecoder)
+    fn decoder(&self) -> DynDecoder {
+        DynDecoder::from_typed(WalletDecoder)
     }
 
     fn module_kind(&self) -> ModuleKind {

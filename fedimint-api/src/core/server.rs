@@ -47,7 +47,7 @@ where
 #[async_trait]
 pub trait IServerModule: Debug {
     /// Returns the decoder belonging to the server module
-    fn decoder(&self) -> Decoder;
+    fn decoder(&self) -> DynDecoder;
 
     fn as_any(&self) -> &dyn Any;
 
@@ -174,8 +174,8 @@ impl<T> IServerModule for T
 where
     T: ServerModule + 'static + Sync,
 {
-    fn decoder(&self) -> Decoder {
-        Decoder::from_typed(ServerModule::decoder(self))
+    fn decoder(&self) -> DynDecoder {
+        DynDecoder::from_typed(ServerModule::decoder(self))
     }
 
     fn as_any(&self) -> &dyn Any {
