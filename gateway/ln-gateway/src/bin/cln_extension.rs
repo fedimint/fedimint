@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 
 use bitcoin::XOnlyPublicKey;
+use bitcoin_hashes::{sha256, Hash};
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
 use fedimint_api::{task::TaskGroup, Amount};
@@ -277,13 +278,100 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(ReceiverStream::new(receiver)))
     }
 
-    type CompleteHtlcsStream = tonic::Streaming<CompleteHtlcsResponse>;
+    type CompleteHtlcsStream =
+        Pin<Box<dyn Stream<Item = Result<CompleteHtlcsResponse, tonic::Status>> + Send + 'static>>;
 
     async fn complete_htlcs(
         &self,
-        _request: tonic::Request<tonic::Streaming<CompleteHtlcsRequest>>,
+        request: tonic::Request<tonic::Streaming<CompleteHtlcsRequest>>,
     ) -> Result<tonic::Response<Self::CompleteHtlcsStream>, Status> {
-        unimplemented!()
+        let mut requests = request.into_inner();
+        let mut responses: Vec<Result<CompleteHtlcsResponse, tonic::Status>> = Vec::new();
+
+        while let Some(CompleteHtlcsRequest {
+            action,
+            intercepted_htlc_id,
+        }) = requests.message().await?
+        {
+            let hash = match sha256::Hash::from_slice(&intercepted_htlc_id) {
+                Ok(hash) => hash,
+                Err(e) => {
+                    error!("Invalid intercepted_htlc_id: {:?}", e);
+                    responses.push(Err(Status::invalid_argument(e.to_string())));
+                    continue;
+                }
+            };
+
+            // TODO: Implement non-blocking access to the outcomes map sowe can multithread complete_htlcs
+            if let Some(outcome) = self
+                .interceptor
+                .lock()
+                .await
+                .outcomes
+                .lock()
+                .await
+                .remove(&hash)
+            {
+                // Translate action request into a cln rpc response for `htlc_accepted` event
+                let htlca_res = match action {
+                    Some(Action::Settle(Settle { preimage })) => {
+                        if let Ok(pk) = XOnlyPublicKey::from_slice(&preimage) {
+                            serde_json::json!({ "result": "resolve", "payment_key": pk.to_string() })
+                        } else {
+                            // 2002 failure code reports general temporary failure of this processing node.
+                            serde_json::json!({ "result": "fail", "failure_message": "2002" })
+                        }
+                    }
+                    Some(Action::Cancel(Cancel { reason: _ })) => {
+                        // TODO: Translate the reason into a BOLT 4 failure message
+                        // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                        serde_json::json!({ "result": "fail", "failure_message": "2002" })
+                    }
+                    None => {
+                        error!("No action specified for intercepted htlc id: {:?}", hash);
+                        responses.push(Err(Status::internal(
+                            "No action specified on this intercepted htlc",
+                        )));
+                        continue;
+                    }
+                };
+
+                // Send translated response to the HTLC interceptor for submission to the cln rpc
+                match outcome.send(htlca_res) {
+                    Ok(_) => {
+                        responses.push(Ok(CompleteHtlcsResponse {}));
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to send htlc_accepted response to interceptor: {:?}",
+                            e
+                        );
+                        responses.push(Err(Status::internal(
+                            "Failed to send htlc_accepted outcome to interceptor",
+                        )));
+                    }
+                };
+                continue;
+            }
+
+            error!(
+                "No reference found for this intercepted and processed htlc id: {:?}",
+                intercepted_htlc_id
+            );
+            responses.push(Err(Status::internal(
+                "No reference found for this intercepted and processed htlc",
+            )))
+        }
+
+        let stream = async_stream::try_stream! {
+            for response in responses {
+                yield response?;
+            }
+        };
+
+        Ok(tonic::Response::new(
+            Box::pin(stream) as Self::CompleteHtlcsStream
+        ))
     }
 }
 
@@ -305,7 +393,7 @@ pub enum ClnRpcError {
 struct ClnHtlcInterceptor {
     subscriptions:
         Mutex<HashMap<u64, mpsc::Sender<Result<SubscribeInterceptHtlcsResponse, Status>>>>,
-    pub outcomes: Mutex<HashMap<Hash, oneshot::Sender<serde_json::Value>>>,
+    pub outcomes: Mutex<HashMap<sha256::Hash, oneshot::Sender<serde_json::Value>>>,
 }
 
 impl ClnHtlcInterceptor {
@@ -316,13 +404,16 @@ impl ClnHtlcInterceptor {
         }
     }
 
-    async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
+    async fn intercept_htlc(&mut self, payload: HtlcAccepted) -> serde_json::Value {
         let short_channel_id = payload.onion.short_channel_id;
         let htlc_expiry = payload.htlc.cltv_expiry;
 
         if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
             let payment_hash = payload.htlc.payment_hash.to_vec();
-            let intercepted_htlc_id = payment_hash.clone();
+
+            // This has a chance of collission since payment_hashes are not guaranteed to be unique
+            // TODO: generate unique id for each intercepted HTLC
+            let intercepted_htlc_id = sha256::Hash::hash(&payment_hash);
 
             match subscription
                 .send(Ok(SubscribeInterceptHtlcsResponse {
@@ -331,8 +422,7 @@ impl ClnHtlcInterceptor {
                     outgoing_amount_msat: payload.onion.forward_amount.msats,
                     incoming_expiry: htlc_expiry,
                     short_channel_id,
-                    // TODO: generate unique id for each intercepted HTLC
-                    intercepted_htlc_id: payment_hash.clone(),
+                    intercepted_htlc_id: intercepted_htlc_id.into_inner().to_vec(),
                 }))
                 .await
             {
@@ -342,7 +432,10 @@ impl ClnHtlcInterceptor {
                     // https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
 
                     let (sender, receiver) = oneshot::channel::<serde_json::Value>();
-                    self.outcomes.lock().await.insert(short_channel_id, sender);
+                    self.outcomes
+                        .lock()
+                        .await
+                        .insert(intercepted_htlc_id, sender);
 
                     // If the gateway does not respond within the HTLC expiry,
                     // Automatically respond with a failure message.
