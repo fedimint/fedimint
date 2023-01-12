@@ -9,7 +9,7 @@ use fedimint_api::module::ModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
-use fedimint_ln::LightningModuleConfigGen;
+use fedimint_ln::LightningConfigGenerator;
 use fedimint_mint::MintConfigGenerator;
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
@@ -87,7 +87,7 @@ pub async fn run_dkg(
     let module_config_gens = ModuleInitRegistry::from(vec![
         Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     let result = ServerConfig::distributed_gen(

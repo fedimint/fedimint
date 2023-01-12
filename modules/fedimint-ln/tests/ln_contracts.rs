@@ -3,7 +3,7 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::config::ConfigGenParams;
 use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_api::{Amount, OutPoint};
-use fedimint_ln::config::LightningModuleClientConfig;
+use fedimint_ln::config::LightningClientConfig;
 use fedimint_ln::contracts::account::AccountContract;
 use fedimint_ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln::contracts::outgoing::OutgoingContract;
@@ -11,9 +11,9 @@ use fedimint_ln::contracts::{
     AccountContractOutcome, Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage,
     IdentifyableContract, OutgoingContractOutcome, Preimage,
 };
-use fedimint_ln::LightningModuleConfigGen;
+use fedimint_ln::LightningConfigGenerator;
 use fedimint_ln::{
-    ContractOutput, LightningInput, LightningModule, LightningModuleError, LightningOutput,
+    ContractOutput, Lightning, LightningError, LightningInput, LightningOutput,
     LightningOutputOutcome,
 };
 use fedimint_testing::FakeFed;
@@ -23,11 +23,11 @@ use secp256k1::KeyPair;
 async fn test_account() {
     let mut rng = secp256k1::rand::rngs::OsRng;
 
-    let mut fed = FakeFed::<LightningModule>::new(
+    let mut fed = FakeFed::<Lightning>::new(
         4,
-        |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
+        |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
-        &LightningModuleConfigGen,
+        &LightningConfigGenerator,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
@@ -74,11 +74,11 @@ async fn test_account() {
 async fn test_outgoing() {
     let mut rng = secp256k1::rand::rngs::OsRng;
 
-    let mut fed = FakeFed::<LightningModule>::new(
+    let mut fed = FakeFed::<Lightning>::new(
         4,
-        |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
+        |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
-        &LightningModuleConfigGen,
+        &LightningConfigGenerator,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
@@ -150,7 +150,7 @@ j5r6drg6k6zcqj0fcwg"
         .unwrap_err();
     assert_eq!(
         format!("{err}"),
-        format!("{}", LightningModuleError::MissingPreimage)
+        format!("{}", LightningError::MissingPreimage)
     );
 
     // Ok
@@ -174,11 +174,11 @@ j5r6drg6k6zcqj0fcwg"
 async fn test_incoming() {
     let mut rng = secp256k1::rand::rngs::OsRng;
 
-    let mut fed = FakeFed::<LightningModule>::new(
+    let mut fed = FakeFed::<Lightning>::new(
         4,
-        |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
+        |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
-        &LightningModuleConfigGen,
+        &LightningConfigGenerator,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
@@ -196,7 +196,7 @@ async fn test_incoming() {
         hash,
         encrypted_preimage: EncryptedPreimage::new(
             preimage.clone(),
-            &fed.client_cfg_typed::<LightningModuleClientConfig>()
+            &fed.client_cfg_typed::<LightningClientConfig>()
                 .unwrap()
                 .threshold_pub_key,
         ),
@@ -250,7 +250,7 @@ async fn test_incoming() {
     let error = fed.verify_input(&incoming_input).await.unwrap_err();
     assert_eq!(
         format!("{error}"),
-        format!("{}", LightningModuleError::ContractNotReady)
+        format!("{}", LightningError::ContractNotReady)
     );
 
     fed.consensus_round(&[], &[]).await;

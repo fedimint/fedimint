@@ -16,7 +16,7 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::module::ModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
-use fedimint_ln::LightningModuleConfigGen;
+use fedimint_ln::LightningConfigGenerator;
 use fedimint_mint::MintConfigGenerator;
 use fedimint_server::config::ModuleInitRegistry;
 use fedimint_wallet::WalletConfigGenerator;
@@ -137,7 +137,7 @@ async fn post_guardians(
     let module_config_gens = ModuleInitRegistry::from(vec![
         Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
     let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();

@@ -1,7 +1,7 @@
 //! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
-//! the Lightning network through a Lightning gateway. See [`LightningModule`] for a high level
+//! the Lightning network through a Lightning gateway. See [`Lightning`] for a high level
 //! overview.
 //!
 //! ## Attention: only one operation per contract and round
@@ -86,7 +86,7 @@ const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 /// [Outgoing]: contracts::outgoing::OutgoingContract
 /// [Incoming]: contracts::incoming::IncomingContract
 #[derive(Debug)]
-pub struct LightningModule {
+pub struct Lightning {
     cfg: LightningConfig,
 }
 
@@ -231,10 +231,10 @@ impl std::fmt::Display for LightningConsensusItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct LightningVerificationCache;
 
-pub struct LightningModuleConfigGen;
+pub struct LightningConfigGenerator;
 
 #[async_trait]
-impl ModuleGen for LightningModuleConfigGen {
+impl ModuleGen for LightningConfigGenerator {
     fn decoder(&self) -> DynDecoder {
         DynDecoder::from_typed(LightningDecoder)
     }
@@ -250,7 +250,7 @@ impl ModuleGen for LightningModuleConfigGen {
         _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        Ok(LightningModule::new(cfg.to_typed()?).into())
+        Ok(Lightning::new(cfg.to_typed()?).into())
     }
 
     fn trusted_dealer_gen(
@@ -343,7 +343,7 @@ impl ModuleGen for LightningModuleConfigGen {
 }
 
 #[async_trait]
-impl ServerModule for LightningModule {
+impl ServerModule for Lightning {
     const KIND: ModuleKind = KIND;
 
     type Decoder = LightningDecoder;
@@ -411,11 +411,11 @@ impl ServerModule for LightningModule {
         let account: ContractAccount = self
             .get_contract_account(dbtx, input.contract_id)
             .await
-            .ok_or(LightningModuleError::UnknownContract(input.contract_id))
+            .ok_or(LightningError::UnknownContract(input.contract_id))
             .into_module_error_other()?;
 
         if account.amount < input.amount {
-            return Err(LightningModuleError::InsufficientFunds(
+            return Err(LightningError::InsufficientFunds(
                 account.amount,
                 input.amount,
             ))
@@ -430,15 +430,14 @@ impl ServerModule for LightningModule {
                         &input
                             .witness
                             .as_ref()
-                            .ok_or(LightningModuleError::MissingPreimage)
+                            .ok_or(LightningError::MissingPreimage)
                             .into_module_error_other()?
                             .0,
                     );
 
                     // … and the spender provides a valid preimage …
                     if preimage_hash != outgoing.hash {
-                        return Err(LightningModuleError::InvalidPreimage)
-                            .into_module_error_other();
+                        return Err(LightningError::InvalidPreimage).into_module_error_other();
                     }
 
                     // … then the contract account can be spent using the gateway key,
@@ -452,13 +451,13 @@ impl ServerModule for LightningModule {
             FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
                 // Once the preimage has been decrypted …
                 DecryptedPreimage::Pending => {
-                    return Err(LightningModuleError::ContractNotReady).into_module_error_other();
+                    return Err(LightningError::ContractNotReady).into_module_error_other();
                 }
                 // … either the user may spend the funds since they sold a valid preimage …
                 DecryptedPreimage::Some(preimage) => match preimage.to_public_key() {
                     Ok(pub_key) => pub_key,
                     Err(_) => {
-                        return Err(LightningModuleError::InvalidPreimage).into_module_error_other()
+                        return Err(LightningError::InvalidPreimage).into_module_error_other()
                     }
                 },
                 // … or the gateway may claim back funds for not receiving the advertised preimage.
@@ -513,12 +512,12 @@ impl ServerModule for LightningModule {
                         .get_value(&OfferKey(incoming.hash))
                         .await
                         .expect("DB error")
-                        .ok_or(LightningModuleError::NoOffer(incoming.hash))
+                        .ok_or(LightningError::NoOffer(incoming.hash))
                         .into_module_error_other()?;
 
                     if contract.amount < offer.amount {
                         // If the account is not sufficiently funded fail the output
-                        return Err(LightningModuleError::InsufficientIncomingFunding(
+                        return Err(LightningError::InsufficientIncomingFunding(
                             offer.amount,
                             contract.amount,
                         ))
@@ -527,7 +526,7 @@ impl ServerModule for LightningModule {
                 }
 
                 if contract.amount == Amount::ZERO {
-                    Err(LightningModuleError::ZeroOutput).into_module_error_other()
+                    Err(LightningError::ZeroOutput).into_module_error_other()
                 } else {
                     Ok(TransactionItemAmount {
                         amount: contract.amount,
@@ -537,7 +536,7 @@ impl ServerModule for LightningModule {
             }
             LightningOutput::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
-                    Err(LightningModuleError::InvalidEncryptedPreimage).into_module_error_other()
+                    Err(LightningError::InvalidEncryptedPreimage).into_module_error_other()
                 } else {
                     Ok(TransactionItemAmount::ZERO)
                 }
@@ -550,14 +549,13 @@ impl ServerModule for LightningModule {
                     .get_value(&ContractKey(*contract))
                     .await
                     .expect("DB error")
-                    .ok_or(LightningModuleError::UnknownContract(*contract))
+                    .ok_or(LightningError::UnknownContract(*contract))
                     .into_module_error_other()?;
 
                 let outgoing_contract = match &contract_account.contract {
                     FundedContract::Outgoing(contract) => contract,
                     _ => {
-                        return Err(LightningModuleError::NotOutgoingContract)
-                            .into_module_error_other();
+                        return Err(LightningError::NotOutgoingContract).into_module_error_other();
                     }
                 };
 
@@ -567,7 +565,7 @@ impl ServerModule for LightningModule {
                         &outgoing_contract.cancellation_message().into(),
                         &outgoing_contract.gateway_key,
                     )
-                    .map_err(|_| LightningModuleError::InvalidCancellationSignature)
+                    .map_err(|_| LightningError::InvalidCancellationSignature)
                     .into_module_error_other()?;
 
                 Ok(TransactionItemAmount::ZERO)
@@ -865,7 +863,7 @@ impl ServerModule for LightningModule {
         vec![
             api_endpoint! {
                 "/account",
-                async |module: &LightningModule, dbtx, contract_id: ContractId| -> ContractAccount {
+                async |module: &Lightning, dbtx, contract_id: ContractId| -> ContractAccount {
                     module
                         .get_contract_account(&mut dbtx, contract_id)
                         .await
@@ -874,13 +872,13 @@ impl ServerModule for LightningModule {
             },
             api_endpoint! {
                 "/offers",
-                async |module: &LightningModule, dbtx, _params: ()| -> Vec<IncomingContractOffer> {
+                async |module: &Lightning, dbtx, _params: ()| -> Vec<IncomingContractOffer> {
                     Ok(module.get_offers(&mut dbtx).await)
                 }
             },
             api_endpoint! {
                 "/offer",
-                async |module: &LightningModule, dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
+                async |module: &Lightning, dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     let offer = module
                         .get_offer(&mut dbtx, payment_hash)
                         .await
@@ -892,13 +890,13 @@ impl ServerModule for LightningModule {
             },
             api_endpoint! {
                 "/list_gateways",
-                async |module: &LightningModule, dbtx, _v: ()| -> Vec<LightningGateway> {
+                async |module: &Lightning, dbtx, _v: ()| -> Vec<LightningGateway> {
                     Ok(module.list_gateways(&mut dbtx).await)
                 }
             },
             api_endpoint! {
                 "/register_gateway",
-                async |module: &LightningModule, dbtx, gateway: LightningGateway| -> () {
+                async |module: &Lightning, dbtx, gateway: LightningGateway| -> () {
                     module.register_gateway(&mut dbtx, gateway).await;
                     dbtx.commit_tx().await.expect("DB Error");
                     Ok(())
@@ -908,9 +906,9 @@ impl ServerModule for LightningModule {
     }
 }
 
-impl LightningModule {
+impl Lightning {
     pub fn new(cfg: LightningConfig) -> Self {
-        LightningModule { cfg }
+        Lightning { cfg }
     }
 
     fn validate_decryption_share(
@@ -999,7 +997,7 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
-pub enum LightningModuleError {
+pub enum LightningError {
     #[error("The the input contract {0} does not exist")]
     UnknownContract(ContractId),
     #[error("The input contract has too little funds, got {0}, input spends {1}")]

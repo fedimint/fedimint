@@ -6,7 +6,7 @@ use clap::Parser;
 use fedimint_api::db::Database;
 use fedimint_api::module::ModuleGen;
 use fedimint_api::task::TaskGroup;
-use fedimint_ln::LightningModuleConfigGen;
+use fedimint_ln::LightningConfigGenerator;
 use fedimint_mint::MintConfigGenerator;
 use fedimint_server::config::ModuleInitRegistry;
 use fedimint_server::consensus::FedimintConsensus;
@@ -123,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
     let module_inits = ModuleInitRegistry::from(vec![
         Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     let decoders = module_inits.decoders(cfg.iter_module_instances())?;

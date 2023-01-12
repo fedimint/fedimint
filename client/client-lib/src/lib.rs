@@ -31,7 +31,7 @@ use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_api::{ServerModule, TieredMulti};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::config::LightningModuleClientConfig;
+use fedimint_core::modules::ln::config::LightningClientConfig;
 use fedimint_core::modules::mint::common::MintDecoder;
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
@@ -195,7 +195,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config: self
                 .config
                 .as_ref()
-                .get_first_module_by_kind::<LightningModuleClientConfig>("ln")
+                .get_first_module_by_kind::<LightningClientConfig>("ln")
                 .expect("needs lightning module client config")
                 .1,
             context: self.context.clone(),

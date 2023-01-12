@@ -6,7 +6,7 @@ use erased_serde::Serialize;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
 use fedimint_api::module::ModuleGen;
-use fedimint_ln::{db as LightningRange, LightningModuleConfigGen};
+use fedimint_ln::{db as LightningRange, LightningConfigGenerator};
 use fedimint_mint::{db as MintRange, MintConfigGenerator};
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::ModuleInitRegistry;
@@ -678,7 +678,7 @@ async fn main() {
     let _module_inits = ModuleInitRegistry::from(vec![
         Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
         Arc::new(MintConfigGenerator),
-        Arc::new(LightningModuleConfigGen),
+        Arc::new(LightningConfigGenerator),
     ]);
 
     let decoders = Default::default(); // TODO: read config and use it to create decoders

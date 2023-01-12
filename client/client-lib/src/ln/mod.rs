@@ -14,15 +14,14 @@ use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::{Amount, ServerModule};
 use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::config::LightningModuleClientConfig;
+use fedimint_core::modules::ln::config::LightningClientConfig;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
 use fedimint_core::modules::ln::contracts::{
     Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
 };
 use fedimint_core::modules::ln::{
-    ContractAccount, ContractOutput, LightningGateway, LightningInput, LightningModule,
-    LightningOutput,
+    ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
 };
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -39,14 +38,14 @@ use crate::utils::ClientContext;
 
 #[derive(Debug)]
 pub struct LnClient {
-    pub config: LightningModuleClientConfig,
+    pub config: LightningClientConfig,
     pub context: Arc<ClientContext>,
 }
 
 impl ClientModule for LnClient {
     const KIND: &'static str = "ln";
-    type Decoder = <LightningModule as ServerModule>::Decoder;
-    type Module = LightningModule;
+    type Decoder = <Lightning as ServerModule>::Decoder;
+    type Module = Lightning;
 
     fn decoder(&self) -> Self::Decoder {
         LightningDecoder
@@ -340,10 +339,10 @@ mod tests {
     use fedimint_api::db::Database;
     use fedimint_api::{Amount, OutPoint, TransactionId};
     use fedimint_core::epoch::SignedEpochOutcome;
-    use fedimint_core::modules::ln::config::LightningModuleClientConfig;
+    use fedimint_core::modules::ln::config::LightningClientConfig;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use fedimint_core::modules::ln::{ContractAccount, LightningModule, LightningModuleConfigGen};
+    use fedimint_core::modules::ln::{ContractAccount, Lightning, LightningConfigGenerator};
     use fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     use fedimint_core::modules::wallet::PegOutFees;
@@ -357,7 +356,7 @@ mod tests {
     use crate::ln::LnClient;
     use crate::{module_decode_stubs, ClientContext, LegacyTransaction};
 
-    type Fed = FakeFed<LightningModule>;
+    type Fed = FakeFed<Lightning>;
 
     #[derive(Debug)]
     struct FakeApi {
@@ -471,15 +470,15 @@ mod tests {
 
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
-        LightningModuleClientConfig,
+        LightningClientConfig,
         ClientContext,
     ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
-            FakeFed::<LightningModule>::new(
+            FakeFed::<Lightning>::new(
                 4,
-                |cfg, _db| async move { Ok(LightningModule::new(cfg.to_typed()?)) },
+                |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
                 &ConfigGenParams::new(),
-                &LightningModuleConfigGen,
+                &LightningConfigGenerator,
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
             )
             .await
