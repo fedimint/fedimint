@@ -112,8 +112,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let salt_path = opts.data_dir.join(SALT_FILE);
-    let key = get_key(opts.password, salt_path);
-    let cfg = read_server_configs(&key, opts.data_dir.clone());
+    let key = get_key(opts.password, salt_path)?;
+    let cfg = read_server_configs(&key, opts.data_dir.clone())?;
 
     let local_task_set = tokio::task::LocalSet::new();
     let _guard = local_task_set.enter();

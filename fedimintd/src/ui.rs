@@ -2,9 +2,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use anyhow::{format_err, Error};
 use askama::Template;
 use axum::extract::{Extension, Form};
-use axum::response::Redirect;
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::{
     routing::{get, post},
     Router,
@@ -102,7 +103,7 @@ pub struct GuardiansForm {
 async fn post_guardians(
     Extension(state): Extension<MutableState>,
     Form(form): Form<GuardiansForm>,
-) -> Result<Redirect, (StatusCode, String)> {
+) -> Result<Redirect, UIError> {
     let mut state = state.lock().await;
     let params = state.params.clone().expect("invalid state");
     let mut connection_strings: Vec<String> =
@@ -123,14 +124,14 @@ async fn post_guardians(
     let mut guardians = vec![params.guardian.clone()];
     for connection_string in connection_strings.clone().into_iter() {
         guardians.push(Guardian {
-            name: parse_peer_params(connection_string.clone()).name,
+            name: parse_peer_params(connection_string.clone())?.name,
             tls_connect_string: connection_string,
         });
     }
 
     // Actually run DKG
-    let key = get_key(Some(state.password.clone()), state.data_dir.join(SALT_FILE));
-    let pk_bytes = encrypted_read(&key, state.data_dir.join(TLS_PK));
+    let key = get_key(Some(state.password.clone()), state.data_dir.join(SALT_FILE))?;
+    let pk_bytes = encrypted_read(&key, state.data_dir.join(TLS_PK))?;
     let max_denomination = Amount::from_msats(100000000000);
     let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
     let module_config_gens = ModuleInitRegistry::from(vec![
@@ -156,7 +157,8 @@ async fn post_guardians(
         .task_group
         .spawn("admin UI running DKG", move |_| async move {
             tracing::info!("Running DKG");
-            match run_dkg(
+
+            let maybe_config = run_dkg(
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
@@ -169,16 +171,16 @@ async fn post_guardians(
                 rustls::PrivateKey(pk_bytes),
                 &mut dkg_task_group,
             )
-            .await
-            {
-                Ok(server_config) => {
+            .await;
+
+            let write_result = maybe_config.and_then(|server| {
+                encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
+                write_nonprivate_configs(&server, dir_out_path, &module_config_gens)
+            });
+
+            match write_result {
+                Ok(_) => {
                     tracing::info!("DKG succeeded");
-                    encrypted_json_write(
-                        &server_config.private,
-                        &key,
-                        dir_out_path.join(PRIVATE_CONFIG),
-                    );
-                    write_nonprivate_configs(&server_config, dir_out_path, &module_config_gens);
                     // Shut down DKG to prevent port collisions
                     dkg_task_group
                         .shutdown_join_all()
@@ -249,17 +251,20 @@ pub struct ParamsForm {
 async fn post_federation_params(
     Extension(state): Extension<MutableState>,
     Form(form): Form<ParamsForm>,
-) -> Result<Redirect, (StatusCode, String)> {
+) -> Result<Redirect, UIError> {
     let mut state = state.lock().await;
 
-    // FIXME: this should return Result
+    if !state.data_dir.exists() {
+        return Err(format_err!("{:?} does not exist!", state.data_dir).into());
+    }
+
     let tls_connect_string = create_cert(
         state.data_dir.clone(),
         form.p2p_url.clone(),
         form.api_url.clone(),
         form.guardian_name.clone(),
         Some(state.password.clone()),
-    );
+    )?;
 
     // Update state
     state.params = Some(FederationParameters {
@@ -280,7 +285,22 @@ async fn post_federation_params(
     Ok(Redirect::to("/add_guardians".parse().unwrap()))
 }
 
-async fn qr(Extension(state): Extension<MutableState>) -> impl axum::response::IntoResponse {
+pub struct UIError(pub StatusCode, pub String);
+
+impl From<anyhow::Error> for UIError {
+    fn from(error: Error) -> Self {
+        UIError(StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+    }
+}
+
+impl IntoResponse for UIError {
+    fn into_response(self) -> Response {
+        let UIError(status, msg) = self;
+        (status, msg).into_response()
+    }
+}
+
+async fn qr(Extension(state): Extension<MutableState>) -> impl IntoResponse {
     let state = state.lock().await;
     let path = state.data_dir.join("client.json");
     let connection_string: String = match std::fs::File::open(path) {
