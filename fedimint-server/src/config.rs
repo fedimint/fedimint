@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
+use std::os::unix::prelude::OsStrExt;
 use std::sync::Arc;
 
 use anyhow::{bail, format_err};
@@ -240,6 +241,13 @@ impl ModuleInitRegistry {
     ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::DynServerModule>> {
         let mut modules = BTreeMap::new();
 
+        let env: BTreeMap<_, _> = std::env::vars_os()
+            // We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
+            .collect();
+
         for (module_id, module_cfg) in &cfg.consensus.modules {
             let kind = module_cfg.kind();
 
@@ -248,7 +256,12 @@ impl ModuleInitRegistry {
             };
             info!(module_instance_id = *module_id, kind = %kind, "Init  module");
             let module = init
-                .init(cfg.get_module_config(*module_id)?, db.clone(), task_group)
+                .init(
+                    cfg.get_module_config(*module_id)?,
+                    db.clone(),
+                    &env,
+                    task_group,
+                )
                 .await?;
             modules.insert(*module_id, module);
         }
@@ -707,7 +720,6 @@ impl ServerConfigParams {
         max_denomination: Amount,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        bitcoind_rpc: &Url,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
     ) -> ServerConfigParams {
@@ -737,7 +749,6 @@ impl ServerConfigParams {
                 .attach(WalletConfigGenParams {
                     network,
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
-                    bitcoin_rpc: bitcoind_rpc.clone(),
                     finality_delay,
                 })
                 .attach(MintConfigGenParams {
@@ -771,7 +782,6 @@ impl ServerConfigParams {
         max_denomination: Amount,
         base_port: u16,
         federation_name: &str,
-        bitcoind_rpc: &Url,
     ) -> HashMap<PeerId, ServerConfigParams> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
@@ -812,7 +822,6 @@ impl ServerConfigParams {
                     max_denomination,
                     &peer_params,
                     federation_name.to_string(),
-                    bitcoind_rpc,
                     bitcoin::network::constants::Network::Regtest,
                     10,
                 );

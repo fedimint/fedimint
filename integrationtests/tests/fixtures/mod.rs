@@ -18,6 +18,7 @@ use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
 use cln_rpc::ClnRpc;
 use fake::FakeLightningTest;
+use fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core;
@@ -156,13 +157,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             .init();
     }
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let params = ServerConfigParams::gen_local(
-        &peers,
-        sats(100000),
-        base_port,
-        "test",
-        &Url::parse("http://127.0.0.1:18443").expect("valid constant"),
-    );
+    let params = ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_inits = ModuleInitRegistry::from(vec![
@@ -186,20 +181,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             .expect("distributed config should not be canceled");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            let peer_server_config = server_config.iter().last().unwrap().1;
-            let wallet_config: WalletConfig = peer_server_config
-                .get_module_config_typed(
-                    peer_server_config
-                        .get_module_id_by_kind("wallet")
-                        .expect("module of type wallet should be already configured"),
-                )
-                .unwrap();
+            let bitcoin_rpc_url =
+                read_bitcoin_rpc_env_from_global_env().expect("invalid bitcoin rpc url");
             let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-                &wallet_config.local.btc_rpc,
+                &bitcoin_rpc_url,
                 task_group.make_handle(),
             )
             .expect("Could not create bitcoinrpc");
-            let bitcoin = RealBitcoinTest::new(&wallet_config.local.btc_rpc);
+            let bitcoin = RealBitcoinTest::new(&bitcoin_rpc_url);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =
@@ -1049,6 +1038,7 @@ impl FederationTest {
                         .init(
                             cfg.get_module_config(id).unwrap(),
                             db.clone(),
+                            &BTreeMap::new(),
                             &mut task_group,
                         )
                         .await

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::{Infallible, TryInto};
+use std::ffi::{OsStr, OsString};
 use std::hash::Hasher;
 use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
@@ -18,6 +19,7 @@ use bitcoin::{
 };
 use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
+use fedimint_api::bitcoin_rpc::{fm_bitcoind_rpc_env_value_to_url, FM_BITCOIND_RPC_ENV};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
@@ -50,7 +52,6 @@ use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
-use url::Url;
 
 use crate::common::WalletDecoder;
 use crate::config::WalletConfig;
@@ -234,9 +235,12 @@ impl ModuleInit for WalletConfigGenerator {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
+        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
+        Ok(Wallet::new(cfg.to_typed()?, db, env, task_group)
+            .await?
+            .into())
     }
 
     fn trusted_dealer_gen(
@@ -265,7 +269,6 @@ impl ModuleInit for WalletConfigGenerator {
                         .collect(),
                     *sk,
                     peers.threshold(),
-                    params.bitcoin_rpc.clone(),
                     params.network,
                     params.finality_delay,
                 );
@@ -327,7 +330,6 @@ impl ModuleInit for WalletConfigGenerator {
             peer_peg_in_keys,
             sk,
             peers.threshold(),
-            params.bitcoin_rpc.clone(),
             params.network,
             params.finality_delay,
         );
@@ -357,7 +359,6 @@ impl ModuleInit for WalletConfigGenerator {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletConfigGenParams {
     pub network: bitcoin::network::constants::Network,
-    pub bitcoin_rpc: Url,
     pub finality_delay: u32,
 }
 
@@ -806,10 +807,16 @@ impl Wallet {
     pub async fn new(
         cfg: WalletConfig,
         db: Database,
+        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
+        let bitcoin_url = fm_bitcoind_rpc_env_value_to_url(
+            env.get(OsStr::new(FM_BITCOIND_RPC_ENV))
+                .map(OsString::as_os_str),
+        )?;
+
         let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-            &cfg.local.btc_rpc,
+            &bitcoin_url,
             task_group.make_handle(),
         )?;
 

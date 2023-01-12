@@ -74,10 +74,6 @@ enum Command {
         #[arg(long = "certs", value_delimiter = ',')]
         certs: Vec<String>,
 
-        /// `bitcoind` json rpc endpoint
-        #[arg(long = "bitcoind-rpc", default_value = "http://127.0.0.1:18443")]
-        bitcoind_rpc: Url,
-
         /// Max denomination of notes issued by the federation (in millisats)
         /// default = 1 BTC
         #[arg(long = "max_denomination", default_value = "100000000000")]
@@ -162,7 +158,6 @@ async fn main() -> anyhow::Result<()> {
             certs,
             bind_p2p,
             bind_api,
-            bitcoind_rpc,
             max_denomination,
             network,
             finality_delay,
@@ -177,7 +172,6 @@ async fn main() -> anyhow::Result<()> {
                 max_denomination,
                 federation_name,
                 certs,
-                &bitcoind_rpc,
                 network,
                 finality_delay,
                 rustls::PrivateKey(pk_bytes),

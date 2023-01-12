@@ -212,7 +212,6 @@ mod tests {
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
-    use reqwest::Url;
     use threshold_crypto::PublicKey;
 
     use crate::api::IFederationApi;
@@ -349,7 +348,6 @@ mod tests {
                 },
                 &ConfigGenParams::new().attach(WalletConfigGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
-                    bitcoin_rpc: Url::parse("http://bitcoin:bitcoin@localhost").unwrap(),
                     finality_delay: 10,
                 }),
                 &WalletConfigGenerator,

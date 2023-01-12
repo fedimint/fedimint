@@ -12,7 +12,6 @@ use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use crate::keys::CompressedPublicKey;
 use crate::PegInDescriptor;
@@ -28,10 +27,7 @@ pub struct WalletConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WalletConfigLocal {
-    /// Configuration for connecting to our Bitcoin node
-    pub btc_rpc: Url,
-}
+pub struct WalletConfigLocal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigPrivate {
@@ -141,7 +137,6 @@ impl WalletConfig {
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
         threshold: usize,
-        btc_rpc: Url,
         network: Network,
         finality_delay: u32,
     ) -> Self {
@@ -150,7 +145,7 @@ impl WalletConfig {
         );
 
         Self {
-            local: WalletConfigLocal { btc_rpc },
+            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
