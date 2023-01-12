@@ -205,7 +205,9 @@ impl LnGateway {
         })
     }
 
-    async fn handle_receive_invoice_msg(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
+    /// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
+    /// a federation user.
+    async fn handle_receive_payment(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
         let ReceivePaymentPayload { htlc_accepted } = payload;
 
         let invoice_amount = htlc_accepted.htlc.amount;
@@ -319,7 +321,7 @@ impl LnGateway {
                     }
                     GatewayRequest::ReceivePayment(inner) => {
                         inner
-                            .handle(|payload| self.handle_receive_invoice_msg(payload))
+                            .handle(|payload| self.handle_receive_payment(payload))
                             .await;
                     }
                     GatewayRequest::PayInvoice(inner) => {
