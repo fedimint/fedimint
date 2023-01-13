@@ -22,26 +22,37 @@ function open_channel() {
 }
 
 function await_bitcoin_rpc() {
-    until $FM_BTC_CLIENT getblockchaininfo; do
-        sleep $POLL_INTERVAL
+    until $FM_BTC_CLIENT getblockchaininfo 1>/dev/null 2>/dev/null ; do
+        >&2 echo "Bitcoind rpc not ready yet. Waiting ..."
+        sleep "$POLL_INTERVAL"
     done
 }
 
 function await_cln_rpc() {
-    until [ -e $FM_LN1_DIR/regtest/lightning-rpc ]; do
-        sleep $POLL_INTERVAL
+    until [ -e "$FM_LN1_DIR/regtest/lightning-rpc" ]; do
+        >&2 echo "LN gateway 1 not ready yet. Waiting ..."
+        sleep "$POLL_INTERVAL"
     done
-    until [ -e $FM_LN2_DIR/regtest/lightning-rpc ]; do
-        sleep $POLL_INTERVAL
+    until [ -e "$FM_LN2_DIR/regtest/lightning-rpc" ]; do
+        >&2 echo "LN gateway 2 not ready yet. Waiting ..."
+        sleep "$POLL_INTERVAL"
     done
 }
 
 function await_fedimint_block_sync() {
-  FINALITY_DELAY=$(get_finality_delay)
-  EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks') - $FINALITY_DELAY ))"
-  echo "Node at ${EXPECTED_BLOCK_HEIGHT}H"
-  $FM_MINT_CLIENT wait-block-height $EXPECTED_BLOCK_HEIGHT
-  echo "Mint at ${EXPECTED_BLOCK_HEIGHT}H"
+  local node_height
+  local finality_delay
+  local expected_block_height
+
+  node_height="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
+  finality_delay="$(get_finality_delay)"
+  expected_block_height="$((node_height - finality_delay))"
+
+  echo "Node at ${node_height}H"
+
+  if [ 0 -lt $expected_block_height ]; then
+      $FM_MINT_CLIENT wait-block-height $expected_block_height
+  fi
 }
 
 function await_all_peers() {
@@ -76,9 +87,9 @@ function await_cln_block_processing() {
 # Function for killing processes stored in FM_PID_FILE
 function kill_fedimint_processes {
   # shellcheck disable=SC2046
-  kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
-  pkill "ln_gateway" || true;
-  rm $FM_PID_FILE
+  kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') 2>/dev/null #sed reverses the order here
+  pkill "ln_gateway" 2>/dev/null || true;
+  rm -f $FM_PID_FILE
 }
 
 function start_gateway() {
