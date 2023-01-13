@@ -2,7 +2,7 @@
 # Calls the CLI to peg user client into the federation
 echo "Run with 'source ./scripts/pegin.sh [amount] [use_gateway]"
 
-set -euxo pipefail
+set -euo pipefail
 source ./scripts/lib.sh
 
 # Let's define some shortcuts for bitcoind and the mint client
