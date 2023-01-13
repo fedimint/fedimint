@@ -254,7 +254,8 @@ impl ModuleInitRegistry {
             let Some(init) = self.0.get(kind) else {
                 anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
             };
-            info!(module_instance_id = *module_id, kind = %kind, "Init  module");
+            info!(module_instance_id = *module_id, kind = %kind, "Init module");
+
             let module = init
                 .init(
                     cfg.get_module_config(*module_id)?,
@@ -383,9 +384,9 @@ impl ServerConfig {
         &self,
         id: ModuleInstanceId,
     ) -> anyhow::Result<T> {
-        let local = Self::get_or_error(&self.local.modules, id)?;
-        let private = Self::get_or_error(&self.private.modules, id)?;
-        let consensus = Self::get_or_error(&self.consensus.modules, id)?;
+        let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
+        let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
+        let consensus = Self::get_module_cfg_by_instance_id(&self.consensus.modules, id)?;
         let module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
@@ -406,22 +407,21 @@ impl ServerConfig {
 
     /// Constructs a module config by name
     pub fn get_module_config(&self, id: ModuleInstanceId) -> anyhow::Result<ServerModuleConfig> {
-        let local = Self::get_or_error(&self.local.modules, id)?;
-        let private = Self::get_or_error(&self.private.modules, id)?;
-        let consensus = Self::get_or_error(&self.consensus.modules, id)?;
+        let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
+        let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
+        let consensus = Self::get_module_cfg_by_instance_id(&self.consensus.modules, id)?;
         Ok(ServerModuleConfig::from(local, private, consensus))
     }
 
-    fn get_or_error<T>(
-        json: &BTreeMap<ModuleInstanceId, T>,
+    fn get_module_cfg_by_instance_id(
+        json: &BTreeMap<ModuleInstanceId, JsonWithKind>,
         id: ModuleInstanceId,
-    ) -> anyhow::Result<T>
-    where
-        T: Clone,
-    {
-        json.get(&id)
+    ) -> anyhow::Result<JsonWithKind> {
+        Ok(json
+            .get(&id)
             .ok_or_else(|| format_err!("Module {id} not found"))
-            .cloned()
+            .cloned()?
+            .with_fixed_empty_value())
     }
 
     pub fn validate_config(
