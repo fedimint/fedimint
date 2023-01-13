@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{format_err, Error};
 use askama::Template;
-use axum::extract::{Extension, Form};
+use axum::extract::Form;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::{
     routing::{get, post},
@@ -47,7 +47,7 @@ pub struct Guardian {
 #[template(path = "home.html")]
 struct HomeTemplate {}
 
-async fn home_page(Extension(_): Extension<MutableState>) -> HomeTemplate {
+async fn home_page(axum::extract::State(_): axum::extract::State<MutableState>) -> HomeTemplate {
     HomeTemplate {}
 }
 
@@ -58,7 +58,7 @@ struct RunTemplate {
     has_connection_string: bool,
 }
 
-async fn run_page(Extension(state): Extension<MutableState>) -> RunTemplate {
+async fn run_page(axum::extract::State(state): axum::extract::State<MutableState>) -> RunTemplate {
     let state = state.lock().await;
     let path = state.data_dir.join("client.json");
     let connection_string: String = match std::fs::File::open(path) {
@@ -84,7 +84,9 @@ struct AddGuardiansTemplate {
     connect_string: String,
 }
 
-async fn add_guardians_page(Extension(state): Extension<MutableState>) -> AddGuardiansTemplate {
+async fn add_guardians_page(
+    axum::extract::State(state): axum::extract::State<MutableState>,
+) -> AddGuardiansTemplate {
     let state = state.lock().await;
     let params = state.params.clone().expect("invalid state");
     AddGuardiansTemplate {
@@ -101,7 +103,7 @@ pub struct GuardiansForm {
 
 #[debug_handler]
 async fn post_guardians(
-    Extension(state): Extension<MutableState>,
+    axum::extract::State(state): axum::extract::State<MutableState>,
     Form(form): Form<GuardiansForm>,
 ) -> Result<Redirect, UIError> {
     let mut state = state.lock().await;
@@ -218,7 +220,9 @@ struct UrlConnection {
     ro_bitcoind_rpc: String,
 }
 
-async fn params_page(Extension(_state): Extension<MutableState>) -> UrlConnection {
+async fn params_page(
+    axum::extract::State(_state): axum::extract::State<MutableState>,
+) -> UrlConnection {
     UrlConnection {
         ro_bitcoind_rpc: fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env()
             .as_ref()
@@ -259,7 +263,7 @@ pub struct ParamsForm {
 
 #[debug_handler]
 async fn post_federation_params(
-    Extension(state): Extension<MutableState>,
+    axum::extract::State(state): axum::extract::State<MutableState>,
     Form(form): Form<ParamsForm>,
 ) -> Result<Redirect, UIError> {
     let mut state = state.lock().await;
@@ -308,7 +312,7 @@ impl IntoResponse for UIError {
     }
 }
 
-async fn qr(Extension(state): Extension<MutableState>) -> impl IntoResponse {
+async fn qr(axum::extract::State(state): axum::extract::State<MutableState>) -> impl IntoResponse {
     let state = state.lock().await;
     let path = state.data_dir.join("client.json");
     let connection_string: String = match std::fs::File::open(path) {
@@ -377,7 +381,7 @@ pub async fn run_ui(
         .route("/post_guardians", post(post_guardians))
         .route("/run", get(run_page))
         .route("/qr", get(qr))
-        .layer(Extension(state));
+        .with_state(state);
 
     axum::Server::bind(&bind_addr)
         .serve(app.into_make_service())
