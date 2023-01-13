@@ -14,14 +14,50 @@
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::cell::Cell;
+<span class="kw">use </span>std::fmt;
+<span class="kw">use </span>std::thread_local;
+
+<span class="macro">thread_local!</span>(<span class="kw">static </span>RUST_LOG_FULL: Cell&lt;bool&gt; = Cell::new(<span class="bool-val">false</span>));
+
+<span class="kw">pub fn </span>rust_log_full_enabled() -&gt; bool {
+    <span class="comment">// this will be called only once per-thread for best performance
+    </span>RUST_LOG_FULL.with(|v| {
+        <span class="kw">let </span>enabled = std::env::var_os(<span class="string">&quot;RUST_LOG_FULL&quot;</span>)
+            .map(|val| !val.is_empty())
+            .unwrap_or(<span class="bool-val">false</span>);
+        v.set(enabled);
+        enabled
+    })
+}
 
 <span class="doccomment">/// Use for displaying bytes in the logs
+///
+/// Will truncate values longer than 64 bytes, unless `RUST_LOG_FULL`
+/// environment variable is set to a non-empty value.
 </span><span class="kw">pub struct </span>AbbreviateHexBytes&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>[u8]);
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; fmt::Display <span class="kw">for </span>AbbreviateHexBytes&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        <span class="kw">if </span><span class="self">self</span>.<span class="number">0</span>.len() &lt;= <span class="number">64 </span>{
+        <span class="kw">if </span><span class="self">self</span>.<span class="number">0</span>.len() &lt;= <span class="number">64 </span>|| rust_log_full_enabled() {
             f.write_str(<span class="kw-2">&amp;</span>hex::encode(<span class="self">self</span>.<span class="number">0</span>))<span class="question-mark">?</span>;
         } <span class="kw">else </span>{
             f.write_str(<span class="kw-2">&amp;</span>hex::encode(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>[..<span class="number">64</span>]))<span class="question-mark">?</span>;
