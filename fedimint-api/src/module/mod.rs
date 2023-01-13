@@ -5,10 +5,12 @@ pub mod registry;
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::cancellable::Cancellable;
@@ -23,7 +25,7 @@ use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::{DynServerModule, VerificationCache};
 use crate::task::TaskGroup;
-use crate::{Amount, OutPoint, PeerId};
+use crate::{dyn_newtype_define, Amount, OutPoint, PeerId};
 
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
@@ -198,7 +200,7 @@ where
     }
 }
 
-/// Module Generation
+/// Interface for Module Generation
 ///
 /// This trait contains the methods responsible for the module's
 /// - initialization
@@ -207,7 +209,7 @@ where
 ///
 /// Once the module configuration is ready, the module can be instantiated via `[Self::init]`.
 #[async_trait]
-pub trait ModuleGen {
+pub trait IModuleGen: Debug {
     fn decoder(&self) -> DynDecoder;
 
     fn module_kind(&self) -> ModuleKind;
@@ -246,6 +248,132 @@ pub trait ModuleGen {
     ) -> anyhow::Result<ClientModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+}
+
+dyn_newtype_define!(
+    #[derive(Clone)]
+    pub DynModuleGen(Arc<IModuleGen>)
+);
+
+/// Module Generation trait with associated types
+///
+/// Needs to be implemented by module generation type
+///
+/// For examples, take a look at one of the `MintConfigGenerator`, `WalletConfigGenerator`, or
+/// `LightningConfigGenerator` structs.
+#[async_trait]
+pub trait ModuleGen: Debug + Sized {
+    const KIND: ModuleKind;
+
+    type Decoder: Decoder;
+
+    fn module_kind(&self) -> ModuleKind {
+        Self::KIND
+    }
+
+    fn decoder(&self) -> Self::Decoder;
+
+    /// Initialize the [`DynServerModule`] instance from its config
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        db: Database,
+        env: &BTreeMap<OsString, OsString>,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<DynServerModule>;
+
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        params: &ConfigGenParams,
+    ) -> BTreeMap<PeerId, ServerModuleConfig>;
+
+    async fn distributed_gen(
+        &self,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        our_id: &PeerId,
+        module_id: ModuleInstanceId,
+        peers: &[PeerId],
+        params: &ConfigGenParams,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>>;
+
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig>;
+
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<ClientModuleConfig>;
+
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+impl<T> IModuleGen for T
+where
+    T: ModuleGen + 'static + Sync,
+{
+    fn decoder(&self) -> DynDecoder {
+        DynDecoder::from_typed(ModuleGen::decoder(self))
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        <Self as ModuleGen>::module_kind(self)
+    }
+
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        db: Database,
+        env: &BTreeMap<OsString, OsString>,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<DynServerModule> {
+        <Self as ModuleGen>::init(self, cfg, db, env, task_group).await
+    }
+
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        params: &ConfigGenParams,
+    ) -> BTreeMap<PeerId, ServerModuleConfig> {
+        <Self as ModuleGen>::trusted_dealer_gen(self, peers, params)
+    }
+
+    async fn distributed_gen(
+        &self,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        our_id: &PeerId,
+        module_id: ModuleInstanceId,
+        peers: &[PeerId],
+        params: &ConfigGenParams,
+        task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+        <Self as ModuleGen>::distributed_gen(
+            self,
+            connections,
+            our_id,
+            module_id,
+            peers,
+            params,
+            task_group,
+        )
+        .await
+    }
+
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
+        <Self as ModuleGen>::to_client_config(self, config)
+    }
+
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: Value,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        <Self as ModuleGen>::to_client_config_from_consensus_value(self, config)
+    }
+
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
+        <Self as ModuleGen>::validate_config(self, identity, config)
+    }
 }
 
 #[async_trait]

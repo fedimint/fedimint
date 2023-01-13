@@ -10,7 +10,7 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{DynDecoder, ModuleInstanceId, ModuleKind};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
@@ -46,18 +46,24 @@ pub struct DummyOutputConfirmation;
 #[derive(Debug, Clone)]
 pub struct DummyVerificationCache;
 
+#[derive(Debug)]
 pub struct DummyConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for DummyConfigGenerator {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(DummyDecoder)
+    const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
+    type Decoder = DummyDecoder;
+
+    fn decoder(&self) -> DummyDecoder {
+        DummyDecoder
     }
 
-    fn module_kind(&self) -> ModuleKind {
-        const KIND: &str = "dummy";
-        ModuleKind::from_static_str(KIND)
-    }
+    // TODO: is this method always required to be implemented? Or maybe have default impl that
+    // returns ModuleKind::from_static(KIND) and define `KIND = "dummy"`?
+    // fn module_kind(&self) -> ModuleKind {
+    //     const KIND: &str = "dummy";
+    //     ModuleKind::from_static_str(KIND)
+    // }
 
     async fn init(
         &self,

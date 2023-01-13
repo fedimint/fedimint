@@ -28,9 +28,7 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{
-    DynDecoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
@@ -231,12 +229,16 @@ impl std::fmt::Display for LightningConsensusItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct LightningVerificationCache;
 
+#[derive(Debug)]
 pub struct LightningConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for LightningConfigGenerator {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(LightningDecoder)
+    const KIND: ModuleKind = ModuleKind::from_static_str("LightningConfigGenerator");
+    type Decoder = LightningDecoder;
+
+    fn decoder(&self) -> LightningDecoder {
+        LightningDecoder
     }
 
     fn module_kind(&self) -> ModuleKind {

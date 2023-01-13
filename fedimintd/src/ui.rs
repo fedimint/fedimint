@@ -13,7 +13,7 @@ use axum::{
 use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_api::config::ClientConfig;
-use fedimint_api::module::ModuleGen;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_ln::LightningConfigGenerator;
@@ -135,9 +135,9 @@ async fn post_guardians(
     let max_denomination = Amount::from_msats(100000000000);
     let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
     let module_config_gens = ModuleInitRegistry::from(vec![
-        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
-        Arc::new(MintConfigGenerator),
-        Arc::new(LightningConfigGenerator),
+        DynModuleGen::from(WalletConfigGenerator),
+        DynModuleGen::from(MintConfigGenerator),
+        DynModuleGen::from(LightningConfigGenerator),
     ]);
     let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();
