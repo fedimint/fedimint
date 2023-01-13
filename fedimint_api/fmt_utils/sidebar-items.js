@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["AbbreviateHexBytes","Use for displaying bytes in the logs"]]};

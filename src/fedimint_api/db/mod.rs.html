@@ -898,6 +898,9 @@
 <a href="#898" id="898">898</a>
 <a href="#899" id="899">899</a>
 <a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -907,7 +910,10 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+<span class="kw">use crate</span>::{
+    encoding::{Decodable, Encodable},
+    fmt_utils::AbbreviateHexBytes,
+};
 
 <span class="kw">pub mod </span>mem_impl;
 
@@ -1122,9 +1128,9 @@
         };
 
         <span class="macro">trace!</span>(
-            <span class="string">&quot;get_value: Decoding {} from bytes {:?}&quot;</span>,
+            <span class="string">&quot;get_value: Decoding {} from bytes {}&quot;</span>,
             std::any::type_name::&lt;K::Value&gt;(),
-            value_bytes
+            AbbreviateHexBytes(<span class="kw-2">&amp;</span>value_bytes)
         );
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="self">self</span>.decoders)<span class="question-mark">?</span>))
     }
@@ -1145,9 +1151,9 @@
                 res.and_then(|(key_bytes, value_bytes)| {
                     <span class="kw">let </span>key = KP::Key::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
                     <span class="macro">trace!</span>(
-                        <span class="string">&quot;find by prefix: Decoding {} from bytes {:?}&quot;</span>,
+                        <span class="string">&quot;find by prefix: Decoding {} from bytes {}&quot;</span>,
                         std::any::type_name::&lt;KP::Value&gt;(),
-                        value_bytes
+                        AbbreviateHexBytes(<span class="kw-2">&amp;</span>value_bytes)
                     );
                     <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>((key, value))
@@ -1166,9 +1172,9 @@
         </span>{
             <span class="prelude-val">Some</span>(old_val_bytes) =&gt; {
                 <span class="macro">trace!</span>(
-                    <span class="string">&quot;insert_bytes: Decoding {} from bytes {:?}&quot;</span>,
+                    <span class="string">&quot;insert_entry: Decoding {} from bytes {}&quot;</span>,
                     std::any::type_name::&lt;K::Value&gt;(),
-                    old_val_bytes
+                    AbbreviateHexBytes(<span class="kw-2">&amp;</span>old_val_bytes)
                 );
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>old_val_bytes, <span class="self">self</span>.decoders)<span class="question-mark">?</span>))
             }
