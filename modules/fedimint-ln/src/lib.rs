@@ -230,10 +230,10 @@ impl std::fmt::Display for LightningConsensusItem {
 pub struct LightningVerificationCache;
 
 #[derive(Debug)]
-pub struct LightningConfigGenerator;
+pub struct LightningGen;
 
 #[async_trait]
-impl ModuleGen for LightningConfigGenerator {
+impl ModuleGen for LightningGen {
     const KIND: ModuleKind = KIND;
     type Decoder = LightningDecoder;
 

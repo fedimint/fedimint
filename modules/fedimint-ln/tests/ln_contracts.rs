@@ -11,7 +11,7 @@ use fedimint_ln::contracts::{
     AccountContractOutcome, Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage,
     IdentifyableContract, OutgoingContractOutcome, Preimage,
 };
-use fedimint_ln::LightningConfigGenerator;
+use fedimint_ln::LightningGen;
 use fedimint_ln::{
     ContractOutput, Lightning, LightningError, LightningInput, LightningOutput,
     LightningOutputOutcome,
@@ -27,7 +27,7 @@ async fn test_account() {
         4,
         |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
-        &LightningConfigGenerator,
+        &LightningGen,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
@@ -78,7 +78,7 @@ async fn test_outgoing() {
         4,
         |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
-        &LightningConfigGenerator,
+        &LightningGen,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await
@@ -178,7 +178,7 @@ async fn test_incoming() {
         4,
         |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
         &ConfigGenParams::new(),
-        &LightningConfigGenerator,
+        &LightningGen,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
     .await

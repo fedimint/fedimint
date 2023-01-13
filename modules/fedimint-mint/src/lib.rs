@@ -136,10 +136,10 @@ pub struct VerifiedNotes {
 }
 
 #[derive(Debug)]
-pub struct MintConfigGenerator;
+pub struct MintGen;
 
 #[async_trait]
-impl ModuleGen for MintConfigGenerator {
+impl ModuleGen for MintGen {
     const KIND: ModuleKind = KIND;
 
     type Decoder = MintDecoder;
@@ -163,9 +163,7 @@ impl ModuleGen for MintConfigGenerator {
         peers: &[PeerId],
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = params
-            .get::<MintConfigGenParams>()
-            .expect("Invalid mint params");
+        let params = params.get::<MintGenParams>().expect("Invalid mint params");
 
         let tbs_keys = params
             .mint_amounts
@@ -225,9 +223,7 @@ impl ModuleGen for MintConfigGenerator {
         params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
-        let params = params
-            .get::<MintConfigGenParams>()
-            .expect("Invalid mint params");
+        let params = params.get::<MintGenParams>().expect("Invalid mint params");
 
         let mut dkg = DkgRunner::multi(
             params.mint_amounts.to_vec(),
@@ -300,11 +296,11 @@ impl ModuleGen for MintConfigGenerator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MintConfigGenParams {
+pub struct MintGenParams {
     pub mint_amounts: Vec<Amount>,
 }
 
-impl ModuleConfigGenParams for MintConfigGenParams {
+impl ModuleConfigGenParams for MintGenParams {
     const MODULE_NAME: &'static str = "mint";
 }
 
@@ -1139,8 +1135,8 @@ mod test {
 
     use crate::config::{FeeConsensus, MintClientConfig};
     use crate::{
-        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigGenParams,
-        MintConfigGenerator, MintConfigPrivate, PeerErrorType,
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigPrivate,
+        MintGen, MintGenParams, PeerErrorType,
     };
 
     const THRESHOLD: usize = 1;
@@ -1148,9 +1144,9 @@ mod test {
 
     fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-        let mint_cfg = MintConfigGenerator.trusted_dealer_gen(
+        let mint_cfg = MintGen.trusted_dealer_gen(
             &peers,
-            &ConfigGenParams::new().attach(MintConfigGenParams {
+            &ConfigGenParams::new().attach(MintGenParams {
                 mint_amounts: vec![Amount::from_sats(1)],
             }),
         );

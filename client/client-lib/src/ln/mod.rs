@@ -342,7 +342,7 @@ mod tests {
     use fedimint_core::modules::ln::config::LightningClientConfig;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use fedimint_core::modules::ln::{ContractAccount, Lightning, LightningConfigGenerator};
+    use fedimint_core::modules::ln::{ContractAccount, Lightning, LightningGen};
     use fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     use fedimint_core::modules::wallet::PegOutFees;
@@ -478,7 +478,7 @@ mod tests {
                 4,
                 |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
                 &ConfigGenParams::new(),
-                &LightningConfigGenerator,
+                &LightningGen,
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
             )
             .await

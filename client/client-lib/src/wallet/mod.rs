@@ -206,8 +206,7 @@ mod tests {
     use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletConfigGenParams, WalletConfigGenerator, WalletOutput,
-        WalletOutputOutcome,
+        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
     };
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
@@ -346,11 +345,11 @@ mod tests {
                         .await?)
                     }
                 },
-                &ConfigGenParams::new().attach(WalletConfigGenParams {
+                &ConfigGenParams::new().attach(WalletGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
                     finality_delay: 10,
                 }),
-                &WalletConfigGenerator,
+                &WalletGen,
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             )
             .await

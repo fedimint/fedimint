@@ -20,8 +20,8 @@ use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnect
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
-use fedimint_core::modules::mint::MintConfigGenParams;
-use fedimint_wallet::WalletConfigGenParams;
+use fedimint_core::modules::mint::MintGenParams;
+use fedimint_wallet::WalletGenParams;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
@@ -742,12 +742,12 @@ impl ServerConfigParams {
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
             federation_name,
             modules: ConfigGenParams::new()
-                .attach(WalletConfigGenParams {
+                .attach(WalletGenParams {
                     network,
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
                     finality_delay,
                 })
-                .attach(MintConfigGenParams {
+                .attach(MintGenParams {
                     mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
                 }),
         }
