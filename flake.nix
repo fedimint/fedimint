@@ -68,7 +68,7 @@
         # > [85806]: rust-lang/rust#85806
         # > [7339]: termux/termux-packages#7339 (comment)
 
-        fake-libgcc-gen = arch: pkgs.stdenv.mkDerivation rec {
+        fake-libgcc-gen = arch: pkgs.stdenv.mkDerivation {
           pname = "fake-libgcc";
           version = "0.1.0";
 
@@ -421,7 +421,7 @@
         });
 
 
-        pkg = { name, dirs, bin ? null }:
+        pkg = { name, dirs, defaultBin ? null }:
           let
             deps = craneLib.buildDepsOnly (commonArgs // {
               src = filterWorkspaceDepsBuildFiles ./.;
@@ -433,9 +433,9 @@
           in
 
           craneLib.buildPackage (commonArgs // {
-            meta = { mainProgram = bin; };
+            meta = { mainProgram = defaultBin; };
             pname = "pkg-${name}";
-            cargoArtifacts = workspaceDeps;
+            cargoArtifacts = deps;
 
             src = filterModules dirs ./.;
             cargoExtraArgs = "--package ${name}";
@@ -480,7 +480,7 @@
 
         fedimintd = pkg {
           name = "fedimintd";
-          bin = "fedimintd";
+          defaultBin = "fedimintd";
           dirs = [
             "client/client-lib"
             "crypto/aead"
@@ -503,7 +503,7 @@
 
         ln-gateway = pkg {
           name = "ln-gateway";
-          bin = "ln-gateway";
+          defaultBin = "ln-gateway";
           dirs = [
             "crypto/aead"
             "crypto/derive-secret"
@@ -526,7 +526,7 @@
 
         gateway-cli = pkg {
           name = "gateway-cli";
-          bin = "gateway-cli";
+          defaultBin = "gateway-cli";
           dirs = [
             "crypto/aead"
             "crypto/derive-secret"
@@ -550,7 +550,7 @@
 
         fedimint-cli = pkg {
           name = "fedimint-cli";
-          bin = "fedimint-cli";
+          defaultBin = "fedimint-cli";
           dirs = [
             "client/client-lib"
             "client/cli"
@@ -670,12 +670,13 @@
           inherit fedimintd ln-gateway gateway-cli fedimint-cli fedimint-tests;
 
         };
-      in
-      {
         packages = outputsWorkspace //
           # replace git hash in the final binaries
           (builtins.mapAttrs (name: package: replace-git-hash { inherit name package; }) outputsPackages)
         ;
+      in
+      {
+        inherit packages;
 
         # Technically nested sets are not allowed in `packages`, so we can
         # dump the nested things here. They'll work the same way for most
@@ -726,7 +727,8 @@
               fedimintd = pkgs.dockerTools.buildLayeredImage {
                 name = "fedimintd";
                 contents = [
-                  fedimintd
+                  packages.fedimintd
+                  packages.fedimint-cli
                   pkgs.bash
                   pkgs.coreutils
                 ];
