@@ -224,15 +224,11 @@ pub struct WalletConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for WalletConfigGenerator {
-    const KIND: ModuleKind = ModuleKind::from_static_str("WalletConfigGenerator");
+    const KIND: ModuleKind = KIND;
     type Decoder = WalletDecoder;
 
     fn decoder(&self) -> WalletDecoder {
         WalletDecoder {}
-    }
-
-    fn module_kind(&self) -> ModuleKind {
-        KIND
     }
 
     async fn init(

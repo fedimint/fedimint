@@ -234,15 +234,11 @@ pub struct LightningConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for LightningConfigGenerator {
-    const KIND: ModuleKind = ModuleKind::from_static_str("LightningConfigGenerator");
+    const KIND: ModuleKind = KIND;
     type Decoder = LightningDecoder;
 
     fn decoder(&self) -> LightningDecoder {
         LightningDecoder
-    }
-
-    fn module_kind(&self) -> ModuleKind {
-        KIND
     }
 
     async fn init(

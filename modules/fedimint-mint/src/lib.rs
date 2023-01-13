@@ -140,15 +140,12 @@ pub struct MintConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for MintConfigGenerator {
-    const KIND: ModuleKind = ModuleKind::from_static_str("MintConfigGenerator");
+    const KIND: ModuleKind = KIND;
+
     type Decoder = MintDecoder;
 
     fn decoder(&self) -> MintDecoder {
         MintDecoder
-    }
-
-    fn module_kind(&self) -> ModuleKind {
-        Self::KIND
     }
 
     async fn init(

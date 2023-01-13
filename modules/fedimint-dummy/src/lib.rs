@@ -51,19 +51,12 @@ pub struct DummyConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for DummyConfigGenerator {
-    const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
+    const KIND: ModuleKind = KIND;
     type Decoder = DummyDecoder;
 
     fn decoder(&self) -> DummyDecoder {
         DummyDecoder
     }
-
-    // TODO: is this method always required to be implemented? Or maybe have default impl that
-    // returns ModuleKind::from_static(KIND) and define `KIND = "dummy"`?
-    // fn module_kind(&self) -> ModuleKind {
-    //     const KIND: &str = "dummy";
-    //     ModuleKind::from_static_str(KIND)
-    // }
 
     async fn init(
         &self,
