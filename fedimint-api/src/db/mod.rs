@@ -7,7 +7,10 @@ use async_trait::async_trait;
 use thiserror::Error;
 use tracing::{trace, warn};
 
-use crate::encoding::{Decodable, Encodable};
+use crate::{
+    encoding::{Decodable, Encodable},
+    fmt_utils::AbbreviateHexBytes,
+};
 
 pub mod mem_impl;
 
@@ -222,9 +225,9 @@ impl<'a> DatabaseTransaction<'a> {
         };
 
         trace!(
-            "get_value: Decoding {} from bytes {:?}",
+            "get_value: Decoding {} from bytes {}",
             std::any::type_name::<K::Value>(),
-            value_bytes
+            AbbreviateHexBytes(&value_bytes)
         );
         Ok(Some(K::Value::from_bytes(&value_bytes, self.decoders)?))
     }
@@ -245,9 +248,9 @@ impl<'a> DatabaseTransaction<'a> {
                 res.and_then(|(key_bytes, value_bytes)| {
                     let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
                     trace!(
-                        "find by prefix: Decoding {} from bytes {:?}",
+                        "find by prefix: Decoding {} from bytes {}",
                         std::any::type_name::<KP::Value>(),
-                        value_bytes
+                        AbbreviateHexBytes(&value_bytes)
                     );
                     let value = KP::Value::from_bytes(&value_bytes, &decoders)?;
                     Ok((key, value))
@@ -266,9 +269,9 @@ impl<'a> DatabaseTransaction<'a> {
         {
             Some(old_val_bytes) => {
                 trace!(
-                    "insert_bytes: Decoding {} from bytes {:?}",
+                    "insert_entry: Decoding {} from bytes {}",
                     std::any::type_name::<K::Value>(),
-                    old_val_bytes
+                    AbbreviateHexBytes(&old_val_bytes)
                 );
                 Ok(Some(K::Value::from_bytes(&old_val_bytes, self.decoders)?))
             }
