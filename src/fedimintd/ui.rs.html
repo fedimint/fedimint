@@ -376,6 +376,17 @@
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -592,10 +603,21 @@
 
 <span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;params.html&quot;</span>)]
-</span><span class="kw">struct </span>UrlConnection {}
+</span><span class="kw">struct </span>UrlConnection {
+    ro_bitcoind_rpc: String,
+}
 
 <span class="kw">async fn </span>params_page(Extension(_state): Extension&lt;MutableState&gt;) -&gt; UrlConnection {
-    UrlConnection {}
+    UrlConnection {
+        ro_bitcoind_rpc: fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env()
+            .as_ref()
+            .map(ToString::to_string)
+            .ok()
+            .unwrap_or(<span class="macro">format!</span>(
+                <span class="string">&quot;Invalid value of {} env variable&quot;</span>,
+                fedimint_api::bitcoin_rpc::FM_BITCOIND_RPC_ENV
+            )),
+    }
 }
 
 <span class="attr">#[derive(Deserialize, Debug, Clone)]
