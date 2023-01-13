@@ -934,8 +934,8 @@
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
-<span class="kw">use </span>fedimint_core::modules::mint::MintConfigGenParams;
-<span class="kw">use </span>fedimint_wallet::WalletConfigGenParams;
+<span class="kw">use </span>fedimint_core::modules::mint::MintGenParams;
+<span class="kw">use </span>fedimint_wallet::WalletGenParams;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>hbbft::NetworkInfo;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -1656,12 +1656,12 @@
             api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, peers, |params| params.api_url),
             federation_name,
             modules: ConfigGenParams::new()
-                .attach(WalletConfigGenParams {
+                .attach(WalletGenParams {
                     network,
                     <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit anyway
                     </span>finality_delay,
                 })
-                .attach(MintConfigGenParams {
+                .attach(MintGenParams {
                     mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
                 }),
         }

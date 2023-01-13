@@ -405,10 +405,10 @@
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
-<span class="kw">use </span>fedimint_ln::LightningConfigGenerator;
-<span class="kw">use </span>fedimint_mint::MintConfigGenerator;
+<span class="kw">use </span>fedimint_ln::LightningGen;
+<span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
-<span class="kw">use </span>fedimint_wallet::WalletConfigGenerator;
+<span class="kw">use </span>fedimint_wallet::WalletGen;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>mint_client::api::WsFederationConnect;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
@@ -524,9 +524,9 @@
     <span class="kw">let </span>max_denomination = Amount::from_msats(<span class="number">100000000000</span>);
     <span class="kw">let </span>(dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::&lt;UiMessage&gt;();
     <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        DynModuleGen::from(WalletConfigGenerator),
-        DynModuleGen::from(MintConfigGenerator),
-        DynModuleGen::from(LightningConfigGenerator),
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
     ]);
     <span class="kw">let </span>dir_out_path = state.data_dir.clone();
     <span class="kw">let </span>fedimintd_sender = state.sender.clone();

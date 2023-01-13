@@ -945,7 +945,7 @@
     <span class="kw">use </span>fedimint_core::modules::ln::config::LightningClientConfig;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, Lightning, LightningConfigGenerator};
+    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, Lightning, LightningGen};
     <span class="kw">use </span>fedimint_core::modules::ln::{LightningGateway, LightningOutput};
     <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
@@ -1081,7 +1081,7 @@
                 <span class="number">4</span>,
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>)) },
                 <span class="kw-2">&amp;</span>ConfigGenParams::new(),
-                <span class="kw-2">&amp;</span>LightningConfigGenerator,
+                <span class="kw-2">&amp;</span>LightningGen,
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
             )
             .<span class="kw">await

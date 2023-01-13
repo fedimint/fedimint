@@ -700,12 +700,12 @@
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::Encodable;
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
-<span class="kw">use </span>fedimint_ln::{db <span class="kw">as </span>LightningRange, LightningConfigGenerator};
-<span class="kw">use </span>fedimint_mint::{db <span class="kw">as </span>MintRange, MintConfigGenerator};
+<span class="kw">use </span>fedimint_ln::{db <span class="kw">as </span>LightningRange, LightningGen};
+<span class="kw">use </span>fedimint_mint::{db <span class="kw">as </span>MintRange, MintGen};
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
 <span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
 <span class="kw">use </span>fedimint_server::db <span class="kw">as </span>ConsensusRange;
-<span class="kw">use </span>fedimint_wallet::{db <span class="kw">as </span>WalletRange, WalletConfigGenerator};
+<span class="kw">use </span>fedimint_wallet::{db <span class="kw">as </span>WalletRange, WalletGen};
 <span class="kw">use </span>mint_client::db <span class="kw">as </span>ClientRange;
 <span class="kw">use </span>mint_client::ln::db <span class="kw">as </span>ClientLightningRange;
 <span class="kw">use </span>mint_client::mint::db <span class="kw">as </span>ClientMintRange;
@@ -1370,9 +1370,9 @@ Options:
     };
 
     <span class="kw">let </span>_module_inits = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        DynModuleGen::from(WalletConfigGenerator),
-        DynModuleGen::from(MintConfigGenerator),
-        DynModuleGen::from(LightningConfigGenerator),
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
     ]);
 
     <span class="kw">let </span>decoders = Default::default(); <span class="comment">// TODO: read config and use it to create decoders

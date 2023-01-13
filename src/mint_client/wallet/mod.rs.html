@@ -457,7 +457,6 @@
 <a href="#457" id="457">457</a>
 <a href="#458" id="458">458</a>
 <a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -666,8 +665,7 @@
     <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
     <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
     <span class="kw">use </span>fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletConfigGenParams, WalletConfigGenerator, WalletOutput,
-        WalletOutputOutcome,
+        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
     };
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
@@ -806,11 +804,11 @@
                         .<span class="kw">await</span><span class="question-mark">?</span>)
                     }
                 },
-                <span class="kw-2">&amp;</span>ConfigGenParams::new().attach(WalletConfigGenParams {
+                <span class="kw-2">&amp;</span>ConfigGenParams::new().attach(WalletGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
                     finality_delay: <span class="number">10</span>,
                 }),
-                <span class="kw-2">&amp;</span>WalletConfigGenerator,
+                <span class="kw-2">&amp;</span>WalletGen,
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             )
             .<span class="kw">await

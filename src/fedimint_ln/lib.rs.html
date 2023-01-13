@@ -1253,10 +1253,10 @@
 </span><span class="kw">pub struct </span>LightningVerificationCache;
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>LightningConfigGenerator;
+</span><span class="kw">pub struct </span>LightningGen;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>LightningConfigGenerator {
+</span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>LightningGen {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
     <span class="kw">type </span>Decoder = LightningDecoder;
 

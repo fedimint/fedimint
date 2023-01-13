@@ -1829,10 +1829,10 @@
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>WalletConfigGenerator;
+</span><span class="kw">pub struct </span>WalletGen;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>WalletConfigGenerator {
+</span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>WalletGen {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
     <span class="kw">type </span>Decoder = WalletDecoder;
 
@@ -1858,7 +1858,7 @@
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>params = params
-            .get::&lt;WalletConfigGenParams&gt;()
+            .get::&lt;WalletGenParams&gt;()
             .expect(<span class="string">&quot;Invalid wallet params&quot;</span>);
 
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
@@ -1901,7 +1901,7 @@
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
         <span class="kw">let </span>params = params
-            .get::&lt;WalletConfigGenParams&gt;()
+            .get::&lt;WalletGenParams&gt;()
             .expect(<span class="string">&quot;Invalid wallet params&quot;</span>);
 
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
@@ -1966,12 +1966,12 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>WalletConfigGenParams {
+</span><span class="kw">pub struct </span>WalletGenParams {
     <span class="kw">pub </span>network: bitcoin::network::constants::Network,
     <span class="kw">pub </span>finality_delay: u32,
 }
 
-<span class="kw">impl </span>ModuleConfigGenParams <span class="kw">for </span>WalletConfigGenParams {
+<span class="kw">impl </span>ModuleConfigGenParams <span class="kw">for </span>WalletGenParams {
     <span class="kw">const </span>MODULE_NAME: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;wallet&quot;</span>;
 }
 
