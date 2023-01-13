@@ -912,14 +912,9 @@
 <a href="#912" id="912">912</a>
 <a href="#913" id="913">913</a>
 <a href="#914" id="914">914</a>
-<a href="#915" id="915">915</a>
-<a href="#916" id="916">916</a>
-<a href="#917" id="917">917</a>
-<a href="#918" id="918">918</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::os::unix::prelude::OsStrExt;
-<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -934,7 +929,7 @@
 };
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-<span class="kw">use </span>fedimint_api::module::ModuleGen;
+<span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
@@ -1099,9 +1094,6 @@
             .expect(<span class="string">&quot;configuration mismatch&quot;</span>)
     }
 }
-
-<span class="comment">// TODO: turn into newtype
-</span><span class="kw">pub type </span>DynModuleGen = Arc&lt;<span class="kw">dyn </span>ModuleGen + Send + Sync&gt;;
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ModuleInitRegistry(BTreeMap&lt;ModuleKind, DynModuleGen&gt;);

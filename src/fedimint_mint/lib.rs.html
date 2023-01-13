@@ -1349,6 +1349,7 @@
 <a href="#1349" id="1349">1349</a>
 <a href="#1350" id="1350">1350</a>
 <a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -1365,7 +1366,7 @@
     scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{DynDecoder, ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
@@ -1486,16 +1487,17 @@
     valid_notes: HashMap&lt;Note, Amount&gt;,
 }
 
-<span class="kw">pub struct </span>MintConfigGenerator;
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>MintConfigGenerator;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>MintConfigGenerator {
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
-        DynDecoder::from_typed(MintDecoder)
-    }
+    <span class="kw">const </span>KIND: ModuleKind = KIND;
 
-    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
-        KIND
+    <span class="kw">type </span>Decoder = MintDecoder;
+
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MintDecoder {
+        MintDecoder
     }
 
     <span class="kw">async fn </span>init(

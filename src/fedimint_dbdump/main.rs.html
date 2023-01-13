@@ -693,15 +693,13 @@
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
-<a href="#696" id="696">696</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>docopt::Docopt;
 <span class="kw">use </span>erased_serde::Serialize;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::Encodable;
-<span class="kw">use </span>fedimint_api::module::ModuleGen;
+<span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_ln::{db <span class="kw">as </span>LightningRange, LightningConfigGenerator};
 <span class="kw">use </span>fedimint_mint::{db <span class="kw">as </span>MintRange, MintConfigGenerator};
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
@@ -1372,9 +1370,9 @@ Options:
     };
 
     <span class="kw">let </span>_module_inits = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleGen + Send + Sync&gt;,
-        Arc::new(MintConfigGenerator),
-        Arc::new(LightningConfigGenerator),
+        DynModuleGen::from(WalletConfigGenerator),
+        DynModuleGen::from(MintConfigGenerator),
+        DynModuleGen::from(LightningConfigGenerator),
     ]);
 
     <span class="kw">let </span>decoders = Default::default(); <span class="comment">// TODO: read config and use it to create decoders

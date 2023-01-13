@@ -398,7 +398,7 @@
         <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>server_cfg {
             <span class="kw">let </span>db = Database::new(
                 MemDatabase::new(),
-                ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder())]),
+                ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder().into())]),
             );
             <span class="kw">let </span>member = constructor(cfg, db.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
             members.push((peer, member, db));

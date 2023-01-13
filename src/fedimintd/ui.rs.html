@@ -402,7 +402,7 @@
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
-<span class="kw">use </span>fedimint_api::module::ModuleGen;
+<span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_ln::LightningConfigGenerator;
@@ -524,9 +524,9 @@
     <span class="kw">let </span>max_denomination = Amount::from_msats(<span class="number">100000000000</span>);
     <span class="kw">let </span>(dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::&lt;UiMessage&gt;();
     <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        Arc::new(WalletConfigGenerator) <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>ModuleGen + Send + Sync&gt;,
-        Arc::new(MintConfigGenerator),
-        Arc::new(LightningConfigGenerator),
+        DynModuleGen::from(WalletConfigGenerator),
+        DynModuleGen::from(MintConfigGenerator),
+        DynModuleGen::from(LightningConfigGenerator),
     ]);
     <span class="kw">let </span>dir_out_path = state.data_dir.clone();
     <span class="kw">let </span>fedimintd_sender = state.sender.clone();
