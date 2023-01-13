@@ -267,10 +267,6 @@ pub trait ModuleGen: Debug + Sized {
 
     type Decoder: Decoder;
 
-    fn module_kind() -> ModuleKind {
-        Self::KIND
-    }
-
     fn decoder(&self) -> Self::Decoder;
 
     /// Initialize the [`DynServerModule`] instance from its config
@@ -318,7 +314,7 @@ where
     }
 
     fn module_kind(&self) -> ModuleKind {
-        <Self as ModuleGen>::module_kind()
+        <Self as ModuleGen>::KIND
     }
 
     async fn init(
