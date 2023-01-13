@@ -5,12 +5,12 @@ use clap::Parser;
 use fedimint_api::db::Database;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
-use fedimint_ln::LightningConfigGenerator;
-use fedimint_mint::MintConfigGenerator;
+use fedimint_ln::LightningGen;
+use fedimint_mint::MintGen;
 use fedimint_server::config::ModuleInitRegistry;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
-use fedimint_wallet::WalletConfigGenerator;
+use fedimint_wallet::WalletGen;
 use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
 use fedimintd::ui::UiMessage;
@@ -120,9 +120,9 @@ async fn main() -> anyhow::Result<()> {
     task_group.install_kill_handler();
 
     let module_inits = ModuleInitRegistry::from(vec![
-        DynModuleGen::from(WalletConfigGenerator),
-        DynModuleGen::from(MintConfigGenerator),
-        DynModuleGen::from(LightningConfigGenerator),
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
     ]);
 
     let decoders = module_inits.decoders(cfg.iter_module_instances())?;

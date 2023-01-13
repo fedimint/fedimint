@@ -38,8 +38,8 @@ use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_ln::{LightningConfigGenerator, LightningGateway};
-use fedimint_mint::{MintConfigGenerator, MintOutput};
+use fedimint_ln::{LightningGateway, LightningGen};
+use fedimint_mint::{MintGen, MintOutput};
 use fedimint_server::config::{connect, ServerConfig};
 use fedimint_server::config::{ModuleInitRegistry, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
@@ -54,7 +54,7 @@ use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::Wallet;
 use fedimint_wallet::WalletConsensusItem;
-use fedimint_wallet::{SpendableUTXO, WalletConfigGenerator};
+use fedimint_wallet::{SpendableUTXO, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
@@ -161,9 +161,9 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_inits = ModuleInitRegistry::from(vec![
-        DynModuleGen::from(WalletConfigGenerator),
-        DynModuleGen::from(MintConfigGenerator),
-        DynModuleGen::from(LightningConfigGenerator),
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
     ]);
 
     match env::var("FM_TEST_DISABLE_MOCKS") {

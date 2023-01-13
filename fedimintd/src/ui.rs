@@ -16,10 +16,10 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
-use fedimint_ln::LightningConfigGenerator;
-use fedimint_mint::MintConfigGenerator;
+use fedimint_ln::LightningGen;
+use fedimint_mint::MintGen;
 use fedimint_server::config::ModuleInitRegistry;
-use fedimint_wallet::WalletConfigGenerator;
+use fedimint_wallet::WalletGen;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
@@ -135,9 +135,9 @@ async fn post_guardians(
     let max_denomination = Amount::from_msats(100000000000);
     let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
     let module_config_gens = ModuleInitRegistry::from(vec![
-        DynModuleGen::from(WalletConfigGenerator),
-        DynModuleGen::from(MintConfigGenerator),
-        DynModuleGen::from(LightningConfigGenerator),
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
     ]);
     let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();

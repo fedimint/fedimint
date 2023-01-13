@@ -5,12 +5,12 @@ use erased_serde::Serialize;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
 use fedimint_api::module::DynModuleGen;
-use fedimint_ln::{db as LightningRange, LightningConfigGenerator};
-use fedimint_mint::{db as MintRange, MintConfigGenerator};
+use fedimint_ln::{db as LightningRange, LightningGen};
+use fedimint_mint::{db as MintRange, MintGen};
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::ModuleInitRegistry;
 use fedimint_server::db as ConsensusRange;
-use fedimint_wallet::{db as WalletRange, WalletConfigGenerator};
+use fedimint_wallet::{db as WalletRange, WalletGen};
 use mint_client::db as ClientRange;
 use mint_client::ln::db as ClientLightningRange;
 use mint_client::mint::db as ClientMintRange;
@@ -675,9 +675,9 @@ async fn main() {
     };
 
     let _module_inits = ModuleInitRegistry::from(vec![
-        DynModuleGen::from(WalletConfigGenerator),
-        DynModuleGen::from(MintConfigGenerator),
-        DynModuleGen::from(LightningConfigGenerator),
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
     ]);
 
     let decoders = Default::default(); // TODO: read config and use it to create decoders

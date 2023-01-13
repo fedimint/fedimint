@@ -220,10 +220,10 @@ impl std::fmt::Display for WalletOutputOutcome {
 }
 
 #[derive(Debug)]
-pub struct WalletConfigGenerator;
+pub struct WalletGen;
 
 #[async_trait]
-impl ModuleGen for WalletConfigGenerator {
+impl ModuleGen for WalletGen {
     const KIND: ModuleKind = KIND;
     type Decoder = WalletDecoder;
 
@@ -249,7 +249,7 @@ impl ModuleGen for WalletConfigGenerator {
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
-            .get::<WalletConfigGenParams>()
+            .get::<WalletGenParams>()
             .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
@@ -292,7 +292,7 @@ impl ModuleGen for WalletConfigGenerator {
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
         let params = params
-            .get::<WalletConfigGenParams>()
+            .get::<WalletGenParams>()
             .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
@@ -357,12 +357,12 @@ impl ModuleGen for WalletConfigGenerator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletConfigGenParams {
+pub struct WalletGenParams {
     pub network: bitcoin::network::constants::Network,
     pub finality_delay: u32,
 }
 
-impl ModuleConfigGenParams for WalletConfigGenParams {
+impl ModuleConfigGenParams for WalletGenParams {
     const MODULE_NAME: &'static str = "wallet";
 }
 
