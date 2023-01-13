@@ -267,7 +267,7 @@ pub trait ModuleGen: Debug + Sized {
 
     type Decoder: Decoder;
 
-    fn module_kind(&self) -> ModuleKind {
+    fn module_kind() -> ModuleKind {
         Self::KIND
     }
 
@@ -318,7 +318,7 @@ where
     }
 
     fn module_kind(&self) -> ModuleKind {
-        <Self as ModuleGen>::module_kind(self)
+        <Self as ModuleGen>::module_kind()
     }
 
     async fn init(
