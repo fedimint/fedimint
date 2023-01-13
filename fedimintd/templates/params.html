@@ -14,6 +14,11 @@
       <input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Cypherpunk Federation">
     </div>
     <div class="form-group">
+      <label for="guardians_count" class="col-form-label">Number of Guardians Including You</label>
+      <input class="form-control" type="number" name="guardians_count" required placeholder="4" min="1" />
+    </div>
+    <h5>Network connectivity</h5>
+    <div class="form-group">
       <label for="bind_p2p">P2P Listen Address</label>
       <input type="text" class="form-control" id="bind_p2p" name="bind_p2p" placeholder="127.0.0.1:8173" />
     </div>
@@ -29,17 +34,17 @@
       <label for="api_url">API Public URL</label>
       <input type="text" class="form-control" id="api_url" name="api_url" placeholder="wss://api.your-website.com" />
     </div>
-    <div class="form-group">
-      <label for="bitcoind_rpc">Bitcoin RPC Addr and Port</label>
-      <input type="text" class="form-control" id="bitcoind_rpc" name="bitcoind_rpc" placeholder="127.0.0.1:8332" />
-    </div>
-    <div class="form-group">
-      <label for="guardians_count" class="col-form-label">Number of Guardians Including You</label>
-      <input class="form-control" type="number" name="guardians_count" required placeholder="4" min="1" />
-    </div>
+    <h5>Wallet settings</h5>
     <div class="form-group">
       <label for="finality_delay" class="col-form-label">Finality delay</label>
       <input class="form-control" type="number" name="finality_delay" required value="10" min="1" />
+    </div>
+    <h5>Bitcoind settings</h5>
+    <div class="form-group">
+      <label for="bitcoind_rpc">Bitcoin RPC Addr and Port</label>
+      <p type="text" class="form-control" style="border: none; margin-bottom: 0;">
+        {{ro_bitcoind_rpc}}
+      </p>
     </div>
     <div class="form-group">
       <label for="network1" class="col-form-label">Choose network</label><br>

@@ -214,10 +214,21 @@ async fn post_guardians(
 
 #[derive(Template)]
 #[template(path = "params.html")]
-struct UrlConnection {}
+struct UrlConnection {
+    ro_bitcoind_rpc: String,
+}
 
 async fn params_page(Extension(_state): Extension<MutableState>) -> UrlConnection {
-    UrlConnection {}
+    UrlConnection {
+        ro_bitcoind_rpc: fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env()
+            .as_ref()
+            .map(ToString::to_string)
+            .ok()
+            .unwrap_or(format!(
+                "Invalid value of {} env variable",
+                fedimint_api::bitcoin_rpc::FM_BITCOIND_RPC_ENV
+            )),
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
