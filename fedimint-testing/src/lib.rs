@@ -59,7 +59,7 @@ where
         for (peer, cfg) in server_cfg {
             let db = Database::new(
                 MemDatabase::new(),
-                ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder())]),
+                ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder().into())]),
             );
             let member = constructor(cfg, db.clone()).await?;
             members.push((peer, member, db));

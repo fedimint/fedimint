@@ -10,7 +10,7 @@ use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{DynDecoder, ModuleInstanceId, ModuleKind};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
@@ -46,17 +46,16 @@ pub struct DummyOutputConfirmation;
 #[derive(Debug, Clone)]
 pub struct DummyVerificationCache;
 
+#[derive(Debug)]
 pub struct DummyConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for DummyConfigGenerator {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(DummyDecoder)
-    }
+    const KIND: ModuleKind = KIND;
+    type Decoder = DummyDecoder;
 
-    fn module_kind(&self) -> ModuleKind {
-        const KIND: &str = "dummy";
-        ModuleKind::from_static_str(KIND)
+    fn decoder(&self) -> DummyDecoder {
+        DummyDecoder
     }
 
     async fn init(

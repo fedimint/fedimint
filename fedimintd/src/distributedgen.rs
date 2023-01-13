@@ -2,10 +2,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use anyhow::ensure;
-use fedimint_api::module::ModuleGen;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -85,9 +84,9 @@ pub async fn run_dkg(
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
     let module_config_gens = ModuleInitRegistry::from(vec![
-        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
-        Arc::new(MintConfigGenerator),
-        Arc::new(LightningConfigGenerator),
+        DynModuleGen::from(WalletConfigGenerator),
+        DynModuleGen::from(MintConfigGenerator),
+        DynModuleGen::from(LightningConfigGenerator),
     ]);
 
     let result = ServerConfig::distributed_gen(

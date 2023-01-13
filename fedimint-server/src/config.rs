@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::os::unix::prelude::OsStrExt;
-use std::sync::Arc;
 
 use anyhow::{bail, format_err};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -16,7 +15,7 @@ use fedimint_api::core::{
 };
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_api::module::ModuleGen;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
@@ -181,9 +180,6 @@ impl ServerConfigConsensus {
             .expect("configuration mismatch")
     }
 }
-
-// TODO: turn into newtype
-pub type DynModuleGen = Arc<dyn ModuleGen + Send + Sync>;
 
 #[derive(Clone)]
 pub struct ModuleInitRegistry(BTreeMap<ModuleKind, DynModuleGen>);

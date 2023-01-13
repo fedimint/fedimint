@@ -14,7 +14,7 @@ use fedimint_api::config::{
     scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::core::{DynDecoder, ModuleInstanceId, ModuleKind};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::__reexports::serde_json;
@@ -135,16 +135,17 @@ pub struct VerifiedNotes {
     valid_notes: HashMap<Note, Amount>,
 }
 
+#[derive(Debug)]
 pub struct MintConfigGenerator;
 
 #[async_trait]
 impl ModuleGen for MintConfigGenerator {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(MintDecoder)
-    }
+    const KIND: ModuleKind = KIND;
 
-    fn module_kind(&self) -> ModuleKind {
-        KIND
+    type Decoder = MintDecoder;
+
+    fn decoder(&self) -> MintDecoder {
+        MintDecoder
     }
 
     async fn init(

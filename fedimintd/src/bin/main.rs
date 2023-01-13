@@ -1,10 +1,9 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use clap::Parser;
 use fedimint_api::db::Database;
-use fedimint_api::module::ModuleGen;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningConfigGenerator;
 use fedimint_mint::MintConfigGenerator;
@@ -121,9 +120,9 @@ async fn main() -> anyhow::Result<()> {
     task_group.install_kill_handler();
 
     let module_inits = ModuleInitRegistry::from(vec![
-        Arc::new(WalletConfigGenerator) as Arc<dyn ModuleGen + Send + Sync>,
-        Arc::new(MintConfigGenerator),
-        Arc::new(LightningConfigGenerator),
+        DynModuleGen::from(WalletConfigGenerator),
+        DynModuleGen::from(MintConfigGenerator),
+        DynModuleGen::from(LightningConfigGenerator),
     ]);
 
     let decoders = module_inits.decoders(cfg.iter_module_instances())?;
