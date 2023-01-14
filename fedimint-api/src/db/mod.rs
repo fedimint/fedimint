@@ -206,12 +206,8 @@ impl<'a> DatabaseTransaction<'a> {
     }
 
     pub async fn commit_tx(mut self) -> Result<()> {
-        if self.commit_tracker.has_writes {
-            self.commit_tracker.is_committed = true;
-            return self.tx.commit_tx().await;
-        }
-
-        Ok(())
+        self.commit_tracker.is_committed = true;
+        return self.tx.commit_tx().await;
     }
 
     pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
