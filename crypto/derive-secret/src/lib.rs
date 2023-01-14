@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 
 use fedimint_api::encoding::{Decodable, Encodable};
 use hkdf::hashes::Sha512;
-use hkdf::Hkdf;
+use hkdf::{bitcoin_hashes, Hkdf};
 use ring::aead;
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use tbs::Scalar;
@@ -91,15 +91,12 @@ fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
 
 impl std::fmt::Debug for DerivableSecret {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DerivableSecret")?;
-        write!(
+        write!(f, "DerivableSecret#")?;
+        bitcoin_hashes::hex::format_hex(
+            &self
+                .kdf
+                .derive::<8>(b"just a debug fingerprint derivation salt"),
             f,
-            "#{}",
-            // Note: bothers me that `hex` can't avoid allocating here :shrug:
-            hex::encode(
-                self.kdf
-                    .derive::<8>(b"just a debug fingerprint derivation salt")
-            )
         )
     }
 }
