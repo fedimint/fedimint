@@ -11,7 +11,7 @@ use db::{ECashUserBackupSnapshot, EcashBackupKey};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
+    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
@@ -300,7 +300,7 @@ pub struct MintGenParams {
     pub mint_amounts: Vec<Amount>,
 }
 
-impl ModuleConfigGenParams for MintGenParams {
+impl ModuleGenParams for MintGenParams {
     const MODULE_NAME: &'static str = "mint";
 }
 

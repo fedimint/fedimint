@@ -23,7 +23,7 @@ use fedimint_api::bitcoin_rpc::{fm_bitcoind_rpc_env_value_to_url, FM_BITCOIND_RP
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
@@ -362,7 +362,7 @@ pub struct WalletGenParams {
     pub finality_delay: u32,
 }
 
-impl ModuleConfigGenParams for WalletGenParams {
+impl ModuleGenParams for WalletGenParams {
     const MODULE_NAME: &'static str = "wallet";
 }
 

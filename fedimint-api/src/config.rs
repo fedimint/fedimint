@@ -202,7 +202,7 @@ impl ConfigGenParams {
     }
 
     /// Add params for a module
-    pub fn attach<P: ModuleConfigGenParams>(mut self, module_params: P) -> Self {
+    pub fn attach<P: ModuleGenParams>(mut self, module_params: P) -> Self {
         self.0.insert(
             P::MODULE_NAME.to_string(),
             serde_json::to_value(&module_params).expect("Encoding to value doesn't fail"),
@@ -211,7 +211,7 @@ impl ConfigGenParams {
     }
 
     /// Retrieve a typed config generation parameters for a module
-    pub fn get<P: ModuleConfigGenParams>(&self) -> anyhow::Result<P> {
+    pub fn get<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
         let value = self
             .0
             .get(P::MODULE_NAME)
@@ -221,7 +221,7 @@ impl ConfigGenParams {
     }
 }
 
-pub trait ModuleConfigGenParams: serde::Serialize + serde::de::DeserializeOwned {
+pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE_NAME: &'static str;
 }
 

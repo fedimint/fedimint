@@ -7,7 +7,7 @@ use common::DummyDecoder;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
@@ -143,7 +143,7 @@ pub struct DummyConfigGenParams {
     pub important_param: u64,
 }
 
-impl ModuleConfigGenParams for DummyConfigGenParams {
+impl ModuleGenParams for DummyConfigGenParams {
     const MODULE_NAME: &'static str = "dummy";
 }
 
