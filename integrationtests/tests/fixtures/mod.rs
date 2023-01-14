@@ -4,6 +4,7 @@ use std::env;
 use std::future::Future;
 use std::iter::repeat;
 use std::net::SocketAddr;
+use std::os::unix::prelude::OsStrExt;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -169,16 +170,21 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
+            let mut config_task_group = TaskGroup::new();
             let (server_config, client_config) = distributed_config(
                 "",
                 &peers,
                 params,
                 module_inits.clone(),
                 max_evil,
-                &mut task_group,
+                &mut config_task_group,
             )
             .await
             .expect("distributed config should not be canceled");
+            config_task_group
+                .shutdown_join_all()
+                .await
+                .expect("Distributed config did not exit cleanly");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let bitcoin_rpc_url =
@@ -1026,6 +1032,12 @@ impl FederationTest {
             let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
 
             let mut modules = BTreeMap::new();
+            // We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            let env_vars: BTreeMap<_, _> = std::env::vars_os()
+                .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
+                .collect();
 
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
@@ -1038,7 +1050,7 @@ impl FederationTest {
                         .init(
                             cfg.get_module_config(id).unwrap(),
                             db.clone(),
-                            &BTreeMap::new(),
+                            &env_vars,
                             &mut task_group,
                         )
                         .await
