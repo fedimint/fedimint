@@ -1104,7 +1104,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fedimint-api",
- "hex",
  "hkdf",
  "ring",
  "secp256k1-zkp",
@@ -3952,11 +3951,11 @@ name = "tbs"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bitcoin_hashes 0.11.0",
  "bls12_381",
  "clap",
  "ff",
  "group",
- "hex",
  "rand",
  "rand_chacha",
  "serde",
