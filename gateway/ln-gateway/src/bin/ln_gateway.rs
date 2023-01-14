@@ -1,6 +1,18 @@
 use cln_plugin::Error;
-use fedimint_api::task::TaskGroup;
-use fedimint_server::config::load_from_file;
+use fedimint_api::{
+    core::{
+        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    },
+    module::registry::ModuleDecoderRegistry,
+    task::TaskGroup,
+};
+use fedimint_server::{
+    config::load_from_file,
+    modules::{
+        ln::common::LightningDecoder, mint::common::MintDecoder, wallet::common::WalletDecoder,
+    },
+};
 use ln_gateway::{
     client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
     cln::{build_cln_rpc, ClnRpcRef},
@@ -34,10 +46,24 @@ async fn main() -> Result<(), Error> {
     // Create federation client builder
     let client_builder: DynGatewayClientBuilder =
         StandardGatewayClientBuilder::new(work_dir.clone(), RocksDbFactory.into()).into();
+    let decoders = ModuleDecoderRegistry::from_iter([
+        (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
+        (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
+        (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
+    ]);
 
     // Create gateway instance
     let task_group = TaskGroup::new();
-    let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone()).await;
+    let gateway = LnGateway::new(
+        gw_cfg,
+        decoders,
+        ln_rpc,
+        client_builder,
+        tx,
+        rx,
+        task_group.clone(),
+    )
+    .await;
 
     if let Err(e) = gateway.run().await {
         task_group.shutdown_join_all().await?;

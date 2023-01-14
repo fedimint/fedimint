@@ -166,6 +166,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         DynModuleGen::from(LightningGen),
     ]);
 
+    let decoders = module_decode_stubs();
+
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
@@ -221,18 +223,21 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let user_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
                 let db_name = format!("client-{}", rng().next_u64());
-                Database::new(sqlite(dir.clone(), db_name).await, module_decode_stubs())
+                Database::new(sqlite(dir.clone(), db_name).await, decoders.clone())
             } else {
-                Database::new(rocks(dir.clone()), module_decode_stubs())
+                Database::new(rocks(dir.clone()), decoders.clone())
             };
 
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
+            let user = UserTest::new(Arc::new(
+                create_user_client(user_cfg, decoders.clone(), peers, user_db).await,
+            ));
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
                 lightning_rpc_adapter,
                 client_config.clone(),
+                decoders,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -303,12 +308,15 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let user_db = Database::new(MemDatabase::new(), module_decode_stubs());
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(Arc::new(create_user_client(user_cfg, peers, user_db).await));
+            let user = UserTest::new(Arc::new(
+                create_user_client(user_cfg, decoders.clone(), peers, user_db).await,
+            ));
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
                 ln_rpc_adapter,
                 client_config.clone(),
+                decoders,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -336,6 +344,7 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
 /// Creates a new user client connected to the given peers
 pub async fn create_user_client(
     config: UserClientConfig,
+    decoders: ModuleDecoderRegistry,
     peers: Vec<PeerId>,
     db: Database,
 ) -> UserClient {
@@ -351,7 +360,7 @@ pub async fn create_user_client(
     )
     .into();
 
-    UserClient::new_with_api(config, db, api, Default::default()).await
+    UserClient::new_with_api(config, decoders, db, api, Default::default()).await
 }
 
 async fn distributed_config(
@@ -441,6 +450,7 @@ impl GatewayTest {
     async fn new(
         ln_client_adapter: LnRpcAdapter,
         client_config: ClientConfig,
+        decoders: ModuleDecoderRegistry,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
     ) -> Self {
@@ -487,6 +497,7 @@ impl GatewayTest {
 
         let gateway = LnGateway::new(
             gw_cfg,
+            decoders.clone(),
             ln_rpc,
             client_builder.clone(),
             sender,
@@ -497,7 +508,7 @@ impl GatewayTest {
 
         let client = Arc::new(
             client_builder
-                .build(gw_client_cfg.clone())
+                .build(gw_client_cfg.clone(), decoders)
                 .await
                 .expect("Could not build gateway client"),
         );
@@ -532,6 +543,7 @@ impl UserTest<UserClientConfig> {
     pub async fn new_user_with_peers(&self, peers: Vec<PeerId>) -> UserTest<UserClientConfig> {
         let user = create_user_client(
             self.config.clone(),
+            self.client.decoders().clone(),
             peers,
             Database::new(MemDatabase::new(), module_decode_stubs()),
         )

@@ -1,10 +1,12 @@
-use std::cmp::min;
-use std::fmt::Debug;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::{self, Debug};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{cmp, result};
 
 use async_trait::async_trait;
-use bitcoin::{Address, Amount};
+use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::{
@@ -12,137 +14,493 @@ use fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
+use fedimint_api::task::sleep;
+use fedimint_api::task::{RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
 use fedimint_core::modules::wallet::PegOutFees;
-use fedimint_core::outcome::legacy::{OutputOutcome, TryIntoOutcome};
-use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::legacy::Transaction as LegacyTransaction;
+use fedimint_core::outcome::legacy::TryIntoOutcome;
+use fedimint_core::outcome::{self, TransactionStatus};
 use fedimint_core::transaction::SerdeTransaction;
 use fedimint_core::CoreError;
+use fedimint_mint::db::ECashUserBackupSnapshot;
 use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use futures::{Future, StreamExt};
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
-use jsonrpsee_types::error::CallError as RpcCallError;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 use threshold_crypto::PublicKey;
 use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
-use crate::module_decode_stubs;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
     UnionResponsesSingle, ValidHistory,
 };
+use crate::LegacyTransaction;
+
+type JsonValue = serde_json::Value;
+
+pub type Result<T> = result::Result<T, ApiError>;
+
+pub type JsonRpcResult<T> = result::Result<T, jsonrpsee_core::Error>;
+pub type FedResult<T> = result::Result<T, FedApiError>;
+
+pub mod fake;
+
+// TODO: rename to `MemberApiError`
+#[derive(Debug, Error)]
+pub enum ApiError {
+    // ParamsSerialization(anyhow::Error),
+    #[error("Response deserialization error: {0}")]
+    ResponseDeserialization(anyhow::Error),
+    #[error("Invalid peer id: {peer_id}")]
+    InvalidPeerId { peer_id: PeerId },
+    #[error("Rpc error: {0}")]
+    Rpc(#[from] JsonRpcError),
+}
+
+impl ApiError {
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            ApiError::ResponseDeserialization(_) => false,
+            ApiError::InvalidPeerId { peer_id: _ } => false,
+            ApiError::Rpc(rpc_e) => match rpc_e {
+                JsonRpcError::Transport(_) => true,
+                JsonRpcError::Internal(_) => true,
+                JsonRpcError::Call(jsonrpsee_types::error::CallError::Custom(e)) => e.code() == 404,
+                _ => false,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub struct FedApiError(BTreeMap<PeerId, ApiError>);
+
+impl fmt::Display for FedApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Federation rpc error(")?;
+        for (i, (peer, e)) in self.0.iter().enumerate() {
+            f.write_fmt(format_args!("{} => {})", peer, e))?;
+            if i == self.0.len() - 1 {
+                f.write_str(", ")?;
+            }
+        }
+        f.write_str(")")?;
+        Ok(())
+    }
+}
+
+impl FedApiError {
+    fn is_retryable(&self) -> bool {
+        self.0.iter().any(|(_, e)| e.is_retryable())
+    }
+}
+
+type OutputOutcomeResult<O> = result::Result<O, OutputOutcomeError>;
+
+#[derive(Debug, Error)]
+pub enum OutputOutcomeError {
+    #[error("Response deserialization error: {0}")]
+    ResponseDeserialization(anyhow::Error),
+    #[error("Federation error: {0}")]
+    Federation(#[from] FedApiError),
+    #[error("Core error: {0}")]
+    Core(#[from] CoreError),
+    #[error("Transaction rejected: {0}")]
+    Rejected(String),
+    #[error("Invalid output index {out_idx}, larger than {outputs_num} in the transaction")]
+    InvalidVout { out_idx: u64, outputs_num: usize },
+    #[error("Timeout reached after waiting {}s", .0.as_secs())]
+    Timeout(Duration),
+}
+
+impl OutputOutcomeError {
+    fn is_retryable(&self) -> bool {
+        match self {
+            Self::Federation(fed) => fed.is_retryable(),
+            Self::Core(CoreError::PendingPreimage) => true,
+            _ => false,
+        }
+    }
+}
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait IFederationApi: Debug + Send + Sync {
-    /// Fetch the outcome of an entire transaction
-    async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
+pub trait IFederationApi: Debug {
+    /// List of all federation members for the purpose of iterating each member in the federation.
+    ///
+    /// The underlying implementation is resonsible for knowing how many
+    /// and `PeerId`s of each. The caller of this interface most probably
+    /// have some idea as well, but passing this set accross every
+    /// API call to the federation would be inconvenient.
+    fn all_members(&self) -> &BTreeSet<PeerId>;
 
-    /// Submit a transaction to all federation members
-    async fn submit_transaction(&self, tx: LegacyTransaction) -> Result<TransactionId>;
-
-    async fn fetch_epoch_history(
+    /// Make request to a specific federation member by `peer_id`
+    async fn request_raw(
         &self,
-        epoch: u64,
-        epoch_pk: PublicKey,
-    ) -> Result<SignedEpochOutcome>;
-
-    async fn fetch_last_epoch(&self) -> Result<u64>;
-
-    // TODO: more generic module API extensibility
-    /// Fetch ln contract state
-    async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount>;
-
-    /// Fetch preimage offer for incoming lightning payments
-    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer>;
-
-    // TODO: find a better abstraction for all our API endpoints that allows different strategies and timeouts
-    /// Checks if there exists an offer for a payment hash
-    async fn offer_exists(&self, payment_hash: Sha256Hash) -> Result<bool>;
-
-    /// Fetch the current consensus block height (trailing actual block height)
-    async fn fetch_consensus_block_height(&self) -> Result<u64>;
-
-    /// Fetch the expected peg-out fees given a peg-out tx
-    async fn fetch_peg_out_fees(
-        &self,
-        address: &Address,
-        amount: &Amount,
-    ) -> Result<Option<PegOutFees>>;
-
-    /// Fetch available lightning gateways (assumes gateways register with all peers)
-    async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>>;
-
-    /// Register a gateway with the federation
-    async fn register_gateway(&self, gateway: LightningGateway) -> Result<()>;
-
-    /// Upload ecash (encrypted) backup for mint to safekeep
-    async fn upload_ecash_backup(&self, request: &fedimint_mint::SignedBackupRequest)
-        -> Result<()>;
-
-    /// Download ecash (encrypted) backup from mint to safekeep
-    async fn download_ecash_backup(
-        &self,
-        id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Vec<ECashUserBackupSnapshot>>;
+        peer_id: PeerId,
+        method: &str,
+        params: &[Value],
+    ) -> result::Result<Value, jsonrpsee_core::Error>;
 }
+
+/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when no arguments are passed to the API call
+///
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you'll make it easier
+/// to change it in the future.
+pub fn erased_no_param() -> Vec<JsonValue> {
+    vec![JsonValue::Null]
+}
+
+/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when one argument are passed to the API call
+///
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you'll make it easier
+/// to change it in the future.
+pub fn erased_single_param<Params>(param: &Params) -> Vec<JsonValue>
+where
+    Params: Serialize,
+{
+    let params_raw = serde_json::to_value(param)
+        .expect("parameter serialization error - this should not happen");
+
+    vec![params_raw]
+}
+
+/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when multiple argument are passed to the API call
+///
+/// Use a tuple as `params`.
+///
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you'll make it easier
+/// to change it in the future.
+pub fn erased_multi_param<Params>(param: &Params) -> Vec<JsonValue>
+where
+    Params: Serialize,
+{
+    let params_raw = serde_json::to_value(param)
+        .expect("parameter serialization error - this should not happen");
+
+    vec![params_raw]
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+pub trait IFederationApiFed: IFederationApi {
+    async fn request_fed_with_strategy<MemberRet: serde::de::DeserializeOwned, FedRet: Debug>(
+        &self,
+        mut strategy: impl QueryStrategy<MemberRet, FedRet> + Send,
+        method: String,
+        params: Vec<Value>,
+    ) -> FedResult<FedRet> {
+        #[cfg(not(target_family = "wasm"))]
+        let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
+        #[cfg(target_family = "wasm")]
+        let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _>>>>::new();
+
+        let peers = self.all_members();
+
+        for peer_id in peers {
+            futures.push(Box::pin(async {
+                PeerResponse {
+                    peer: *peer_id,
+                    result: self.request_raw(*peer_id, &method, &params).await,
+                }
+            }));
+        }
+
+        let mut member_delay_ms = BTreeMap::new();
+        let mut member_errors = BTreeMap::new();
+
+        // Delegates the response handling to the `QueryStrategy` with an exponential back-off
+        // with every new set of requests
+        let max_delay_ms = 1000;
+        loop {
+            let response = futures.next().await;
+            trace!(?response, method, ?params, "Received member response");
+            match response {
+                Some(PeerResponse { peer, result }) => {
+                    let result: Result<MemberRet> = result.map_err(ApiError::Rpc).and_then(|o| {
+                        serde_json::from_value::<MemberRet>(o)
+                            .map_err(|e| ApiError::ResponseDeserialization(e.into()))
+                    });
+
+                    let strategy_step = strategy.process(peer, result);
+                    trace!(
+                        method,
+                        ?params,
+                        ?strategy_step,
+                        "Taking strategy step to the response after member response"
+                    );
+                    match strategy_step {
+                        QueryStep::RetryMembers(peers) => {
+                            for retry_peer in peers {
+                                member_errors.remove(&retry_peer);
+
+                                let mut delay_ms =
+                                    member_delay_ms.get(&retry_peer).copied().unwrap_or(10);
+                                delay_ms = cmp::min(max_delay_ms, delay_ms * 2);
+                                member_delay_ms.insert(retry_peer, delay_ms);
+
+                                futures.push(Box::pin({
+                                    let method = &method;
+                                    let params = &params;
+                                    async move {
+                                        // Note: we need to sleep inside the retrying future,
+                                        // so that `futures` is being polled continously
+                                        sleep(Duration::from_millis(delay_ms)).await;
+                                        PeerResponse {
+                                            peer: retry_peer,
+                                            result: self
+                                                .request_raw(retry_peer, method, params)
+                                                .await,
+                                        }
+                                    }
+                                }));
+                            }
+                        }
+                        QueryStep::FailMembers(failed) => {
+                            for (failed_peer, error) in failed {
+                                member_errors.insert(failed_peer, error);
+                            }
+                        }
+                        QueryStep::Continue => {}
+                        QueryStep::Failure(failed) => {
+                            for (failed_peer, error) in failed {
+                                member_errors.insert(failed_peer, error);
+                            }
+                            return Err(FedApiError(BTreeMap::new()));
+                        }
+                        QueryStep::Success(response) => return Ok(response),
+                    }
+                }
+                None => return Err(FedApiError(BTreeMap::new())),
+            }
+        }
+    }
+
+    async fn request_union<Ret>(&self, method: String, params: Vec<Value>) -> FedResult<Vec<Ret>>
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+    {
+        self.request_fed_with_strategy(
+            UnionResponses::new(self.all_members().one_honest()),
+            method,
+            params,
+        )
+        .await
+    }
+
+    async fn request_current_consensus<Ret>(
+        &self,
+        method: String,
+        params: Vec<Value>,
+    ) -> FedResult<Ret>
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+    {
+        self.request_fed_with_strategy(
+            CurrentConsensus::new(self.all_members().one_honest()),
+            method,
+            params,
+        )
+        .await
+    }
+
+    async fn request_eventually_consistent<Ret>(
+        &self,
+        method: String,
+        params: Vec<Value>,
+    ) -> FedResult<Ret>
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+    {
+        self.request_fed_with_strategy(
+            EventuallyConsistent::new(self.all_members().one_honest()),
+            method,
+            params,
+        )
+        .await
+    }
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl<T: ?Sized> IFederationApiFed for T where T: IFederationApi {}
 
 dyn_newtype_define! {
     pub DynFederationApi(Arc<IFederationApi>)
 }
 
-impl DynFederationApi {
-    pub async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+pub trait GlobalFederationApi {
+    async fn get_client_config(&self) -> FedResult<ClientConfig>;
+
+    async fn submit_transaction(&self, tx: LegacyTransaction) -> FedResult<TransactionId>;
+    async fn fetch_tx_outcome(&self, txid: &TransactionId) -> FedResult<TransactionStatus>;
+
+    async fn fetch_epoch_history(
+        &self,
+        epoch: u64,
+        epoch_pk: PublicKey,
+        decoders: &ModuleDecoderRegistry,
+    ) -> FedResult<SignedEpochOutcome>;
+
+    async fn fetch_last_epoch(&self) -> FedResult<u64>;
+
+    async fn fetch_output_outcome<R>(
+        &self,
+        out_point: OutPoint,
+        decoders: &ModuleDecoderRegistry,
+    ) -> OutputOutcomeResult<R>
     where
-        T: TryIntoOutcome + Send,
+        R: TryIntoOutcome + Send;
+
+    async fn await_output_outcome<R: TryIntoOutcome + Send>(
+        &self,
+        outpoint: OutPoint,
+        timeout: Duration,
+        decoders: &ModuleDecoderRegistry,
+    ) -> OutputOutcomeResult<R>;
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl<T: ?Sized> GlobalFederationApi for T
+where
+    T: IFederationApi + Send + Sync + 'static,
+{
+    async fn get_client_config(&self) -> FedResult<ClientConfig> {
+        self.request_current_consensus("/config".to_owned(), erased_no_param())
+            .await
+    }
+
+    /// Submit a transaction for inclusion
+    async fn submit_transaction(&self, tx: LegacyTransaction) -> FedResult<TransactionId> {
+        self.request_current_consensus(
+            "/transaction".to_owned(),
+            erased_single_param(&SerdeTransaction::from(&tx.into_type_erased())),
+        )
+        .await
+    }
+
+    /// Fetch the outcome of an entire transaction
+    async fn fetch_tx_outcome(&self, tx: &TransactionId) -> FedResult<TransactionStatus> {
+        self.request_fed_with_strategy(
+            Retry404::new(self.all_members().one_honest()),
+            "/fetch_transaction".to_owned(),
+            erased_single_param(&tx),
+        )
+        .await
+    }
+
+    async fn fetch_epoch_history(
+        &self,
+        epoch: u64,
+        epoch_pk: PublicKey,
+        decoders: &ModuleDecoderRegistry,
+    ) -> FedResult<SignedEpochOutcome> {
+        // TODO: make this function avoid clone
+        let decoders = decoders.clone();
+
+        struct ValidHistoryWrapper {
+            decoders: ModuleDecoderRegistry,
+            strategy: ValidHistory,
+        }
+
+        impl QueryStrategy<SerdeEpochHistory, SignedEpochOutcome> for ValidHistoryWrapper {
+            fn process(
+                &mut self,
+                peer: PeerId,
+                result: Result<SerdeEpochHistory>,
+            ) -> QueryStep<SignedEpochOutcome> {
+                let response = result.and_then(|hist| {
+                    hist.try_into_inner(&self.decoders)
+                        .map_err(|e| ApiError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
+                });
+                match self.strategy.process(peer, response) {
+                    QueryStep::RetryMembers(r) => QueryStep::RetryMembers(r),
+                    QueryStep::FailMembers(failed) => QueryStep::FailMembers(failed),
+                    QueryStep::Continue => QueryStep::Continue,
+                    QueryStep::Success(res) => QueryStep::Success(res),
+                    QueryStep::Failure(failed) => QueryStep::Failure(failed),
+                }
+            }
+        }
+
+        let qs = ValidHistoryWrapper {
+            decoders,
+            strategy: ValidHistory::new(epoch_pk, self.all_members().one_honest()),
+        };
+
+        self.request_fed_with_strategy::<SerdeEpochHistory, _>(
+            qs,
+            "/fetch_epoch_history".to_owned(),
+            erased_single_param(&epoch),
+        )
+        .await
+    }
+
+    async fn fetch_last_epoch(&self) -> FedResult<u64> {
+        self.request_eventually_consistent("/epoch".to_owned(), erased_no_param())
+            .await
+    }
+
+    async fn fetch_output_outcome<R>(
+        &self,
+        out_point: OutPoint,
+        decoders: &ModuleDecoderRegistry,
+    ) -> OutputOutcomeResult<R>
+    where
+        R: TryIntoOutcome + Send,
     {
-        match self.fetch_tx_outcome(out_point.txid).await? {
-            TransactionStatus::Rejected(e) => Err(ApiError::TransactionRejected(e)),
+        match self.fetch_tx_outcome(&out_point.txid).await? {
+            TransactionStatus::Rejected(e) => Err(OutputOutcomeError::Rejected(e)),
             TransactionStatus::Accepted { outputs, .. } => {
                 let outputs_len = outputs.len();
                 outputs
                     .into_iter()
                     .nth(out_point.out_idx as usize) // avoid clone as would be necessary with .get(…)
-                    .ok_or(ApiError::OutPointOutOfRange(
-                        outputs_len,
-                        out_point.out_idx as usize,
-                    ))
+                    .ok_or(OutputOutcomeError::InvalidVout {
+                        outputs_num: outputs_len,
+                        out_idx: out_point.out_idx,
+                    })
                     .and_then(|output| {
-                        let legacy_oo: OutputOutcome =
-                            output.try_into_inner(&module_decode_stubs())?.into();
-
-                        legacy_oo.try_into_variant().map_err(ApiError::CoreError)
+                        let legacy_oo: outcome::legacy::OutputOutcome = output
+                            .try_into_inner(decoders)
+                            .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?
+                            .into();
+                        legacy_oo
+                            .try_into_variant()
+                            .map_err(OutputOutcomeError::Core)
                     })
             }
         }
     }
 
     // TODO should become part of the API
-    pub async fn await_output_outcome<T: TryIntoOutcome + Send>(
+    async fn await_output_outcome<R: TryIntoOutcome + Send>(
         &self,
         outpoint: OutPoint,
         timeout: Duration,
-    ) -> Result<T> {
+        decoders: &ModuleDecoderRegistry,
+    ) -> OutputOutcomeResult<R> {
         let poll = || async {
             let interval = Duration::from_secs(1);
             loop {
-                match self.fetch_output_outcome(outpoint).await {
+                match self.fetch_output_outcome(outpoint, decoders).await {
                     Ok(t) => return Ok(t),
                     Err(e) if e.is_retryable() => {
                         trace!("Federation api returned retryable error: {:?}", e);
@@ -157,7 +515,161 @@ impl DynFederationApi {
         };
         fedimint_api::task::timeout(timeout, poll())
             .await
-            .map_err(|_| ApiError::Timeout)?
+            .map_err(|_| OutputOutcomeError::Timeout(timeout))?
+    }
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+pub trait LnFederationApi {
+    async fn fetch_contract(&self, contract: ContractId) -> FedResult<ContractAccount>;
+    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> FedResult<IncomingContractOffer>;
+    async fn fetch_gateways(&self) -> FedResult<Vec<LightningGateway>>;
+    async fn register_gateway(&self, gateway: &LightningGateway) -> FedResult<()>;
+    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FedResult<bool>;
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl<T: ?Sized> LnFederationApi for T
+where
+    T: IFederationApi + Send + Sync + 'static,
+{
+    async fn fetch_contract(&self, contract: ContractId) -> FedResult<ContractAccount> {
+        self.request_fed_with_strategy(
+            Retry404::new(self.all_members().one_honest()),
+            format!("/module/{}/account", LEGACY_HARDCODED_INSTANCE_ID_LN),
+            erased_single_param(&contract),
+        )
+        .await
+    }
+    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> FedResult<IncomingContractOffer> {
+        self.request_fed_with_strategy(
+            Retry404::new(self.all_members().one_honest()),
+            format!("/module/{}/offer", LEGACY_HARDCODED_INSTANCE_ID_LN),
+            erased_single_param(&payment_hash),
+        )
+        .await
+    }
+
+    async fn fetch_gateways(&self) -> FedResult<Vec<LightningGateway>> {
+        self.request_union(
+            format!("/module/{}/list_gateways", LEGACY_HARDCODED_INSTANCE_ID_LN),
+            erased_no_param(),
+        )
+        .await
+    }
+
+    async fn register_gateway(&self, gateway: &LightningGateway) -> FedResult<()> {
+        self.request_current_consensus(
+            format!(
+                "/module/{}/register_gateway",
+                LEGACY_HARDCODED_INSTANCE_ID_LN
+            ),
+            erased_single_param(gateway),
+        )
+        .await
+    }
+
+    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FedResult<bool> {
+        match self.fetch_offer(payment_hash).await {
+            Ok(_) => Ok(true),
+            Err(e) if e.is_retryable() => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+pub trait MintFederationApi {
+    async fn upload_ecash_backup(
+        &self,
+        request: &fedimint_mint::SignedBackupRequest,
+    ) -> FedResult<()>;
+    async fn download_ecash_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> FedResult<Vec<ECashUserBackupSnapshot>>;
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl<T: ?Sized> MintFederationApi for T
+where
+    T: IFederationApi + Send + Sync + 'static,
+{
+    async fn upload_ecash_backup(
+        &self,
+        request: &fedimint_mint::SignedBackupRequest,
+    ) -> FedResult<()> {
+        self.request_current_consensus(
+            format!("/module/{}/backup", LEGACY_HARDCODED_INSTANCE_ID_MINT),
+            erased_single_param(request),
+        )
+        .await
+    }
+    async fn download_ecash_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> FedResult<Vec<ECashUserBackupSnapshot>> {
+        Ok(self
+            .request_fed_with_strategy(
+                UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
+                    self.all_members().one_honest(),
+                ),
+                format!("/module/{}/recover", LEGACY_HARDCODED_INSTANCE_ID_MINT),
+                erased_single_param(id),
+            )
+            .await?
+            .into_iter()
+            .flatten()
+            .collect())
+    }
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+pub trait WalletFederationApi {
+    async fn fetch_consensus_block_height(&self) -> FedResult<u64>;
+    async fn fetch_peg_out_fees(
+        &self,
+        address: &Address,
+        amount: bitcoin::Amount,
+    ) -> FedResult<Option<PegOutFees>>;
+}
+
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+impl<T: ?Sized> WalletFederationApi for T
+where
+    T: IFederationApi + Send + Sync + 'static,
+{
+    async fn fetch_consensus_block_height(&self) -> FedResult<u64> {
+        self.request_fed_with_strategy(
+            EventuallyConsistent::new(self.all_members().one_honest()),
+            format!(
+                "/module/{}/block_height",
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET
+            ),
+            erased_no_param(),
+        )
+        .await
+    }
+
+    async fn fetch_peg_out_fees(
+        &self,
+        address: &Address,
+        amount: bitcoin::Amount,
+    ) -> FedResult<Option<PegOutFees>> {
+        self.request_eventually_consistent(
+            format!(
+                "/module/{}/peg_out_fees",
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET
+            ),
+            erased_multi_param(&(address, amount.to_sat())),
+        )
+        .await
     }
 }
 
@@ -166,8 +678,8 @@ impl DynFederationApi {
 /// returned as a member faults list.
 #[derive(Debug)]
 pub struct WsFederationApi<C = WsClient> {
+    peers: BTreeSet<PeerId>,
     members: Vec<FederationMember<C>>,
-    module_registry: ModuleDecoderRegistry,
 }
 
 #[derive(Debug)]
@@ -199,238 +711,38 @@ impl From<&ClientConfig> for WsFederationConnect {
     }
 }
 
-pub type Result<T> = std::result::Result<T, ApiError>;
-
-#[derive(Debug, Error)]
-pub enum ApiError {
-    #[error("Client Rpc error: {0}")]
-    RpcError(#[from] JsonRpcError),
-    #[error("Decode error: {0}")]
-    DecodeError(#[from] fedimint_api::encoding::DecodeError),
-    #[error("Invalid response: {0}")]
-    InvalidResponse(String),
-    #[error("Error retrieving the transaction: {0}")]
-    TransactionError(String),
-    #[error("The transaction was rejected by consensus processing: {0}")]
-    TransactionRejected(String),
-    #[error("Out point out of range, transaction got {0} outputs, requested element {1}")]
-    OutPointOutOfRange(usize, usize),
-    #[error("Core error: {0}")]
-    CoreError(#[from] CoreError),
-    #[error("Timeout error awaiting outcome")]
-    Timeout,
-    #[error("Unable to determine a consistent API result from peers")]
-    NoResult,
-}
-
-impl ApiError {
-    /// Returns `true` if queried outpoint isn't ready yet but may become ready later
-    pub fn is_retryable(&self) -> bool {
-        match self {
-            ApiError::RpcError(JsonRpcError::Call(RpcCallError::Custom(e))) => e.code() == 404,
-            ApiError::CoreError(e) => e.is_retryable(),
-            _ => false,
-        }
-    }
-}
-
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<C> {
-    /// Fetch the outcome of an entire transaction
-    async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
-        self.request(
-            "/fetch_transaction",
-            tx,
-            Retry404::new(self.peers().one_honest()),
-        )
-        .await
+    fn all_members(&self) -> &BTreeSet<PeerId> {
+        &self.peers
     }
 
-    /// Submit a transaction to all federation members
-    async fn submit_transaction(&self, tx: LegacyTransaction) -> Result<TransactionId> {
-        // TODO: check the id is correct
-        self.request(
-            "/transaction",
-            SerdeTransaction::from(&tx.into_type_erased()),
-            CurrentConsensus::new(self.peers().one_honest()),
-        )
-        .await
-    }
-
-    async fn fetch_epoch_history(
+    async fn request_raw(
         &self,
-        epoch: u64,
-        epoch_pk: PublicKey,
-    ) -> Result<SignedEpochOutcome> {
-        struct ValidHistoryWrapper<'a> {
-            modules: &'a ModuleDecoderRegistry,
-            strategy: ValidHistory,
-        }
+        peer_id: PeerId,
+        method: &str,
+        params: &[Value],
+    ) -> JsonRpcResult<Value> {
+        let member = self
+            .members
+            .iter()
+            .find(|m| m.peer_id == peer_id)
+            .ok_or_else(|| JsonRpcError::Custom(format!("Invalid peer_id: {peer_id}")))?;
 
-        impl<'a> QueryStrategy<SerdeEpochHistory> for ValidHistoryWrapper<'a> {
-            fn process(
-                &mut self,
-                response: FedResponse<SerdeEpochHistory>,
-            ) -> QueryStep<SerdeEpochHistory> {
-                let response = FedResponse {
-                    peer: response.peer,
-                    result: response.result.and_then(|hist| {
-                        hist.try_into_inner(self.modules)
-                            .map_err(|e| jsonrpsee_core::Error::Custom(e.to_string()))
-                    }),
-                };
-                match self.strategy.process(response) {
-                    QueryStep::Finished(res) => QueryStep::Finished(res.map(|val| (&val).into())),
-                    QueryStep::Retry(r) => QueryStep::Retry(r),
-                    QueryStep::Continue => QueryStep::Continue,
-                }
-            }
-        }
-
-        let qs = ValidHistoryWrapper {
-            modules: &self.module_registry,
-            strategy: ValidHistory::new(epoch_pk, self.peers().one_honest()),
-        };
-
-        Ok(self
-            .request::<_, SerdeEpochHistory>("/fetch_epoch_history", epoch, qs)
-            .await?
-            .try_into_inner(&self.module_registry)?)
-    }
-
-    async fn fetch_last_epoch(&self) -> Result<u64> {
-        self.request(
-            "/epoch",
-            (),
-            EventuallyConsistent::new(self.peers().one_honest()),
-        )
-        .await
-    }
-
-    async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
-        self.request(
-            &format!("/module/{}/account", LEGACY_HARDCODED_INSTANCE_ID_LN),
-            contract,
-            Retry404::new(self.peers().one_honest()),
-        )
-        .await
-    }
-
-    async fn fetch_consensus_block_height(&self) -> Result<u64> {
-        self.request(
-            &format!(
-                "/module/{}/block_height",
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET
-            ),
-            (),
-            EventuallyConsistent::new(self.peers().one_honest()),
-        )
-        .await
-    }
-
-    async fn fetch_peg_out_fees(
-        &self,
-        address: &Address,
-        amount: &Amount,
-    ) -> Result<Option<PegOutFees>> {
-        self.request(
-            &format!(
-                "/module/{}/peg_out_fees",
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET
-            ),
-            (address, amount.to_sat()),
-            EventuallyConsistent::new(self.peers().one_honest()),
-        )
-        .await
-    }
-
-    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
-        self.request(
-            &format!("/module/{}/offer", LEGACY_HARDCODED_INSTANCE_ID_LN),
-            payment_hash,
-            Retry404::new(self.peers().one_honest()),
-        )
-        .await
-    }
-
-    async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>> {
-        self.request(
-            &format!("/module/{}/list_gateways", LEGACY_HARDCODED_INSTANCE_ID_LN),
-            (),
-            UnionResponses::new(self.peers().one_honest()),
-        )
-        .await
-    }
-
-    async fn register_gateway(&self, gateway: LightningGateway) -> Result<()> {
-        self.request(
-            &format!(
-                "/module/{}/register_gateway",
-                LEGACY_HARDCODED_INSTANCE_ID_LN
-            ),
-            gateway,
-            CurrentConsensus::new(self.peers().threshold()),
-        )
-        .await
-    }
-
-    async fn offer_exists(&self, payment_hash: Sha256Hash) -> Result<bool> {
-        let res: Result<IncomingContractOffer> = self
-            .request(
-                &format!("/module/{}/offer", LEGACY_HARDCODED_INSTANCE_ID_LN),
-                payment_hash,
-                CurrentConsensus::new(self.peers().one_honest()),
-            )
-            .await;
-
-        match res {
-            Ok(_) => Ok(true),
-            Err(e) if e.is_retryable() => Ok(false),
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn upload_ecash_backup(
-        &self,
-        request: &fedimint_mint::SignedBackupRequest,
-    ) -> Result<()> {
-        self.request(
-            &format!("/module/{}/backup", LEGACY_HARDCODED_INSTANCE_ID_MINT),
-            request,
-            CurrentConsensus::new(self.peers().threshold()),
-        )
-        .await
-    }
-
-    async fn download_ecash_backup(
-        &self,
-        id: &secp256k1::XOnlyPublicKey,
-    ) -> Result<Vec<ECashUserBackupSnapshot>> {
-        Ok(self
-            .request_complex(
-                &format!("/module/{}/recover", LEGACY_HARDCODED_INSTANCE_ID_MINT),
-                id,
-                UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
-                    self.peers().one_honest(),
-                ),
-            )
-            .await?
-            .into_iter()
-            .flatten()
-            .collect())
+        member.request(method, params).await
     }
 }
 
 #[async_trait]
 pub trait JsonRpcClient: ClientT + Sized {
-    async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError>;
+    async fn connect(url: &Url) -> result::Result<Self, JsonRpcError>;
     fn is_connected(&self) -> bool;
 }
 
 #[async_trait]
 impl JsonRpcClient for WsClient {
-    async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError> {
+    async fn connect(url: &Url) -> result::Result<Self, JsonRpcError> {
         #[cfg(not(target_family = "wasm"))]
         return WsClientBuilder::default()
             .certificate_store(CertificateStore::WebPki)
@@ -478,6 +790,7 @@ impl<C> WsFederationApi<C> {
     /// Creates a new API client
     pub fn new_with_client(members: Vec<(PeerId, Url)>) -> Self {
         WsFederationApi {
+            peers: members.iter().map(|m| m.0).collect(),
             members: members
                 .into_iter()
                 .map(|(peer_id, url)| {
@@ -494,29 +807,23 @@ impl<C> WsFederationApi<C> {
                     }
                 })
                 .collect(),
-            module_registry: module_decode_stubs(),
         }
     }
 }
 
-pub struct FedResponse<R> {
+#[derive(Debug)]
+pub struct PeerResponse<R> {
     pub peer: PeerId,
-    pub result: std::result::Result<R, JsonRpcError>,
+    pub result: JsonRpcResult<R>,
 }
 
 impl<C: JsonRpcClient> FederationMember<C> {
     #[instrument(fields(peer = %self.peer_id), skip_all)]
-    pub async fn request<R>(&self, method: &str, params: &[serde_json::Value]) -> FedResponse<R>
-    where
-        R: serde::de::DeserializeOwned,
-    {
+    pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
         let rclient = self.client.read().await;
         match &*rclient {
             Some(client) if client.is_connected() => {
-                return FedResponse {
-                    peer: self.peer_id,
-                    result: client.request::<R, _>(method, params).await,
-                };
+                return client.request::<_, _>(method, params).await;
             }
             _ => {}
         };
@@ -525,15 +832,15 @@ impl<C: JsonRpcClient> FederationMember<C> {
 
         drop(rclient);
         let mut wclient = self.client.write().await;
-        let response = match &*wclient {
+        Ok(match &*wclient {
             Some(client) if client.is_connected() => {
                 // other task has already connected it
                 let rclient = RwLockWriteGuard::downgrade(wclient);
                 rclient
                     .as_ref()
                     .unwrap()
-                    .request::<R, _>(method, params)
-                    .await
+                    .request::<_, _>(method, params)
+                    .await?
             }
             _ => {
                 // write lock is acquired before creating a new client
@@ -546,21 +853,16 @@ impl<C: JsonRpcClient> FederationMember<C> {
                         rclient
                             .as_ref()
                             .unwrap()
-                            .request::<R, _>(method, params)
-                            .await
+                            .request::<_, _>(method, params)
+                            .await?
                     }
                     Err(err) => {
                         error!(%err, "unable to connect to server");
-                        Err(err)
+                        return Err(err)?;
                     }
                 }
             }
-        };
-
-        FedResponse {
-            peer: self.peer_id,
-            result: response,
-        }
+        })
     }
 }
 
@@ -581,57 +883,7 @@ fn url_to_string_with_default_port(url: &Url) -> String {
     )
 }
 
-impl<C: JsonRpcClient> WsFederationApi<C> {
-    pub async fn request<P: serde::Serialize, R: serde::de::DeserializeOwned>(
-        &self,
-        method: &str,
-        param: P,
-        strategy: impl QueryStrategy<R>,
-    ) -> Result<R> {
-        self.request_complex(method, param, strategy).await
-    }
-
-    pub async fn request_complex<
-        P: serde::Serialize,
-        IR: serde::de::DeserializeOwned,
-        OR: serde::de::DeserializeOwned,
-    >(
-        &self,
-        method: &str,
-        param: P,
-        mut strategy: impl QueryStrategy<IR, OR>,
-    ) -> Result<OR> {
-        let params = [serde_json::to_value(param).expect("encoding error")];
-        let mut futures = FuturesUnordered::new();
-
-        for member in &self.members {
-            futures.push(member.request(method, &params));
-        }
-
-        // Delegates the response handling to the `QueryStrategy` with an exponential back-off
-        // with every new set of requests
-        let mut delay_ms = 10;
-        let max_delay_ms = 1000;
-        loop {
-            match futures.next().await {
-                Some(result) => match strategy.process(result) {
-                    QueryStep::Retry(peers) => {
-                        for member in &self.members {
-                            if peers.contains(&member.peer_id) {
-                                futures.push(member.request(method, &params));
-                            }
-                        }
-                        sleep(Duration::from_millis(delay_ms)).await;
-                        delay_ms = min(max_delay_ms, delay_ms * 2);
-                    }
-                    QueryStep::Continue => {}
-                    QueryStep::Finished(result) => return result,
-                },
-                None => return Err(ApiError::NoResult),
-            }
-        }
-    }
-}
+impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 #[cfg(test)]
 mod tests {
@@ -643,6 +895,7 @@ mod tests {
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Mutex,
         },
+        time::Duration,
     };
 
     use anyhow::anyhow;
@@ -745,14 +998,14 @@ mod tests {
             "should not connect before first request"
         );
 
-        fed.request::<()>("", &[]).await.result.unwrap();
+        fed.request("", &[]).await.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             1,
             "should connect once after first request"
         );
 
-        fed.request::<()>("", &[]).await.result.unwrap();
+        fed.request("", &[]).await.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             1,
@@ -762,7 +1015,7 @@ mod tests {
         // disconnect
         CONNECTED.store(false, Ordering::SeqCst);
 
-        fed.request::<()>("", &[]).await.result.unwrap();
+        fed.request("", &[]).await.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             2,
@@ -813,12 +1066,12 @@ mod tests {
         FAIL.lock().unwrap().insert(0);
 
         assert!(
-            fed.request::<()>("", &[]).await.result.is_err(),
+            fed.request("", &[]).await.is_err(),
             "connect for client 0 should fail"
         );
 
         // connect for client 1 should succeed
-        fed.request::<()>("", &[]).await.result.unwrap();
+        fed.request("", &[]).await.unwrap();
 
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -830,9 +1083,9 @@ mod tests {
         FAIL.lock().unwrap().insert(1);
 
         // only connect once even for two concurrent requests
-        let (reqa, reqb) = tokio::join!(fed.request::<()>("", &[]), fed.request::<()>("", &[]));
-        reqa.result.expect("both request should be successful");
-        reqb.result.expect("both request should be successful");
+        let (reqa, reqb) = tokio::join!(fed.request("", &[]), fed.request("", &[]));
+        reqa.expect("both request should be successful");
+        reqb.expect("both request should be successful");
 
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -848,7 +1101,7 @@ mod tests {
         FAIL.lock().unwrap().insert(3);
 
         // only connect once even for two concurrent requests
-        let (reqa, reqb) = tokio::join!(fed.request::<()>("", &[]), fed.request::<()>("", &[]));
+        let (reqa, reqb) = tokio::join!(fed.request("", &[]), fed.request("", &[]));
 
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -857,7 +1110,7 @@ mod tests {
         );
 
         assert!(
-            reqa.result.is_err() ^ reqb.result.is_err(),
+            reqa.is_err() ^ reqb.is_err(),
             "exactly one of two request should succeed"
         );
     }

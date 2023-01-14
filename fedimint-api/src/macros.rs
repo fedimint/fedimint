@@ -265,7 +265,7 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id {
 macro_rules! serde_module_encoding_wrapper {
     ($wrapper_name:ident, $wrapped:ty) => {
         #[derive(Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
-        pub struct $wrapper_name(Vec<u8>);
+        pub struct $wrapper_name(#[serde(with = "hex::serde")] Vec<u8>);
 
         impl ::std::fmt::Debug for $wrapper_name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {

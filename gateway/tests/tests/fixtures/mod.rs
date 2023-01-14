@@ -9,6 +9,7 @@ use ln_gateway::{
     rpc::GatewayRequest,
     LnGateway,
 };
+use mint_client::module_decode_stubs;
 use tokio::sync::mpsc;
 
 pub mod client;
@@ -29,8 +30,18 @@ pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
     let client_builder: DynGatewayClientBuilder =
         client::TestGatewayClientBuilder::new(MemDbFactory.into()).into();
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
+    let decoders = module_decode_stubs();
 
-    let gateway = LnGateway::new(gw_cfg, ln_rpc, client_builder, tx, rx, task_group.clone()).await;
+    let gateway = LnGateway::new(
+        gw_cfg,
+        decoders,
+        ln_rpc,
+        client_builder,
+        tx,
+        rx,
+        task_group.clone(),
+    )
+    .await;
     let bitcoin = Box::new(FakeBitcoinTest::new());
 
     Ok(Fixtures {
