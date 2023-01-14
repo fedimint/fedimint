@@ -1359,7 +1359,7 @@
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
-    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleConfigGenParams,
+    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams,
     ServerModuleConfig, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
@@ -1648,7 +1648,7 @@
     <span class="kw">pub </span>mint_amounts: Vec&lt;Amount&gt;,
 }
 
-<span class="kw">impl </span>ModuleConfigGenParams <span class="kw">for </span>MintGenParams {
+<span class="kw">impl </span>ModuleGenParams <span class="kw">for </span>MintGenParams {
     <span class="kw">const </span>MODULE_NAME: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;mint&quot;</span>;
 }
 

@@ -1121,7 +1121,7 @@
     }
 
     <span class="doccomment">/// Add params for a module
-    </span><span class="kw">pub fn </span>attach&lt;P: ModuleConfigGenParams&gt;(<span class="kw-2">mut </span><span class="self">self</span>, module_params: P) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>attach&lt;P: ModuleGenParams&gt;(<span class="kw-2">mut </span><span class="self">self</span>, module_params: P) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.<span class="number">0</span>.insert(
             P::MODULE_NAME.to_string(),
             serde_json::to_value(<span class="kw-2">&amp;</span>module_params).expect(<span class="string">&quot;Encoding to value doesn&#39;t fail&quot;</span>),
@@ -1130,7 +1130,7 @@
     </span>}
 
     <span class="doccomment">/// Retrieve a typed config generation parameters for a module
-    </span><span class="kw">pub fn </span>get&lt;P: ModuleConfigGenParams&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;P&gt; {
+    </span><span class="kw">pub fn </span>get&lt;P: ModuleGenParams&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;P&gt; {
         <span class="kw">let </span>value = <span class="self">self
             </span>.<span class="number">0
             </span>.get(P::MODULE_NAME)
@@ -1140,7 +1140,7 @@
     }
 }
 
-<span class="kw">pub trait </span>ModuleConfigGenParams: serde::Serialize + serde::de::DeserializeOwned {
+<span class="kw">pub trait </span>ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
     <span class="kw">const </span>MODULE_NAME: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
 }
 

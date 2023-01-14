@@ -319,7 +319,7 @@
 <span class="kw">use </span>fedimint_api::cancellable::Cancellable;
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
-    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleConfigGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
@@ -455,7 +455,7 @@
     <span class="kw">pub </span>important_param: u64,
 }
 
-<span class="kw">impl </span>ModuleConfigGenParams <span class="kw">for </span>DummyConfigGenParams {
+<span class="kw">impl </span>ModuleGenParams <span class="kw">for </span>DummyConfigGenParams {
     <span class="kw">const </span>MODULE_NAME: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;dummy&quot;</span>;
 }
 
