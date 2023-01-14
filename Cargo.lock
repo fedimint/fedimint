@@ -2339,6 +2339,7 @@ dependencies = [
  "axum-macros",
  "bitcoin",
  "bitcoin_hashes 0.11.0",
+ "clap",
  "cln-plugin",
  "cln-rpc",
  "fedimint-api",

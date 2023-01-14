@@ -13,6 +13,10 @@ name = "ln_gateway"
 path = "src/lib.rs"
 
 [[bin]]
+name = "gatewayd"
+path = "src/bin/gatewayd.rs"
+
+[[bin]]
 name = "ln_gateway"
 path = "src/bin/ln_gateway.rs"
 
@@ -23,6 +27,7 @@ axum = "0.6.2"
 axum-macros = "0.3.1"
 bitcoin_hashes = "0.11.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
+clap = { version = "4.0.29", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 cln-rpc = "0.1.1"
 cln-plugin = "0.1.1"
 futures = "0.3.24"

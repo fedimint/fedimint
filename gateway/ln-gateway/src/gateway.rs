@@ -7,9 +7,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::anyhow;
 use bitcoin::Address;
-use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
-use fedimint_api::{task::TaskGroup, Amount, TransactionId};
+use fedimint_api::{
+    config::FederationId, module::registry::ModuleDecoderRegistry, task::TaskGroup, Amount,
+    TransactionId,
+};
 use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient};
 use tokio::sync::{mpsc, Mutex};
@@ -19,11 +22,11 @@ use crate::{
     actor_fork::GatewayActor,
     client::DynGatewayClientBuilder,
     config::GatewayConfig,
-    ln::LnRpc,
     rpc::{
-        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
-        ReceivePaymentPayload, WithdrawPayload,
+        lnrpc_client::{DynLnRpcClient, DynLnRpcClientFactory},
+        rpc_server::run_webserver,
+        BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayInfo,
+        GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload, WithdrawPayload,
     },
     LnGatewayError, Result,
 };
@@ -32,10 +35,13 @@ pub struct Gateway {
     config: GatewayConfig,
     decoders: ModuleDecoderRegistry,
     actors: Mutex<HashMap<String, Arc<GatewayActor>>>,
-    ln_rpc: Arc<dyn LnRpc>,
+    lnrpc: Mutex<Option<DynLnRpcClient>>,
+    // TODO: Use lnrpc_factory to link new lnrpc clients to gatewayd
+    #[allow(dead_code)]
+    lnrpc_factory: DynLnRpcClientFactory,
+    client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
-    client_builder: DynGatewayClientBuilder,
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
 }
@@ -44,29 +50,43 @@ impl Gateway {
     pub async fn new(
         config: GatewayConfig,
         decoders: ModuleDecoderRegistry,
-        ln_rpc: Arc<dyn LnRpc>,
+        lnrpc_factory: DynLnRpcClientFactory,
         client_builder: DynGatewayClientBuilder,
-        // TODO: consider encapsulating message channel within LnGateway
-        sender: mpsc::Sender<GatewayRequest>,
-        receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
+        // Create message channels for the webserver
+        let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
+
+        // Start gateway without an lnrpc client
+        let lnrpc: Option<DynLnRpcClient> = None;
+
         let decoders2 = decoders.clone();
-        let ln_gw = Self {
-            config,
+
+        let gw = Self {
+            config: config.clone(),
             actors: Mutex::new(HashMap::new()),
-            ln_rpc,
+            lnrpc: Mutex::new(lnrpc),
             sender,
             receiver,
+            lnrpc_factory,
             client_builder,
             task_group,
             channel_id_generator: AtomicU64::new(0),
             decoders,
         };
 
-        ln_gw.load_federation_actors(decoders2).await;
+        gw.load_federation_actors(decoders2).await;
 
-        ln_gw
+        gw
+    }
+
+    async fn get_lnrpc_client(&self) -> Result<DynLnRpcClient> {
+        match self.lnrpc.lock().await.clone() {
+            Some(client) => Ok(client),
+            None => Err(LnGatewayError::Other(anyhow!(
+                "No Lightning RPC client connected"
+            ))),
+        }
     }
 
     async fn load_federation_actors(&self, decoders: ModuleDecoderRegistry) {
@@ -104,11 +124,6 @@ impl Gateway {
             .ok_or(LnGatewayError::UnknownFederation)
     }
 
-    /// Register a federation to the gateway.
-    ///
-    /// # Returns
-    ///
-    /// A `GatewayActor` that can be used to execute gateway functions for the federation
     pub async fn connect_federation(
         &self,
         client: Arc<GatewayClient>,
@@ -128,7 +143,6 @@ impl Gateway {
         Ok(actor)
     }
 
-    // Webserver handler for requests to register a federation
     async fn handle_connect_federation(&self, payload: ConnectFedPayload) -> Result<()> {
         let connect: WsFederationConnect = serde_json::from_str(&payload.connect).map_err(|e| {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
@@ -305,6 +319,7 @@ impl Gateway {
                             .handle(|payload| self.handle_connect_federation(payload))
                             .await;
                     }
+                    // TODO: Remove: Gateway uses lnrpc to intercept HTLCs
                     GatewayRequest::ReceivePayment(inner) => {
                         inner
                             .handle(|payload| self.handle_receive_payment(payload))
