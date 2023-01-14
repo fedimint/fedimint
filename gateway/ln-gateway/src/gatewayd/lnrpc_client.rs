@@ -1,16 +1,23 @@
 use std::{fmt::Debug, sync::Arc};
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_api::dyn_newtype_define;
 use fedimint_server::modules::ln::route_hints::RouteHint;
-use tonic::Streaming;
+use tonic::{
+    transport::{Channel, Endpoint},
+    Streaming,
+};
+use tracing::error;
+use url::Url;
 
 use crate::{
     gatewaylnrpc::{
-        CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest,
-        PayInvoiceResponse, SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
+        gateway_lightning_client::GatewayLightningClient, CompleteHtlcsRequest,
+        CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest, PayInvoiceResponse,
+        SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
     },
-    Result,
+    LnGatewayError, Result,
 };
 
 // TODO: Issue 1554: Define gatewaylnpc spec for getting route hints
@@ -50,5 +57,57 @@ dyn_newtype_define!(
 impl DynLnRpcClient {
     pub fn new(client: Arc<dyn ILnRpcClient + Send + Sync>) -> Self {
         DynLnRpcClient(client)
+    }
+}
+
+/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for convenience,
+/// and makes real RPC requests over the wire to a remote lightning node.
+/// The lightning node is exposed via a corresponding `GatewayLightningServer`.
+#[derive(Debug)]
+pub struct NetworkLnRpcClient {
+    client: GatewayLightningClient<Channel>,
+}
+
+impl NetworkLnRpcClient {
+    pub async fn new(url: Url) -> Result<Self> {
+        let endpoint = Endpoint::from_shared(url.to_string()).map_err(|e| {
+            error!("Failed to create lnrpc endpoint from url : {:?}", e);
+            LnGatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
+        })?;
+
+        let client = GatewayLightningClient::connect(endpoint)
+            .await
+            .map_err(|e| {
+                error!("Failed to connect to lnrpc server: {:?}", e);
+                LnGatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
+            })?;
+
+        Ok(Self { client })
+    }
+}
+
+#[async_trait]
+impl ILnRpcClient for NetworkLnRpcClient {
+    async fn pubkey(&self) -> Result<GetPubKeyResponse> {
+        unimplemented!()
+    }
+
+    async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
+        unimplemented!()
+    }
+
+    async fn pay(&self, _invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
+        unimplemented!()
+    }
+
+    async fn subscribe_htlcs(
+        &self,
+        _subscription: SubscribeInterceptHtlcsRequest,
+    ) -> Result<HtlcStream> {
+        unimplemented!()
+    }
+
+    async fn complete_htlc(&self, _outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
+        unimplemented!()
     }
 }
