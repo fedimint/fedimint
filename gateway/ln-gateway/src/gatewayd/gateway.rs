@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    net::SocketAddr,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -23,8 +24,7 @@ use tracing::{error, info, warn};
 use super::actor::GatewayActor;
 use crate::{
     client::DynGatewayClientBuilder,
-    config::GatewayConfig,
-    ln::LnRpc,
+    gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse},
     rpc::{
         rpc_server::run_webserver, BackupPayload, BalancePayload, ConnectFedPayload,
         DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender,
@@ -37,14 +37,13 @@ const ROUTE_HINT_RETRIES: usize = 10;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 
 pub struct Gateway {
-    config: GatewayConfig,
     decoders: ModuleDecoderRegistry,
     module_gens: ModuleGenRegistry,
+    lnrpc: DynLnRpcClient,
     actors: Mutex<HashMap<String, Arc<GatewayActor>>>,
-    ln_rpc: Arc<dyn LnRpc>,
+    client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
-    client_builder: DynGatewayClientBuilder,
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
 }
@@ -52,19 +51,19 @@ pub struct Gateway {
 impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
-        config: GatewayConfig,
+        lnrpc: DynLnRpcClient,
+        client_builder: DynGatewayClientBuilder,
         decoders: ModuleDecoderRegistry,
         module_gens: ModuleGenRegistry,
-        ln_rpc: Arc<dyn LnRpc>,
-        client_builder: DynGatewayClientBuilder,
-        // TODO: consider encapsulating message channel within LnGateway
-        sender: mpsc::Sender<GatewayRequest>,
-        receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
+        // Create message channels for the webserver
+        let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
+
+        // Source route hints form the LN node
         let mut num_retries = 0;
         let route_hints = loop {
-            let route_hints = ln_rpc
+            let GetRouteHintsResponse { route_hints } = lnrpc
                 .route_hints()
                 .await
                 .expect("Could not feth route hints");
@@ -82,10 +81,9 @@ impl Gateway {
             tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
 
-        let ln_gw = Self {
-            config,
+        let gw = Self {
+            lnrpc,
             actors: Mutex::new(HashMap::new()),
-            ln_rpc,
             sender,
             receiver,
             client_builder,
@@ -95,11 +93,10 @@ impl Gateway {
             module_gens: module_gens.clone(),
         };
 
-        ln_gw
-            .load_federation_actors(decoders, module_gens, route_hints)
+        gw.load_federation_actors(decoders, module_gens, route_hints)
             .await;
 
-        ln_gw
+        gw
     }
 
     async fn load_federation_actors(
@@ -145,11 +142,6 @@ impl Gateway {
             .ok_or(LnGatewayError::UnknownFederation)
     }
 
-    /// Register a federation to the gateway.
-    ///
-    /// # Returns
-    ///
-    /// A `GatewayActor` that can be used to execute gateway functions for the federation
     pub async fn connect_federation(
         &self,
         client: Arc<GatewayClient>,
@@ -170,7 +162,6 @@ impl Gateway {
         Ok(actor)
     }
 
-    // Webserver handler for requests to register a federation
     async fn handle_connect_federation(
         &self,
         payload: ConnectFedPayload,
@@ -181,7 +172,7 @@ impl Gateway {
         })?;
 
         let node_pub_key = self
-            .ln_rpc
+            .lnrpc
             .pubkey()
             .await
             .expect("Failed to get node pubkey from Lightning node");
@@ -251,7 +242,7 @@ impl Gateway {
         } = payload;
 
         let actor = self.select_actor(federation_id).await?;
-        let outpoint = actor.pay_invoice(self.ln_rpc.clone(), contract_id).await?;
+        let outpoint = actor.pay_invoice(self.lnrpc.clone(), contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
@@ -312,17 +303,12 @@ impl Gateway {
         self.select_actor(federation_id).await?.restore().await
     }
 
-    pub async fn run(mut self) -> Result<()> {
+    pub async fn run(mut self, listen: SocketAddr, password: String) -> Result<()> {
         let mut tg = self.task_group.clone();
 
-        let cfg = self.config.clone();
         let sender = GatewayRpcSender::new(self.sender.clone());
         tg.spawn("Gateway Webserver", move |server_ctrl| async move {
-            let mut webserver = tokio::spawn(run_webserver(
-                cfg.password.clone(),
-                cfg.bind_address,
-                sender,
-            ));
+            let mut webserver = tokio::spawn(run_webserver(password, listen, sender));
 
             // Shut down webserver if requested
             if server_ctrl.is_shutting_down() {
@@ -350,13 +336,15 @@ impl Gateway {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
-                        let route_hints = self.ln_rpc.route_hints().await?;
+                        let GetRouteHintsResponse { route_hints } =
+                            self.lnrpc.route_hints().await?;
                         inner
                             .handle(|payload| {
                                 self.handle_connect_federation(payload, route_hints.clone())
                             })
                             .await;
                     }
+                    // TODO: Remove this handler because Gateway uses lnrpc to intercept HTLCs
                     GatewayRequest::ReceivePayment(inner) => {
                         inner
                             .handle(|payload| self.handle_receive_payment(payload))
