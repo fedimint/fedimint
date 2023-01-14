@@ -100,16 +100,13 @@
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Scheme for deriving deterministic secret keys
 
 </span><span class="kw">use </span>std::fmt::Formatter;
 
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>hkdf::hashes::Sha512;
-<span class="kw">use </span>hkdf::Hkdf;
+<span class="kw">use </span>hkdf::{bitcoin_hashes, Hkdf};
 <span class="kw">use </span>ring::aead;
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>tbs::Scalar;
@@ -196,15 +193,12 @@
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>DerivableSecret {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;DerivableSecret&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(
+        <span class="macro">write!</span>(f, <span class="string">&quot;DerivableSecret#&quot;</span>)<span class="question-mark">?</span>;
+        bitcoin_hashes::hex::format_hex(
+            <span class="kw-2">&amp;</span><span class="self">self
+                </span>.kdf
+                .derive::&lt;<span class="number">8</span>&gt;(<span class="string">b&quot;just a debug fingerprint derivation salt&quot;</span>),
             f,
-            <span class="string">&quot;#{}&quot;</span>,
-            <span class="comment">// Note: bothers me that `hex` can&#39;t avoid allocating here :shrug:
-            </span>hex::encode(
-                <span class="self">self</span>.kdf
-                    .derive::&lt;<span class="number">8</span>&gt;(<span class="string">b&quot;just a debug fingerprint derivation salt&quot;</span>)
-            )
         )
     }
 }
