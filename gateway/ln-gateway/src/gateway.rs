@@ -1,18 +1,4 @@
-pub mod actor;
-pub mod client;
-pub mod cln;
-pub mod config;
-pub mod gateway;
-pub mod ln;
-pub mod rpc;
-pub mod utils;
-
-pub mod gatewaylnrpc {
-    tonic::include_proto!("gatewaylnrpc");
-}
-
 use std::{
-    borrow::Cow,
     collections::HashMap,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -21,17 +7,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
 use fedimint_server::modules::ln::contracts::Preimage;
-use mint_client::{
-    api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
-    GatewayClient,
-};
-use thiserror::Error;
+use mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
 
@@ -39,17 +19,16 @@ use crate::{
     actor::GatewayActor,
     client::DynGatewayClientBuilder,
     config::GatewayConfig,
-    ln::{LightningError, LnRpc},
+    ln::LnRpc,
     rpc::{
         rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
         DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
         ReceivePaymentPayload, WithdrawPayload,
     },
+    LnGatewayError, Result,
 };
 
-pub type Result<T> = std::result::Result<T, LnGatewayError>;
-
-pub struct LnGateway {
+pub struct Gateway {
     config: GatewayConfig,
     decoders: ModuleDecoderRegistry,
     actors: Mutex<HashMap<String, Arc<GatewayActor>>>,
@@ -61,7 +40,7 @@ pub struct LnGateway {
     channel_id_generator: AtomicU64,
 }
 
-impl LnGateway {
+impl Gateway {
     pub async fn new(
         config: GatewayConfig,
         decoders: ModuleDecoderRegistry,
@@ -365,30 +344,8 @@ impl LnGateway {
     }
 }
 
-impl Drop for LnGateway {
+impl Drop for Gateway {
     fn drop(&mut self) {
         futures::executor::block_on(self.task_group.shutdown());
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum LnGatewayError {
-    #[error("Federation client operation error: {0:?}")]
-    ClientError(#[from] ClientError),
-    #[error("Our LN node could not route the payment: {0:?}")]
-    CouldNotRoute(LightningError),
-    #[error("Mint client error: {0:?}")]
-    MintClientE(#[from] MintClientError),
-    #[error("Actor not found")]
-    UnknownFederation,
-    #[error("Other: {0:?}")]
-    Other(#[from] anyhow::Error),
-}
-
-impl IntoResponse for LnGatewayError {
-    fn into_response(self) -> Response {
-        let mut err = Cow::<'static, str>::Owned(format!("{:?}", self)).into_response();
-        *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        err
     }
 }
