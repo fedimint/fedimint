@@ -15,6 +15,7 @@ use fedimint_api::{
 };
 use fedimint_server::modules::ln::contracts::Preimage;
 use mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient};
+use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
 
@@ -22,6 +23,7 @@ use crate::{
     actor_fork::GatewayActor,
     client::DynGatewayClientBuilder,
     config::GatewayConfig,
+    gatewaylnrpc::GetPubKeyResponse,
     rpc::{
         lnrpc_client::{DynLnRpcClient, DynLnRpcClientFactory},
         rpc_server::run_webserver,
@@ -148,11 +150,9 @@ impl Gateway {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
-        let node_pub_key = self
-            .ln_rpc
-            .pubkey()
-            .await
-            .expect("Failed to get node pubkey from Lightning node");
+        let GetPubKeyResponse { pub_key } = self.get_lnrpc_client().await?.get_pubkey().await?;
+        let node_pub_key = PublicKey::from_slice(&pub_key)
+            .map_err(|e| LnGatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
         // The gateway deterministically assigns a channel id (u64) to each federation connected.
         // TODO: explicitly handle the case where the channel id overflows

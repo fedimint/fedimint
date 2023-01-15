@@ -3,14 +3,14 @@ use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_api::dyn_newtype_define;
-use tonic::{transport::Channel, Streaming};
+use tonic::{transport::Channel, Request, Streaming};
 use tracing::error;
 
 use crate::{
     gatewaylnrpc::{
         gateway_lightning_client::GatewayLightningClient, CompleteHtlcsRequest,
-        CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest, PayInvoiceResponse,
-        SubscribeInterceptHtlcsResponse,
+        CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest,
+        PayInvoiceResponse, SubscribeInterceptHtlcsResponse,
     },
     LnGatewayError, Result,
 };
@@ -77,7 +77,15 @@ impl NetworkLnRpcClient {
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
     async fn get_pubkey(&self) -> Result<GetPubKeyResponse> {
-        unimplemented!()
+        let req = Request::new(GetPubKeyRequest {});
+
+        let mut client = self.client.clone();
+        let res = client.get_pub_key(req).await.map_err(|s| {
+            error!("Failed to get pubkey: {:?}", s.message());
+            LnGatewayError::LnrpcError(s)
+        })?;
+
+        Ok(res.into_inner())
     }
 
     async fn pay_invoice(
