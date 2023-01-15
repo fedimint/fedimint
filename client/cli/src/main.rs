@@ -311,7 +311,7 @@ impl<T, E: Error + 'static> ErrorHandler<T, E> for Result<T, E> {
             Ok(v) => v,
             Err(e) => {
                 let cli_error = CliError::from(err, msg, Some(Box::new(e)));
-                println!("{}", cli_error);
+                eprintln!("{}", cli_error);
                 exit(1);
             }
         }
@@ -406,7 +406,7 @@ async fn main() {
                 println!("{}", output);
             }
             Err(err) => {
-                println!("{}", err);
+                eprintln!("{}", err);
                 exit(1);
             }
         }

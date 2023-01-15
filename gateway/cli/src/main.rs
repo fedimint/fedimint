@@ -200,7 +200,7 @@ pub async fn print_response(response: reqwest::Response) {
             }
         }
         _ => {
-            println!("\nError: {}", &response.text().await.unwrap());
+            eprintln!("\nError: {}", &response.text().await.unwrap());
         }
     }
 }
