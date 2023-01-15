@@ -38,7 +38,7 @@ impl MemDatabase {
         let data = self.data.lock().unwrap();
         let data_iter = data.iter();
         for (key, value) in data_iter {
-            eprintln!("{}: {}", hex::encode(key), hex::encode(value));
+            println!("{}: {}", hex::encode(key), hex::encode(value));
         }
     }
 }
