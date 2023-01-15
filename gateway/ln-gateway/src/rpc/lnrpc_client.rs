@@ -101,3 +101,26 @@ impl ILnRpcClient for NetworkLnRpcClient {
         unimplemented!()
     }
 }
+
+/// A generic factory trait for creating `DynLnRpcClient` instances.
+#[async_trait]
+pub trait ILnRpcClientFactory: Debug {
+    async fn create(&self, address: SocketAddr) -> Result<DynLnRpcClient>;
+}
+
+dyn_newtype_define!(
+    /// Arc reference to a gateway lightning rpc client factory
+    #[derive(Clone)]
+    pub DynLnRpcClientFactory(Arc<ILnRpcClientFactory>)
+);
+
+#[derive(Debug, Default)]
+pub struct NetworkLnRpcClientFactory;
+
+/// An `ILnRpcClientFactory` that creates `NetworkLnRpcClient` instances.
+#[async_trait]
+impl ILnRpcClientFactory for NetworkLnRpcClientFactory {
+    async fn create(&self, address: SocketAddr) -> Result<DynLnRpcClient> {
+        Ok(NetworkLnRpcClient::new(address).await?.into())
+    }
+}
