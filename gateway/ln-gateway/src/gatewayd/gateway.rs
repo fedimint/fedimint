@@ -152,12 +152,14 @@ impl Gateway {
         route_hints: Vec<RouteHint>,
     ) -> Result<Arc<GatewayActor>> {
         let actor = Arc::new(
-            GatewayActor::new(client.clone(), route_hints)
-                .await
-                .expect("Failed to create actor"),
+            GatewayActor::new(
+                client.clone(),
+                self.lnrpc.clone(),
+                route_hints,
+                self.task_group.clone(),
+            )
+            .await?,
         );
-
-        // TODO: Subscribe for HTLC intercept on behalf of this federation
 
         self.actors.lock().await.insert(
             client.config().client_config.federation_id.to_string(),

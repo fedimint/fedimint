@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use bitcoin::{Address, Transaction};
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
 use mint_client::modules::{
     ln::{
@@ -12,11 +12,15 @@ use mint_client::modules::{
 };
 use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
     gatewayd::lnrpc_client::DynLnRpcClient,
-    gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse},
+    gatewaylnrpc::{
+        complete_htlcs_request::{Action, Cancel, Settle},
+        CompleteHtlcsRequest, PayInvoiceRequest, PayInvoiceResponse,
+        SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
+    },
     rpc::FederationInfo,
     utils::retry,
     LnGatewayError, Result,
@@ -25,12 +29,20 @@ use crate::{
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
+#[derive(Clone)]
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
+    lnrpc: DynLnRpcClient,
+    task_group: TaskGroup,
 }
 
 impl GatewayActor {
-    pub async fn new(client: Arc<GatewayClient>, route_hints: Vec<RouteHint>) -> Result<Self> {
+    pub async fn new(
+        client: Arc<GatewayClient>,
+        lnrpc: DynLnRpcClient,
+        route_hints: Vec<RouteHint>,
+        task_group: TaskGroup,
+    ) -> Result<Self> {
         let register_client = client.clone();
         tokio::spawn(async move {
             loop {
@@ -63,7 +75,114 @@ impl GatewayActor {
             }
         });
 
-        Ok(Self { client })
+        let actor = Self {
+            client,
+            lnrpc,
+            task_group,
+        };
+
+        actor.subscribe_htlcs().await?;
+
+        Ok(actor)
+    }
+
+    async fn subscribe_htlcs(&self) -> Result<()> {
+        let actor = self.to_owned();
+        let lnrpc_copy = self.lnrpc.to_owned();
+        let short_channel_id = self.client.config().mint_channel_id;
+        let mut tg = self.task_group.clone();
+
+        let mut stream = lnrpc_copy
+            .subscribe_htlcs(SubscribeInterceptHtlcsRequest { short_channel_id })
+            .await?;
+
+        tg.spawn(
+            "Subscribe to intercepted HTLCs in stream",
+            move |subscription| async move {
+                while let Some(SubscribeInterceptHtlcsResponse {
+                    payment_hash,
+                    outgoing_amount_msat,
+                    intercepted_htlc_id,
+                    ..
+                }) = match stream.message().await {
+                    Ok(Some(msg)) => Some(msg),
+                    Ok(None) => {
+                        warn!("HTLC stream closed by service");
+                        None
+                    }
+                    Err(e) => {
+                        error!("HTLC stream closed with error: {:?}", e);
+                        None
+                    }
+                } {
+                    if subscription.is_shutting_down() {
+                        info!("Shutting down HTLC subscription");
+                        break;
+                    }
+
+                    // TODO: Assert short channel id matches the one we subscribed to, or cancel processing of intercepted HTLC
+                    // TODO: Assert the offered fee derived from invoice amount and outgoing amount is acceptable or cancel processing of intercepted HTLC
+                    // TODO: Assert the HTLC expiry or cancel processing of intercepted HTLC
+
+                    let hash = match sha256::Hash::from_slice(&payment_hash) {
+                        Ok(hash) => hash,
+                        Err(e) => {
+                            let fail = "Failed to parse payment hash";
+
+                            error!("{}: {:?}", fail, e);
+                            let _ = lnrpc_copy
+                                .complete_htlc(CompleteHtlcsRequest {
+                                    intercepted_htlc_id,
+                                    action: Some(Action::Cancel(Cancel {
+                                        reason: fail.to_string(),
+                                    })),
+                                })
+                                .await;
+                            continue;
+                        }
+                    };
+
+                    let amount_msat = Amount::from_msats(outgoing_amount_msat);
+
+                    match actor.buy_preimage_internal(&hash, &amount_msat).await {
+                        Ok(preimage) => {
+                            info!("Successfully processed intercepted HTLC");
+                            if let Err(e) = lnrpc_copy
+                                .complete_htlc(CompleteHtlcsRequest {
+                                    intercepted_htlc_id,
+                                    action: Some(Action::Settle(Settle {
+                                        preimage: preimage.0.to_vec(),
+                                    })),
+                                })
+                                .await
+                            {
+                                error!("Failed to complete HTLC: {:?}", e);
+                                // Note: To prevent loss of funds for the gateway,
+                                // we should either retry completing the htlc or reclaim funds from the federation
+                            };
+                        }
+                        Err(e) => {
+                            error!("Failed to process intercepted HTLC: {:?}", e);
+                            // Note: this specific complete htlc requires no futher action.
+                            // If we fail to send the complete htlc message, or get an error result,
+                            // lightning node will still cancel HTCL after expiry period lapses.
+                            // Result can be safely ignored.
+                            let _ = lnrpc_copy
+                                .complete_htlc(CompleteHtlcsRequest {
+                                    intercepted_htlc_id,
+                                    action: Some(Action::Cancel(Cancel {
+                                        reason: e.to_string(),
+                                    })),
+                                })
+                                .await;
+                        }
+                    };
+                }
+            },
+        )
+        .await;
+
+        Ok(())
     }
 
     async fn fetch_all_notes(&self) {

@@ -6,8 +6,7 @@ use fedimint_api::dyn_newtype_define;
 use fedimint_server::modules::ln::route_hints::RouteHint;
 use tonic::{
     transport::{Channel, Endpoint},
-    Request,
-    Streaming,
+    Request, Streaming,
 };
 use tracing::error;
 use url::Url;
@@ -113,12 +112,22 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn subscribe_htlcs(
         &self,
-        _subscription: SubscribeInterceptHtlcsRequest,
+        subscription: SubscribeInterceptHtlcsRequest,
     ) -> Result<HtlcStream> {
-        unimplemented!()
+        let req = Request::new(subscription);
+
+        let mut client = self.client.clone();
+        let res = client.subscribe_intercept_htlcs(req).await?;
+
+        Ok(res.into_inner())
     }
 
-    async fn complete_htlc(&self, _outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
-        unimplemented!()
+    async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
+        let req = Request::new(outcome);
+
+        let mut client = self.client.clone();
+        let res = client.complete_htlc(req).await?;
+
+        Ok(res.into_inner())
     }
 }
