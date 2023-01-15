@@ -439,7 +439,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
             .fund_outgoing_ln_contract(invoice, rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(2).await; // send coins to LN contract
+        fed.run_consensus_epochs(1).await; // send coins to LN contract
 
         let contract_account = user
             .client
@@ -576,7 +576,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
             .fund_outgoing_ln_contract(invoice, rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(2).await; // send coins to LN contract
+        fed.run_consensus_epochs(1).await; // send coins to LN contract
 
         let contract_account = user
             .client

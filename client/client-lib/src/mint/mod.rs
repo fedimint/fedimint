@@ -207,7 +207,10 @@ impl MintClient {
 
         let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
         let notes_per_denomination = self.notes_per_denomination(&mut dbtx).await;
-        for amount in change {
+        for amount in change.clone() {
+            if amount.msats == 0 {
+                continue;
+            }
             let (issuances, nonces) = self
                 .create_ecash(amount, notes_per_denomination, &mut dbtx)
                 .await;
