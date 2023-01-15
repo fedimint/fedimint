@@ -453,6 +453,8 @@ impl Drop for LnGateway {
 pub enum LnGatewayError {
     #[error("Federation client operation error: {0:?}")]
     ClientError(#[from] ClientError),
+    #[error("Lightning rpc operation error: {0:?}")]
+    LnRpcError(#[from] tonic::Status),
     #[error("Our LN node could not route the payment: {0:?}")]
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]

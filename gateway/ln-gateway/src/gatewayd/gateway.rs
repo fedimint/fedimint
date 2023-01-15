@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::anyhow;
 use bitcoin::Address;
 use fedimint_api::{
     config::{FederationId, ModuleGenRegistry},
@@ -16,8 +17,10 @@ use fedimint_api::{
     Amount, TransactionId,
 };
 use fedimint_server::api::WsFederationConnect;
-use mint_client::modules::ln::{contracts::Preimage, route_hints::RouteHint};
-use mint_client::{ln::PayInvoicePayload, GatewayClient};
+use mint_client::modules::ln::{
+    contracts::Preimage, route_hints::RouteHint, GatewayClient, PayInvoicePayload,
+};
+use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info, warn};
 
@@ -25,6 +28,7 @@ use super::actor::GatewayActor;
 use crate::{
     client::DynGatewayClientBuilder,
     gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse},
+    gatewaylnrpc::GetPubKeyResponse,
     rpc::{
         rpc_server::run_webserver, BackupPayload, BalancePayload, ConnectFedPayload,
         DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender,
@@ -171,11 +175,9 @@ impl Gateway {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
-        let node_pub_key = self
-            .lnrpc
-            .pubkey()
-            .await
-            .expect("Failed to get node pubkey from Lightning node");
+        let GetPubKeyResponse { pub_key } = self.lnrpc.pubkey().await?;
+        let node_pub_key = PublicKey::from_slice(&pub_key)
+            .map_err(|e| LnGatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
         // The gateway deterministically assigns a channel id (u64) to each federation connected.
         // TODO: explicitly handle the case where the channel id overflows

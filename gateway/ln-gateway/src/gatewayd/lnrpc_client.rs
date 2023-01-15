@@ -6,6 +6,7 @@ use fedimint_api::dyn_newtype_define;
 use fedimint_server::modules::ln::route_hints::RouteHint;
 use tonic::{
     transport::{Channel, Endpoint},
+    Request,
     Streaming,
 };
 use tracing::error;
@@ -14,8 +15,8 @@ use url::Url;
 use crate::{
     gatewaylnrpc::{
         gateway_lightning_client::GatewayLightningClient, CompleteHtlcsRequest,
-        CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest, PayInvoiceResponse,
-        SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
+        CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest,
+        PayInvoiceResponse, SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
     },
     LnGatewayError, Result,
 };
@@ -89,7 +90,12 @@ impl NetworkLnRpcClient {
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
     async fn pubkey(&self) -> Result<GetPubKeyResponse> {
-        unimplemented!()
+        let req = Request::new(GetPubKeyRequest {});
+
+        let mut client = self.client.clone();
+        let res = client.get_pub_key(req).await?;
+
+        Ok(res.into_inner())
     }
 
     async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
