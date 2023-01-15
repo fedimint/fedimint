@@ -102,8 +102,13 @@ impl ILnRpcClient for NetworkLnRpcClient {
         unimplemented!()
     }
 
-    async fn pay(&self, _invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
-        unimplemented!()
+    async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
+        let req = Request::new(invoice);
+
+        let mut client = self.client.clone();
+        let res = client.pay_invoice(req).await?;
+
+        Ok(res.into_inner())
     }
 
     async fn subscribe_htlcs(

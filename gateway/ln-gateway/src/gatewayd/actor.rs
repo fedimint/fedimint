@@ -14,7 +14,13 @@ use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
-use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
+use crate::{
+    gatewayd::lnrpc_client::DynLnRpcClient,
+    gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse},
+    rpc::FederationInfo,
+    utils::retry,
+    LnGatewayError, Result,
+};
 
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -88,7 +94,7 @@ impl GatewayActor {
     #[instrument(skip_all, fields(%contract_id))]
     pub async fn pay_invoice(
         &self,
-        ln_rpc: Arc<dyn LnRpc>,
+        lnrpc: DynLnRpcClient,
         contract_id: ContractId,
     ) -> Result<OutPoint> {
         debug!("Fetching contract");
@@ -130,7 +136,7 @@ impl GatewayActor {
             self.buy_preimage_internal(&payment_params.payment_hash, &payment_params.invoice_amount)
                 .await
         } else {
-            self.buy_preimage_external(ln_rpc, contract_account.contract.invoice, &payment_params)
+            self.buy_preimage_external(lnrpc, contract_account.contract.invoice, &payment_params)
                 .await
         };
 
@@ -183,26 +189,23 @@ impl GatewayActor {
 
     pub async fn buy_preimage_external(
         &self,
-        ln_rpc: Arc<dyn LnRpc>,
+        lnrpc: DynLnRpcClient,
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
-        match ln_rpc
-            .pay(
-                invoice,
-                payment_params.max_delay,
-                payment_params.max_fee_percent(),
-            )
+        match lnrpc
+            .pay(PayInvoiceRequest {
+                invoice: invoice.to_string(),
+                max_delay: payment_params.max_delay,
+                max_fee_percent: payment_params.max_fee_percent(),
+            })
             .await
         {
-            Ok(preimage) => {
-                debug!(?preimage, "Successfully paid LN invoice");
-                Ok(preimage)
+            Ok(PayInvoiceResponse { preimage, .. }) => {
+                let slice: [u8; 32] = preimage.try_into().expect("Failed to parse preimage");
+                Ok(Preimage(slice))
             }
-            Err(e) => {
-                warn!("LN payment failed, aborting");
-                Err(LnGatewayError::CouldNotRoute(e))
-            }
+            Err(e) => Err(e),
         }
     }
 
