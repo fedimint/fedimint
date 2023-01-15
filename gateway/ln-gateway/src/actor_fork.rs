@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use bitcoin::{Address, Transaction};
-use bitcoin_hashes::sha256;
-use fedimint_api::{Amount, OutPoint, TransactionId};
+use bitcoin_hashes::{sha256, Hash};
+use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
 use fedimint_server::modules::{
     ln::contracts::{ContractId, Preimage},
     wallet::txoproof::TxOutProof,
@@ -14,18 +14,29 @@ use rand::{CryptoRng, RngCore};
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
-    gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse},
+    gatewaylnrpc::{
+        complete_htlcs_request::{Action, Cancel, Settle},
+        CompleteHtlcsRequest, PayInvoiceRequest, PayInvoiceResponse,
+        SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
+    },
     rpc::{lnrpc_client::DynLnRpcClient, FederationInfo},
     utils::retry,
     LnGatewayError, Result,
 };
 
+#[derive(Clone)]
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
+    lnrpc: DynLnRpcClient,
+    task_group: TaskGroup,
 }
 
 impl GatewayActor {
-    pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
+    pub async fn new(
+        client: Arc<GatewayClient>,
+        lnrpc: DynLnRpcClient,
+        task_group: TaskGroup,
+    ) -> Result<Self> {
         // Retry gateway registration
         match retry(
             String::from("Register With Federation"),
@@ -44,7 +55,112 @@ impl GatewayActor {
             Err(e) => warn!("Failed to connect with federation: {}", e),
         }
 
-        Ok(Self { client })
+        let actor = Self {
+            client,
+            lnrpc,
+            task_group,
+        };
+
+        actor.subscribe_htlcs().await?;
+
+        Ok(actor)
+    }
+
+    async fn subscribe_htlcs(&self) -> Result<()> {
+        let actor = self.to_owned();
+        let lnrpc = self.lnrpc.to_owned();
+        let short_channel_id = self.client.config().mint_channel_id;
+        let mut tg = self.task_group.clone();
+
+        let mut stream = lnrpc
+            .subscribe_intercept_htlcs(SubscribeInterceptHtlcsRequest { short_channel_id })
+            .await?;
+
+        tg.spawn(
+            "Subscribe to intercepted HTLCs in stream",
+            move |subscription| async move {
+                loop {
+                    if subscription.is_shutting_down() {
+                        info!("Shutting down HTLC handler");
+                        // TODO: Unsubscribe from HTLCs?
+                        break;
+                    }
+
+                    let mut htlc_outcomes = Vec::<CompleteHtlcsRequest>::new();
+
+                    while let Some(SubscribeInterceptHtlcsResponse {
+                        payment_hash,
+                        outgoing_amount_msat,
+                        intercepted_htlc_id,
+                        ..
+                    }) = match stream.message().await {
+                        Ok(Some(msg)) => Some(msg),
+                        Ok(None) => {
+                            warn!("Stream closed");
+                            None
+                        }
+                        Err(e) => {
+                            warn!("Stream error: {:?}", e);
+                            None
+                        }
+                    } {
+                        // TODO: Assert short channel id matches the one we subscribed to, or cancel processing of intercepted HTLC
+                        // TODO: Assert the offered fee derived from invoice amount and outgoing amount is acceptable or cancel processing of intercepted HTLC
+                        // TODO: Assert the HTLC expiry or cancel processing of intercepted HTLC
+
+                        let hash = match sha256::Hash::from_slice(&payment_hash) {
+                            Ok(hash) => hash,
+                            Err(e) => {
+                                let fail = "Failed to parse payment hash";
+
+                                error!("{}: {:?}", fail, e);
+                                htlc_outcomes.push(CompleteHtlcsRequest {
+                                    action: Some(Action::Cancel(Cancel {
+                                        reason: fail.to_string(),
+                                        intercepted_htlc_id,
+                                    })),
+                                });
+                                continue;
+                            }
+                        };
+
+                        let amount_msat = Amount::from_msats(outgoing_amount_msat);
+
+                        let outcome = match actor.buy_preimage_internal(&hash, &amount_msat).await {
+                            Ok(preimage) => {
+                                info!("Successfully processed intercepted HTLC");
+                                CompleteHtlcsRequest {
+                                    action: Some(Action::Settle(Settle {
+                                        preimage: preimage.0.to_vec(),
+                                        intercepted_htlc_id,
+                                    })),
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to process intercepted HTLC: {:?}", e);
+                                CompleteHtlcsRequest {
+                                    action: Some(Action::Cancel(Cancel {
+                                        reason: e.to_string(),
+                                        intercepted_htlc_id,
+                                    })),
+                                }
+                            }
+                        };
+
+                        htlc_outcomes.push(outcome);
+                    }
+
+                    if let Err(e) = lnrpc.complete_htlcs(htlc_outcomes).await {
+                        error!("Failed to complete HTLCs: {:?}", e);
+                        // NOTE: This is a potential loss of funds for the gateway.
+                        // We should consider a retry of this operation, cancel the HTLCs or reclaim funds.
+                    }
+                }
+            },
+        )
+        .await;
+
+        Ok(())
     }
 
     async fn fetch_all_coins(&self) {

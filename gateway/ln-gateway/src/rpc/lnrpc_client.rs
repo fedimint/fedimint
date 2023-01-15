@@ -11,7 +11,7 @@ use crate::{
     gatewaylnrpc::{
         gateway_lightning_client::GatewayLightningClient, CompleteHtlcsRequest,
         CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest,
-        PayInvoiceResponse, SubscribeInterceptHtlcsResponse,
+        PayInvoiceResponse, SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
     },
     LnGatewayError, Result,
 };
@@ -32,12 +32,12 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Subscribe to intercept htlcs that belong to a specific mint identified by `short_channel_id`
     async fn subscribe_intercept_htlcs(
         &self,
-        short_channel_id: u64,
+        channel: SubscribeInterceptHtlcsRequest,
     ) -> Result<Streaming<SubscribeInterceptHtlcsResponse>>;
 
     async fn complete_htlcs(
         &self,
-        requests: Vec<CompleteHtlcsRequest>,
+        outcomes: Vec<CompleteHtlcsRequest>,
     ) -> Result<Streaming<CompleteHtlcsResponse>>;
 }
 
@@ -106,16 +106,32 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn subscribe_intercept_htlcs(
         &self,
-        _short_channel_id: u64,
+        channel: SubscribeInterceptHtlcsRequest,
     ) -> Result<Streaming<SubscribeInterceptHtlcsResponse>> {
-        unimplemented!()
+        let req = Request::new(channel);
+
+        let mut client = self.client.clone();
+        let res = client.subscribe_intercept_htlcs(req).await.map_err(|s| {
+            error!("Failed to subscribe intercept htlcs: {:?}", s.message());
+            LnGatewayError::LnrpcError(s)
+        })?;
+
+        Ok(res.into_inner())
     }
 
     async fn complete_htlcs(
         &self,
-        _requests: Vec<CompleteHtlcsRequest>,
+        outcomes: Vec<CompleteHtlcsRequest>,
     ) -> Result<Streaming<CompleteHtlcsResponse>> {
-        unimplemented!()
+        let req = Request::new(stream::iter(outcomes.into_iter()));
+
+        let mut client = self.client.clone();
+        let res = client.complete_htlcs(req).await.map_err(|s| {
+            error!("Failed to complete processed htlcs: {:?}", s.message());
+            LnGatewayError::LnrpcError(s)
+        })?;
+
+        Ok(res.into_inner())
     }
 }
 
