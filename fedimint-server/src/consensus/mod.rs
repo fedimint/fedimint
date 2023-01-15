@@ -215,6 +215,7 @@ impl FedimintConsensus {
     /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is coming from a
     /// a reference (already signed) `OutcomeHistory`, that contains `rejected_txs`,
     /// so we can check it against our own `rejected_txs` we calculate in this function.
+    ///
     /// **Note**: `reference_rejecte_txs` **must** come from a validated/trustworthy
     /// source and be correct, or it can cause a panic.
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
