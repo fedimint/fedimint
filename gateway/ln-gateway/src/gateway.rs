@@ -16,7 +16,7 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
 
 use crate::{
-    actor::GatewayActor,
+    actor_fork::GatewayActor,
     client::DynGatewayClientBuilder,
     config::GatewayConfig,
     ln::LnRpc,
