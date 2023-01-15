@@ -3,6 +3,7 @@ use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_api::dyn_newtype_define;
+use futures::stream;
 use tonic::{transport::Channel, Request, Streaming};
 use tracing::error;
 
@@ -90,9 +91,17 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn pay_invoice(
         &self,
-        _invoices: Vec<PayInvoiceRequest>,
+        invoices: Vec<PayInvoiceRequest>,
     ) -> Result<Streaming<PayInvoiceResponse>> {
-        unimplemented!()
+        let req = Request::new(stream::iter(invoices.into_iter()));
+
+        let mut client = self.client.clone();
+        let res = client.pay_invoice(req).await.map_err(|s| {
+            error!("Failed to pay invoices: {:?}", s.message());
+            LnGatewayError::LnrpcError(s)
+        })?;
+
+        Ok(res.into_inner())
     }
 
     async fn subscribe_intercept_htlcs(

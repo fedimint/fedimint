@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use anyhow::anyhow;
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use fedimint_api::{Amount, OutPoint, TransactionId};
@@ -7,11 +8,17 @@ use fedimint_server::modules::{
     ln::contracts::{ContractId, Preimage},
     wallet::txoproof::TxOutProof,
 };
+use futures::StreamExt;
 use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
-use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
+use crate::{
+    gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse},
+    rpc::{lnrpc_client::DynLnRpcClient, FederationInfo},
+    utils::retry,
+    LnGatewayError, Result,
+};
 
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
@@ -70,7 +77,7 @@ impl GatewayActor {
     #[instrument(skip_all, fields(%contract_id))]
     pub async fn pay_invoice(
         &self,
-        ln_rpc: Arc<dyn LnRpc>,
+        lnrpc: DynLnRpcClient,
         contract_id: ContractId,
     ) -> Result<OutPoint> {
         debug!("Fetching contract");
@@ -103,7 +110,7 @@ impl GatewayActor {
             self.buy_preimage_internal(&payment_params.payment_hash, &payment_params.invoice_amount)
                 .await
         } else {
-            self.buy_preimage_external(ln_rpc, contract_account.contract.invoice, &payment_params)
+            self.buy_preimage_external(lnrpc, contract_account.contract.invoice, &payment_params)
                 .await
         };
 
@@ -156,27 +163,37 @@ impl GatewayActor {
 
     pub async fn buy_preimage_external(
         &self,
-        ln_rpc: Arc<dyn LnRpc>,
+        lnrpc: DynLnRpcClient,
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
-        match ln_rpc
-            .pay(
-                invoice,
-                payment_params.max_delay,
-                payment_params.max_fee_percent(),
-            )
-            .await
-        {
-            Ok(preimage) => {
-                debug!(?preimage, "Successfully paid LN invoice");
-                Ok(preimage)
-            }
-            Err(e) => {
-                warn!("LN payment failed, aborting");
-                Err(LnGatewayError::CouldNotRoute(e))
-            }
+        // TODO: Implement batch buy preimage external.
+        // At present, we only send one invoice to the stream and expect a single response.
+
+        let mut stream = lnrpc
+            .pay_invoice(vec![PayInvoiceRequest {
+                invoice: invoice.to_string(),
+                max_delay: payment_params.max_delay,
+                max_fee_percent: payment_params.max_fee_percent(),
+            }])
+            .await?;
+
+        if let Some(response) = stream.next().await {
+            return match response {
+                Ok(PayInvoiceResponse { preimage, .. }) => {
+                    let slice: [u8; 32] = preimage.try_into().expect("Failed to parse preimage");
+                    Ok(Preimage(slice))
+                }
+                Err(status) => {
+                    error!("Failed to pay invoice: {}", status.message());
+                    Err(LnGatewayError::LnrpcError(status))
+                }
+            };
         }
+
+        Err(LnGatewayError::Other(anyhow!(
+            "No response from pay invoice"
+        )))
     }
 
     pub async fn await_outgoing_contract_claimed(
