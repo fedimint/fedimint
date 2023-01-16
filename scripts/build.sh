@@ -49,7 +49,7 @@ do
   fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
   api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
   export FM_PASSWORD="pass$ID"
-  $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://localhost:$fed_port --api-url ws://localhost:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
+  $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://127.0.0.1:$fed_port --api-url ws://127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
   CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
 done
 CERTS=${CERTS:1}
