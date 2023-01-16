@@ -503,6 +503,10 @@
 <a href="#503" id="503">503</a>
 <a href="#504" id="504">504</a>
 <a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -633,21 +637,7 @@
             </span>}
         }
 
-        ApiEndpoint {
-            path: &lt;Endpoint <span class="kw">as </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint</span>&gt;::PATH,
-            handler: Box::new(|m, dbtx, param| {
-                Box::pin(<span class="kw">async move </span>{
-                    <span class="kw">let </span>params = <span class="macro-nonterminal">$crate::module::__reexports::serde_json::from_value</span>(param)
-                        .map_err(|e| <span class="macro-nonterminal">$crate::module::ApiError::bad_request</span>(e.to_string()))<span class="question-mark">?</span>;
-
-                    <span class="kw">let </span>ret =
-                        &lt;Endpoint <span class="kw">as </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint</span>&gt;::handle(m, dbtx, params)
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(<span class="macro-nonterminal">$crate::module::__reexports::serde_json::to_value</span>(ret)
-                        .expect(<span class="string">&quot;encoding error&quot;</span>))
-                })
-            }),
-        }
+        <span class="macro-nonterminal">$crate::module::ApiEndpoint::from_typed</span>::&lt;Endpoint&gt;()
     }};
 }
 
@@ -674,6 +664,24 @@
     ///   * Reference to the module which defined it
     ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
     </span><span class="kw">pub </span>handler: HandlerFn&lt;M&gt;,
+}
+
+<span class="comment">// &lt;()&gt; is used to avoid specify state.
+</span><span class="kw">impl </span>ApiEndpoint&lt;()&gt; {
+    <span class="kw">pub fn </span>from_typed&lt;E: TypedApiEndpoint&gt;() -&gt; ApiEndpoint&lt;E::State&gt; {
+        ApiEndpoint {
+            path: E::PATH,
+            handler: Box::new(|m, dbtx, param| {
+                Box::pin(<span class="kw">async move </span>{
+                    <span class="kw">let </span>params = serde_json::from_value(param)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
+
+                    <span class="kw">let </span>ret = E::handle(m, dbtx, params).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>(serde_json::to_value(ret).expect(<span class="string">&quot;encoding error&quot;</span>))
+                })
+            }),
+        }
+    }
 }
 
 <span class="attr">#[derive(Error, Debug)]
