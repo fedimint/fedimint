@@ -1115,6 +1115,19 @@
 <a href="#1115" id="1115">1115</a>
 <a href="#1116" id="1116">1116</a>
 <a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::pin::Pin;
@@ -1169,18 +1182,17 @@
 
 <span class="kw">type </span>JsonValue = serde_json::Value;
 
-<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = result::Result&lt;T, ApiError&gt;;
+<span class="kw">pub type </span>MemberResult&lt;T&gt; = result::Result&lt;T, MemberError&gt;;
 
 <span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = result::Result&lt;T, jsonrpsee_core::Error&gt;;
-<span class="kw">pub type </span>FedResult&lt;T&gt; = result::Result&lt;T, FedApiError&gt;;
+<span class="kw">pub type </span>FederationResult&lt;T&gt; = result::Result&lt;T, FederationError&gt;;
 
 <span class="kw">pub mod </span>fake;
 
-<span class="comment">// TODO: rename to `MemberApiError`
+<span class="doccomment">/// An API request error when calling a single federation member
 </span><span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>ApiError {
-    <span class="comment">// ParamsSerialization(anyhow::Error),
-    </span><span class="attr">#[error(<span class="string">&quot;Response deserialization error: {0}&quot;</span>)]
+</span><span class="kw">pub enum </span>MemberError {
+    <span class="attr">#[error(<span class="string">&quot;Response deserialization error: {0}&quot;</span>)]
     </span>ResponseDeserialization(anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Invalid peer id: {peer_id}&quot;</span>)]
     </span>InvalidPeerId { peer_id: PeerId },
@@ -1188,12 +1200,12 @@
     </span>Rpc(<span class="attr">#[from] </span>JsonRpcError),
 }
 
-<span class="kw">impl </span>ApiError {
+<span class="kw">impl </span>MemberError {
     <span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
-            ApiError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-            ApiError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">false</span>,
-            ApiError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
+            MemberError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            MemberError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">false</span>,
+            MemberError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
                 JsonRpcError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
                 JsonRpcError::Internal(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
                 JsonRpcError::Call(jsonrpsee_types::error::CallError::Custom(e)) =&gt; e.code() == <span class="number">404</span>,
@@ -1203,10 +1215,11 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub struct </span>FedApiError(BTreeMap&lt;PeerId, ApiError&gt;);
+<span class="doccomment">/// An API request error when calling an entire federation
+</span><span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">pub struct </span>FederationError(BTreeMap&lt;PeerId, MemberError&gt;);
 
-<span class="kw">impl </span>fmt::Display <span class="kw">for </span>FedApiError {
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>FederationError {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         f.write_str(<span class="string">&quot;Federation rpc error(&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.iter().enumerate() {
@@ -1220,7 +1233,7 @@
     }
 }
 
-<span class="kw">impl </span>FedApiError {
+<span class="kw">impl </span>FederationError {
     <span class="kw">fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.<span class="number">0</span>.iter().any(|(<span class="kw">_</span>, e)| e.is_retryable())
     }
@@ -1233,7 +1246,7 @@
     <span class="attr">#[error(<span class="string">&quot;Response deserialization error: {0}&quot;</span>)]
     </span>ResponseDeserialization(anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Federation error: {0}&quot;</span>)]
-    </span>Federation(<span class="attr">#[from] </span>FedApiError),
+    </span>Federation(<span class="attr">#[from] </span>FederationError),
     <span class="attr">#[error(<span class="string">&quot;Core error: {0}&quot;</span>)]
     </span>Core(<span class="attr">#[from] </span>CoreError),
     <span class="attr">#[error(<span class="string">&quot;Transaction rejected: {0}&quot;</span>)]
@@ -1314,13 +1327,15 @@
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">pub trait </span>IFederationApiFed: IFederationApi {
-    <span class="kw">async fn </span>request_fed_with_strategy&lt;MemberRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
+</span><span class="doccomment">/// An extension trait allowing to making federation-wide API call on top [`IFederationApi`].
+</span><span class="kw">pub trait </span>FederationApiExt: IFederationApi {
+    <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically merge the responses.
+    </span><span class="kw">async fn </span>request_with_strategy&lt;MemberRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;MemberRet, FedRet&gt; + Send,
         method: String,
         params: Vec&lt;Value&gt;,
-    ) -&gt; FedResult&lt;FedRet&gt; {
+    ) -&gt; FederationResult&lt;FedRet&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
         <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
@@ -1348,10 +1363,11 @@
             <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, <span class="question-mark">?</span>params, <span class="string">&quot;Received member response&quot;</span>);
             <span class="kw">match </span>response {
                 <span class="prelude-val">Some</span>(PeerResponse { peer, result }) =&gt; {
-                    <span class="kw">let </span>result: <span class="prelude-ty">Result</span>&lt;MemberRet&gt; = result.map_err(ApiError::Rpc).and_then(|o| {
-                        serde_json::from_value::&lt;MemberRet&gt;(o)
-                            .map_err(|e| ApiError::ResponseDeserialization(e.into()))
-                    });
+                    <span class="kw">let </span>result: MemberResult&lt;MemberRet&gt; =
+                        result.map_err(MemberError::Rpc).and_then(|o| {
+                            serde_json::from_value::&lt;MemberRet&gt;(o)
+                                .map_err(|e| MemberError::ResponseDeserialization(e.into()))
+                        });
 
                     <span class="kw">let </span>strategy_step = strategy.process(peer, result);
                     <span class="macro">trace!</span>(
@@ -1397,21 +1413,25 @@
                             <span class="kw">for </span>(failed_peer, error) <span class="kw">in </span>failed {
                                 member_errors.insert(failed_peer, error);
                             }
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(FedApiError(BTreeMap::new()));
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError(BTreeMap::new()));
                         }
                         QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
                     }
                 }
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(FedApiError(BTreeMap::new())),
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError(BTreeMap::new())),
             }
         }
     }
 
-    <span class="kw">async fn </span>request_union&lt;Ret&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: String, params: Vec&lt;Value&gt;) -&gt; FedResult&lt;Vec&lt;Ret&gt;&gt;
+    <span class="kw">async fn </span>request_union&lt;Ret&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: String,
+        params: Vec&lt;Value&gt;,
+    ) -&gt; FederationResult&lt;Vec&lt;Ret&gt;&gt;
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
     {
-        <span class="self">self</span>.request_fed_with_strategy(
+        <span class="self">self</span>.request_with_strategy(
             UnionResponses::new(<span class="self">self</span>.all_members().one_honest()),
             method,
             params,
@@ -1423,11 +1443,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: String,
         params: Vec&lt;Value&gt;,
-    ) -&gt; FedResult&lt;Ret&gt;
+    ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
     {
-        <span class="self">self</span>.request_fed_with_strategy(
+        <span class="self">self</span>.request_with_strategy(
             CurrentConsensus::new(<span class="self">self</span>.all_members().one_honest()),
             method,
             params,
@@ -1439,11 +1459,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: String,
         params: Vec&lt;Value&gt;,
-    ) -&gt; FedResult&lt;Ret&gt;
+    ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
     {
-        <span class="self">self</span>.request_fed_with_strategy(
+        <span class="self">self</span>.request_with_strategy(
             EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
             method,
             params,
@@ -1454,7 +1474,7 @@
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; IFederationApiFed <span class="kw">for </span>T <span class="kw">where </span>T: IFederationApi {}
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; FederationApiExt <span class="kw">for </span>T <span class="kw">where </span>T: IFederationApi {}
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="kw">pub </span>DynFederationApi(Arc&lt;IFederationApi&gt;)
@@ -1463,19 +1483,19 @@
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">pub trait </span>GlobalFederationApi {
-    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;ClientConfig&gt;;
+    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ClientConfig&gt;;
 
-    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FedResult&lt;TransactionId&gt;;
-    <span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FedResult&lt;TransactionStatus&gt;;
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FederationResult&lt;TransactionId&gt;;
+    <span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt;;
 
     <span class="kw">async fn </span>fetch_epoch_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         epoch: u64,
         epoch_pk: PublicKey,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; FedResult&lt;SignedEpochOutcome&gt;;
+    ) -&gt; FederationResult&lt;SignedEpochOutcome&gt;;
 
-    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt;;
+    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
     <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1499,13 +1519,13 @@
 <span class="kw">where
     </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;ClientConfig&gt; {
+    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ClientConfig&gt; {
         <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/config&quot;</span>.to_owned(), erased_no_param())
             .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Submit a transaction for inclusion
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FedResult&lt;TransactionId&gt; {
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FederationResult&lt;TransactionId&gt; {
         <span class="self">self</span>.request_current_consensus(
             <span class="string">&quot;/transaction&quot;</span>.to_owned(),
             erased_single_param(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx.into_type_erased())),
@@ -1514,8 +1534,8 @@
     </span>}
 
     <span class="doccomment">/// Fetch the outcome of an entire transaction
-    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FedResult&lt;TransactionStatus&gt; {
-        <span class="self">self</span>.request_fed_with_strategy(
+    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt; {
+        <span class="self">self</span>.request_with_strategy(
             Retry404::new(<span class="self">self</span>.all_members().one_honest()),
             <span class="string">&quot;/fetch_transaction&quot;</span>.to_owned(),
             erased_single_param(<span class="kw-2">&amp;</span>tx),
@@ -1528,7 +1548,7 @@
         epoch: u64,
         epoch_pk: PublicKey,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; FedResult&lt;SignedEpochOutcome&gt; {
+    ) -&gt; FederationResult&lt;SignedEpochOutcome&gt; {
         <span class="comment">// TODO: make this function avoid clone
         </span><span class="kw">let </span>decoders = decoders.clone();
 
@@ -1541,11 +1561,11 @@
             <span class="kw">fn </span>process(
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>,
                 peer: PeerId,
-                result: <span class="prelude-ty">Result</span>&lt;SerdeEpochHistory&gt;,
+                result: MemberResult&lt;SerdeEpochHistory&gt;,
             ) -&gt; QueryStep&lt;SignedEpochOutcome&gt; {
                 <span class="kw">let </span>response = result.and_then(|hist| {
                     hist.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.decoders)
-                        .map_err(|e| ApiError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
+                        .map_err(|e| MemberError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
                 });
                 <span class="kw">match </span><span class="self">self</span>.strategy.process(peer, response) {
                     QueryStep::RetryMembers(r) =&gt; QueryStep::RetryMembers(r),
@@ -1562,7 +1582,7 @@
             strategy: ValidHistory::new(epoch_pk, <span class="self">self</span>.all_members().one_honest()),
         };
 
-        <span class="self">self</span>.request_fed_with_strategy::&lt;SerdeEpochHistory, <span class="kw">_</span>&gt;(
+        <span class="self">self</span>.request_with_strategy::&lt;SerdeEpochHistory, <span class="kw">_</span>&gt;(
             qs,
             <span class="string">&quot;/fetch_epoch_history&quot;</span>.to_owned(),
             erased_single_param(<span class="kw-2">&amp;</span>epoch),
@@ -1570,7 +1590,7 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt; {
+    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_eventually_consistent(<span class="string">&quot;/epoch&quot;</span>.to_owned(), erased_no_param())
             .<span class="kw">await
     </span>}
@@ -1639,11 +1659,14 @@
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">pub trait </span>LnFederationApi {
-    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FedResult&lt;ContractAccount&gt;;
-    <span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;IncomingContractOffer&gt;;
-    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;Vec&lt;LightningGateway&gt;&gt;;
-    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FedResult&lt;()&gt;;
-    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;bool&gt;;
+    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt;;
+    <span class="kw">async fn </span>fetch_offer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payment_hash: Sha256Hash,
+    ) -&gt; FederationResult&lt;IncomingContractOffer&gt;;
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt;;
+    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FederationResult&lt;()&gt;;
+    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt;;
 }
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
@@ -1652,16 +1675,19 @@
 <span class="kw">where
     </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FedResult&lt;ContractAccount&gt; {
-        <span class="self">self</span>.request_fed_with_strategy(
+    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
+        <span class="self">self</span>.request_with_strategy(
             Retry404::new(<span class="self">self</span>.all_members().one_honest()),
             <span class="macro">format!</span>(<span class="string">&quot;/module/{}/account&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
             erased_single_param(<span class="kw-2">&amp;</span>contract),
         )
         .<span class="kw">await
     </span>}
-    <span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;IncomingContractOffer&gt; {
-        <span class="self">self</span>.request_fed_with_strategy(
+    <span class="kw">async fn </span>fetch_offer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payment_hash: Sha256Hash,
+    ) -&gt; FederationResult&lt;IncomingContractOffer&gt; {
+        <span class="self">self</span>.request_with_strategy(
             Retry404::new(<span class="self">self</span>.all_members().one_honest()),
             <span class="macro">format!</span>(<span class="string">&quot;/module/{}/offer&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
             erased_single_param(<span class="kw-2">&amp;</span>payment_hash),
@@ -1669,7 +1695,7 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;Vec&lt;LightningGateway&gt;&gt; {
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt; {
         <span class="self">self</span>.request_union(
             <span class="macro">format!</span>(<span class="string">&quot;/module/{}/list_gateways&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
             erased_no_param(),
@@ -1677,7 +1703,7 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FedResult&lt;()&gt; {
+    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_current_consensus(
             <span class="macro">format!</span>(
                 <span class="string">&quot;/module/{}/register_gateway&quot;</span>,
@@ -1688,7 +1714,7 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;bool&gt; {
+    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt; {
         <span class="kw">match </span><span class="self">self</span>.fetch_offer(payment_hash).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
             <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
@@ -1703,11 +1729,11 @@
     <span class="kw">async fn </span>upload_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
-    ) -&gt; FedResult&lt;()&gt;;
+    ) -&gt; FederationResult&lt;()&gt;;
     <span class="kw">async fn </span>download_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-    ) -&gt; FedResult&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt;;
+    ) -&gt; FederationResult&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt;;
 }
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
@@ -1719,7 +1745,7 @@
     <span class="kw">async fn </span>upload_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
-    ) -&gt; FedResult&lt;()&gt; {
+    ) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_current_consensus(
             <span class="macro">format!</span>(<span class="string">&quot;/module/{}/backup&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_MINT),
             erased_single_param(request),
@@ -1729,9 +1755,9 @@
     <span class="kw">async fn </span>download_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-    ) -&gt; FedResult&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
+    ) -&gt; FederationResult&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request_fed_with_strategy(
+            </span>.request_with_strategy(
                 UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
                     <span class="self">self</span>.all_members().one_honest(),
                 ),
@@ -1748,12 +1774,12 @@
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">pub trait </span>WalletFederationApi {
-    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt;;
+    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
     <span class="kw">async fn </span>fetch_peg_out_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
         amount: bitcoin::Amount,
-    ) -&gt; FedResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt;;
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt;;
 }
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
@@ -1762,8 +1788,8 @@
 <span class="kw">where
     </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt; {
-        <span class="self">self</span>.request_fed_with_strategy(
+    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
+        <span class="self">self</span>.request_with_strategy(
             EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
             <span class="macro">format!</span>(
                 <span class="string">&quot;/module/{}/block_height&quot;</span>,
@@ -1778,7 +1804,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
         amount: bitcoin::Amount,
-    ) -&gt; FedResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
         <span class="self">self</span>.request_eventually_consistent(
             <span class="macro">format!</span>(
                 <span class="string">&quot;/module/{}/peg_out_fees&quot;</span>,

@@ -415,7 +415,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::api::GlobalFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::api::OutputOutcomeError;
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use </span><span class="kw">crate</span>::ApiError;
+<span class="kw">use </span><span class="kw">crate</span>::MemberError;
 
 <span class="kw">pub mod </span>db;
 
@@ -580,7 +580,7 @@
     <span class="attr">#[error(<span class="string">&quot;Output outcome error: {0}&quot;</span>)]
     </span>OutputOutcomeError(<span class="attr">#[from] </span>OutputOutcomeError),
     <span class="attr">#[error(<span class="string">&quot;Mint API error: {0}&quot;</span>)]
-    </span>ApiError(<span class="attr">#[from] </span>ApiError),
+    </span>ApiError(<span class="attr">#[from] </span>MemberError),
 }
 
 <span class="attr">#[cfg(test)]

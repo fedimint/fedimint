@@ -1417,7 +1417,7 @@
 </span><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>api::{
-    DynFederationApi, FedApiError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
+    DynFederationApi, FederationError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
     WalletFederationApi,
 };
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
@@ -1493,7 +1493,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, ClientContext};
 <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
 <span class="kw">use crate</span>::{
-    api::ApiError,
+    api::MemberError,
     ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableNote},
     wallet::WalletClient,
@@ -2728,7 +2728,7 @@
 <span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>ClientError {
     <span class="attr">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
-    </span>MintApiError(<span class="attr">#[from] </span>FedApiError),
+    </span>MintApiError(<span class="attr">#[from] </span>FederationError),
     <span class="attr">#[error(<span class="string">&quot;Output outcome error: {0}&quot;</span>)]
     </span>OutputOutcome(<span class="attr">#[from] </span>OutputOutcomeError),
     <span class="attr">#[error(<span class="string">&quot;Wallet client error: {0}&quot;</span>)]

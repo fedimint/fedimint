@@ -994,7 +994,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::api::{ApiError, GlobalFederationApi, OutputOutcomeError};
+<span class="kw">use </span><span class="kw">crate</span>::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingCoinsKey};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use crate</span>::{ChildId, DerivableSecret, MintDecoder};
@@ -1574,7 +1574,7 @@
 <span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>MintClientError {
     <span class="attr">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
-    </span>ApiError(<span class="attr">#[from] </span>ApiError),
+    </span>ApiError(<span class="attr">#[from] </span>MemberError),
     <span class="attr">#[error(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]
     </span>FinalizationError(<span class="attr">#[from] </span>CoinFinalizationError),
     <span class="attr">#[error(<span class="string">&quot;Insufficient balance. Amount requested={0} Mint balance={1}&quot;</span>)]

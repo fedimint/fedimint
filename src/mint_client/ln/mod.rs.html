@@ -570,7 +570,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::db::ConfirmedInvoiceKey;
 <span class="kw">use </span><span class="self">self</span>::incoming::ConfirmedInvoice;
-<span class="kw">use </span><span class="kw">crate</span>::api::{FedApiError, LnFederationApi, WalletFederationApi};
+<span class="kw">use </span><span class="kw">crate</span>::api::{FederationError, LnFederationApi, WalletFederationApi};
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::ln::incoming::IncomingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
@@ -857,7 +857,7 @@
     <span class="attr">#[error(<span class="string">&quot;We can&#39;t pay an amountless invoice&quot;</span>)]
     </span>MissingInvoiceAmount,
     <span class="attr">#[error(<span class="string">&quot;Mint API error: {0}&quot;</span>)]
-    </span>ApiError(FedApiError),
+    </span>ApiError(FederationError),
     <span class="attr">#[error(<span class="string">&quot;Timeout&quot;</span>)]
     </span>Timeout,
     <span class="attr">#[error(<span class="string">&quot;Mint returned unexpected account type&quot;</span>)]

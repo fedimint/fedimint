@@ -744,7 +744,7 @@
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_mint::common::MintDecoder;
 <span class="kw">use </span>mint_client::api::{
-    GlobalFederationApi, IFederationApi, IFederationApiFed, WsFederationApi, WsFederationConnect,
+    FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
 };
 <span class="kw">use </span>mint_client::mint::SpendableNote;
 <span class="kw">use </span>mint_client::query::EventuallyConsistent;
@@ -1155,7 +1155,7 @@
             <span class="kw">let </span>arg: Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
             <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(client.config().as_ref()).into();
             <span class="kw">let </span>response: Value = ws_api
-                .request_fed_with_strategy(
+                .request_with_strategy(
                     EventuallyConsistent::new(ws_api.peers().len()),
                     method,
                     <span class="macro">vec!</span>[arg],
