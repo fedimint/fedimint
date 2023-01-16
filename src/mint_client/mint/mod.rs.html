@@ -1242,7 +1242,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>change_outputs: Vec&lt;(usize, NoteIssuanceRequests)&gt; = <span class="macro">vec!</span>[];
         <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
         <span class="kw">for </span>amount <span class="kw">in </span>change.clone() {
-            <span class="kw">if </span>amount.msats == <span class="number">0 </span>{
+            <span class="kw">if </span>amount == Amount::ZERO {
                 <span class="kw">continue</span>;
             }
             <span class="kw">let </span>(issuances, nonces) = <span class="self">self
