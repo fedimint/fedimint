@@ -245,111 +245,123 @@ impl FedimintConsensus {
             .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
             .unzip_consensus_item();
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let epoch_history = loop {
+            let mut dbtx = self.db.begin_transaction().await;
 
-        // Begin consensus epoch
-        {
-            let per_module_cis: HashMap<
-                ModuleInstanceId,
-                Vec<(PeerId, fedimint_api::core::DynModuleConsensusItem)>,
-            > = module_cis
-                .into_iter()
-                .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
+            // Begin consensus epoch
+            {
+                let per_module_cis: HashMap<
+                    ModuleInstanceId,
+                    Vec<(PeerId, fedimint_api::core::DynModuleConsensusItem)>,
+                > = module_cis
+                    .iter()
+                    .cloned()
+                    .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
 
-            for (module_key, module_cis) in per_module_cis {
-                self.modules
-                    .get(module_key)
-                    .begin_consensus_epoch(&mut dbtx, module_cis)
-                    .await;
-            }
-        }
-
-        // Process transactions
-        let mut rejected_txs: BTreeSet<TransactionId> = BTreeSet::new();
-        {
-            let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
-            let mut processed_txs: HashSet<TransactionId> = HashSet::new();
-
-            for (_, transaction) in transaction_cis {
-                let txid: TransactionId = transaction.tx_hash();
-                if !processed_txs.insert(txid) {
-                    // Avoid processing duplicate tx from different peers
-                    continue;
+                for (module_key, module_cis) in per_module_cis {
+                    self.modules
+                        .get(module_key)
+                        .begin_consensus_epoch(&mut dbtx, module_cis)
+                        .await;
                 }
+            }
 
-                let span = info_span!("Processing transaction");
-                async {
-                    trace!(?transaction);
-                    dbtx.remove_entry(&ProposedTransactionKey(txid))
-                        .await
-                        .expect("DB Error");
+            // Process transactions
+            let mut rejected_txs: BTreeSet<TransactionId> = BTreeSet::new();
+            {
+                let caches =
+                    self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
+                let mut processed_txs: HashSet<TransactionId> = HashSet::new();
 
-                    dbtx.set_tx_savepoint().await;
-                    // TODO: use borrowed transaction
-                    match self
-                        .process_transaction(&mut dbtx, transaction.clone(), &caches)
-                        .await
-                    {
-                        Ok(()) => {
-                            dbtx.insert_entry(
-                                &AcceptedTransactionKey(txid),
-                                &AcceptedTransaction { epoch, transaction },
-                            )
+                for (_, transaction) in transaction_cis.clone() {
+                    let txid: TransactionId = transaction.tx_hash();
+                    if !processed_txs.insert(txid) {
+                        // Avoid processing duplicate tx from different peers
+                        continue;
+                    }
+
+                    let span = info_span!("Processing transaction");
+                    async {
+                        trace!(?transaction);
+                        dbtx.remove_entry(&ProposedTransactionKey(txid))
                             .await
                             .expect("DB Error");
-                        }
-                        Err(error) => {
-                            rejected_txs.insert(txid);
-                            dbtx.rollback_tx_to_savepoint().await;
-                            warn!(%error, "Transaction failed");
-                            dbtx.insert_entry(
-                                &RejectedTransactionKey(txid),
-                                &format!("{:?}", error),
-                            )
+
+                        dbtx.set_tx_savepoint().await;
+                        // TODO: use borrowed transaction
+                        match self
+                            .process_transaction(&mut dbtx, transaction.clone(), &caches)
                             .await
-                            .expect("DB Error");
+                        {
+                            Ok(()) => {
+                                dbtx.insert_entry(
+                                    &AcceptedTransactionKey(txid),
+                                    &AcceptedTransaction { epoch, transaction },
+                                )
+                                .await
+                                .expect("DB Error");
+                            }
+                            Err(error) => {
+                                rejected_txs.insert(txid);
+                                dbtx.rollback_tx_to_savepoint().await;
+                                warn!(%error, "Transaction failed");
+                                dbtx.insert_entry(
+                                    &RejectedTransactionKey(txid),
+                                    &format!("{:?}", error),
+                                )
+                                .await
+                                .expect("DB Error");
+                            }
                         }
                     }
+                    .instrument(span)
+                    .await;
                 }
-                .instrument(span)
-                .await;
-            }
-        }
-
-        if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
-            // Result of the consensus are supposed to be deterministic.
-            // If our result is not the same as what the (honest) majority of the federation
-            // signed over, it's a catastrophical bug/mismatch of Federation's fedimintd
-            // implementations.
-            assert_eq!(
-                reference_rejected_txs, &rejected_txs,
-                "rejected_txs mismatch: reference = {:?} != {:?}",
-                reference_rejected_txs, rejected_txs
-            );
-        }
-
-        // End consensus epoch
-        let epoch_history = {
-            let mut drop_peers = Vec::<PeerId>::new();
-
-            let epoch_history = self
-                .save_epoch_history(outcome, &mut dbtx, &mut drop_peers, rejected_txs)
-                .await;
-
-            for (_, module) in self.modules.iter_modules() {
-                let module_drop_peers = module.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
-                drop_peers.extend(module_drop_peers);
             }
 
-            for peer in drop_peers {
-                dbtx.insert_entry(&DropPeerKey(peer), &())
-                    .await
-                    .expect("DB Error");
+            if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
+                // Result of the consensus are supposed to be deterministic.
+                // If our result is not the same as what the (honest) majority of the federation
+                // signed over, it's a catastrophical bug/mismatch of Federation's fedimintd
+                // implementations.
+                assert_eq!(
+                    reference_rejected_txs, &rejected_txs,
+                    "rejected_txs mismatch: reference = {:?} != {:?}",
+                    reference_rejected_txs, rejected_txs
+                );
             }
 
-            dbtx.commit_tx().await.expect("DB Error");
+            // End consensus epoch
+            let epoch_history = {
+                let mut drop_peers = Vec::<PeerId>::new();
 
-            epoch_history
+                let epoch_history = self
+                    .save_epoch_history(outcome.clone(), &mut dbtx, &mut drop_peers, rejected_txs)
+                    .await;
+
+                for (_, module) in self.modules.iter_modules() {
+                    let module_drop_peers =
+                        module.end_consensus_epoch(&epoch_peers, &mut dbtx).await;
+                    drop_peers.extend(module_drop_peers);
+                }
+
+                for peer in drop_peers {
+                    dbtx.insert_entry(&DropPeerKey(peer), &())
+                        .await
+                        .expect("DB Error");
+                }
+
+                epoch_history
+            };
+
+            match dbtx.commit_tx().await {
+                Ok(()) => {
+                    break epoch_history;
+                }
+                Err(error) => {
+                    error!(%error, "Committing DB transaction failed, retrying!");
+                }
+            }
         };
 
         let audit = self.audit().await;
