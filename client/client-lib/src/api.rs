@@ -52,17 +52,16 @@ use crate::LegacyTransaction;
 
 type JsonValue = serde_json::Value;
 
-pub type Result<T> = result::Result<T, ApiError>;
+pub type MemberResult<T> = result::Result<T, MemberError>;
 
 pub type JsonRpcResult<T> = result::Result<T, jsonrpsee_core::Error>;
-pub type FedResult<T> = result::Result<T, FedApiError>;
+pub type FederationResult<T> = result::Result<T, FederationError>;
 
 pub mod fake;
 
-// TODO: rename to `MemberApiError`
+/// An API request error when calling a single federation member
 #[derive(Debug, Error)]
-pub enum ApiError {
-    // ParamsSerialization(anyhow::Error),
+pub enum MemberError {
     #[error("Response deserialization error: {0}")]
     ResponseDeserialization(anyhow::Error),
     #[error("Invalid peer id: {peer_id}")]
@@ -71,12 +70,12 @@ pub enum ApiError {
     Rpc(#[from] JsonRpcError),
 }
 
-impl ApiError {
+impl MemberError {
     pub fn is_retryable(&self) -> bool {
         match self {
-            ApiError::ResponseDeserialization(_) => false,
-            ApiError::InvalidPeerId { peer_id: _ } => false,
-            ApiError::Rpc(rpc_e) => match rpc_e {
+            MemberError::ResponseDeserialization(_) => false,
+            MemberError::InvalidPeerId { peer_id: _ } => false,
+            MemberError::Rpc(rpc_e) => match rpc_e {
                 JsonRpcError::Transport(_) => true,
                 JsonRpcError::Internal(_) => true,
                 JsonRpcError::Call(jsonrpsee_types::error::CallError::Custom(e)) => e.code() == 404,
@@ -86,10 +85,11 @@ impl ApiError {
     }
 }
 
+/// An API request error when calling an entire federation
 #[derive(Debug, Error)]
-pub struct FedApiError(BTreeMap<PeerId, ApiError>);
+pub struct FederationError(BTreeMap<PeerId, MemberError>);
 
-impl fmt::Display for FedApiError {
+impl fmt::Display for FederationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Federation rpc error(")?;
         for (i, (peer, e)) in self.0.iter().enumerate() {
@@ -103,7 +103,7 @@ impl fmt::Display for FedApiError {
     }
 }
 
-impl FedApiError {
+impl FederationError {
     fn is_retryable(&self) -> bool {
         self.0.iter().any(|(_, e)| e.is_retryable())
     }
@@ -116,7 +116,7 @@ pub enum OutputOutcomeError {
     #[error("Response deserialization error: {0}")]
     ResponseDeserialization(anyhow::Error),
     #[error("Federation error: {0}")]
-    Federation(#[from] FedApiError),
+    Federation(#[from] FederationError),
     #[error("Core error: {0}")]
     Core(#[from] CoreError),
     #[error("Transaction rejected: {0}")]
@@ -197,13 +197,15 @@ where
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait IFederationApiFed: IFederationApi {
-    async fn request_fed_with_strategy<MemberRet: serde::de::DeserializeOwned, FedRet: Debug>(
+/// An extension trait allowing to making federation-wide API call on top [`IFederationApi`].
+pub trait FederationApiExt: IFederationApi {
+    /// Make an aggregate request to federation, using `strategy` to logically merge the responses.
+    async fn request_with_strategy<MemberRet: serde::de::DeserializeOwned, FedRet: Debug>(
         &self,
         mut strategy: impl QueryStrategy<MemberRet, FedRet> + Send,
         method: String,
         params: Vec<Value>,
-    ) -> FedResult<FedRet> {
+    ) -> FederationResult<FedRet> {
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -231,10 +233,11 @@ pub trait IFederationApiFed: IFederationApi {
             trace!(?response, method, ?params, "Received member response");
             match response {
                 Some(PeerResponse { peer, result }) => {
-                    let result: Result<MemberRet> = result.map_err(ApiError::Rpc).and_then(|o| {
-                        serde_json::from_value::<MemberRet>(o)
-                            .map_err(|e| ApiError::ResponseDeserialization(e.into()))
-                    });
+                    let result: MemberResult<MemberRet> =
+                        result.map_err(MemberError::Rpc).and_then(|o| {
+                            serde_json::from_value::<MemberRet>(o)
+                                .map_err(|e| MemberError::ResponseDeserialization(e.into()))
+                        });
 
                     let strategy_step = strategy.process(peer, result);
                     trace!(
@@ -280,21 +283,25 @@ pub trait IFederationApiFed: IFederationApi {
                             for (failed_peer, error) in failed {
                                 member_errors.insert(failed_peer, error);
                             }
-                            return Err(FedApiError(BTreeMap::new()));
+                            return Err(FederationError(BTreeMap::new()));
                         }
                         QueryStep::Success(response) => return Ok(response),
                     }
                 }
-                None => return Err(FedApiError(BTreeMap::new())),
+                None => return Err(FederationError(BTreeMap::new())),
             }
         }
     }
 
-    async fn request_union<Ret>(&self, method: String, params: Vec<Value>) -> FedResult<Vec<Ret>>
+    async fn request_union<Ret>(
+        &self,
+        method: String,
+        params: Vec<Value>,
+    ) -> FederationResult<Vec<Ret>>
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
     {
-        self.request_fed_with_strategy(
+        self.request_with_strategy(
             UnionResponses::new(self.all_members().one_honest()),
             method,
             params,
@@ -306,11 +313,11 @@ pub trait IFederationApiFed: IFederationApi {
         &self,
         method: String,
         params: Vec<Value>,
-    ) -> FedResult<Ret>
+    ) -> FederationResult<Ret>
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
     {
-        self.request_fed_with_strategy(
+        self.request_with_strategy(
             CurrentConsensus::new(self.all_members().one_honest()),
             method,
             params,
@@ -322,11 +329,11 @@ pub trait IFederationApiFed: IFederationApi {
         &self,
         method: String,
         params: Vec<Value>,
-    ) -> FedResult<Ret>
+    ) -> FederationResult<Ret>
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
     {
-        self.request_fed_with_strategy(
+        self.request_with_strategy(
             EventuallyConsistent::new(self.all_members().one_honest()),
             method,
             params,
@@ -337,7 +344,7 @@ pub trait IFederationApiFed: IFederationApi {
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<T: ?Sized> IFederationApiFed for T where T: IFederationApi {}
+impl<T: ?Sized> FederationApiExt for T where T: IFederationApi {}
 
 dyn_newtype_define! {
     pub DynFederationApi(Arc<IFederationApi>)
@@ -346,19 +353,19 @@ dyn_newtype_define! {
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait GlobalFederationApi {
-    async fn get_client_config(&self) -> FedResult<ClientConfig>;
+    async fn get_client_config(&self) -> FederationResult<ClientConfig>;
 
-    async fn submit_transaction(&self, tx: LegacyTransaction) -> FedResult<TransactionId>;
-    async fn fetch_tx_outcome(&self, txid: &TransactionId) -> FedResult<TransactionStatus>;
+    async fn submit_transaction(&self, tx: LegacyTransaction) -> FederationResult<TransactionId>;
+    async fn fetch_tx_outcome(&self, txid: &TransactionId) -> FederationResult<TransactionStatus>;
 
     async fn fetch_epoch_history(
         &self,
         epoch: u64,
         epoch_pk: PublicKey,
         decoders: &ModuleDecoderRegistry,
-    ) -> FedResult<SignedEpochOutcome>;
+    ) -> FederationResult<SignedEpochOutcome>;
 
-    async fn fetch_last_epoch(&self) -> FedResult<u64>;
+    async fn fetch_last_epoch(&self) -> FederationResult<u64>;
 
     async fn fetch_output_outcome<R>(
         &self,
@@ -382,13 +389,13 @@ impl<T: ?Sized> GlobalFederationApi for T
 where
     T: IFederationApi + Send + Sync + 'static,
 {
-    async fn get_client_config(&self) -> FedResult<ClientConfig> {
+    async fn get_client_config(&self) -> FederationResult<ClientConfig> {
         self.request_current_consensus("/config".to_owned(), erased_no_param())
             .await
     }
 
     /// Submit a transaction for inclusion
-    async fn submit_transaction(&self, tx: LegacyTransaction) -> FedResult<TransactionId> {
+    async fn submit_transaction(&self, tx: LegacyTransaction) -> FederationResult<TransactionId> {
         self.request_current_consensus(
             "/transaction".to_owned(),
             erased_single_param(&SerdeTransaction::from(&tx.into_type_erased())),
@@ -397,8 +404,8 @@ where
     }
 
     /// Fetch the outcome of an entire transaction
-    async fn fetch_tx_outcome(&self, tx: &TransactionId) -> FedResult<TransactionStatus> {
-        self.request_fed_with_strategy(
+    async fn fetch_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
+        self.request_with_strategy(
             Retry404::new(self.all_members().one_honest()),
             "/fetch_transaction".to_owned(),
             erased_single_param(&tx),
@@ -411,7 +418,7 @@ where
         epoch: u64,
         epoch_pk: PublicKey,
         decoders: &ModuleDecoderRegistry,
-    ) -> FedResult<SignedEpochOutcome> {
+    ) -> FederationResult<SignedEpochOutcome> {
         // TODO: make this function avoid clone
         let decoders = decoders.clone();
 
@@ -424,11 +431,11 @@ where
             fn process(
                 &mut self,
                 peer: PeerId,
-                result: Result<SerdeEpochHistory>,
+                result: MemberResult<SerdeEpochHistory>,
             ) -> QueryStep<SignedEpochOutcome> {
                 let response = result.and_then(|hist| {
                     hist.try_into_inner(&self.decoders)
-                        .map_err(|e| ApiError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
+                        .map_err(|e| MemberError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
                 });
                 match self.strategy.process(peer, response) {
                     QueryStep::RetryMembers(r) => QueryStep::RetryMembers(r),
@@ -445,7 +452,7 @@ where
             strategy: ValidHistory::new(epoch_pk, self.all_members().one_honest()),
         };
 
-        self.request_fed_with_strategy::<SerdeEpochHistory, _>(
+        self.request_with_strategy::<SerdeEpochHistory, _>(
             qs,
             "/fetch_epoch_history".to_owned(),
             erased_single_param(&epoch),
@@ -453,7 +460,7 @@ where
         .await
     }
 
-    async fn fetch_last_epoch(&self) -> FedResult<u64> {
+    async fn fetch_last_epoch(&self) -> FederationResult<u64> {
         self.request_eventually_consistent("/epoch".to_owned(), erased_no_param())
             .await
     }
@@ -522,11 +529,14 @@ where
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait LnFederationApi {
-    async fn fetch_contract(&self, contract: ContractId) -> FedResult<ContractAccount>;
-    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> FedResult<IncomingContractOffer>;
-    async fn fetch_gateways(&self) -> FedResult<Vec<LightningGateway>>;
-    async fn register_gateway(&self, gateway: &LightningGateway) -> FedResult<()>;
-    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FedResult<bool>;
+    async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
+    async fn fetch_offer(
+        &self,
+        payment_hash: Sha256Hash,
+    ) -> FederationResult<IncomingContractOffer>;
+    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>>;
+    async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()>;
+    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
@@ -535,16 +545,19 @@ impl<T: ?Sized> LnFederationApi for T
 where
     T: IFederationApi + Send + Sync + 'static,
 {
-    async fn fetch_contract(&self, contract: ContractId) -> FedResult<ContractAccount> {
-        self.request_fed_with_strategy(
+    async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
+        self.request_with_strategy(
             Retry404::new(self.all_members().one_honest()),
             format!("/module/{}/account", LEGACY_HARDCODED_INSTANCE_ID_LN),
             erased_single_param(&contract),
         )
         .await
     }
-    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> FedResult<IncomingContractOffer> {
-        self.request_fed_with_strategy(
+    async fn fetch_offer(
+        &self,
+        payment_hash: Sha256Hash,
+    ) -> FederationResult<IncomingContractOffer> {
+        self.request_with_strategy(
             Retry404::new(self.all_members().one_honest()),
             format!("/module/{}/offer", LEGACY_HARDCODED_INSTANCE_ID_LN),
             erased_single_param(&payment_hash),
@@ -552,7 +565,7 @@ where
         .await
     }
 
-    async fn fetch_gateways(&self) -> FedResult<Vec<LightningGateway>> {
+    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
         self.request_union(
             format!("/module/{}/list_gateways", LEGACY_HARDCODED_INSTANCE_ID_LN),
             erased_no_param(),
@@ -560,7 +573,7 @@ where
         .await
     }
 
-    async fn register_gateway(&self, gateway: &LightningGateway) -> FedResult<()> {
+    async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.request_current_consensus(
             format!(
                 "/module/{}/register_gateway",
@@ -571,7 +584,7 @@ where
         .await
     }
 
-    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FedResult<bool> {
+    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool> {
         match self.fetch_offer(payment_hash).await {
             Ok(_) => Ok(true),
             Err(e) if e.is_retryable() => Ok(false),
@@ -586,11 +599,11 @@ pub trait MintFederationApi {
     async fn upload_ecash_backup(
         &self,
         request: &fedimint_mint::SignedBackupRequest,
-    ) -> FedResult<()>;
+    ) -> FederationResult<()>;
     async fn download_ecash_backup(
         &self,
         id: &secp256k1::XOnlyPublicKey,
-    ) -> FedResult<Vec<ECashUserBackupSnapshot>>;
+    ) -> FederationResult<Vec<ECashUserBackupSnapshot>>;
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
@@ -602,7 +615,7 @@ where
     async fn upload_ecash_backup(
         &self,
         request: &fedimint_mint::SignedBackupRequest,
-    ) -> FedResult<()> {
+    ) -> FederationResult<()> {
         self.request_current_consensus(
             format!("/module/{}/backup", LEGACY_HARDCODED_INSTANCE_ID_MINT),
             erased_single_param(request),
@@ -612,9 +625,9 @@ where
     async fn download_ecash_backup(
         &self,
         id: &secp256k1::XOnlyPublicKey,
-    ) -> FedResult<Vec<ECashUserBackupSnapshot>> {
+    ) -> FederationResult<Vec<ECashUserBackupSnapshot>> {
         Ok(self
-            .request_fed_with_strategy(
+            .request_with_strategy(
                 UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
                     self.all_members().one_honest(),
                 ),
@@ -631,12 +644,12 @@ where
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait WalletFederationApi {
-    async fn fetch_consensus_block_height(&self) -> FedResult<u64>;
+    async fn fetch_consensus_block_height(&self) -> FederationResult<u64>;
     async fn fetch_peg_out_fees(
         &self,
         address: &Address,
         amount: bitcoin::Amount,
-    ) -> FedResult<Option<PegOutFees>>;
+    ) -> FederationResult<Option<PegOutFees>>;
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
@@ -645,8 +658,8 @@ impl<T: ?Sized> WalletFederationApi for T
 where
     T: IFederationApi + Send + Sync + 'static,
 {
-    async fn fetch_consensus_block_height(&self) -> FedResult<u64> {
-        self.request_fed_with_strategy(
+    async fn fetch_consensus_block_height(&self) -> FederationResult<u64> {
+        self.request_with_strategy(
             EventuallyConsistent::new(self.all_members().one_honest()),
             format!(
                 "/module/{}/block_height",
@@ -661,7 +674,7 @@ where
         &self,
         address: &Address,
         amount: bitcoin::Amount,
-    ) -> FedResult<Option<PegOutFees>> {
+    ) -> FederationResult<Option<PegOutFees>> {
         self.request_eventually_consistent(
             format!(
                 "/module/{}/peg_out_fees",

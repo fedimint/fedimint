@@ -24,7 +24,7 @@ use fedimint_core::modules::wallet::common::WalletDecoder;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use fedimint_mint::common::MintDecoder;
 use mint_client::api::{
-    GlobalFederationApi, IFederationApi, IFederationApiFed, WsFederationApi, WsFederationConnect,
+    FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
 };
 use mint_client::mint::SpendableNote;
 use mint_client::query::EventuallyConsistent;
@@ -435,7 +435,7 @@ async fn handle_command(
             let arg: Value = serde_json::from_str(&arg).unwrap();
             let ws_api: Arc<_> = WsFederationApi::from_config(client.config().as_ref()).into();
             let response: Value = ws_api
-                .request_fed_with_strategy(
+                .request_with_strategy(
                     EventuallyConsistent::new(ws_api.peers().len()),
                     method,
                     vec![arg],

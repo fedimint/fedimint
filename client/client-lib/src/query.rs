@@ -9,13 +9,13 @@ use jsonrpsee_types::error::CallError as RpcCallError;
 use threshold_crypto::PublicKey;
 use tracing::debug;
 
-use crate::{api, ApiError};
+use crate::{api, MemberError};
 
 /// Returns a result from the first responding peer
 pub struct TrustAllPeers;
 
 impl<R> QueryStrategy<R> for TrustAllPeers {
-    fn process(&mut self, peer: PeerId, result: api::Result<R>) -> QueryStep<R> {
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
         match result {
             Ok(o) => QueryStep::Success(o),
             Err(e) => QueryStep::FailMembers(BTreeMap::from([(peer, e)])),
@@ -42,7 +42,7 @@ impl QueryStrategy<SignedEpochOutcome> for ValidHistory {
     fn process(
         &mut self,
         peer: PeerId,
-        result: api::Result<SignedEpochOutcome>,
+        result: api::MemberResult<SignedEpochOutcome>,
     ) -> QueryStep<SignedEpochOutcome> {
         match result {
             Ok(epoch) if epoch.verify_sig(&self.epoch_pk).is_ok() => QueryStep::Success(epoch),
@@ -71,7 +71,7 @@ impl<R> UnionResponses<R> {
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
-    fn process(&mut self, peer: PeerId, results: api::Result<Vec<R>>) -> QueryStep<Vec<R>> {
+    fn process(&mut self, peer: PeerId, results: api::MemberResult<Vec<R>>) -> QueryStep<Vec<R>> {
         if let Ok(results) = results {
             for new_result in results {
                 if !self.existing_results.iter().any(|r| r == &new_result) {
@@ -116,7 +116,7 @@ impl<R> UnionResponsesSingle<R> {
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R> {
-    fn process(&mut self, peer: PeerId, result: api::Result<R>) -> QueryStep<Vec<R>> {
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<Vec<R>> {
         match result {
             Ok(new_result) => {
                 if !self.existing_results.iter().any(|r| r == &new_result) {
@@ -153,9 +153,11 @@ impl<R> Retry404<R> {
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<R> for Retry404<R> {
-    fn process(&mut self, peer: PeerId, result: api::Result<R>) -> QueryStep<R> {
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
         match result {
-            Err(ApiError::Rpc(JsonRpcError::Call(RpcCallError::Custom(e)))) if e.code() == 404 => {
+            Err(MemberError::Rpc(JsonRpcError::Call(RpcCallError::Custom(e))))
+                if e.code() == 404 =>
+            {
                 QueryStep::RetryMembers(BTreeSet::from([peer]))
             }
             result => self.current.process(peer, result),
@@ -183,7 +185,7 @@ impl<R> EventuallyConsistent<R> {
 }
 
 impl<R: Eq + Clone + Debug> QueryStrategy<R> for EventuallyConsistent<R> {
-    fn process(&mut self, peer: PeerId, result: api::Result<R>) -> QueryStep<R> {
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
         self.responses.insert(peer);
 
         match self.current.process(peer, result) {
@@ -205,7 +207,7 @@ pub struct CurrentConsensus<R> {
     /// it's easier to store them in `Vec` and do a linear search
     /// than required `R: Ord` or `R: Hash`.
     pub existing_results: Vec<(R, HashSet<PeerId>)>,
-    pub errors: BTreeMap<PeerId, ApiError>,
+    pub errors: BTreeMap<PeerId, MemberError>,
     required: usize,
 }
 
@@ -220,7 +222,7 @@ impl<R> CurrentConsensus<R> {
 }
 
 impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
-    fn process(&mut self, peer: PeerId, result: api::Result<R>) -> QueryStep<R> {
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
         match result {
             Ok(result) => {
                 if let Some((prev_result, peers)) = self
@@ -257,7 +259,7 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
 }
 
 pub trait QueryStrategy<IR, OR = IR> {
-    fn process(&mut self, peer_id: PeerId, response: api::Result<IR>) -> QueryStep<OR>;
+    fn process(&mut self, peer_id: PeerId, response: api::MemberResult<IR>) -> QueryStep<OR>;
 }
 
 /// Results from the strategy handling a response from a peer
@@ -270,11 +272,11 @@ pub enum QueryStep<R> {
     /// Retry request to this peer
     RetryMembers(BTreeSet<PeerId>),
     /// Fail these members and remember their errors
-    FailMembers(BTreeMap<PeerId, ApiError>),
+    FailMembers(BTreeMap<PeerId, MemberError>),
     /// Do nothing yet, keep waiting for requests
     Continue,
     /// Return the succsessful result
     Success(R),
     /// Fail the whole request and remember errors from given members
-    Failure(BTreeMap<PeerId, ApiError>),
+    Failure(BTreeMap<PeerId, MemberError>),
 }

@@ -14,7 +14,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use api::{
-    DynFederationApi, FedApiError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
+    DynFederationApi, FederationError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
     WalletFederationApi,
 };
 use bitcoin::util::key::KeyPair;
@@ -90,7 +90,7 @@ use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
-    api::ApiError,
+    api::MemberError,
     ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableNote},
     wallet::WalletClient,
@@ -1325,7 +1325,7 @@ pub mod serde_keypair {
 #[derive(Error, Debug)]
 pub enum ClientError {
     #[error("Error querying federation: {0}")]
-    MintApiError(#[from] FedApiError),
+    MintApiError(#[from] FederationError),
     #[error("Output outcome error: {0}")]
     OutputOutcome(#[from] OutputOutcomeError),
     #[error("Wallet client error: {0}")]

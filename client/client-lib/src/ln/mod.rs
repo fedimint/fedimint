@@ -30,7 +30,7 @@ use thiserror::Error;
 
 use self::db::ConfirmedInvoiceKey;
 use self::incoming::ConfirmedInvoice;
-use crate::api::{FedApiError, LnFederationApi, WalletFederationApi};
+use crate::api::{FederationError, LnFederationApi, WalletFederationApi};
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
@@ -317,7 +317,7 @@ pub enum LnClientError {
     #[error("We can't pay an amountless invoice")]
     MissingInvoiceAmount,
     #[error("Mint API error: {0}")]
-    ApiError(FedApiError),
+    ApiError(FederationError),
     #[error("Timeout")]
     Timeout,
     #[error("Mint returned unexpected account type")]
