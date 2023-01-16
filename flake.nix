@@ -590,6 +590,14 @@
           ];
         };
 
+        fedimint-sqlite = { target }: pkgCross {
+          name = "fedimint-sqlite";
+          inherit target;
+          dirs = [
+            "fedimint-sqlite"
+          ];
+        };
+
         fedimint-tests = pkg {
           name = "fedimint-tests";
           dirs = [
@@ -712,6 +720,7 @@
           cross = builtins.mapAttrs
             (attr: target: {
               mint-client = mint-client { inherit target; };
+              fedimint-sqlite = fedimint-sqlite { inherit target; };
             })
             crossTargets;
 
