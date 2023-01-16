@@ -12,6 +12,7 @@ use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
 use serde_json::Value;
 use thiserror::Error;
+use tracing::instrument;
 
 use crate::cancellable::Cancellable;
 use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
@@ -159,7 +160,33 @@ pub struct ApiEndpoint<M> {
 
 // <()> is used to avoid specify state.
 impl ApiEndpoint<()> {
-    pub fn from_typed<E: TypedApiEndpoint>() -> ApiEndpoint<E::State> {
+    pub fn from_typed<E: TypedApiEndpoint>() -> ApiEndpoint<E::State>
+    where
+        E::Param: Debug,
+        E::Response: Debug,
+    {
+        #[instrument(
+            target = "fedimint_server::request",
+            level = "trace",
+            skip_all,
+            fields(method = E::PATH),
+            ret,
+            err(Debug),
+        )]
+        async fn handle_request<'a, 'b, E>(
+            state: &'a E::State,
+            dbtx: fedimint_api::db::DatabaseTransaction<'b>,
+            param: E::Param,
+        ) -> Result<E::Response, ApiError>
+        where
+            E: TypedApiEndpoint,
+            E::Param: Debug,
+            E::Response: Debug,
+        {
+            tracing::trace!(target: "fedimint_server::request", ?param, "recieved request");
+            E::handle(state, dbtx, param).await
+        }
+
         ApiEndpoint {
             path: E::PATH,
             handler: Box::new(|m, dbtx, param| {
@@ -167,7 +194,7 @@ impl ApiEndpoint<()> {
                     let params = serde_json::from_value(param)
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
-                    let ret = E::handle(m, dbtx, params).await?;
+                    let ret = handle_request::<E>(m, dbtx, params).await?;
                     Ok(serde_json::to_value(ret).expect("encoding error"))
                 })
             }),
