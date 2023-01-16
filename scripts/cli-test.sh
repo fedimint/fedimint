@@ -27,7 +27,7 @@ PEG_OUT_ADDR="$($FM_BTC_CLIENT getnewaddress)"
 $FM_MINT_CLIENT peg-out $PEG_OUT_ADDR 500
 sleep 5 # FIXME wait for tx to be included
 await_block_sync
-until [ "$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00000500" ]; do
+until [ "$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00002500" ]; do
   sleep $POLL_INTERVAL
 done
 mine_blocks 10

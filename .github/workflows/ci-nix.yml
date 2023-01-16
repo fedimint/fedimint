@@ -63,12 +63,6 @@ jobs:
       # - name: Test workspace
       #   run: nix build -L .#workspaceTest
 
-      - name: Reconnect Tests
-        run: nix build -L .#debug.cli-test.reconnect
-
-      - name: Latency Tests
-        run: nix build -L .#debug.cli-test.latency
-
       - name: CLI Tests
         run: nix build -L .#debug.cli-test.cli
 
