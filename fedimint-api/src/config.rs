@@ -8,6 +8,8 @@ use std::str::FromStr;
 use anyhow::bail;
 use anyhow::format_err;
 use bitcoin::secp256k1;
+use bitcoin_hashes::hex;
+use bitcoin_hashes::hex::{FromHex, ToHex};
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::BitcoinHash;
@@ -16,7 +18,6 @@ use hbbft::crypto::group::GroupEncoding;
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 use hbbft::pairing::group::Group;
-use hex::FromHexError;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -141,7 +142,7 @@ impl FederationId {
 
 impl ToString for FederationId {
     fn to_string(&self) -> String {
-        hex::encode(self.0.to_bytes())
+        self.0.to_bytes().to_hex()
     }
 }
 
@@ -150,9 +151,9 @@ impl FromStr for FederationId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from_bytes(
-            hex::decode(s)?
+            Vec::from_hex(s)?
                 .try_into()
-                .map_err(|_| FromHexError::InvalidStringLength)?,
+                .map_err(|bytes: Vec<u8>| hex::Error::InvalidLength(48, bytes.len()))?,
         )
         .ok_or_else::<anyhow::Error, _>(|| format_err!("Invalid FederationId pubkey"))
     }
