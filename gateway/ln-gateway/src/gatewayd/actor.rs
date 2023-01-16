@@ -211,11 +211,7 @@ impl GatewayActor {
     }
 
     #[instrument(skip_all, fields(%contract_id))]
-    pub async fn pay_invoice(
-        &self,
-        lnrpc: DynLnRpcClient,
-        contract_id: ContractId,
-    ) -> Result<OutPoint> {
+    pub async fn pay_invoice(&self, contract_id: ContractId) -> Result<OutPoint> {
         debug!("Fetching contract");
         let rng = rand::rngs::OsRng;
         let contract_account = self.client.fetch_outgoing_contract(contract_id).await?;
@@ -255,7 +251,7 @@ impl GatewayActor {
             self.buy_preimage_internal(&payment_params.payment_hash, &payment_params.invoice_amount)
                 .await
         } else {
-            self.buy_preimage_external(lnrpc, contract_account.contract.invoice, &payment_params)
+            self.buy_preimage_external(contract_account.contract.invoice, &payment_params)
                 .await
         };
 
@@ -308,11 +304,11 @@ impl GatewayActor {
 
     pub async fn buy_preimage_external(
         &self,
-        lnrpc: DynLnRpcClient,
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
-        match lnrpc
+        match self
+            .lnrpc
             .pay(PayInvoiceRequest {
                 invoice: invoice.to_string(),
                 max_delay: payment_params.max_delay,

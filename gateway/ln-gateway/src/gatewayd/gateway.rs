@@ -246,7 +246,7 @@ impl Gateway {
         } = payload;
 
         let actor = self.select_actor(federation_id).await?;
-        let outpoint = actor.pay_invoice(self.lnrpc.clone(), contract_id).await?;
+        let outpoint = actor.pay_invoice(contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
