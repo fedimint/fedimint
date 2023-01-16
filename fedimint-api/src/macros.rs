@@ -264,8 +264,14 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id {
 #[macro_export]
 macro_rules! serde_module_encoding_wrapper {
     ($wrapper_name:ident, $wrapped:ty) => {
-        #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+        #[derive(Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
         pub struct $wrapper_name(Vec<u8>);
+
+        impl ::std::fmt::Debug for $wrapper_name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                <_ as ::std::fmt::Display>::fmt(&$crate::fmt_utils::AbbreviateHexBytes(&self.0), f)
+            }
+        }
 
         impl From<&$wrapped> for $wrapper_name {
             fn from(eh: &$wrapped) -> Self {
