@@ -1,11 +1,9 @@
 pub mod db;
 
-use std::borrow::Cow;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitcoin_hashes::hex::FromHex;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
@@ -20,7 +18,6 @@ use fedimint_core::modules::mint::{
 };
 use fedimint_core::transaction::legacy::{Input, Output, Transaction};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
-use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 use thiserror::Error;
@@ -145,7 +142,6 @@ pub struct NoteIssuanceRequests {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
     pub note: Note,
-    #[serde(deserialize_with = "deserialize_key_pair")]
     pub spend_key: KeyPair,
 }
 
@@ -637,23 +633,6 @@ impl MintClientError {
 impl From<InvalidAmountTierError> for CoinFinalizationError {
     fn from(e: InvalidAmountTierError) -> Self {
         CoinFinalizationError::InvalidAmountTier(e.0)
-    }
-}
-
-// TODO: remove once rust-bitcoin/rust-secp256k1#491 is fixed
-fn deserialize_key_pair<'de, D: serde::Deserializer<'de>>(
-    d: D,
-) -> std::result::Result<KeyPair, D::Error> {
-    if d.is_human_readable() {
-        let hex_bytes: Cow<'_, str> = Deserialize::deserialize(d)?;
-        let bytes =
-            Vec::from_hex(hex_bytes.as_ref()).map_err(|_| D::Error::custom("Invalid hex"))?;
-        KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, &bytes)
-            .map_err(|_| D::Error::custom("Not a valid private key"))
-    } else {
-        let bytes: [u8; 32] = Deserialize::deserialize(d)?;
-        KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, &bytes)
-            .map_err(|_| D::Error::custom("Not a valid private key"))
     }
 }
 
