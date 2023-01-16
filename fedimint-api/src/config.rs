@@ -10,9 +10,10 @@ use anyhow::format_err;
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::{FromHex, ToHex};
+use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use fedimint_api::BitcoinHash;
+use fedimint_api::{BitcoinHash, Encodable};
 use hbbft::crypto::group::Curve;
 use hbbft::crypto::group::GroupEncoding;
 use hbbft::crypto::poly::Commitment;
@@ -96,7 +97,7 @@ impl JsonWithKind {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct ApiEndpoint {
     /// The peer's API websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     pub url: Url,
@@ -119,6 +120,15 @@ pub struct ClientConfig {
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+}
+
+/// The API response for configuration requests
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ConfigResponse {
+    /// The client config
+    pub client: ClientConfig,
+    /// Hash of the consensus config (for validating against peers)
+    pub consensus_hash: sha256::Hash,
 }
 
 /// The federation id is a copy of the authentication threshold public key of the federation
@@ -226,6 +236,15 @@ pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE_NAME: &'static str;
 }
 
+/// Response from the API for this particular module
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleConfigResponse {
+    /// The client configuration
+    pub client: ClientModuleConfig,
+    /// Hash of the consensus configuration
+    pub consensus_hash: sha256::Hash,
+}
+
 /// Config for the client-side of a particular Federation module
 ///
 /// Since modules are (tbd.) pluggable into Federations,
@@ -289,9 +308,15 @@ impl ServerModuleConfig {
 }
 
 /// Consensus-critical part of a server side module config
-pub trait TypedServerModuleConsensusConfig: DeserializeOwned + Serialize {
+pub trait TypedServerModuleConsensusConfig: DeserializeOwned + Serialize + Encodable {
     /// Derive client side config for this module (type-erased)
     fn to_client_config(&self) -> ClientModuleConfig;
+
+    fn hash(&self) -> anyhow::Result<sha256::Hash> {
+        let mut engine = HashEngine::default();
+        self.consensus_encode(&mut engine)?;
+        Ok(sha256::Hash::from_engine(engine))
+    }
 }
 
 /// Module (server side) config
@@ -334,7 +359,7 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 }
 
 /// Typed client side module config
-pub trait TypedClientModuleConfig: DeserializeOwned + Serialize {
+pub trait TypedClientModuleConfig: DeserializeOwned + Serialize + Encodable {
     fn kind(&self) -> ModuleKind;
 
     fn to_erased(&self) -> ClientModuleConfig {

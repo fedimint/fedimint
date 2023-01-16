@@ -1,6 +1,8 @@
-use std::io::Error;
+use std::io::{Error, Write};
 
 use bitcoin::hashes::Hash as BitcoinHash;
+use miniscript::descriptor::WshInner;
+use miniscript::{Descriptor, MiniscriptKey};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
@@ -36,6 +38,31 @@ impl_encode_decode_bridge!(bitcoin::Transaction);
 impl_encode_decode_bridge!(bitcoin::Txid);
 impl_encode_decode_bridge!(bitcoin::util::merkleblock::PartialMerkleTree);
 impl_encode_decode_bridge!(bitcoin::util::psbt::PartiallySignedTransaction);
+
+impl<T: Encodable + MiniscriptKey> Encodable for Descriptor<T> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        match self {
+            Descriptor::Wsh(multi) => match multi.clone().into_inner() {
+                WshInner::SortedMulti(keys) => {
+                    for key in keys.pks {
+                        len += key.consensus_encode(writer)?;
+                    }
+                    len += (keys.k as u16).consensus_encode(writer)?;
+                }
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        }
+        Ok(len)
+    }
+}
+
+impl Encodable for bitcoin::Network {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.magic().consensus_encode(writer)
+    }
+}
 
 impl Encodable for bitcoin::Amount {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
