@@ -278,7 +278,7 @@ impl FedimintServer {
                                 epoch,
                                 contributions: BTreeMap::from_iter(items.into_iter()),
                             },
-                            &rejected_txs,
+                            rejected_txs.clone(),
                         )
                         .await;
                     self.last_processed_epoch = Some(epoch);
