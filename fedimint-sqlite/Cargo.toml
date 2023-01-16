@@ -11,7 +11,7 @@ path = "src/lib.rs"
 anyhow = "1.0.66"
 async-trait = "0.1"
 futures = "0.3.24"
-sqlx = { version = "0.6.2", features = ["runtime-tokio-native-tls", "sqlite"]}
+sqlx = { version = "0.6.2", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "migrate"]}
 fedimint-api = { path = "../fedimint-api" }
 rand = "0.8"
 tracing = "0.1.37"
