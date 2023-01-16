@@ -5,6 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitcoin_hashes::hex::FromHex;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
@@ -645,7 +646,8 @@ fn deserialize_key_pair<'de, D: serde::Deserializer<'de>>(
 ) -> std::result::Result<KeyPair, D::Error> {
     if d.is_human_readable() {
         let hex_bytes: Cow<'_, str> = Deserialize::deserialize(d)?;
-        let bytes = hex::decode(hex_bytes.as_ref()).map_err(|_| D::Error::custom("Invalid hex"))?;
+        let bytes =
+            Vec::from_hex(hex_bytes.as_ref()).map_err(|_| D::Error::custom("Invalid hex"))?;
         KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, &bytes)
             .map_err(|_| D::Error::custom("Not a valid private key"))
     } else {

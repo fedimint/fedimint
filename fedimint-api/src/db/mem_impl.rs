@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use bitcoin_hashes::hex::ToHex;
 
 use super::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, IDatabase,
@@ -38,7 +39,7 @@ impl MemDatabase {
         let data = self.data.lock().unwrap();
         let data_iter = data.iter();
         for (key, value) in data_iter {
-            println!("{}: {}", hex::encode(key), hex::encode(value));
+            println!("{}: {}", key.to_hex(), value.to_hex());
         }
     }
 }

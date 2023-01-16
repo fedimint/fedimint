@@ -2585,7 +2585,6 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-testing",
  "futures",
- "hex",
  "hkdf",
  "js-sys",
  "jsonrpsee-core",
