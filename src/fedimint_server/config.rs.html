@@ -912,7 +912,13 @@
 <a href="#912" id="912">912</a>
 <a href="#913" id="913">913</a>
 <a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::os::unix::prelude::OsStrExt;
 
@@ -1143,6 +1149,15 @@
         <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from_iter(modules))
     }
 
+    <span class="kw">pub fn </span>get_env_vars_map() -&gt; BTreeMap&lt;OsString, OsString&gt; {
+        std::env::vars_os()
+            <span class="comment">// We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            </span>.filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(<span class="string">b&quot;FM_&quot;</span>))
+            .collect()
+    }
+
     <span class="kw">pub async fn </span>init_all(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: <span class="kw-2">&amp;</span>ServerConfig,
@@ -1151,12 +1166,7 @@
     ) -&gt; anyhow::Result&lt;ModuleRegistry&lt;fedimint_api::server::DynServerModule&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
 
-        <span class="kw">let </span>env: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = std::env::vars_os()
-            <span class="comment">// We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            </span>.filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(<span class="string">b&quot;FM_&quot;</span>))
-            .collect();
+        <span class="kw">let </span>env = ModuleInitRegistry::get_env_vars_map();
 
         <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
             <span class="kw">let </span>kind = module_cfg.kind();
