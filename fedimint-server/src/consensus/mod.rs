@@ -429,13 +429,7 @@ impl FedimintConsensus {
     ) -> SignedEpochOutcome {
         let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
-        let maybe_prev_epoch = self
-            .db
-            .begin_transaction()
-            .await
-            .get_value(&prev_epoch_key)
-            .await
-            .expect("DB error");
+        let maybe_prev_epoch = dbtx.get_value(&prev_epoch_key).await.expect("DB error");
 
         let current = SignedEpochOutcome::new(
             outcome.epoch,
