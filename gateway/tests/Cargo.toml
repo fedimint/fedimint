@@ -24,7 +24,7 @@ ln-gateway = { path = "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
 portpicker = "0.1.1"
 rand = "0.8"
-serde_json = "1.0.89"
+serde_json = "1.0.91"
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 tokio = { version = "1.23.1", features = ["full"] }
 tracing ="0.1.37"
