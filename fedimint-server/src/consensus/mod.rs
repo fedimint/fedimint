@@ -245,6 +245,8 @@ impl FedimintConsensus {
             .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
             .unzip_consensus_item();
 
+        let mut dbtx = self.db.begin_transaction().await;
+
         // Begin consensus epoch
         {
             let per_module_cis: HashMap<
@@ -254,22 +256,17 @@ impl FedimintConsensus {
                 .into_iter()
                 .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
 
-            let mut dbtx = self.db.begin_transaction().await;
             for (module_key, module_cis) in per_module_cis {
                 self.modules
                     .get(module_key)
                     .begin_consensus_epoch(&mut dbtx, module_cis)
                     .await;
             }
-
-            dbtx.commit_tx().await.expect("DB Error");
         }
 
         // Process transactions
         let mut rejected_txs: BTreeSet<TransactionId> = BTreeSet::new();
         {
-            let mut dbtx = self.db.begin_transaction().await;
-
             let caches = self.build_verification_caches(transaction_cis.iter().map(|(_, tx)| tx));
             let mut processed_txs: HashSet<TransactionId> = HashSet::new();
 
@@ -317,7 +314,6 @@ impl FedimintConsensus {
                 .instrument(span)
                 .await;
             }
-            dbtx.commit_tx().await.expect("DB Error");
         }
 
         if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
@@ -334,7 +330,6 @@ impl FedimintConsensus {
 
         // End consensus epoch
         let epoch_history = {
-            let mut dbtx = self.db.begin_transaction().await;
             let mut drop_peers = Vec::<PeerId>::new();
 
             let epoch_history = self
