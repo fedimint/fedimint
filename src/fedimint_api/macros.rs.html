@@ -287,6 +287,12 @@
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Define &quot;dyn newtype&quot; (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
@@ -553,8 +559,14 @@
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>serde_module_encoding_wrapper {
     (<span class="macro-nonterminal">$wrapper_name</span>:ident, <span class="macro-nonterminal">$wrapped</span>:ty) =&gt; {
-        <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+        <span class="attr">#[derive(Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
         </span><span class="kw">pub struct </span><span class="macro-nonterminal">$wrapper_name</span>(Vec&lt;u8&gt;);
+
+        <span class="kw">impl </span>::std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$wrapper_name </span>{
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>::std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; ::std::fmt::Result {
+                &lt;<span class="kw">_ as </span>::std::fmt::Display&gt;::fmt(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::fmt_utils::AbbreviateHexBytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>), f)
+            }
+        }
 
         <span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span><span class="macro-nonterminal">$wrapped</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$wrapper_name </span>{
             <span class="kw">fn </span>from(eh: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$wrapped</span>) -&gt; <span class="self">Self </span>{
