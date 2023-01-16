@@ -562,7 +562,7 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
         self.client
             .coins()
             .await
-            .iter_tiers()
+            .iter()
             .flat_map(|(a, c)| repeat(*a).take(c.len()))
             .sorted()
             .collect::<Vec<Amount>>()

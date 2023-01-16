@@ -462,7 +462,7 @@ impl ServerModule for Mint {
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.total_amount(),
-                fee: self.cfg.consensus.fee_consensus.coin_spend_abs * (input.item_count() as u64),
+                fee: self.cfg.consensus.fee_consensus.coin_spend_abs * (input.count_items() as u64),
             },
             puk_keys: input
                 .iter_items()
@@ -498,10 +498,10 @@ impl ServerModule for Mint {
         _dbtx: &mut DatabaseTransaction,
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        if output.max_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
+        if output.longest_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
             return Err(MintError::ExceededMaxNotes(
                 self.cfg.consensus.max_notes_per_denomination,
-                output.max_tier_len(),
+                output.longest_tier_len(),
             ))
             .into_module_error_other();
         }
@@ -518,7 +518,7 @@ impl ServerModule for Mint {
             Ok(TransactionItemAmount {
                 amount: output.total_amount(),
                 fee: self.cfg.consensus.fee_consensus.coin_issuance_abs
-                    * (output.item_count() as u64),
+                    * (output.count_items() as u64),
             })
         }
     }

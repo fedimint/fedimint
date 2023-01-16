@@ -466,7 +466,7 @@ async fn handle_command(
         Command::Validate { coins } => {
             let validate_result = client.validate_note_signatures(&coins).await;
             let details_vec = coins
-                .iter_tiers()
+                .iter()
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))
                 .collect();
 
@@ -512,13 +512,13 @@ async fn handle_command(
         Command::Info => {
             let coins = client.coins().await;
             let details_vec = coins
-                .iter_tiers()
+                .iter()
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))
                 .collect();
             Ok(CliOutput::Info {
                 network: client.wallet_client().config.network.to_string(),
                 total_amount: (coins.total_amount()),
-                total_num_notes: (coins.item_count()),
+                total_num_notes: (coins.count_items()),
                 details: (details_vec),
             })
         }

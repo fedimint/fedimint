@@ -19,10 +19,12 @@ use crate::{Amount, Tiered};
 pub struct TieredMulti<T>(BTreeMap<Amount, Vec<T>>);
 
 impl<T> TieredMulti<T> {
+    /// Returns a new `TieredMulti` with the given `BTreeMap` map
     pub fn new(map: BTreeMap<Amount, Vec<T>>) -> Self {
         TieredMulti(map)
     }
 
+    /// Returns the total value of all notes in msat as `Amount`
     pub fn total_amount(&self) -> Amount {
         let milli_sat = self
             .0
@@ -32,22 +34,27 @@ impl<T> TieredMulti<T> {
         Amount { msats: milli_sat }
     }
 
-    pub fn item_count(&self) -> usize {
+    /// Returns the number of items in all vectors
+    pub fn count_items(&self) -> usize {
         self.0.values().map(|coins| coins.len()).sum()
     }
 
-    pub fn tier_count(&self) -> usize {
+    /// Returns the number of tiers
+    pub fn count_tiers(&self) -> usize {
         self.0.len()
     }
 
-    pub fn tiers(&self) -> impl Iterator<Item = &Amount> {
+    /// Returns an iterator over the keys
+    pub fn iter_tiers(&self) -> impl Iterator<Item = &Amount> {
         self.0.keys()
     }
 
+    /// Verifies whether all vectors in all tiers are empty
     pub fn is_empty(&self) -> bool {
-        self.item_count() == 0
+        self.count_items() == 0
     }
 
+    /// Applies the given closure to every `(Amount, T)` pair
     pub fn map<F, N, E>(self, f: F) -> Result<TieredMulti<N>, E>
     where
         F: Fn(Amount, T) -> Result<N, E>,
@@ -67,6 +74,7 @@ impl<T> TieredMulti<T> {
         Ok(TieredMulti(res))
     }
 
+    /// Verifies whether the structure of `self` and `other` is identical
     pub fn structural_eq<O>(&self, other: &TieredMulti<O>) -> bool {
         let tier_eq = self.0.keys().eq(other.0.keys());
         let per_tier_eq = self
@@ -78,35 +86,49 @@ impl<T> TieredMulti<T> {
         tier_eq && per_tier_eq
     }
 
-    pub fn iter_tiers(&self) -> impl Iterator<Item = (&Amount, &Vec<T>)> {
+    /// Returns an borrowing iterator
+    pub fn iter(&self) -> impl Iterator<Item = (&Amount, &Vec<T>)> {
         self.0.iter()
     }
 
-    // Note: order of the elements is important here: from lowest tiers to highest, then in order of elements in the Vec
+    /// Returns an iterator over every `(Amount, &T)`
+    ///
+    /// Note: The order of the elements is important:
+    /// from the lowest tier to the highest, then in order of elements in the Vec
     pub fn iter_items(&self) -> impl Iterator<Item = (Amount, &T)> + DoubleEndedIterator {
+        // Note: If you change the method implementation, make sure that the returned order of the
+        // elements stays consistent.
         self.0
             .iter()
             .flat_map(|(amt, coins)| coins.iter().map(move |c| (*amt, c)))
     }
-    // Note: order of the elements is important here: from lowest tiers to highest, then in order of elements in the Vec
+
+    /// Returns an consuming iterator over every `(Amount, T)`
+    ///
+    /// Note: The order of the elements is important:
+    /// from the lowest tier to the highest, then in order of elements in the Vec
     pub fn into_iter_items(self) -> impl Iterator<Item = (Amount, T)> + DoubleEndedIterator {
+        // Note: If you change the method implementation, make sure that the returned order of the
+        // elements stays consistent.
         self.0
             .into_iter()
             .flat_map(|(amt, coins)| coins.into_iter().map(move |c| (amt, c)))
     }
 
-    /// Returns the max number of notes for any given denomination tier
-    pub fn max_tier_len(&self) -> usize {
+    /// Returns the length of the longest vector of all tiers
+    pub fn longest_tier_len(&self) -> usize {
         self.0.values().map(|notes| notes.len()).max().unwrap_or(0)
     }
 
-    pub fn check_tiers<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
+    /// Verifies that all keys in `self` are present in the keys of the given parameter `Tiered`
+    pub fn all_tiers_exist_in<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
         match self.0.keys().find(|&amt| keys.get(*amt).is_none()) {
             Some(amt) => Err(InvalidAmountTierError(*amt)),
             None => Ok(()),
         }
     }
 
+    /// Returns an `Option` with a reference to the vector of the given `Amount`
     pub fn get(&self, amt: Amount) -> Option<&Vec<T>> {
         self.0.get(&amt)
     }
