@@ -4,7 +4,6 @@ use std::env;
 use std::future::Future;
 use std::iter::repeat;
 use std::net::SocketAddr;
-use std::os::unix::prelude::OsStrExt;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -89,7 +88,7 @@ mod real;
 mod utils;
 
 const DEFAULT_P2P_PORT: u16 = 8173;
-const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 10000;
+const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 20000;
 static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
 
 // Helper functions for easier test writing
@@ -170,7 +169,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
-            let mut config_task_group = TaskGroup::new();
+            let mut config_task_group = task_group.make_subgroup().await;
             let (server_config, client_config) = distributed_config(
                 "",
                 &peers,
@@ -1032,12 +1031,7 @@ impl FederationTest {
             let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
 
             let mut modules = BTreeMap::new();
-            // We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            let env_vars: BTreeMap<_, _> = std::env::vars_os()
-                .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
-                .collect();
+            let env_vars = ModuleInitRegistry::get_env_vars_map();
 
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();

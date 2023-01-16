@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::os::unix::prelude::OsStrExt;
 
@@ -229,6 +230,15 @@ impl ModuleInitRegistry {
         Ok(ModuleDecoderRegistry::from_iter(modules))
     }
 
+    pub fn get_env_vars_map() -> BTreeMap<OsString, OsString> {
+        std::env::vars_os()
+            // We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
+            .collect()
+    }
+
     pub async fn init_all(
         &self,
         cfg: &ServerConfig,
@@ -237,12 +247,7 @@ impl ModuleInitRegistry {
     ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::DynServerModule>> {
         let mut modules = BTreeMap::new();
 
-        let env: BTreeMap<_, _> = std::env::vars_os()
-            // We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
-            .collect();
+        let env = ModuleInitRegistry::get_env_vars_map();
 
         for (module_id, module_cfg) in &cfg.consensus.modules {
             let kind = module_cfg.kind();
