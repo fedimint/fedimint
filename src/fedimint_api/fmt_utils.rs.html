@@ -28,25 +28,17 @@
 <a href="#28" id="28">28</a>
 <a href="#29" id="29">29</a>
 <a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::cell::Cell;
-<span class="kw">use </span>std::fmt;
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::thread_local;
-
-<span class="macro">thread_local!</span>(<span class="kw">static </span>RUST_LOG_FULL: Cell&lt;bool&gt; = Cell::new(<span class="bool-val">false</span>));
 
 <span class="kw">pub fn </span>rust_log_full_enabled() -&gt; bool {
     <span class="comment">// this will be called only once per-thread for best performance
-    </span>RUST_LOG_FULL.with(|v| {
-        <span class="kw">let </span>enabled = std::env::var_os(<span class="string">&quot;RUST_LOG_FULL&quot;</span>)
+    </span><span class="macro">thread_local!</span>(<span class="kw">static </span>RUST_LOG_FULL: bool = {
+        std::env::var_os(<span class="string">&quot;RUST_LOG_FULL&quot;</span>)
             .map(|val| !val.is_empty())
-            .unwrap_or(<span class="bool-val">false</span>);
-        v.set(enabled);
-        enabled
-    })
+            .unwrap_or(<span class="bool-val">false</span>)
+    });
+    RUST_LOG_FULL.with(|x| <span class="kw-2">*</span>x)
 }
 
 <span class="doccomment">/// Use for displaying bytes in the logs
