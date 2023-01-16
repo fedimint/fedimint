@@ -385,6 +385,10 @@
 <a href="#385" id="385">385</a>
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -410,7 +414,7 @@
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::Address;
-<span class="kw">use </span>fedimint_api::config::FederationId;
+<span class="kw">use </span>fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_api::{task::TaskGroup, Amount, TransactionId};
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
 <span class="kw">use </span>mint_client::{
@@ -437,6 +441,7 @@
 
 <span class="kw">pub struct </span>LnGateway {
     config: GatewayConfig,
+    decoders: ModuleDecoderRegistry,
     actors: Mutex&lt;HashMap&lt;String, Arc&lt;GatewayActor&gt;&gt;&gt;,
     ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
     sender: mpsc::Sender&lt;GatewayRequest&gt;,
@@ -449,6 +454,7 @@
 <span class="kw">impl </span>LnGateway {
     <span class="kw">pub async fn </span>new(
         config: GatewayConfig,
+        decoders: ModuleDecoderRegistry,
         ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
         client_builder: DynGatewayClientBuilder,
         <span class="comment">// TODO: consider encapsulating message channel within LnGateway
@@ -456,6 +462,7 @@
         receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
         task_group: TaskGroup,
     ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>decoders2 = decoders.clone();
         <span class="kw">let </span>ln_gw = <span class="self">Self </span>{
             config,
             actors: Mutex::new(HashMap::new()),
@@ -465,21 +472,22 @@
             client_builder,
             task_group,
             channel_id_generator: AtomicU64::new(<span class="number">0</span>),
+            decoders,
         };
 
-        ln_gw.load_federation_actors().<span class="kw">await</span>;
+        ln_gw.load_federation_actors(decoders2).<span class="kw">await</span>;
 
         ln_gw
     }
 
-    <span class="kw">async fn </span>load_federation_actors(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+    <span class="kw">async fn </span>load_federation_actors(<span class="kw-2">&amp;</span><span class="self">self</span>, decoders: ModuleDecoderRegistry) {
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(configs) = <span class="self">self</span>.client_builder.load_configs() {
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = <span class="self">self</span>.channel_id_generator.load(Ordering::SeqCst);
 
             <span class="kw">for </span>config <span class="kw">in </span>configs {
                 <span class="kw">let </span>client = <span class="self">self
                     </span>.client_builder
-                    .build(config.clone())
+                    .build(config.clone(), decoders.clone())
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;Could not build federation client&quot;</span>);
 
@@ -558,7 +566,7 @@
 
         <span class="kw">let </span>client = Arc::new(
             <span class="self">self</span>.client_builder
-                .build(gw_client_cfg.clone())
+                .build(gw_client_cfg.clone(), <span class="self">self</span>.decoders.clone())
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Failed to build gateway client&quot;</span>),
         );

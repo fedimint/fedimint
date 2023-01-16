@@ -707,25 +707,47 @@
 <a href="#707" id="707">707</a>
 <a href="#708" id="708">708</a>
 <a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::core::{
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 <span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
+<span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
+<span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
-<span class="kw">use </span>mint_client::api::{WsFederationApi, WsFederationConnect};
+<span class="kw">use </span>fedimint_mint::common::MintDecoder;
+<span class="kw">use </span>mint_client::api::{
+    GlobalFederationApi, IFederationApi, IFederationApiFed, WsFederationApi, WsFederationConnect,
+};
 <span class="kw">use </span>mint_client::mint::SpendableNote;
-<span class="kw">use </span>mint_client::query::{CurrentConsensus, EventuallyConsistent};
+<span class="kw">use </span>mint_client::query::EventuallyConsistent;
 <span class="kw">use </span>mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     serialize_ecash,
@@ -1071,18 +1093,12 @@
         <span class="kw">if let </span>Command::JoinFederation { connect } = cli.command {
             <span class="kw">let </span>connect_obj: WsFederationConnect = serde_json::from_str(<span class="kw-2">&amp;</span>connect)
                 .or_terminate(CliErrorKind::InvalidValue, <span class="string">&quot;invalid connect info&quot;</span>);
-            <span class="kw">let </span>api = WsFederationApi::new(connect_obj.members);
-            <span class="kw">let </span>cfg: ClientConfig = api
-                .request(
-                    <span class="string">&quot;/config&quot;</span>,
-                    (),
-                    CurrentConsensus::new(api.peers().one_honest()),
-                )
-                .<span class="kw">await
-                </span>.or_terminate(
-                    CliErrorKind::NetworkError,
-                    <span class="string">&quot;couldn&#39;t download config from peer&quot;</span>,
-                );
+            <span class="kw">let </span>api = Arc::new(WsFederationApi::new(connect_obj.members))
+                <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
+            <span class="kw">let </span>cfg: ClientConfig = api.get_client_config().<span class="kw">await</span>.or_terminate(
+                CliErrorKind::NetworkError,
+                <span class="string">&quot;couldn&#39;t download config from peer&quot;</span>,
+            );
             <span class="kw">let </span>cfg_path = cli.workdir.join(<span class="string">&quot;client.json&quot;</span>);
             std::fs::create_dir_all(<span class="kw-2">&amp;</span>cli.workdir)
                 .or_terminate(CliErrorKind::IOError, <span class="string">&quot;failed to create config directory&quot;</span>);
@@ -1106,7 +1122,13 @@
 
         <span class="kw">let </span>rng = rand::rngs::OsRng;
 
-        <span class="kw">let </span>client = Client::new(cfg.clone(), db, Default::default()).<span class="kw">await</span>;
+        <span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
+            (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
+            (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
+            (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
+        ]);
+
+        <span class="kw">let </span>client = Client::new(cfg.clone(), decoders, db, Default::default()).<span class="kw">await</span>;
 
         <span class="kw">let </span>cli_result = handle_command(cli, client, rng).<span class="kw">await</span>;
 
@@ -1131,12 +1153,12 @@
     <span class="kw">match </span>cli.command {
         Command::Api { method, arg } =&gt; {
             <span class="kw">let </span>arg: Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
-            <span class="kw">let </span>ws_api = WsFederationApi::from_config(client.config().as_ref());
+            <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(client.config().as_ref()).into();
             <span class="kw">let </span>response: Value = ws_api
-                .request(
-                    <span class="kw-2">&amp;</span>method,
-                    arg,
+                .request_fed_with_strategy(
                     EventuallyConsistent::new(ws_api.peers().len()),
+                    method,
+                    <span class="macro">vec!</span>[arg],
                 )
                 .<span class="kw">await
                 </span>.unwrap();

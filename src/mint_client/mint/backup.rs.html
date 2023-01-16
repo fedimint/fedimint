@@ -909,7 +909,7 @@
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use super</span>::{db::NextECashNoteIndexKeyPrefix, <span class="kw-2">*</span>};
-<span class="kw">use </span><span class="kw">crate</span>::api;
+<span class="kw">use </span><span class="kw">crate</span>::api::{<span class="self">self</span>, GlobalFederationApi, MintFederationApi};
 
 <span class="kw">impl </span>MintClient {
     <span class="doccomment">/// Prepare an encrypted backup and send it to federation for storing
@@ -1098,7 +1098,7 @@
     </span><span class="kw">async fn </span>fetch_epochs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         epoch_range: RangeInclusive&lt;u64&gt;,
-        sender: mpsc::Sender&lt;api::Result&lt;SignedEpochOutcome&gt;&gt;,
+        sender: mpsc::Sender&lt;api::FedResult&lt;SignedEpochOutcome&gt;&gt;,
         task_handle: <span class="kw-2">&amp;</span>TaskHandle,
     ) {
         <span class="kw">for </span>epoch <span class="kw">in </span>epoch_range {
@@ -1111,7 +1111,7 @@
             <span class="kw">match </span><span class="self">self
                 </span>.context
                 .api
-                .fetch_epoch_history(epoch, <span class="self">self</span>.epoch_pk)
+                .fetch_epoch_history(epoch, <span class="self">self</span>.epoch_pk, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(epoch_history) =&gt; {

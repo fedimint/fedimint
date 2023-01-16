@@ -394,69 +394,6 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -475,6 +412,8 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
 
+<span class="kw">use </span><span class="kw">crate</span>::api::GlobalFederationApi;
+<span class="kw">use </span><span class="kw">crate</span>::api::OutputOutcomeError;
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span><span class="kw">crate</span>::ApiError;
 
@@ -622,7 +561,7 @@
         <span class="kw">let </span>outcome: WalletOutputOutcome = <span class="self">self
             </span>.context
             .api
-            .await_output_outcome(out_point, timeout)
+            .await_output_outcome(out_point, timeout, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(outcome.<span class="number">0</span>)
     }
@@ -638,6 +577,8 @@
     </span>PegInAmountTooSmall,
     <span class="attr">#[error(<span class="string">&quot;Inconsistent peg-in proof: {0}&quot;</span>)]
     </span>PegInProofError(PegInProofError),
+    <span class="attr">#[error(<span class="string">&quot;Output outcome error: {0}&quot;</span>)]
+    </span>OutputOutcomeError(<span class="attr">#[from] </span>OutputOutcomeError),
     <span class="attr">#[error(<span class="string">&quot;Mint API error: {0}&quot;</span>)]
     </span>ApiError(<span class="attr">#[from] </span>ApiError),
 }
@@ -648,21 +589,19 @@
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
 
-    <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::sha256;
     <span class="kw">use </span>bitcoin::{Address, Txid};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
-    <span class="kw">use </span>fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+    <span class="kw">use </span>fedimint_api::core::{
+        DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    };
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
+    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_api::task::TaskGroup;
     <span class="kw">use </span>fedimint_api::{Feerate, OutPoint, TransactionId};
-    <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
-    <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
-    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-    <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
+    <span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
     <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
     <span class="kw">use </span>fedimint_core::modules::wallet::{
         PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
@@ -670,11 +609,11 @@
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     <span class="kw">use </span>fedimint_testing::FakeFed;
-    <span class="kw">use </span>threshold_crypto::PublicKey;
+    <span class="kw">use </span>tokio::sync::Mutex;
 
-    <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
+    <span class="kw">use </span><span class="kw">crate</span>::api::fake::FederationApiFaker;
     <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClient;
-    <span class="kw">use crate</span>::{module_decode_stubs, ClientContext, LegacyTransaction};
+    <span class="kw">use crate</span>::{module_decode_stubs, ClientContext};
 
     <span class="kw">type </span>Fed = FakeFed&lt;Wallet&gt;;
     <span class="kw">type </span>SharedFed = Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;;
@@ -685,96 +624,29 @@
         </span>_mint: SharedFed,
     }
 
-    <span class="attr">#[async_trait]
-    </span><span class="kw">impl </span>IFederationApi <span class="kw">for </span>FakeApi {
-        <span class="kw">async fn </span>fetch_tx_outcome(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _tx: TransactionId,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;TransactionStatus&gt; {
-            <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
-                epoch: <span class="number">0</span>,
-                outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(
-                    <span class="kw-2">&amp;</span>fedimint_api::core::DynOutputOutcome::from_typed(
-                        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    <span class="kw">pub async fn </span>make_test_mint_fed(
+        module_id: ModuleInstanceId,
+        fed: Arc&lt;Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt;,
+    ) -&gt; FederationApiFaker&lt;tokio::sync::Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt; {
+        <span class="kw">let </span>members = fed
+            .lock()
+            .<span class="kw">await
+            </span>.members
+            .iter()
+            .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
+            .collect();
+        FederationApiFaker::new(fed, members).with(
+            <span class="string">&quot;/fetch_transaction&quot;</span>,
+            <span class="kw">move </span>|_mint: Arc&lt;Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt;, _tx: TransactionId| <span class="kw">async move </span>{
+                <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
+                    epoch: <span class="number">0</span>,
+                    outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
+                        module_id,
                         WalletOutputOutcome(Txid::from_slice([<span class="number">0</span>; <span class="number">32</span>].as_slice()).unwrap()),
-                    ),
-                )],
-            })
-        }
-
-        <span class="kw">async fn </span>submit_transaction(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _tx: LegacyTransaction,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;TransactionId&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_contract(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _contract: ContractId,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;ContractAccount&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;u64&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_offer(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;IncomingContractOffer&gt; {
-            <span class="macro">unimplemented!</span>();
-        }
-
-        <span class="kw">async fn </span>fetch_peg_out_fees(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _address: <span class="kw-2">&amp;</span>Address,
-            _amount: <span class="kw-2">&amp;</span>bitcoin::Amount,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
-            <span class="macro">unimplemented!</span>();
-        }
-
-        <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;Vec&lt;LightningGateway&gt;&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, _gateway: LightningGateway) -&gt; <span class="kw">crate</span>::api::Result&lt;()&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_epoch_history(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _epoch: u64,
-            _pk: PublicKey,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;SignedEpochOutcome&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;u64&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>offer_exists(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;bool&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>upload_ecash_backup(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;()&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>download_ecash_backup(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
+                    ))],
+                })
+            },
+        )
     }
 
     <span class="kw">async fn </span>new_mint_and_client(
@@ -788,6 +660,7 @@
         <span class="kw">let </span>btc_rpc = FakeBitcoindRpc::new();
         <span class="kw">let </span>btc_rpc_controller = btc_rpc.controller();
 
+        <span class="kw">let </span>module_id = LEGACY_HARDCODED_INSTANCE_ID_WALLET;
         <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::&lt;Wallet&gt;::new(
                 <span class="number">4</span>,
@@ -809,18 +682,19 @@
                     finality_delay: <span class="number">10</span>,
                 }),
                 <span class="kw-2">&amp;</span>WalletGen,
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                module_id,
             )
             .<span class="kw">await
             </span>.unwrap(),
         ));
 
-        <span class="kw">let </span>api = FakeApi { _mint: fed.clone() }.into();
+        <span class="kw">let </span>api = make_test_mint_fed(module_id, fed.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
         <span class="kw">let </span>client = ClientContext {
+            decoders: ModuleDecoderRegistry::from_iter([(module_id, WalletDecoder.into())]),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
-            api,
+            api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 

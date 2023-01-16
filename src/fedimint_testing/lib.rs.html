@@ -357,7 +357,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>FakeFed&lt;Module&gt; {
-    members: Vec&lt;(PeerId, Module, Database)&gt;,
+    <span class="kw">pub </span>members: Vec&lt;(PeerId, Module, Database)&gt;,
     client_cfg: ClientModuleConfig,
     block_height: Arc&lt;std::sync::atomic::AtomicU64&gt;,
 }

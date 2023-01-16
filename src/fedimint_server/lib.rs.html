@@ -492,6 +492,7 @@
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -513,7 +514,8 @@
 <span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 <span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>mint_client::api::{IFederationApi, WsFederationApi};
+<span class="kw">use </span>mint_client::api::WsFederationApi;
+<span class="kw">use </span>mint_client::api::{DynFederationApi, GlobalFederationApi};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -566,7 +568,7 @@
     <span class="kw">pub </span>connections: PeerConnections&lt;EpochMessage&gt;,
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;,
-    <span class="kw">pub </span>api: Arc&lt;<span class="kw">dyn </span>IFederationApi&gt;,
+    <span class="kw">pub </span>api: DynFederationApi,
     <span class="kw">pub </span>peers: BTreeSet&lt;PeerId&gt;,
     <span class="kw">pub </span>rejoin_at_epoch: <span class="prelude-ty">Option</span>&lt;HashMap&lt;u64, HashSet&lt;PeerId&gt;&gt;&gt;,
     <span class="kw">pub </span>run_empty_epochs: u64,
@@ -638,14 +640,14 @@
             .clone()
             .into_iter()
             .map(|(id, node)| (id, node.url));
-        <span class="kw">let </span>api = Arc::new(WsFederationApi::new(api_endpoints.collect()));
+        <span class="kw">let </span>api = WsFederationApi::new(api_endpoints.collect());
 
         FedimintServer {
             connections,
             hbbft,
             consensus: Arc::new(consensus),
             cfg: cfg.clone(),
-            api,
+            api: api.into(),
             peers: cfg.local.p2p.keys().cloned().collect(),
             rejoin_at_epoch: <span class="prelude-val">None</span>,
             run_empty_epochs: <span class="number">0</span>,
@@ -743,7 +745,7 @@
                     <span class="kw">let </span>epoch_pk = <span class="self">self</span>.cfg.consensus.epoch_pk_set.public_key();
                     <span class="kw">let </span>epoch = <span class="self">self
                         </span>.api
-                        .fetch_epoch_history(epoch_num, epoch_pk)
+                        .fetch_epoch_history(epoch_num, epoch_pk, <span class="kw-2">&amp;</span><span class="self">self</span>.decoders)
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;fetches history&quot;</span>);
 

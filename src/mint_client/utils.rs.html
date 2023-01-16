@@ -73,6 +73,7 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
@@ -135,6 +136,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientContext {
+    <span class="kw">pub </span>decoders: ModuleDecoderRegistry,
     <span class="kw">pub </span>db: Database,
     <span class="kw">pub </span>api: DynFederationApi,
     <span class="kw">pub </span>secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,

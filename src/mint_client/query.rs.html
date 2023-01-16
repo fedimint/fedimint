@@ -278,19 +278,7 @@
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
 
@@ -301,16 +289,17 @@
 <span class="kw">use </span>threshold_crypto::PublicKey;
 <span class="kw">use </span>tracing::debug;
 
-<span class="kw">use </span><span class="kw">crate</span>::api::{FedResponse, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span><span class="kw">crate</span>::ApiError;
+<span class="kw">use crate</span>::{api, ApiError};
 
 <span class="doccomment">/// Returns a result from the first responding peer
 </span><span class="kw">pub struct </span>TrustAllPeers;
 
 <span class="kw">impl</span>&lt;R&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>TrustAllPeers {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
-        <span class="kw">let </span>FedResponse { peer: <span class="kw">_</span>, result } = response;
-        QueryStep::Finished(result.map_err(ApiError::RpcError))
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::Result&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(o) =&gt; QueryStep::Success(o),
+            <span class="prelude-val">Err</span>(e) =&gt; QueryStep::FailMembers(BTreeMap::from([(peer, e)])),
+        }
     }
 }
 
@@ -332,12 +321,12 @@
 <span class="kw">impl </span>QueryStrategy&lt;SignedEpochOutcome&gt; <span class="kw">for </span>ValidHistory {
     <span class="kw">fn </span>process(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        response: FedResponse&lt;SignedEpochOutcome&gt;,
+        peer: PeerId,
+        result: api::Result&lt;SignedEpochOutcome&gt;,
     ) -&gt; QueryStep&lt;SignedEpochOutcome&gt; {
-        <span class="kw">let </span>FedResponse { peer, result } = response;
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(epoch) <span class="kw">if </span>epoch.verify_sig(<span class="kw-2">&amp;</span><span class="self">self</span>.epoch_pk).is_ok() =&gt; QueryStep::Finished(<span class="prelude-val">Ok</span>(epoch)),
-            result =&gt; <span class="self">self</span>.current.process(FedResponse { peer, result }),
+            <span class="prelude-val">Ok</span>(epoch) <span class="kw">if </span>epoch.verify_sig(<span class="kw-2">&amp;</span><span class="self">self</span>.epoch_pk).is_ok() =&gt; QueryStep::Success(epoch),
+            result =&gt; <span class="self">self</span>.current.process(peer, result),
         }
     }
 }
@@ -362,12 +351,8 @@
 }
 
 <span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;Vec&lt;R&gt;&gt; <span class="kw">for </span>UnionResponses&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;Vec&lt;R&gt;&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
-        <span class="kw">if let </span>FedResponse {
-            peer,
-            result: <span class="prelude-val">Ok</span>(results),
-        } = response
-        {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, results: api::Result&lt;Vec&lt;R&gt;&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(results) = results {
             <span class="kw">for </span>new_result <span class="kw">in </span>results {
                 <span class="kw">if </span>!<span class="self">self</span>.existing_results.iter().any(|r| r == <span class="kw-2">&amp;</span>new_result) {
                     <span class="self">self</span>.existing_results.push(new_result);
@@ -377,13 +362,13 @@
             <span class="self">self</span>.responses.insert(peer);
 
             <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required {
-                QueryStep::Finished(<span class="prelude-val">Ok</span>(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.existing_results)))
+                QueryStep::Success(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.existing_results))
             } <span class="kw">else </span>{
                 QueryStep::Continue
             }
         } <span class="kw">else </span>{
             <span class="comment">// handle error case using the CurrentConsensus method
-            </span><span class="self">self</span>.current.process(response)
+            </span><span class="self">self</span>.current.process(peer, results)
         }
     }
 }
@@ -411,12 +396,9 @@
 }
 
 <span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;R, Vec&lt;R&gt;&gt; <span class="kw">for </span>UnionResponsesSingle&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;R&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
-        <span class="kw">match </span>response {
-            FedResponse {
-                peer,
-                result: <span class="prelude-val">Ok</span>(new_result),
-            } =&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::Result&lt;R&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(new_result) =&gt; {
                 <span class="kw">if </span>!<span class="self">self</span>.existing_results.iter().any(|r| r == <span class="kw-2">&amp;</span>new_result) {
                     <span class="self">self</span>.existing_results.push(new_result);
                 }
@@ -424,20 +406,14 @@
                 <span class="self">self</span>.responses.insert(peer);
 
                 <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required {
-                    QueryStep::Finished(<span class="prelude-val">Ok</span>(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.existing_results)))
+                    QueryStep::Success(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.existing_results))
                 } <span class="kw">else </span>{
                     QueryStep::Continue
                 }
             }
-            FedResponse {
-                peer,
-                result: <span class="prelude-val">Err</span>(e),
-            } =&gt; {
+            <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="comment">// handle error case using the CurrentConsensus method
-                </span><span class="self">self</span>.current.process(FedResponse {
-                    peer,
-                    result: <span class="prelude-val">Err</span>(e),
-                })
+                </span><span class="self">self</span>.current.process(peer, <span class="prelude-val">Err</span>(e))
             }
         }
     }
@@ -457,13 +433,12 @@
 }
 
 <span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>Retry404&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
-        <span class="kw">let </span>FedResponse { peer, result } = response;
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::Result&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Err</span>(JsonRpcError::Call(RpcCallError::Custom(e))) <span class="kw">if </span>e.code() == <span class="number">404 </span>=&gt; {
-                QueryStep::Retry(HashSet::from([peer]))
+            <span class="prelude-val">Err</span>(ApiError::Rpc(JsonRpcError::Call(RpcCallError::Custom(e)))) <span class="kw">if </span>e.code() == <span class="number">404 </span>=&gt; {
+                QueryStep::RetryMembers(BTreeSet::from([peer]))
             }
-            result =&gt; <span class="self">self</span>.current.process(FedResponse { peer, result }),
+            result =&gt; <span class="self">self</span>.current.process(peer, result),
         }
     }
 }
@@ -472,7 +447,7 @@
 </span><span class="comment">// FIXME: should be replaced by queries for specific epochs in case we cannot get enough responses
 // FIXME: for any single epoch
 </span><span class="kw">pub struct </span>EventuallyConsistent&lt;R&gt; {
-    responses: HashSet&lt;PeerId&gt;,
+    responses: BTreeSet&lt;PeerId&gt;,
     current: CurrentConsensus&lt;R&gt;,
     required: usize,
 }
@@ -480,7 +455,7 @@
 <span class="kw">impl</span>&lt;R&gt; EventuallyConsistent&lt;R&gt; {
     <span class="kw">pub fn </span>new(required: usize) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            responses: HashSet::new(),
+            responses: BTreeSet::new(),
             current: CurrentConsensus::new(required),
             required,
         }
@@ -488,12 +463,12 @@
 }
 
 <span class="kw">impl</span>&lt;R: Eq + Clone + Debug&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>EventuallyConsistent&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
-        <span class="self">self</span>.responses.insert(response.peer);
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::Result&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
+        <span class="self">self</span>.responses.insert(peer);
 
-        <span class="kw">match </span><span class="self">self</span>.current.process(response) {
+        <span class="kw">match </span><span class="self">self</span>.current.process(peer, result) {
             QueryStep::Continue <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required =&gt; {
-                <span class="kw">let </span>result = QueryStep::Retry(<span class="self">self</span>.responses.clone());
+                <span class="kw">let </span>result = QueryStep::RetryMembers(<span class="self">self</span>.responses.clone());
                 <span class="self">self</span>.responses.clear();
                 result
             }
@@ -510,7 +485,7 @@
     /// it&#39;s easier to store them in `Vec` and do a linear search
     /// than required `R: Ord` or `R: Hash`.
     </span><span class="kw">pub </span>existing_results: Vec&lt;(R, HashSet&lt;PeerId&gt;)&gt;,
-    <span class="kw">pub </span>errors: HashMap&lt;PeerId, JsonRpcError&gt;,
+    <span class="kw">pub </span>errors: BTreeMap&lt;PeerId, ApiError&gt;,
     required: usize,
 }
 
@@ -518,19 +493,16 @@
     <span class="kw">pub fn </span>new(required: usize) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             existing_results: <span class="macro">vec!</span>[],
-            errors: HashMap::new(),
+            errors: BTreeMap::new(),
             required,
         }
     }
 }
 
 <span class="kw">impl</span>&lt;R: Eq + Clone + Debug&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>CurrentConsensus&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
-        <span class="kw">match </span>response {
-            FedResponse {
-                peer,
-                result: <span class="prelude-val">Ok</span>(result),
-            } =&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::Result&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(result) =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>((prev_result, peers)) = <span class="self">self
                     </span>.existing_results
                     .iter_mut()
@@ -545,23 +517,19 @@
                     <span class="self">self</span>.existing_results.push((result, HashSet::from([peer])));
                 }
             }
-            FedResponse {
-                peer,
-                result: <span class="prelude-val">Err</span>(error),
-            } =&gt; {
+            <span class="prelude-val">Err</span>(error) =&gt; {
                 <span class="self">self</span>.errors.insert(peer, error);
             }
         }
 
         <span class="kw">for </span>(result, peers) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.existing_results {
             <span class="kw">if </span>peers.len() &gt;= <span class="self">self</span>.required {
-                <span class="kw">return </span>QueryStep::Finished(<span class="prelude-val">Ok</span>(result.clone()));
+                <span class="kw">return </span>QueryStep::Success(result.clone());
             }
         }
 
         <span class="kw">if </span><span class="self">self</span>.errors.len() &gt;= <span class="self">self</span>.required {
-            <span class="kw">let </span>(<span class="kw">_</span>, error) = <span class="self">self</span>.errors.drain().next().expect(<span class="string">&quot;non-empty&quot;</span>);
-            <span class="kw">return </span>QueryStep::Finished(<span class="prelude-val">Err</span>(ApiError::RpcError(error)));
+            <span class="kw">return </span>QueryStep::Failure(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.errors));
         }
 
         QueryStep::Continue
@@ -569,18 +537,26 @@
 }
 
 <span class="kw">pub trait </span>QueryStrategy&lt;IR, OR = IR&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, response: FedResponse&lt;IR&gt;) -&gt; QueryStep&lt;OR&gt;;
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, response: api::Result&lt;IR&gt;) -&gt; QueryStep&lt;OR&gt;;
 }
 
 <span class="doccomment">/// Results from the strategy handling a response from a peer
 ///
-/// `Retry` sending requests to some of the peers
-/// `Continue` awaiting and handling responses
-/// `Finished` return a final result
+/// Note that the implementation driving the [`QueryStrategy`] returning
+/// [`QueryStep`] is responsible from remembering and collecting errors
+/// for each peer.
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub enum </span>QueryStep&lt;R&gt; {
-    Retry(HashSet&lt;PeerId&gt;),
-    Continue,
-    Finished(<span class="prelude-ty">Result</span>&lt;R&gt;),
+    <span class="doccomment">/// Retry request to this peer
+    </span>RetryMembers(BTreeSet&lt;PeerId&gt;),
+    <span class="doccomment">/// Fail these members and remember their errors
+    </span>FailMembers(BTreeMap&lt;PeerId, ApiError&gt;),
+    <span class="doccomment">/// Do nothing yet, keep waiting for requests
+    </span>Continue,
+    <span class="doccomment">/// Return the succsessful result
+    </span>Success(R),
+    <span class="doccomment">/// Fail the whole request and remember errors from given members
+    </span>Failure(BTreeMap&lt;PeerId, ApiError&gt;),
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (9e75dddf6 2023-01-15)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>

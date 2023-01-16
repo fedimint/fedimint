@@ -538,69 +538,6 @@
 <a href="#538" id="538">538</a>
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
-<a href="#549" id="549">549</a>
-<a href="#550" id="550">550</a>
-<a href="#551" id="551">551</a>
-<a href="#552" id="552">552</a>
-<a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
-<a href="#563" id="563">563</a>
-<a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a>
-<a href="#569" id="569">569</a>
-<a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
-<a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a>
-<a href="#579" id="579">579</a>
-<a href="#580" id="580">580</a>
-<a href="#581" id="581">581</a>
-<a href="#582" id="582">582</a>
-<a href="#583" id="583">583</a>
-<a href="#584" id="584">584</a>
-<a href="#585" id="585">585</a>
-<a href="#586" id="586">586</a>
-<a href="#587" id="587">587</a>
-<a href="#588" id="588">588</a>
-<a href="#589" id="589">589</a>
-<a href="#590" id="590">590</a>
-<a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -633,7 +570,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::db::ConfirmedInvoiceKey;
 <span class="kw">use </span><span class="self">self</span>::incoming::ConfirmedInvoice;
-<span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
+<span class="kw">use </span><span class="kw">crate</span>::api::{FedApiError, LnFederationApi, WalletFederationApi};
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::ln::incoming::IncomingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
@@ -737,8 +674,8 @@
     <span class="kw">pub async fn </span>get_contract_account(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
         timeout(Duration::from_secs(<span class="number">10</span>), <span class="self">self</span>.context.api.fetch_contract(id))
             .<span class="kw">await
-            </span>.unwrap_or(<span class="prelude-val">Err</span>(ApiError::Timeout))
-            .map_err(LnClientError::ApiError)
+            </span>.map_err(|_e| LnClientError::Timeout)<span class="question-mark">?
+            </span>.map_err(LnClientError::ApiError)
     }
 
     <span class="kw">pub async fn </span>get_outgoing_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;OutgoingContractAccount&gt; {
@@ -852,8 +789,8 @@
             <span class="self">self</span>.context.api.fetch_offer(payment_hash),
         )
         .<span class="kw">await
-        </span>.unwrap_or(<span class="prelude-val">Err</span>(ApiError::Timeout))
-        .map_err(LnClientError::ApiError)
+        </span>.map_err(|_e| LnClientError::Timeout)<span class="question-mark">?
+        </span>.map_err(LnClientError::ApiError)
     }
 
     <span class="kw">pub async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
@@ -920,7 +857,9 @@
     <span class="attr">#[error(<span class="string">&quot;We can&#39;t pay an amountless invoice&quot;</span>)]
     </span>MissingInvoiceAmount,
     <span class="attr">#[error(<span class="string">&quot;Mint API error: {0}&quot;</span>)]
-    </span>ApiError(ApiError),
+    </span>ApiError(FedApiError),
+    <span class="attr">#[error(<span class="string">&quot;Timeout&quot;</span>)]
+    </span>Timeout,
     <span class="attr">#[error(<span class="string">&quot;Mint returned unexpected account type&quot;</span>)]
     </span>WrongAccountType,
     <span class="attr">#[error(<span class="string">&quot;No ConfirmedOffer found for contract ID {0}&quot;</span>)]
@@ -931,144 +870,74 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::sync::Arc;
 
-    <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
-    <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
-    <span class="kw">use </span>fedimint_api::core::{
-        DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    };
+    <span class="kw">use </span>fedimint_api::core::{DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN};
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::db::Database;
+    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-    <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
+    <span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
     <span class="kw">use </span>fedimint_core::modules::ln::config::LightningClientConfig;
-    <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, Lightning, LightningGen};
-    <span class="kw">use </span>fedimint_core::modules::ln::{LightningGateway, LightningOutput};
-    <span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
-    <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
+    <span class="kw">use </span>fedimint_core::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>lightning_invoice::Invoice;
-    <span class="kw">use </span>threshold_crypto::PublicKey;
+    <span class="kw">use </span>tokio::sync::Mutex;
     <span class="kw">use </span>url::Url;
 
-    <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
+    <span class="kw">use </span><span class="kw">crate</span>::api::fake::FederationApiFaker;
     <span class="kw">use </span><span class="kw">crate</span>::ln::LnClient;
-    <span class="kw">use crate</span>::{module_decode_stubs, ClientContext, LegacyTransaction};
+    <span class="kw">use crate</span>::{module_decode_stubs, ClientContext};
 
     <span class="kw">type </span>Fed = FakeFed&lt;Lightning&gt;;
 
-    <span class="attr">#[derive(Debug)]
-    </span><span class="kw">struct </span>FakeApi {
-        mint: Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
-    }
-
-    <span class="attr">#[async_trait]
-    </span><span class="kw">impl </span>IFederationApi <span class="kw">for </span>FakeApi {
-        <span class="kw">async fn </span>fetch_tx_outcome(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            tx: TransactionId,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;TransactionStatus&gt; {
-            <span class="kw">let </span>mint = <span class="self">self</span>.mint.lock().<span class="kw">await</span>;
-            <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
-                epoch: <span class="number">0</span>,
-                outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                    mint.output_outcome(OutPoint {
-                        txid: tx,
-                        out_idx: <span class="number">0</span>,
+    <span class="kw">async fn </span>make_test_mint_fed(
+        module_id: ModuleInstanceId,
+        fed: Arc&lt;Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt;,
+    ) -&gt; FederationApiFaker&lt;tokio::sync::Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt; {
+        <span class="kw">let </span>members = fed
+            .lock()
+            .<span class="kw">await
+            </span>.members
+            .iter()
+            .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
+            .collect();
+        FederationApiFaker::new(fed, members)
+            <span class="comment">// TODO: is the output here is supposed to be a mint or wallet?
+            </span>.with(
+                <span class="string">&quot;/fetch_transaction&quot;</span>,
+                <span class="kw">move </span>|mint: Arc&lt;Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt;, tx: TransactionId| <span class="kw">async move </span>{
+                    <span class="kw">let </span>mint = mint.lock().<span class="kw">await</span>;
+                    <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
+                        epoch: <span class="number">0</span>,
+                        outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
+                            module_id,
+                            mint.output_outcome(OutPoint {
+                                txid: tx,
+                                out_idx: <span class="number">0</span>,
+                            })
+                            .<span class="kw">await
+                            </span>.unwrap(),
+                        ))],
                     })
-                    .<span class="kw">await
-                    </span>.unwrap(),
-                ))],
-            })
-        }
-
-        <span class="kw">async fn </span>submit_transaction(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _tx: LegacyTransaction,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;TransactionId&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_contract(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            contract: ContractId,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;ContractAccount&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">self
-                </span>.mint
-                .lock()
-                .<span class="kw">await
-                </span>.fetch_from_all(|m, db| <span class="kw">async </span>{
-                    m.get_contract_account(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, contract)
+                },
+            )
+            .with(
+                <span class="macro">format!</span>(<span class="string">&quot;/module/{}/account&quot;</span>, module_id),
+                |mint: Arc&lt;Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt;, contract: ContractId| <span class="kw">async move </span>{
+                    <span class="prelude-val">Ok</span>(mint
+                        .lock()
                         .<span class="kw">await
-                </span>})
-                .<span class="kw">await
-                </span>.unwrap())
-        }
-
-        <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;u64&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_offer(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;IncomingContractOffer&gt; {
-            <span class="macro">unimplemented!</span>();
-        }
-
-        <span class="kw">async fn </span>fetch_peg_out_fees(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _address: <span class="kw-2">&amp;</span>Address,
-            _amount: <span class="kw-2">&amp;</span>bitcoin::Amount,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
-            <span class="macro">unimplemented!</span>();
-        }
-
-        <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;Vec&lt;LightningGateway&gt;&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, _gateway: LightningGateway) -&gt; <span class="kw">crate</span>::api::Result&lt;()&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_epoch_history(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _epoch: u64,
-            _pk: PublicKey,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;SignedEpochOutcome&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::api::Result&lt;u64&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>offer_exists(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;bool&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>upload_ecash_backup(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;()&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>download_ecash_backup(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-        ) -&gt; <span class="kw">crate</span>::api::Result&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
-            <span class="macro">unimplemented!</span>()
-        }
+                        </span>.fetch_from_all(|m, db| <span class="kw">async </span>{
+                            m.get_contract_account(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, contract)
+                                .<span class="kw">await
+                        </span>})
+                        .<span class="kw">await
+                        </span>.unwrap())
+                },
+            )
     }
 
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
@@ -1076,21 +945,26 @@
         LightningClientConfig,
         ClientContext,
     ) {
+        <span class="kw">let </span>module_id = LEGACY_HARDCODED_INSTANCE_ID_LN;
         <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::&lt;Lightning&gt;::new(
                 <span class="number">4</span>,
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>)) },
                 <span class="kw-2">&amp;</span>ConfigGenParams::new(),
                 <span class="kw-2">&amp;</span>LightningGen,
-                LEGACY_HARDCODED_INSTANCE_ID_LN,
+                module_id,
             )
             .<span class="kw">await
             </span>.unwrap(),
         ));
-        <span class="kw">let </span>api = FakeApi { mint: fed.clone() };
+        <span class="kw">let </span>api = make_test_mint_fed(module_id, fed.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
         <span class="kw">let </span>client_context = ClientContext {
+            decoders: ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningDecoder.into(),
+            )]),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),

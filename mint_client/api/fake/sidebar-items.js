@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"static":[["CALLSITE",""],["META",""]],"struct":[["FederationApiFaker","A fake [`super::IFederationApi`] builder"]],"type":[["Handler",""]]};

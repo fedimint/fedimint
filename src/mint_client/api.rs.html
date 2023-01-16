@@ -862,13 +862,268 @@
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
 <a href="#864" id="864">864</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
-<span class="kw">use </span>std::fmt::Debug;
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
+<span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin::{Address, Amount};
+<span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::core::{
@@ -876,137 +1131,493 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
+<span class="kw">use </span>fedimint_api::task::sleep;
+<span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-<span class="kw">use </span>fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
-<span class="kw">use </span>fedimint_core::outcome::legacy::{OutputOutcome, TryIntoOutcome};
-<span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
-<span class="kw">use </span>fedimint_core::transaction::legacy::Transaction <span class="kw">as </span>LegacyTransaction;
+<span class="kw">use </span>fedimint_core::outcome::legacy::TryIntoOutcome;
+<span class="kw">use </span>fedimint_core::outcome::{<span class="self">self</span>, TransactionStatus};
 <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
 <span class="kw">use </span>fedimint_core::CoreError;
+<span class="kw">use </span>fedimint_mint::db::ECashUserBackupSnapshot;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
-<span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>futures::{Future, StreamExt};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>jsonrpsee_core::client::CertificateStore;
 <span class="kw">use </span>jsonrpsee_core::client::ClientT;
 <span class="kw">use </span>jsonrpsee_core::Error <span class="kw">as </span>JsonRpcError;
-<span class="kw">use </span>jsonrpsee_types::error::CallError <span class="kw">as </span>RpcCallError;
 <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::PublicKey;
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::module_decode_stubs;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
     UnionResponsesSingle, ValidHistory,
 };
+<span class="kw">use </span><span class="kw">crate</span>::LegacyTransaction;
+
+<span class="kw">type </span>JsonValue = serde_json::Value;
+
+<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = result::Result&lt;T, ApiError&gt;;
+
+<span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = result::Result&lt;T, jsonrpsee_core::Error&gt;;
+<span class="kw">pub type </span>FedResult&lt;T&gt; = result::Result&lt;T, FedApiError&gt;;
+
+<span class="kw">pub mod </span>fake;
+
+<span class="comment">// TODO: rename to `MemberApiError`
+</span><span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">pub enum </span>ApiError {
+    <span class="comment">// ParamsSerialization(anyhow::Error),
+    </span><span class="attr">#[error(<span class="string">&quot;Response deserialization error: {0}&quot;</span>)]
+    </span>ResponseDeserialization(anyhow::Error),
+    <span class="attr">#[error(<span class="string">&quot;Invalid peer id: {peer_id}&quot;</span>)]
+    </span>InvalidPeerId { peer_id: PeerId },
+    <span class="attr">#[error(<span class="string">&quot;Rpc error: {0}&quot;</span>)]
+    </span>Rpc(<span class="attr">#[from] </span>JsonRpcError),
+}
+
+<span class="kw">impl </span>ApiError {
+    <span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">match </span><span class="self">self </span>{
+            ApiError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            ApiError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">false</span>,
+            ApiError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
+                JsonRpcError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                JsonRpcError::Internal(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                JsonRpcError::Call(jsonrpsee_types::error::CallError::Custom(e)) =&gt; e.code() == <span class="number">404</span>,
+                <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+            },
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">pub struct </span>FedApiError(BTreeMap&lt;PeerId, ApiError&gt;);
+
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>FedApiError {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+        f.write_str(<span class="string">&quot;Federation rpc error(&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.iter().enumerate() {
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{} =&gt; {})&quot;</span>, peer, e))<span class="question-mark">?</span>;
+            <span class="kw">if </span>i == <span class="self">self</span>.<span class="number">0</span>.len() - <span class="number">1 </span>{
+                f.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
+            }
+        }
+        f.write_str(<span class="string">&quot;)&quot;</span>)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">impl </span>FedApiError {
+    <span class="kw">fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.<span class="number">0</span>.iter().any(|(<span class="kw">_</span>, e)| e.is_retryable())
+    }
+}
+
+<span class="kw">type </span>OutputOutcomeResult&lt;O&gt; = result::Result&lt;O, OutputOutcomeError&gt;;
+
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">pub enum </span>OutputOutcomeError {
+    <span class="attr">#[error(<span class="string">&quot;Response deserialization error: {0}&quot;</span>)]
+    </span>ResponseDeserialization(anyhow::Error),
+    <span class="attr">#[error(<span class="string">&quot;Federation error: {0}&quot;</span>)]
+    </span>Federation(<span class="attr">#[from] </span>FedApiError),
+    <span class="attr">#[error(<span class="string">&quot;Core error: {0}&quot;</span>)]
+    </span>Core(<span class="attr">#[from] </span>CoreError),
+    <span class="attr">#[error(<span class="string">&quot;Transaction rejected: {0}&quot;</span>)]
+    </span>Rejected(String),
+    <span class="attr">#[error(<span class="string">&quot;Invalid output index {out_idx}, larger than {outputs_num} in the transaction&quot;</span>)]
+    </span>InvalidVout { out_idx: u64, outputs_num: usize },
+    <span class="attr">#[error(<span class="string">&quot;Timeout reached after waiting {}s&quot;</span>, .<span class="number">0</span>.as_secs())]
+    </span>Timeout(Duration),
+}
+
+<span class="kw">impl </span>OutputOutcomeError {
+    <span class="kw">fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Federation(fed) =&gt; fed.is_retryable(),
+            <span class="self">Self</span>::Core(CoreError::PendingPreimage) =&gt; <span class="bool-val">true</span>,
+            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+        }
+    }
+}
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">pub trait </span>IFederationApi: Debug + Send + Sync {
-    <span class="doccomment">/// Fetch the outcome of an entire transaction
-    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt;;
+</span><span class="kw">pub trait </span>IFederationApi: Debug {
+    <span class="doccomment">/// List of all federation members for the purpose of iterating each member in the federation.
+    ///
+    /// The underlying implementation is resonsible for knowing how many
+    /// and `PeerId`s of each. The caller of this interface most probably
+    /// have some idea as well, but passing this set accross every
+    /// API call to the federation would be inconvenient.
+    </span><span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;;
 
-    <span class="doccomment">/// Submit a transaction to all federation members
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;;
-
-    <span class="kw">async fn </span>fetch_epoch_history(
+    <span class="doccomment">/// Make request to a specific federation member by `peer_id`
+    </span><span class="kw">async fn </span>request_raw(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        epoch: u64,
-        epoch_pk: PublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;SignedEpochOutcome&gt;;
-
-    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;
-
-    <span class="comment">// TODO: more generic module API extensibility
-    </span><span class="doccomment">/// Fetch ln contract state
-    </span><span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt;;
-
-    <span class="doccomment">/// Fetch preimage offer for incoming lightning payments
-    </span><span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt;;
-
-    <span class="comment">// TODO: find a better abstraction for all our API endpoints that allows different strategies and timeouts
-    </span><span class="doccomment">/// Checks if there exists an offer for a payment hash
-    </span><span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt;;
-
-    <span class="doccomment">/// Fetch the current consensus block height (trailing actual block height)
-    </span><span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;
-
-    <span class="doccomment">/// Fetch the expected peg-out fees given a peg-out tx
-    </span><span class="kw">async fn </span>fetch_peg_out_fees(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: <span class="kw-2">&amp;</span>Address,
-        amount: <span class="kw-2">&amp;</span>Amount,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt;;
-
-    <span class="doccomment">/// Fetch available lightning gateways (assumes gateways register with all peers)
-    </span><span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt;;
-
-    <span class="doccomment">/// Register a gateway with the federation
-    </span><span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
-
-    <span class="doccomment">/// Upload ecash (encrypted) backup for mint to safekeep
-    </span><span class="kw">async fn </span>upload_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest)
-        -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
-
-    <span class="doccomment">/// Download ecash (encrypted) backup from mint to safekeep
-    </span><span class="kw">async fn </span>download_ecash_backup(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt;;
+        peer_id: PeerId,
+        method: <span class="kw-2">&amp;</span>str,
+        params: <span class="kw-2">&amp;</span>[Value],
+    ) -&gt; result::Result&lt;Value, jsonrpsee_core::Error&gt;;
 }
+
+<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when no arguments are passed to the API call
+///
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you&#39;ll make it easier
+/// to change it in the future.
+</span><span class="kw">pub fn </span>erased_no_param() -&gt; Vec&lt;JsonValue&gt; {
+    <span class="macro">vec!</span>[JsonValue::Null]
+}
+
+<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when one argument are passed to the API call
+///
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you&#39;ll make it easier
+/// to change it in the future.
+</span><span class="kw">pub fn </span>erased_single_param&lt;Params&gt;(param: <span class="kw-2">&amp;</span>Params) -&gt; Vec&lt;JsonValue&gt;
+<span class="kw">where
+    </span>Params: Serialize,
+{
+    <span class="kw">let </span>params_raw = serde_json::to_value(param)
+        .expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>);
+
+    <span class="macro">vec!</span>[params_raw]
+}
+
+<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when multiple argument are passed to the API call
+///
+/// Use a tuple as `params`.
+///
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you&#39;ll make it easier
+/// to change it in the future.
+</span><span class="kw">pub fn </span>erased_multi_param&lt;Params&gt;(param: <span class="kw-2">&amp;</span>Params) -&gt; Vec&lt;JsonValue&gt;
+<span class="kw">where
+    </span>Params: Serialize,
+{
+    <span class="kw">let </span>params_raw = serde_json::to_value(param)
+        .expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>);
+
+    <span class="macro">vec!</span>[params_raw]
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">pub trait </span>IFederationApiFed: IFederationApi {
+    <span class="kw">async fn </span>request_fed_with_strategy&lt;MemberRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;MemberRet, FedRet&gt; + Send,
+        method: String,
+        params: Vec&lt;Value&gt;,
+    ) -&gt; FedResult&lt;FedRet&gt; {
+        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+        </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
+        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+        </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt;&gt;&gt;&gt;::new();
+
+        <span class="kw">let </span>peers = <span class="self">self</span>.all_members();
+
+        <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
+            futures.push(Box::pin(<span class="kw">async </span>{
+                PeerResponse {
+                    peer: <span class="kw-2">*</span>peer_id,
+                    result: <span class="self">self</span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>params).<span class="kw">await</span>,
+                }
+            }));
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>member_delay_ms = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>member_errors = BTreeMap::new();
+
+        <span class="comment">// Delegates the response handling to the `QueryStrategy` with an exponential back-off
+        // with every new set of requests
+        </span><span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>response = futures.next().<span class="kw">await</span>;
+            <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, <span class="question-mark">?</span>params, <span class="string">&quot;Received member response&quot;</span>);
+            <span class="kw">match </span>response {
+                <span class="prelude-val">Some</span>(PeerResponse { peer, result }) =&gt; {
+                    <span class="kw">let </span>result: <span class="prelude-ty">Result</span>&lt;MemberRet&gt; = result.map_err(ApiError::Rpc).and_then(|o| {
+                        serde_json::from_value::&lt;MemberRet&gt;(o)
+                            .map_err(|e| ApiError::ResponseDeserialization(e.into()))
+                    });
+
+                    <span class="kw">let </span>strategy_step = strategy.process(peer, result);
+                    <span class="macro">trace!</span>(
+                        method,
+                        <span class="question-mark">?</span>params,
+                        <span class="question-mark">?</span>strategy_step,
+                        <span class="string">&quot;Taking strategy step to the response after member response&quot;
+                    </span>);
+                    <span class="kw">match </span>strategy_step {
+                        QueryStep::RetryMembers(peers) =&gt; {
+                            <span class="kw">for </span>retry_peer <span class="kw">in </span>peers {
+                                member_errors.remove(<span class="kw-2">&amp;</span>retry_peer);
+
+                                <span class="kw">let </span><span class="kw-2">mut </span>delay_ms =
+                                    member_delay_ms.get(<span class="kw-2">&amp;</span>retry_peer).copied().unwrap_or(<span class="number">10</span>);
+                                delay_ms = cmp::min(max_delay_ms, delay_ms * <span class="number">2</span>);
+                                member_delay_ms.insert(retry_peer, delay_ms);
+
+                                futures.push(Box::pin({
+                                    <span class="kw">let </span>method = <span class="kw-2">&amp;</span>method;
+                                    <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
+                                    <span class="kw">async move </span>{
+                                        <span class="comment">// Note: we need to sleep inside the retrying future,
+                                        // so that `futures` is being polled continously
+                                        </span>sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
+                                        PeerResponse {
+                                            peer: retry_peer,
+                                            result: <span class="self">self
+                                                </span>.request_raw(retry_peer, method, params)
+                                                .<span class="kw">await</span>,
+                                        }
+                                    }
+                                }));
+                            }
+                        }
+                        QueryStep::FailMembers(failed) =&gt; {
+                            <span class="kw">for </span>(failed_peer, error) <span class="kw">in </span>failed {
+                                member_errors.insert(failed_peer, error);
+                            }
+                        }
+                        QueryStep::Continue =&gt; {}
+                        QueryStep::Failure(failed) =&gt; {
+                            <span class="kw">for </span>(failed_peer, error) <span class="kw">in </span>failed {
+                                member_errors.insert(failed_peer, error);
+                            }
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(FedApiError(BTreeMap::new()));
+                        }
+                        QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
+                    }
+                }
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(FedApiError(BTreeMap::new())),
+            }
+        }
+    }
+
+    <span class="kw">async fn </span>request_union&lt;Ret&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: String, params: Vec&lt;Value&gt;) -&gt; FedResult&lt;Vec&lt;Ret&gt;&gt;
+    <span class="kw">where
+        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+    {
+        <span class="self">self</span>.request_fed_with_strategy(
+            UnionResponses::new(<span class="self">self</span>.all_members().one_honest()),
+            method,
+            params,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>request_current_consensus&lt;Ret&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: String,
+        params: Vec&lt;Value&gt;,
+    ) -&gt; FedResult&lt;Ret&gt;
+    <span class="kw">where
+        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+    {
+        <span class="self">self</span>.request_fed_with_strategy(
+            CurrentConsensus::new(<span class="self">self</span>.all_members().one_honest()),
+            method,
+            params,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>request_eventually_consistent&lt;Ret&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: String,
+        params: Vec&lt;Value&gt;,
+    ) -&gt; FedResult&lt;Ret&gt;
+    <span class="kw">where
+        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+    {
+        <span class="self">self</span>.request_fed_with_strategy(
+            EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
+            method,
+            params,
+        )
+        .<span class="kw">await
+    </span>}
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; IFederationApiFed <span class="kw">for </span>T <span class="kw">where </span>T: IFederationApi {}
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="kw">pub </span>DynFederationApi(Arc&lt;IFederationApi&gt;)
 }
 
-<span class="kw">impl </span>DynFederationApi {
-    <span class="kw">pub async fn </span>fetch_output_outcome&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt;
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">pub trait </span>GlobalFederationApi {
+    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;ClientConfig&gt;;
+
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FedResult&lt;TransactionId&gt;;
+    <span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FedResult&lt;TransactionStatus&gt;;
+
+    <span class="kw">async fn </span>fetch_epoch_history(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        epoch: u64,
+        epoch_pk: PublicKey,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; FedResult&lt;SignedEpochOutcome&gt;;
+
+    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt;;
+
+    <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        out_point: OutPoint,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; OutputOutcomeResult&lt;R&gt;
     <span class="kw">where
-        </span>T: TryIntoOutcome + Send,
+        </span>R: TryIntoOutcome + Send;
+
+    <span class="kw">async fn </span>await_output_outcome&lt;R: TryIntoOutcome + Send&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        outpoint: OutPoint,
+        timeout: Duration,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; OutputOutcomeResult&lt;R&gt;;
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; GlobalFederationApi <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;ClientConfig&gt; {
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/config&quot;</span>.to_owned(), erased_no_param())
+            .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Submit a transaction for inclusion
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FedResult&lt;TransactionId&gt; {
+        <span class="self">self</span>.request_current_consensus(
+            <span class="string">&quot;/transaction&quot;</span>.to_owned(),
+            erased_single_param(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx.into_type_erased())),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Fetch the outcome of an entire transaction
+    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FedResult&lt;TransactionStatus&gt; {
+        <span class="self">self</span>.request_fed_with_strategy(
+            Retry404::new(<span class="self">self</span>.all_members().one_honest()),
+            <span class="string">&quot;/fetch_transaction&quot;</span>.to_owned(),
+            erased_single_param(<span class="kw-2">&amp;</span>tx),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>fetch_epoch_history(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        epoch: u64,
+        epoch_pk: PublicKey,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; FedResult&lt;SignedEpochOutcome&gt; {
+        <span class="comment">// TODO: make this function avoid clone
+        </span><span class="kw">let </span>decoders = decoders.clone();
+
+        <span class="kw">struct </span>ValidHistoryWrapper {
+            decoders: ModuleDecoderRegistry,
+            strategy: ValidHistory,
+        }
+
+        <span class="kw">impl </span>QueryStrategy&lt;SerdeEpochHistory, SignedEpochOutcome&gt; <span class="kw">for </span>ValidHistoryWrapper {
+            <span class="kw">fn </span>process(
+                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+                peer: PeerId,
+                result: <span class="prelude-ty">Result</span>&lt;SerdeEpochHistory&gt;,
+            ) -&gt; QueryStep&lt;SignedEpochOutcome&gt; {
+                <span class="kw">let </span>response = result.and_then(|hist| {
+                    hist.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.decoders)
+                        .map_err(|e| ApiError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
+                });
+                <span class="kw">match </span><span class="self">self</span>.strategy.process(peer, response) {
+                    QueryStep::RetryMembers(r) =&gt; QueryStep::RetryMembers(r),
+                    QueryStep::FailMembers(failed) =&gt; QueryStep::FailMembers(failed),
+                    QueryStep::Continue =&gt; QueryStep::Continue,
+                    QueryStep::Success(res) =&gt; QueryStep::Success(res),
+                    QueryStep::Failure(failed) =&gt; QueryStep::Failure(failed),
+                }
+            }
+        }
+
+        <span class="kw">let </span>qs = ValidHistoryWrapper {
+            decoders,
+            strategy: ValidHistory::new(epoch_pk, <span class="self">self</span>.all_members().one_honest()),
+        };
+
+        <span class="self">self</span>.request_fed_with_strategy::&lt;SerdeEpochHistory, <span class="kw">_</span>&gt;(
+            qs,
+            <span class="string">&quot;/fetch_epoch_history&quot;</span>.to_owned(),
+            erased_single_param(<span class="kw-2">&amp;</span>epoch),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt; {
+        <span class="self">self</span>.request_eventually_consistent(<span class="string">&quot;/epoch&quot;</span>.to_owned(), erased_no_param())
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        out_point: OutPoint,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; OutputOutcomeResult&lt;R&gt;
+    <span class="kw">where
+        </span>R: TryIntoOutcome + Send,
     {
-        <span class="kw">match </span><span class="self">self</span>.fetch_tx_outcome(out_point.txid).<span class="kw">await</span><span class="question-mark">? </span>{
-            TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(ApiError::TransactionRejected(e)),
+        <span class="kw">match </span><span class="self">self</span>.fetch_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid).<span class="kw">await</span><span class="question-mark">? </span>{
+            TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(OutputOutcomeError::Rejected(e)),
             TransactionStatus::Accepted { outputs, .. } =&gt; {
                 <span class="kw">let </span>outputs_len = outputs.len();
                 outputs
                     .into_iter()
                     .nth(out_point.out_idx <span class="kw">as </span>usize) <span class="comment">// avoid clone as would be necessary with .get(…)
-                    </span>.ok_or(ApiError::OutPointOutOfRange(
-                        outputs_len,
-                        out_point.out_idx <span class="kw">as </span>usize,
-                    ))
+                    </span>.ok_or(OutputOutcomeError::InvalidVout {
+                        outputs_num: outputs_len,
+                        out_idx: out_point.out_idx,
+                    })
                     .and_then(|output| {
-                        <span class="kw">let </span>legacy_oo: OutputOutcome =
-                            output.try_into_inner(<span class="kw-2">&amp;</span>module_decode_stubs())<span class="question-mark">?</span>.into();
-
-                        legacy_oo.try_into_variant().map_err(ApiError::CoreError)
+                        <span class="kw">let </span>legacy_oo: outcome::legacy::OutputOutcome = output
+                            .try_into_inner(decoders)
+                            .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))<span class="question-mark">?
+                            </span>.into();
+                        legacy_oo
+                            .try_into_variant()
+                            .map_err(OutputOutcomeError::Core)
                     })
             }
         }
     }
 
     <span class="comment">// TODO should become part of the API
-    </span><span class="kw">pub async fn </span>await_output_outcome&lt;T: TryIntoOutcome + Send&gt;(
+    </span><span class="kw">async fn </span>await_output_outcome&lt;R: TryIntoOutcome + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; OutputOutcomeResult&lt;R&gt; {
         <span class="kw">let </span>poll = || <span class="kw">async </span>{
             <span class="kw">let </span>interval = Duration::from_secs(<span class="number">1</span>);
             <span class="kw">loop </span>{
-                <span class="kw">match </span><span class="self">self</span>.fetch_output_outcome(outpoint).<span class="kw">await </span>{
+                <span class="kw">match </span><span class="self">self</span>.fetch_output_outcome(outpoint, decoders).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
                     <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
                         <span class="macro">trace!</span>(<span class="string">&quot;Federation api returned retryable error: {:?}&quot;</span>, e);
@@ -1021,7 +1632,161 @@
         };
         fedimint_api::task::timeout(timeout, poll())
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
+            </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
+    </span>}
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">pub trait </span>LnFederationApi {
+    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FedResult&lt;ContractAccount&gt;;
+    <span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;IncomingContractOffer&gt;;
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;Vec&lt;LightningGateway&gt;&gt;;
+    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FedResult&lt;()&gt;;
+    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;bool&gt;;
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; LnFederationApi <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FedResult&lt;ContractAccount&gt; {
+        <span class="self">self</span>.request_fed_with_strategy(
+            Retry404::new(<span class="self">self</span>.all_members().one_honest()),
+            <span class="macro">format!</span>(<span class="string">&quot;/module/{}/account&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
+            erased_single_param(<span class="kw-2">&amp;</span>contract),
+        )
+        .<span class="kw">await
+    </span>}
+    <span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;IncomingContractOffer&gt; {
+        <span class="self">self</span>.request_fed_with_strategy(
+            Retry404::new(<span class="self">self</span>.all_members().one_honest()),
+            <span class="macro">format!</span>(<span class="string">&quot;/module/{}/offer&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
+            erased_single_param(<span class="kw-2">&amp;</span>payment_hash),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;Vec&lt;LightningGateway&gt;&gt; {
+        <span class="self">self</span>.request_union(
+            <span class="macro">format!</span>(<span class="string">&quot;/module/{}/list_gateways&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
+            erased_no_param(),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FedResult&lt;()&gt; {
+        <span class="self">self</span>.request_current_consensus(
+            <span class="macro">format!</span>(
+                <span class="string">&quot;/module/{}/register_gateway&quot;</span>,
+                LEGACY_HARDCODED_INSTANCE_ID_LN
+            ),
+            erased_single_param(gateway),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FedResult&lt;bool&gt; {
+        <span class="kw">match </span><span class="self">self</span>.fetch_offer(payment_hash).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
+            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
+        }
+    }
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">pub trait </span>MintFederationApi {
+    <span class="kw">async fn </span>upload_ecash_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
+    ) -&gt; FedResult&lt;()&gt;;
+    <span class="kw">async fn </span>download_ecash_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
+    ) -&gt; FedResult&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt;;
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; MintFederationApi <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">async fn </span>upload_ecash_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
+    ) -&gt; FedResult&lt;()&gt; {
+        <span class="self">self</span>.request_current_consensus(
+            <span class="macro">format!</span>(<span class="string">&quot;/module/{}/backup&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_MINT),
+            erased_single_param(request),
+        )
+        .<span class="kw">await
+    </span>}
+    <span class="kw">async fn </span>download_ecash_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
+    ) -&gt; FedResult&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.request_fed_with_strategy(
+                UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
+                    <span class="self">self</span>.all_members().one_honest(),
+                ),
+                <span class="macro">format!</span>(<span class="string">&quot;/module/{}/recover&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_MINT),
+                erased_single_param(id),
+            )
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .flatten()
+            .collect())
+    }
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">pub trait </span>WalletFederationApi {
+    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt;;
+    <span class="kw">async fn </span>fetch_peg_out_fees(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: <span class="kw-2">&amp;</span>Address,
+        amount: bitcoin::Amount,
+    ) -&gt; FedResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt;;
+}
+
+<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; WalletFederationApi <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedResult&lt;u64&gt; {
+        <span class="self">self</span>.request_fed_with_strategy(
+            EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
+            <span class="macro">format!</span>(
+                <span class="string">&quot;/module/{}/block_height&quot;</span>,
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET
+            ),
+            erased_no_param(),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>fetch_peg_out_fees(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: <span class="kw-2">&amp;</span>Address,
+        amount: bitcoin::Amount,
+    ) -&gt; FedResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
+        <span class="self">self</span>.request_eventually_consistent(
+            <span class="macro">format!</span>(
+                <span class="string">&quot;/module/{}/peg_out_fees&quot;</span>,
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET
+            ),
+            erased_multi_param(<span class="kw-2">&amp;</span>(address, amount.to_sat())),
+        )
+        .<span class="kw">await
     </span>}
 }
 
@@ -1030,8 +1795,8 @@
 /// returned as a member faults list.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
+    peers: BTreeSet&lt;PeerId&gt;,
     members: Vec&lt;FederationMember&lt;C&gt;&gt;,
-    module_registry: ModuleDecoderRegistry,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1063,238 +1828,38 @@
     }
 }
 
-<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ApiError&gt;;
-
-<span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>ApiError {
-    <span class="attr">#[error(<span class="string">&quot;Client Rpc error: {0}&quot;</span>)]
-    </span>RpcError(<span class="attr">#[from] </span>JsonRpcError),
-    <span class="attr">#[error(<span class="string">&quot;Decode error: {0}&quot;</span>)]
-    </span>DecodeError(<span class="attr">#[from] </span>fedimint_api::encoding::DecodeError),
-    <span class="attr">#[error(<span class="string">&quot;Invalid response: {0}&quot;</span>)]
-    </span>InvalidResponse(String),
-    <span class="attr">#[error(<span class="string">&quot;Error retrieving the transaction: {0}&quot;</span>)]
-    </span>TransactionError(String),
-    <span class="attr">#[error(<span class="string">&quot;The transaction was rejected by consensus processing: {0}&quot;</span>)]
-    </span>TransactionRejected(String),
-    <span class="attr">#[error(<span class="string">&quot;Out point out of range, transaction got {0} outputs, requested element {1}&quot;</span>)]
-    </span>OutPointOutOfRange(usize, usize),
-    <span class="attr">#[error(<span class="string">&quot;Core error: {0}&quot;</span>)]
-    </span>CoreError(<span class="attr">#[from] </span>CoreError),
-    <span class="attr">#[error(<span class="string">&quot;Timeout error awaiting outcome&quot;</span>)]
-    </span>Timeout,
-    <span class="attr">#[error(<span class="string">&quot;Unable to determine a consistent API result from peers&quot;</span>)]
-    </span>NoResult,
-}
-
-<span class="kw">impl </span>ApiError {
-    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later
-    </span><span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="kw">match </span><span class="self">self </span>{
-            ApiError::RpcError(JsonRpcError::Call(RpcCallError::Custom(e))) =&gt; e.code() == <span class="number">404</span>,
-            ApiError::CoreError(e) =&gt; e.is_retryable(),
-            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-        }
-    }
-}
-
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + Send + Sync&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
-    <span class="doccomment">/// Fetch the outcome of an entire transaction
-    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt; {
-        <span class="self">self</span>.request(
-            <span class="string">&quot;/fetch_transaction&quot;</span>,
-            tx,
-            Retry404::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Submit a transaction to all federation members
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
-        <span class="comment">// TODO: check the id is correct
-        </span><span class="self">self</span>.request(
-            <span class="string">&quot;/transaction&quot;</span>,
-            SerdeTransaction::from(<span class="kw-2">&amp;</span>tx.into_type_erased()),
-            CurrentConsensus::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>fetch_epoch_history(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        epoch: u64,
-        epoch_pk: PublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;SignedEpochOutcome&gt; {
-        <span class="kw">struct </span>ValidHistoryWrapper&lt;<span class="lifetime">&#39;a</span>&gt; {
-            modules: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleDecoderRegistry,
-            strategy: ValidHistory,
-        }
-
-        <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; QueryStrategy&lt;SerdeEpochHistory&gt; <span class="kw">for </span>ValidHistoryWrapper&lt;<span class="lifetime">&#39;a</span>&gt; {
-            <span class="kw">fn </span>process(
-                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-                response: FedResponse&lt;SerdeEpochHistory&gt;,
-            ) -&gt; QueryStep&lt;SerdeEpochHistory&gt; {
-                <span class="kw">let </span>response = FedResponse {
-                    peer: response.peer,
-                    result: response.result.and_then(|hist| {
-                        hist.try_into_inner(<span class="self">self</span>.modules)
-                            .map_err(|e| jsonrpsee_core::Error::Custom(e.to_string()))
-                    }),
-                };
-                <span class="kw">match </span><span class="self">self</span>.strategy.process(response) {
-                    QueryStep::Finished(res) =&gt; QueryStep::Finished(res.map(|val| (<span class="kw-2">&amp;</span>val).into())),
-                    QueryStep::Retry(r) =&gt; QueryStep::Retry(r),
-                    QueryStep::Continue =&gt; QueryStep::Continue,
-                }
-            }
-        }
-
-        <span class="kw">let </span>qs = ValidHistoryWrapper {
-            modules: <span class="kw-2">&amp;</span><span class="self">self</span>.module_registry,
-            strategy: ValidHistory::new(epoch_pk, <span class="self">self</span>.peers().one_honest()),
-        };
-
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request::&lt;<span class="kw">_</span>, SerdeEpochHistory&gt;(<span class="string">&quot;/fetch_epoch_history&quot;</span>, epoch, qs)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.module_registry)<span class="question-mark">?</span>)
+    <span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.peers
     }
 
-    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="self">self</span>.request(
-            <span class="string">&quot;/epoch&quot;</span>,
-            (),
-            EventuallyConsistent::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
-        <span class="self">self</span>.request(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/module/{}/account&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
-            contract,
-            Retry404::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="self">self</span>.request(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                <span class="string">&quot;/module/{}/block_height&quot;</span>,
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET
-            ),
-            (),
-            EventuallyConsistent::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>fetch_peg_out_fees(
+    <span class="kw">async fn </span>request_raw(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: <span class="kw-2">&amp;</span>Address,
-        amount: <span class="kw-2">&amp;</span>Amount,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
-        <span class="self">self</span>.request(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                <span class="string">&quot;/module/{}/peg_out_fees&quot;</span>,
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET
-            ),
-            (address, amount.to_sat()),
-            EventuallyConsistent::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
+        peer_id: PeerId,
+        method: <span class="kw-2">&amp;</span>str,
+        params: <span class="kw-2">&amp;</span>[Value],
+    ) -&gt; JsonRpcResult&lt;Value&gt; {
+        <span class="kw">let </span>member = <span class="self">self
+            </span>.members
+            .iter()
+            .find(|m| m.peer_id == peer_id)
+            .ok_or_else(|| JsonRpcError::Custom(<span class="macro">format!</span>(<span class="string">&quot;Invalid peer_id: {peer_id}&quot;</span>)))<span class="question-mark">?</span>;
+
+        member.request(method, params).<span class="kw">await
     </span>}
-
-    <span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt; {
-        <span class="self">self</span>.request(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/module/{}/offer&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
-            payment_hash,
-            Retry404::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt; {
-        <span class="self">self</span>.request(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/module/{}/list_gateways&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
-            (),
-            UnionResponses::new(<span class="self">self</span>.peers().one_honest()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.request(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                <span class="string">&quot;/module/{}/register_gateway&quot;</span>,
-                LEGACY_HARDCODED_INSTANCE_ID_LN
-            ),
-            gateway,
-            CurrentConsensus::new(<span class="self">self</span>.peers().threshold()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
-        <span class="kw">let </span>res: <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt; = <span class="self">self
-            </span>.request(
-                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/module/{}/offer&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_LN),
-                payment_hash,
-                CurrentConsensus::new(<span class="self">self</span>.peers().one_honest()),
-            )
-            .<span class="kw">await</span>;
-
-        <span class="kw">match </span>res {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
-            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
-        }
-    }
-
-    <span class="kw">async fn </span>upload_ecash_backup(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: <span class="kw-2">&amp;</span>fedimint_mint::SignedBackupRequest,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.request(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/module/{}/backup&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_MINT),
-            request,
-            CurrentConsensus::new(<span class="self">self</span>.peers().threshold()),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>download_ecash_backup(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request_complex(
-                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/module/{}/recover&quot;</span>, LEGACY_HARDCODED_INSTANCE_ID_MINT),
-                id,
-                UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
-                    <span class="self">self</span>.peers().one_honest(),
-                ),
-            )
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_iter()
-            .flatten()
-            .collect())
-    }
 }
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">return </span>WsClientBuilder::default()
             .certificate_store(CertificateStore::WebPki)
@@ -1342,6 +1907,7 @@
     <span class="doccomment">/// Creates a new API client
     </span><span class="kw">pub fn </span>new_with_client(members: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
         WsFederationApi {
+            peers: members.iter().map(|m| m.<span class="number">0</span>).collect(),
             members: members
                 .into_iter()
                 .map(|(peer_id, url)| {
@@ -1358,29 +1924,23 @@
                     }
                 })
                 .collect(),
-            module_registry: module_decode_stubs(),
         }
     }
 }
 
-<span class="kw">pub struct </span>FedResponse&lt;R&gt; {
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>PeerResponse&lt;R&gt; {
     <span class="kw">pub </span>peer: PeerId,
-    <span class="kw">pub </span>result: std::result::Result&lt;R, JsonRpcError&gt;,
+    <span class="kw">pub </span>result: JsonRpcResult&lt;R&gt;,
 }
 
 <span class="kw">impl</span>&lt;C: JsonRpcClient&gt; FederationMember&lt;C&gt; {
     <span class="attr">#[instrument(fields(peer = %<span class="self">self</span>.peer_id), skip_all)]
-    </span><span class="kw">pub async fn </span>request&lt;R&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[serde_json::Value]) -&gt; FedResponse&lt;R&gt;
-    <span class="kw">where
-        </span>R: serde::de::DeserializeOwned,
-    {
+    </span><span class="kw">pub async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[Value]) -&gt; JsonRpcResult&lt;Value&gt; {
         <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>rclient {
             <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
-                <span class="kw">return </span>FedResponse {
-                    peer: <span class="self">self</span>.peer_id,
-                    result: client.request::&lt;R, <span class="kw">_</span>&gt;(method, params).<span class="kw">await</span>,
-                };
+                <span class="kw">return </span>client.request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params).<span class="kw">await</span>;
             }
             <span class="kw">_ </span>=&gt; {}
         };
@@ -1389,15 +1949,15 @@
 
         drop(rclient);
         <span class="kw">let </span><span class="kw-2">mut </span>wclient = <span class="self">self</span>.client.write().<span class="kw">await</span>;
-        <span class="kw">let </span>response = <span class="kw">match </span><span class="kw-2">&amp;*</span>wclient {
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>wclient {
             <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
                 <span class="comment">// other task has already connected it
                 </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
                 rclient
                     .as_ref()
                     .unwrap()
-                    .request::&lt;R, <span class="kw">_</span>&gt;(method, params)
-                    .<span class="kw">await
+                    .request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params)
+                    .<span class="kw">await</span><span class="question-mark">?
             </span>}
             <span class="kw">_ </span>=&gt; {
                 <span class="comment">// write lock is acquired before creating a new client
@@ -1410,21 +1970,16 @@
                         rclient
                             .as_ref()
                             .unwrap()
-                            .request::&lt;R, <span class="kw">_</span>&gt;(method, params)
-                            .<span class="kw">await
+                            .request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params)
+                            .<span class="kw">await</span><span class="question-mark">?
                     </span>}
                     <span class="prelude-val">Err</span>(err) =&gt; {
                         <span class="macro">error!</span>(%err, <span class="string">&quot;unable to connect to server&quot;</span>);
-                        <span class="prelude-val">Err</span>(err)
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(err)<span class="question-mark">?</span>;
                     }
                 }
             }
-        };
-
-        FedResponse {
-            peer: <span class="self">self</span>.peer_id,
-            result: response,
-        }
+        })
     }
 }
 
@@ -1445,57 +2000,7 @@
     )
 }
 
-<span class="kw">impl</span>&lt;C: JsonRpcClient&gt; WsFederationApi&lt;C&gt; {
-    <span class="kw">pub async fn </span>request&lt;P: serde::Serialize, R: serde::de::DeserializeOwned&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        method: <span class="kw-2">&amp;</span>str,
-        param: P,
-        strategy: <span class="kw">impl </span>QueryStrategy&lt;R&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt; {
-        <span class="self">self</span>.request_complex(method, param, strategy).<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>request_complex&lt;
-        P: serde::Serialize,
-        IR: serde::de::DeserializeOwned,
-        OR: serde::de::DeserializeOwned,
-    &gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        method: <span class="kw-2">&amp;</span>str,
-        param: P,
-        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;IR, OR&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;OR&gt; {
-        <span class="kw">let </span>params = [serde_json::to_value(param).expect(<span class="string">&quot;encoding error&quot;</span>)];
-        <span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::new();
-
-        <span class="kw">for </span>member <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
-            futures.push(member.request(method, <span class="kw-2">&amp;</span>params));
-        }
-
-        <span class="comment">// Delegates the response handling to the `QueryStrategy` with an exponential back-off
-        // with every new set of requests
-        </span><span class="kw">let </span><span class="kw-2">mut </span>delay_ms = <span class="number">10</span>;
-        <span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>futures.next().<span class="kw">await </span>{
-                <span class="prelude-val">Some</span>(result) =&gt; <span class="kw">match </span>strategy.process(result) {
-                    QueryStep::Retry(peers) =&gt; {
-                        <span class="kw">for </span>member <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
-                            <span class="kw">if </span>peers.contains(<span class="kw-2">&amp;</span>member.peer_id) {
-                                futures.push(member.request(method, <span class="kw-2">&amp;</span>params));
-                            }
-                        }
-                        sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
-                        delay_ms = min(max_delay_ms, delay_ms * <span class="number">2</span>);
-                    }
-                    QueryStep::Continue =&gt; {}
-                    QueryStep::Finished(result) =&gt; <span class="kw">return </span>result,
-                },
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::NoResult),
-            }
-        }
-    }
-}
+<span class="kw">impl</span>&lt;C: JsonRpcClient&gt; WsFederationApi&lt;C&gt; {}
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
@@ -1507,6 +2012,7 @@
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Mutex,
         },
+        time::Duration,
     };
 
     <span class="kw">use </span>anyhow::anyhow;
@@ -1609,14 +2115,14 @@
             <span class="string">&quot;should not connect before first request&quot;
         </span>);
 
-        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
+        fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">1</span>,
             <span class="string">&quot;should connect once after first request&quot;
         </span>);
 
-        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
+        fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">1</span>,
@@ -1626,7 +2132,7 @@
         <span class="comment">// disconnect
         </span>CONNECTED.store(<span class="bool-val">false</span>, Ordering::SeqCst);
 
-        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
+        fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">2</span>,
@@ -1677,12 +2183,12 @@
         FAIL.lock().unwrap().insert(<span class="number">0</span>);
 
         <span class="macro">assert!</span>(
-            fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.is_err(),
+            fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.is_err(),
             <span class="string">&quot;connect for client 0 should fail&quot;
         </span>);
 
         <span class="comment">// connect for client 1 should succeed
-        </span>fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
+        </span>fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
 
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -1694,9 +2200,9 @@
         </span>FAIL.lock().unwrap().insert(<span class="number">1</span>);
 
         <span class="comment">// only connect once even for two concurrent requests
-        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
-        reqa.result.expect(<span class="string">&quot;both request should be successful&quot;</span>);
-        reqb.result.expect(<span class="string">&quot;both request should be successful&quot;</span>);
+        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
+        reqa.expect(<span class="string">&quot;both request should be successful&quot;</span>);
+        reqb.expect(<span class="string">&quot;both request should be successful&quot;</span>);
 
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -1712,7 +2218,7 @@
         </span>FAIL.lock().unwrap().insert(<span class="number">3</span>);
 
         <span class="comment">// only connect once even for two concurrent requests
-        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
+        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), fed.request(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
 
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -1721,7 +2227,7 @@
         );
 
         <span class="macro">assert!</span>(
-            reqa.result.is_err() ^ reqb.result.is_err(),
+            reqa.is_err() ^ reqb.is_err(),
             <span class="string">&quot;exactly one of two request should succeed&quot;
         </span>);
     }
