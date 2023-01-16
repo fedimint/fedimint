@@ -128,21 +128,7 @@ macro_rules! __api_endpoint {
             }
         }
 
-        ApiEndpoint {
-            path: <Endpoint as $crate::module::TypedApiEndpoint>::PATH,
-            handler: Box::new(|m, dbtx, param| {
-                Box::pin(async move {
-                    let params = $crate::module::__reexports::serde_json::from_value(param)
-                        .map_err(|e| $crate::module::ApiError::bad_request(e.to_string()))?;
-
-                    let ret =
-                        <Endpoint as $crate::module::TypedApiEndpoint>::handle(m, dbtx, params)
-                            .await?;
-                    Ok($crate::module::__reexports::serde_json::to_value(ret)
-                        .expect("encoding error"))
-                })
-            }),
-        }
+        $crate::module::ApiEndpoint::from_typed::<Endpoint>()
     }};
 }
 
@@ -169,6 +155,24 @@ pub struct ApiEndpoint<M> {
     ///   * Reference to the module which defined it
     ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
     pub handler: HandlerFn<M>,
+}
+
+// <()> is used to avoid specify state.
+impl ApiEndpoint<()> {
+    pub fn from_typed<E: TypedApiEndpoint>() -> ApiEndpoint<E::State> {
+        ApiEndpoint {
+            path: E::PATH,
+            handler: Box::new(|m, dbtx, param| {
+                Box::pin(async move {
+                    let params = serde_json::from_value(param)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+                    let ret = E::handle(m, dbtx, params).await?;
+                    Ok(serde_json::to_value(ret).expect("encoding error"))
+                })
+            }),
+        }
+    }
 }
 
 #[derive(Error, Debug)]
