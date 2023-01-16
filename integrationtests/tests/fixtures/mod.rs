@@ -88,7 +88,7 @@ mod real;
 mod utils;
 
 const DEFAULT_P2P_PORT: u16 = 8173;
-const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 10000;
+const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 20000;
 static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
 
 // Helper functions for easier test writing
@@ -169,16 +169,21 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
+            let mut config_task_group = task_group.make_subgroup().await;
             let (server_config, client_config) = distributed_config(
                 "",
                 &peers,
                 params,
                 module_inits.clone(),
                 max_evil,
-                &mut task_group,
+                &mut config_task_group,
             )
             .await
             .expect("distributed config should not be canceled");
+            config_task_group
+                .shutdown_join_all()
+                .await
+                .expect("Distributed config did not exit cleanly");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let bitcoin_rpc_url =
@@ -1026,6 +1031,7 @@ impl FederationTest {
             let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
 
             let mut modules = BTreeMap::new();
+            let env_vars = ModuleInitRegistry::get_env_vars_map();
 
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
@@ -1038,7 +1044,7 @@ impl FederationTest {
                         .init(
                             cfg.get_module_config(id).unwrap(),
                             db.clone(),
-                            &BTreeMap::new(),
+                            &env_vars,
                             &mut task_group,
                         )
                         .await

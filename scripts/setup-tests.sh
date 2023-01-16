@@ -15,6 +15,8 @@ POLL_INTERVAL=1
 bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$FM_BTC_DIR &
 echo $! >> $FM_PID_FILE
 
+export FM_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
+
 until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.chain')" == "regtest" ]; do
   sleep $POLL_INTERVAL
 done
