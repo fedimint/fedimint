@@ -30,7 +30,7 @@ use tokio::sync::mpsc;
 use tracing::{error, info};
 
 use super::{db::NextECashNoteIndexKeyPrefix, *};
-use crate::api;
+use crate::api::{self, GlobalFederationApi, MintFederationApi};
 
 impl MintClient {
     /// Prepare an encrypted backup and send it to federation for storing
@@ -219,7 +219,7 @@ impl MintClient {
     async fn fetch_epochs(
         &self,
         epoch_range: RangeInclusive<u64>,
-        sender: mpsc::Sender<api::Result<SignedEpochOutcome>>,
+        sender: mpsc::Sender<api::FedResult<SignedEpochOutcome>>,
         task_handle: &TaskHandle,
     ) {
         for epoch in epoch_range {
@@ -232,7 +232,7 @@ impl MintClient {
             match self
                 .context
                 .api
-                .fetch_epoch_history(epoch, self.epoch_pk)
+                .fetch_epoch_history(epoch, self.epoch_pk, &self.context.decoders)
                 .await
             {
                 Ok(epoch_history) => {

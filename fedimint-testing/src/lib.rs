@@ -18,7 +18,7 @@ pub mod btc;
 
 #[derive(Debug)]
 pub struct FakeFed<Module> {
-    members: Vec<(PeerId, Module, Database)>,
+    pub members: Vec<(PeerId, Module, Database)>,
     client_cfg: ClientModuleConfig,
     block_height: Arc<std::sync::atomic::AtomicU64>,
 }

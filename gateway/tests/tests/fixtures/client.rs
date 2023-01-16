@@ -1,8 +1,13 @@
-use std::path::PathBuf;
+use std::{collections::BTreeSet, path::PathBuf};
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_api::config::{ClientConfig, FederationId};
+use fedimint_api::{
+    config::{ClientConfig, FederationId},
+    core::LEGACY_HARDCODED_INSTANCE_ID_LN,
+    module::registry::ModuleDecoderRegistry,
+    PeerId,
+};
 use ln_gateway::{
     client::{DynDbFactory, IGatewayClientBuilder},
     LnGatewayError,
@@ -32,17 +37,23 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
     async fn build(
         &self,
         config: GatewayClientConfig,
+        decoders: ModuleDecoderRegistry,
     ) -> Result<Client<GatewayClientConfig>, LnGatewayError> {
         let federation_id = config.client_config.federation_id.clone();
+        // Ignore `config`s, hardcode one peer.
+        let members = BTreeSet::from([PeerId::from(0)]);
 
-        let api: DynFederationApi = MockApi::new().into();
+        let api: DynFederationApi =
+            MockApi::make_test_fed(LEGACY_HARDCODED_INSTANCE_ID_LN, members)
+                .await
+                .into();
         let db = self.db_factory.create_database(
             federation_id,
             PathBuf::new(),
             module_decode_stubs(),
         )?;
 
-        Ok(GatewayClient::new_with_api(config, db, api, Default::default()).await)
+        Ok(GatewayClient::new_with_api(config, decoders, db, api, Default::default()).await)
     }
 
     async fn create_config(

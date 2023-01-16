@@ -17,10 +17,17 @@ use ln_gateway::{
     utils::retry,
 };
 use mint_client::api::WsFederationConnect;
+use tracing_subscriber::EnvFilter;
 use url::Url;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_authentication() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
+        )
+        .init();
     let gw_password = "password".to_string();
     let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
     let gw_bind_address = SocketAddr::from(([127, 0, 0, 1], gw_port));

@@ -13,7 +13,10 @@ use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
-use api::DynFederationApi;
+use api::{
+    DynFederationApi, FedApiError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
+    WalletFederationApi,
+};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
@@ -146,6 +149,12 @@ pub struct Client<C> {
     root_secret: DerivableSecret,
 }
 
+impl<C> Client<C> {
+    pub fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.context.decoders
+    }
+}
+
 #[derive(Encodable, Decodable)]
 pub struct ClientSecret([u8; 64]);
 
@@ -233,13 +242,19 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.config.clone()
     }
 
-    pub async fn new(config: T, db: Database, secp: Secp256k1<All>) -> Self {
+    pub async fn new(
+        config: T,
+        decoders: ModuleDecoderRegistry,
+        db: Database,
+        secp: Secp256k1<All>,
+    ) -> Self {
         let api = api::WsFederationApi::from_config(config.as_ref());
-        Self::new_with_api(config, db, api.into(), secp).await
+        Self::new_with_api(config, decoders, db, api.into(), secp).await
     }
 
     pub async fn new_with_api(
         config: T,
+        decoders: ModuleDecoderRegistry,
         db: Database,
         api: DynFederationApi,
         secp: Secp256k1<All>,
@@ -247,7 +262,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let root_secret = Self::get_secret(&db).await;
         Self {
             config,
-            context: Arc::new(ClientContext { db, api, secp }),
+            context: Arc::new(ClientContext {
+                decoders,
+                db,
+                api,
+                secp,
+            }),
             root_secret,
         }
     }
@@ -406,7 +426,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let fees = self
             .context
             .api
-            .fetch_peg_out_fees(&recipient, &amount)
+            .fetch_peg_out_fees(&recipient, amount)
             .await?;
         fees.map(|fees| PegOut {
             recipient,
@@ -530,7 +550,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
         let stream = pending
             .map(|(key, coins)| async move {
-                match self.context.api.fetch_tx_outcome(key.0).await {
+                match self.context.api.fetch_tx_outcome(&key.0).await {
                     Ok(TransactionStatus::Rejected(_)) => Ok((key, coins)),
                     Ok(TransactionStatus::Accepted { .. }) => {
                         Ok((key, TieredMulti::<SpendableNote>::default()))
@@ -593,11 +613,11 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         epoch: u64,
         epoch_pk: PublicKey,
     ) -> Result<SignedEpochOutcome> {
-        self.context
+        Ok(self
+            .context
             .api
-            .fetch_epoch_history(epoch, epoch_pk)
-            .await
-            .map_err(|e| e.into())
+            .fetch_epoch_history(epoch, epoch_pk, &self.context.decoders)
+            .await?)
     }
 }
 
@@ -741,9 +761,12 @@ impl Client<UserClientConfig> {
     pub async fn await_outgoing_contract_acceptance(&self, outpoint: OutPoint) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<OutgoingContractOutcome>(outpoint, Duration::from_secs(30))
-            .await
-            .map_err(ClientError::MintApiError)?;
+            .await_output_outcome::<OutgoingContractOutcome>(
+                outpoint,
+                Duration::from_secs(30),
+                &self.context.decoders,
+            )
+            .await?;
         Ok(())
     }
 
@@ -758,9 +781,12 @@ impl Client<UserClientConfig> {
                 let res = self
                     .context
                     .api
-                    .await_output_outcome::<MintOutputOutcome>(outpoint, Duration::from_secs(30))
-                    .await
-                    .map_err(ClientError::MintApiError);
+                    .await_output_outcome::<MintOutputOutcome>(
+                        outpoint,
+                        Duration::from_secs(30),
+                        &self.context.decoders,
+                    )
+                    .await;
                 if res.is_ok() && res.unwrap().is_some() {
                     return Ok(());
                 }
@@ -771,7 +797,7 @@ impl Client<UserClientConfig> {
 
         fedimint_api::task::timeout(Duration::from_secs(40), poll())
             .await
-            .map_err(|_| ApiError::Timeout)?
+            .map_err(|_| ClientError::Timeout)?
     }
 
     pub async fn generate_invoice<R: RngCore + CryptoRng>(
@@ -855,7 +881,7 @@ impl Client<UserClientConfig> {
         let outpoint = OutPoint { txid, out_idx: 0 };
         self.context
             .api
-            .await_output_outcome::<OfferId>(outpoint, timeout)
+            .await_output_outcome::<OfferId>(outpoint, timeout, &self.context.decoders)
             .await?;
 
         let confirmed = ConfirmedInvoice {
@@ -1176,7 +1202,11 @@ impl Client<GatewayClientConfig> {
         Ok(self
             .context
             .api
-            .await_output_outcome::<Preimage>(outpoint, Duration::from_secs(10))
+            .await_output_outcome::<Preimage>(
+                outpoint,
+                Duration::from_secs(10),
+                &self.context.decoders,
+            )
             .await?)
     }
 
@@ -1190,7 +1220,7 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<<fedimint_core::modules::mint::Mint as ServerModule>::OutputOutcome>(outpoint, Duration::from_secs(10))
+            .await_output_outcome::<<fedimint_core::modules::mint::Mint as ServerModule>::OutputOutcome>(outpoint, Duration::from_secs(10), &self.context.decoders)
             .await?;
         // We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need
@@ -1218,7 +1248,7 @@ impl Client<GatewayClientConfig> {
     pub async fn register_with_federation(&self, config: LightningGateway) -> Result<()> {
         self.context
             .api
-            .register_gateway(config)
+            .register_gateway(&config)
             .await
             .map_err(ClientError::MintApiError)
     }
@@ -1295,7 +1325,9 @@ pub mod serde_keypair {
 #[derive(Error, Debug)]
 pub enum ClientError {
     #[error("Error querying federation: {0}")]
-    MintApiError(#[from] ApiError),
+    MintApiError(#[from] FedApiError),
+    #[error("Output outcome error: {0}")]
+    OutputOutcome(#[from] OutputOutcomeError),
     #[error("Wallet client error: {0}")]
     WalletClientError(#[from] WalletClientError),
     #[error("Mint client error: {0}")]

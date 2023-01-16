@@ -19,7 +19,8 @@ pub use fedimint_core::*;
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
 use itertools::Itertools;
-use mint_client::api::{IFederationApi, WsFederationApi};
+use mint_client::api::WsFederationApi;
+use mint_client::api::{DynFederationApi, GlobalFederationApi};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -72,7 +73,7 @@ pub struct FedimintServer {
     pub connections: PeerConnections<EpochMessage>,
     pub cfg: ServerConfig,
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
-    pub api: Arc<dyn IFederationApi>,
+    pub api: DynFederationApi,
     pub peers: BTreeSet<PeerId>,
     pub rejoin_at_epoch: Option<HashMap<u64, HashSet<PeerId>>>,
     pub run_empty_epochs: u64,
@@ -144,14 +145,14 @@ impl FedimintServer {
             .clone()
             .into_iter()
             .map(|(id, node)| (id, node.url));
-        let api = Arc::new(WsFederationApi::new(api_endpoints.collect()));
+        let api = WsFederationApi::new(api_endpoints.collect());
 
         FedimintServer {
             connections,
             hbbft,
             consensus: Arc::new(consensus),
             cfg: cfg.clone(),
-            api,
+            api: api.into(),
             peers: cfg.local.p2p.keys().cloned().collect(),
             rejoin_at_epoch: None,
             run_empty_epochs: 0,
@@ -249,7 +250,7 @@ impl FedimintServer {
                     let epoch_pk = self.cfg.consensus.epoch_pk_set.public_key();
                     let epoch = self
                         .api
-                        .fetch_epoch_history(epoch_num, epoch_pk)
+                        .fetch_epoch_history(epoch_num, epoch_pk, &self.decoders)
                         .await
                         .expect("fetches history");
 

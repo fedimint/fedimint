@@ -16,6 +16,8 @@ use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
 
+use crate::api::GlobalFederationApi;
+use crate::api::OutputOutcomeError;
 use crate::utils::ClientContext;
 use crate::ApiError;
 
@@ -163,7 +165,7 @@ impl WalletClient {
         let outcome: WalletOutputOutcome = self
             .context
             .api
-            .await_output_outcome(out_point, timeout)
+            .await_output_outcome(out_point, timeout, &self.context.decoders)
             .await?;
         Ok(outcome.0)
     }
@@ -179,6 +181,8 @@ pub enum WalletClientError {
     PegInAmountTooSmall,
     #[error("Inconsistent peg-in proof: {0}")]
     PegInProofError(PegInProofError),
+    #[error("Output outcome error: {0}")]
+    OutputOutcomeError(#[from] OutputOutcomeError),
     #[error("Mint API error: {0}")]
     ApiError(#[from] ApiError),
 }
@@ -189,21 +193,19 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use async_trait::async_trait;
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
     use fedimint_api::config::ConfigGenParams;
-    use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+    use fedimint_api::core::{
+        DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    };
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::task::TaskGroup;
     use fedimint_api::{Feerate, OutPoint, TransactionId};
-    use fedimint_core::epoch::SignedEpochOutcome;
-    use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    use fedimint_core::modules::ln::contracts::ContractId;
-    use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-    use fedimint_core::modules::mint::db::ECashUserBackupSnapshot;
+    use fedimint_core::modules::wallet::common::WalletDecoder;
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::{
         PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
@@ -211,11 +213,11 @@ mod tests {
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
-    use threshold_crypto::PublicKey;
+    use tokio::sync::Mutex;
 
-    use crate::api::IFederationApi;
+    use crate::api::fake::FederationApiFaker;
     use crate::wallet::WalletClient;
-    use crate::{module_decode_stubs, ClientContext, LegacyTransaction};
+    use crate::{module_decode_stubs, ClientContext};
 
     type Fed = FakeFed<Wallet>;
     type SharedFed = Arc<tokio::sync::Mutex<Fed>>;
@@ -226,96 +228,29 @@ mod tests {
         _mint: SharedFed,
     }
 
-    #[async_trait]
-    impl IFederationApi for FakeApi {
-        async fn fetch_tx_outcome(
-            &self,
-            _tx: TransactionId,
-        ) -> crate::api::Result<TransactionStatus> {
-            Ok(TransactionStatus::Accepted {
-                epoch: 0,
-                outputs: vec![SerdeOutputOutcome::from(
-                    &fedimint_api::core::DynOutputOutcome::from_typed(
-                        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    pub async fn make_test_mint_fed(
+        module_id: ModuleInstanceId,
+        fed: Arc<Mutex<FakeFed<Wallet>>>,
+    ) -> FederationApiFaker<tokio::sync::Mutex<FakeFed<Wallet>>> {
+        let members = fed
+            .lock()
+            .await
+            .members
+            .iter()
+            .map(|(peer_id, _, _)| *peer_id)
+            .collect();
+        FederationApiFaker::new(fed, members).with(
+            "/fetch_transaction",
+            move |_mint: Arc<Mutex<FakeFed<Wallet>>>, _tx: TransactionId| async move {
+                Ok(TransactionStatus::Accepted {
+                    epoch: 0,
+                    outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
+                        module_id,
                         WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()),
-                    ),
-                )],
-            })
-        }
-
-        async fn submit_transaction(
-            &self,
-            _tx: LegacyTransaction,
-        ) -> crate::api::Result<TransactionId> {
-            unimplemented!()
-        }
-
-        async fn fetch_contract(
-            &self,
-            _contract: ContractId,
-        ) -> crate::api::Result<ContractAccount> {
-            unimplemented!()
-        }
-
-        async fn fetch_consensus_block_height(&self) -> crate::api::Result<u64> {
-            unimplemented!()
-        }
-
-        async fn fetch_offer(
-            &self,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
-        ) -> crate::api::Result<IncomingContractOffer> {
-            unimplemented!();
-        }
-
-        async fn fetch_peg_out_fees(
-            &self,
-            _address: &Address,
-            _amount: &bitcoin::Amount,
-        ) -> crate::api::Result<Option<PegOutFees>> {
-            unimplemented!();
-        }
-
-        async fn fetch_gateways(&self) -> crate::api::Result<Vec<LightningGateway>> {
-            unimplemented!()
-        }
-
-        async fn register_gateway(&self, _gateway: LightningGateway) -> crate::api::Result<()> {
-            unimplemented!()
-        }
-
-        async fn fetch_epoch_history(
-            &self,
-            _epoch: u64,
-            _pk: PublicKey,
-        ) -> crate::api::Result<SignedEpochOutcome> {
-            unimplemented!()
-        }
-
-        async fn fetch_last_epoch(&self) -> crate::api::Result<u64> {
-            unimplemented!()
-        }
-
-        async fn offer_exists(
-            &self,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
-        ) -> crate::api::Result<bool> {
-            unimplemented!()
-        }
-
-        async fn upload_ecash_backup(
-            &self,
-            _request: &fedimint_mint::SignedBackupRequest,
-        ) -> crate::api::Result<()> {
-            unimplemented!()
-        }
-
-        async fn download_ecash_backup(
-            &self,
-            _id: &secp256k1::XOnlyPublicKey,
-        ) -> crate::api::Result<Vec<ECashUserBackupSnapshot>> {
-            unimplemented!()
-        }
+                    ))],
+                })
+            },
+        )
     }
 
     async fn new_mint_and_client(
@@ -329,6 +264,7 @@ mod tests {
         let btc_rpc = FakeBitcoindRpc::new();
         let btc_rpc_controller = btc_rpc.controller();
 
+        let module_id = LEGACY_HARDCODED_INSTANCE_ID_WALLET;
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<Wallet>::new(
                 4,
@@ -350,18 +286,19 @@ mod tests {
                     finality_delay: 10,
                 }),
                 &WalletGen,
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                module_id,
             )
             .await
             .unwrap(),
         ));
 
-        let api = FakeApi { _mint: fed.clone() }.into();
+        let api = make_test_mint_fed(module_id, fed.clone()).await;
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client = ClientContext {
+            decoders: ModuleDecoderRegistry::from_iter([(module_id, WalletDecoder.into())]),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
-            api,
+            api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 

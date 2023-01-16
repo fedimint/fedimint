@@ -510,6 +510,7 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
         let invoice = lightning.invoice(sats(1000), None).await;
 
         fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
+
         let (contract_id, outpoint) = user
             .client
             .fund_outgoing_ln_contract(invoice, rng())

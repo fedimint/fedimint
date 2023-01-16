@@ -9,15 +9,13 @@ use async_trait::async_trait;
 use fedimint_api::{
     config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
-    dyn_newtype_define, NumPeers,
+    dyn_newtype_define,
 };
 use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_server::config::load_from_file;
 use mint_client::{
-    api::{WsFederationApi, WsFederationConnect},
-    module_decode_stubs,
-    query::CurrentConsensus,
-    Client, GatewayClientConfig,
+    api::{DynFederationApi, GlobalFederationApi, WsFederationApi, WsFederationConnect},
+    module_decode_stubs, Client, GatewayClientConfig,
 };
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
@@ -76,7 +74,11 @@ impl IDbFactory for RocksDbFactory {
 #[async_trait]
 pub trait IGatewayClientBuilder: Debug {
     /// Build a new gateway federation client
-    async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>>;
+    async fn build(
+        &self,
+        config: GatewayClientConfig,
+        decoders: ModuleDecoderRegistry,
+    ) -> Result<Client<GatewayClientConfig>>;
 
     /// Create a new gateway federation client config from connect info
     async fn create_config(
@@ -117,7 +119,11 @@ impl StandardGatewayClientBuilder {
 
 #[async_trait]
 impl IGatewayClientBuilder for StandardGatewayClientBuilder {
-    async fn build(&self, config: GatewayClientConfig) -> Result<Client<GatewayClientConfig>> {
+    async fn build(
+        &self,
+        config: GatewayClientConfig,
+        decoders: ModuleDecoderRegistry,
+    ) -> Result<Client<GatewayClientConfig>> {
         let federation_id = config.client_config.federation_id.clone();
 
         let db = self.db_factory.create_database(
@@ -127,7 +133,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         )?;
         let ctx = secp256k1::Secp256k1::new();
 
-        Ok(Client::new(config, db, ctx).await)
+        Ok(Client::new(config, decoders, db, ctx).await)
     }
 
     async fn create_config(
@@ -137,14 +143,10 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         node_pubkey: PublicKey,
         announce_address: Url,
     ) -> Result<GatewayClientConfig> {
-        let api = WsFederationApi::new(connect.members);
+        let api: DynFederationApi = WsFederationApi::new(connect.members).into();
 
         let client_cfg: ClientConfig = api
-            .request(
-                "/config",
-                (),
-                CurrentConsensus::new(api.peers().one_honest()),
-            )
+            .get_client_config()
             .await
             .expect("Failed to get client config");
 
