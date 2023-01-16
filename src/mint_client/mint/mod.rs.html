@@ -964,6 +964,8 @@
 <a href="#964" id="964">964</a>
 <a href="#965" id="965">965</a>
 <a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -971,6 +973,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>bitcoin_hashes::hex::FromHex;
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::core::client::ClientModule;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
@@ -1611,7 +1614,8 @@
 ) -&gt; std::result::Result&lt;KeyPair, D::Error&gt; {
     <span class="kw">if </span>d.is_human_readable() {
         <span class="kw">let </span>hex_bytes: Cow&lt;<span class="lifetime">&#39;_</span>, str&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bytes = hex::decode(hex_bytes.as_ref()).map_err(|<span class="kw">_</span>| D::Error::custom(<span class="string">&quot;Invalid hex&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes =
+            Vec::from_hex(hex_bytes.as_ref()).map_err(|<span class="kw">_</span>| D::Error::custom(<span class="string">&quot;Invalid hex&quot;</span>))<span class="question-mark">?</span>;
         KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, <span class="kw-2">&amp;</span>bytes)
             .map_err(|<span class="kw">_</span>| D::Error::custom(<span class="string">&quot;Not a valid private key&quot;</span>))
     } <span class="kw">else </span>{

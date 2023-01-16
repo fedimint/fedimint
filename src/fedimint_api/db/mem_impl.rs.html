@@ -216,12 +216,14 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 
 <span class="kw">use super</span>::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, IDatabase,
@@ -256,7 +258,7 @@
         <span class="kw">let </span>data = <span class="self">self</span>.data.lock().unwrap();
         <span class="kw">let </span>data_iter = data.iter();
         <span class="kw">for </span>(key, value) <span class="kw">in </span>data_iter {
-            <span class="macro">println!</span>(<span class="string">&quot;{}: {}&quot;</span>, hex::encode(key), hex::encode(value));
+            <span class="macro">println!</span>(<span class="string">&quot;{}: {}&quot;</span>, key.to_hex(), value.to_hex());
         }
     }
 }

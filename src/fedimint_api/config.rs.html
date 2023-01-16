@@ -917,6 +917,7 @@
 <a href="#917" id="917">917</a>
 <a href="#918" id="918">918</a>
 <a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -927,6 +928,8 @@
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>bitcoin_hashes::hex;
+<span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_api::BitcoinHash;
@@ -935,7 +938,6 @@
 <span class="kw">use </span>hbbft::crypto::poly::Commitment;
 <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 <span class="kw">use </span>hbbft::pairing::group::Group;
-<span class="kw">use </span>hex::FromHexError;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -1060,7 +1062,7 @@
 
 <span class="kw">impl </span>ToString <span class="kw">for </span>FederationId {
     <span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        hex::encode(<span class="self">self</span>.<span class="number">0</span>.to_bytes())
+        <span class="self">self</span>.<span class="number">0</span>.to_bytes().to_hex()
     }
 }
 
@@ -1069,9 +1071,9 @@
 
     <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
         <span class="self">Self</span>::try_from_bytes(
-            hex::decode(s)<span class="question-mark">?
+            Vec::from_hex(s)<span class="question-mark">?
                 </span>.try_into()
-                .map_err(|<span class="kw">_</span>| FromHexError::InvalidStringLength)<span class="question-mark">?</span>,
+                .map_err(|bytes: Vec&lt;u8&gt;| hex::Error::InvalidLength(<span class="number">48</span>, bytes.len()))<span class="question-mark">?</span>,
         )
         .ok_or_else::&lt;anyhow::Error, <span class="kw">_</span>&gt;(|| <span class="macro">format_err!</span>(<span class="string">&quot;Invalid FederationId pubkey&quot;</span>))
     }
