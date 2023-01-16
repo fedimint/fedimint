@@ -467,7 +467,7 @@
             cargoArtifacts = deps;
 
             src = filterModules dirs ./.;
-            cargoExtraArgs = "--package ${name} --target ${target.name}";
+            cargoExtraArgs = "--target ${target.name} --package ${name}";
 
             # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
@@ -587,6 +587,17 @@
             "fedimint-rocksdb"
             "fedimint-sqlite"
             "modules"
+          ];
+        };
+
+        fedimint-sqlite = { target }: pkgCross {
+          name = "fedimint-sqlite";
+          inherit target;
+          dirs = [
+            "fedimint-sqlite"
+            "crypto"
+            "fedimint-api"
+            "fedimint-derive"
           ];
         };
 
@@ -712,6 +723,7 @@
           cross = builtins.mapAttrs
             (attr: target: {
               mint-client = mint-client { inherit target; };
+              fedimint-sqlite = fedimint-sqlite { inherit target; };
             })
             crossTargets;
 

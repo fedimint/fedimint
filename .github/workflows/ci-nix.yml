@@ -131,6 +131,10 @@ jobs:
       - name: Build mint-client for ${{ matrix.build }}
         run: nix build -L .#cross.${{ matrix.build }}.mint-client
 
+      - name: Build fedimint-sqlite for ${{ matrix.build }}
+        if: matrix.build != 'wasm32'
+        run: nix build -L .#cross.${{ matrix.build }}.fedimint-sqlite
+
   containers:
     name: "Containers"
     runs-on: buildjet-8vcpu-ubuntu-2004
