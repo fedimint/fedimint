@@ -19,7 +19,7 @@ use tracing::debug;
 use crate::api::GlobalFederationApi;
 use crate::api::OutputOutcomeError;
 use crate::utils::ClientContext;
-use crate::ApiError;
+use crate::MemberError;
 
 pub mod db;
 
@@ -184,7 +184,7 @@ pub enum WalletClientError {
     #[error("Output outcome error: {0}")]
     OutputOutcomeError(#[from] OutputOutcomeError),
     #[error("Mint API error: {0}")]
-    ApiError(#[from] ApiError),
+    ApiError(#[from] MemberError),
 }
 
 #[cfg(test)]

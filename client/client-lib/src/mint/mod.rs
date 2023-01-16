@@ -26,7 +26,7 @@ use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature
 use thiserror::Error;
 use tracing::{debug, trace, warn};
 
-use crate::api::{ApiError, GlobalFederationApi, OutputOutcomeError};
+use crate::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingCoinsKey};
 use crate::utils::ClientContext;
 use crate::{ChildId, DerivableSecret, MintDecoder};
@@ -606,7 +606,7 @@ pub enum CoinFinalizationError {
 #[derive(Error, Debug)]
 pub enum MintClientError {
     #[error("Error querying federation: {0}")]
-    ApiError(#[from] ApiError),
+    ApiError(#[from] MemberError),
     #[error("Could not finalize issuance request: {0}")]
     FinalizationError(#[from] CoinFinalizationError),
     #[error("Insufficient balance. Amount requested={0} Mint balance={1}")]

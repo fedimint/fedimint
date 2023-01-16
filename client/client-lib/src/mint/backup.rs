@@ -219,7 +219,7 @@ impl MintClient {
     async fn fetch_epochs(
         &self,
         epoch_range: RangeInclusive<u64>,
-        sender: mpsc::Sender<api::FedResult<SignedEpochOutcome>>,
+        sender: mpsc::Sender<api::FederationResult<SignedEpochOutcome>>,
         task_handle: &TaskHandle,
     ) {
         for epoch in epoch_range {
