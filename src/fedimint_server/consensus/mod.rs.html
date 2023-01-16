@@ -673,6 +673,33 @@
 <a href="#673" id="673">673</a>
 <a href="#674" id="674">674</a>
 <a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -906,8 +933,6 @@
         reference_rejected_txs: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;BTreeSet&lt;TransactionId&gt;&gt;,
     ) -&gt; SignedEpochOutcome {
         <span class="kw">let </span>epoch = consensus_outcome.epoch;
-        <span class="kw">let </span>epoch_peers: HashSet&lt;PeerId&gt; =
-            consensus_outcome.contributions.keys().copied().collect();
         <span class="kw">let </span>outcome = consensus_outcome.clone();
 
         <span class="kw">let </span>UnzipConsensusItem {
@@ -920,116 +945,40 @@
             .flat_map(|(peer, cis)| cis.into_iter().map(<span class="kw">move </span>|ci| (peer, ci)))
             .unzip_consensus_item();
 
-        <span class="comment">// Begin consensus epoch
-        </span>{
-            <span class="kw">let </span>per_module_cis: HashMap&lt;
-                ModuleInstanceId,
-                Vec&lt;(PeerId, fedimint_api::core::DynModuleConsensusItem)&gt;,
-            &gt; = module_cis
-                .into_iter()
-                .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
-
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-            <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
-                <span class="self">self</span>.modules
-                    .get(module_key)
-                    .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, module_cis)
-                    .<span class="kw">await</span>;
-            }
-
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-        }
-
-        <span class="comment">// Process transactions
-        </span><span class="kw">let </span><span class="kw-2">mut </span>rejected_txs: BTreeSet&lt;TransactionId&gt; = BTreeSet::new();
-        {
+        <span class="kw">let </span>epoch_history = <span class="kw">loop </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
-            <span class="kw">let </span>caches = <span class="self">self</span>.build_verification_caches(transaction_cis.iter().map(|(<span class="kw">_</span>, tx)| tx));
-            <span class="kw">let </span><span class="kw-2">mut </span>processed_txs: HashSet&lt;TransactionId&gt; = HashSet::new();
-
-            <span class="kw">for </span>(<span class="kw">_</span>, transaction) <span class="kw">in </span>transaction_cis {
-                <span class="kw">let </span>txid: TransactionId = transaction.tx_hash();
-                <span class="kw">if </span>!processed_txs.insert(txid) {
-                    <span class="comment">// Avoid processing duplicate tx from different peers
-                    </span><span class="kw">continue</span>;
-                }
-
-                <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;Processing transaction&quot;</span>);
-                <span class="kw">async </span>{
-                    <span class="macro">trace!</span>(<span class="question-mark">?</span>transaction);
-                    dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(txid))
-                        .<span class="kw">await
-                        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-
-                    dbtx.set_tx_savepoint().<span class="kw">await</span>;
-                    <span class="comment">// TODO: use borrowed transaction
-                    </span><span class="kw">match </span><span class="self">self
-                        </span>.process_transaction(<span class="kw-2">&amp;mut </span>dbtx, transaction.clone(), <span class="kw-2">&amp;</span>caches)
-                        .<span class="kw">await
-                    </span>{
-                        <span class="prelude-val">Ok</span>(()) =&gt; {
-                            dbtx.insert_entry(
-                                <span class="kw-2">&amp;</span>AcceptedTransactionKey(txid),
-                                <span class="kw-2">&amp;</span>AcceptedTransaction { epoch, transaction },
-                            )
-                            .<span class="kw">await
-                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-                        }
-                        <span class="prelude-val">Err</span>(error) =&gt; {
-                            rejected_txs.insert(txid);
-                            dbtx.rollback_tx_to_savepoint().<span class="kw">await</span>;
-                            <span class="macro">warn!</span>(%error, <span class="string">&quot;Transaction failed&quot;</span>);
-                            dbtx.insert_entry(
-                                <span class="kw-2">&amp;</span>RejectedTransactionKey(txid),
-                                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, error),
-                            )
-                            .<span class="kw">await
-                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-                        }
-                    }
-                }
-                .instrument(span)
+            <span class="self">self</span>.process_module_consensus_items(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>module_cis)
                 .<span class="kw">await</span>;
+
+            <span class="kw">let </span>rejected_txs = <span class="self">self
+                </span>.process_transactions(<span class="kw-2">&amp;mut </span>dbtx, epoch, <span class="kw-2">&amp;</span>transaction_cis)
+                .<span class="kw">await</span>;
+
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(reference_rejected_txs) = reference_rejected_txs.as_ref() {
+                <span class="comment">// Result of the consensus are supposed to be deterministic.
+                // If our result is not the same as what the (honest) majority of the federation
+                // signed over, it&#39;s a catastrophical bug/mismatch of Federation&#39;s fedimintd
+                // implementations.
+                </span><span class="macro">assert_eq!</span>(
+                    reference_rejected_txs, <span class="kw-2">&amp;</span>rejected_txs,
+                    <span class="string">&quot;rejected_txs mismatch: reference = {:?} != {:?}&quot;</span>,
+                    reference_rejected_txs, rejected_txs
+                );
             }
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-        }
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(reference_rejected_txs) = reference_rejected_txs.as_ref() {
-            <span class="comment">// Result of the consensus are supposed to be deterministic.
-            // If our result is not the same as what the (honest) majority of the federation
-            // signed over, it&#39;s a catastrophical bug/mismatch of Federation&#39;s fedimintd
-            // implementations.
-            </span><span class="macro">assert_eq!</span>(
-                reference_rejected_txs, <span class="kw-2">&amp;</span>rejected_txs,
-                <span class="string">&quot;rejected_txs mismatch: reference = {:?} != {:?}&quot;</span>,
-                reference_rejected_txs, rejected_txs
-            );
-        }
-
-        <span class="comment">// End consensus epoch
-        </span><span class="kw">let </span>epoch_history = {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
             <span class="kw">let </span>epoch_history = <span class="self">self
-                </span>.save_epoch_history(outcome, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>drop_peers, rejected_txs)
+                </span>.finalize_process_epoch(<span class="kw-2">&amp;mut </span>dbtx, outcome.clone(), rejected_txs)
                 .<span class="kw">await</span>;
 
-            <span class="kw">for </span>(<span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
-                <span class="kw">let </span>module_drop_peers = module.end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
-                drop_peers.extend(module_drop_peers);
+            <span class="kw">match </span>dbtx.commit_tx().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(()) =&gt; {
+                    <span class="kw">break </span>epoch_history;
+                }
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">error!</span>(%error, <span class="string">&quot;Committing DB transaction failed, retrying!&quot;</span>);
+                }
             }
-
-            <span class="kw">for </span>peer <span class="kw">in </span>drop_peers {
-                dbtx.insert_entry(<span class="kw-2">&amp;</span>DropPeerKey(peer), <span class="kw-2">&amp;</span>())
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-            }
-
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-
-            epoch_history
         };
 
         <span class="kw">let </span>audit = <span class="self">self</span>.audit().<span class="kw">await</span>;
@@ -1038,6 +987,117 @@
                 <span class="string">&quot;Balance sheet of the fed has gone negative, this should never happen! {}&quot;</span>,
                 audit
             )
+        }
+
+        epoch_history
+    }
+
+    <span class="doccomment">/// Calls `begin_consensus_epoch` on all modules, dispatching their consensus items
+    </span><span class="kw">async fn </span>process_module_consensus_items(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        module_cis: <span class="kw-2">&amp;</span>[(PeerId, fedimint_api::core::DynModuleConsensusItem)],
+    ) {
+        <span class="kw">let </span>per_module_cis: HashMap&lt;
+            ModuleInstanceId,
+            Vec&lt;(PeerId, fedimint_api::core::DynModuleConsensusItem)&gt;,
+        &gt; = module_cis
+            .iter()
+            .cloned()
+            .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
+
+        <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
+            <span class="self">self</span>.modules
+                .get(module_key)
+                .begin_consensus_epoch(dbtx, module_cis)
+                .<span class="kw">await</span>;
+        }
+    }
+
+    <span class="doccomment">/// Applies all valid fedimint transactions to the database transaction `dbtx` and returns a set
+    /// of invalid transactions that were filtered out
+    </span><span class="kw">async fn </span>process_transactions(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        epoch: u64,
+        transactions: <span class="kw-2">&amp;</span>[(PeerId, Transaction)],
+    ) -&gt; BTreeSet&lt;TransactionId&gt; {
+        <span class="comment">// Process transactions
+        </span><span class="kw">let </span><span class="kw-2">mut </span>rejected_txs: BTreeSet&lt;TransactionId&gt; = BTreeSet::new();
+
+        <span class="kw">let </span>caches = <span class="self">self</span>.build_verification_caches(transactions.iter().map(|(<span class="kw">_</span>, tx)| tx));
+        <span class="kw">let </span><span class="kw-2">mut </span>processed_txs: HashSet&lt;TransactionId&gt; = HashSet::new();
+
+        <span class="kw">for </span>(<span class="kw">_</span>, transaction) <span class="kw">in </span>transactions.iter().cloned() {
+            <span class="kw">let </span>txid: TransactionId = transaction.tx_hash();
+            <span class="kw">if </span>!processed_txs.insert(txid) {
+                <span class="comment">// Avoid processing duplicate tx from different peers
+                </span><span class="kw">continue</span>;
+            }
+
+            <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;Processing transaction&quot;</span>);
+            <span class="kw">async </span>{
+                <span class="macro">trace!</span>(<span class="question-mark">?</span>transaction);
+                dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(txid))
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+
+                dbtx.set_tx_savepoint().<span class="kw">await</span>;
+                <span class="comment">// TODO: use borrowed transaction
+                </span><span class="kw">match </span><span class="self">self
+                    </span>.process_transaction(dbtx, transaction.clone(), <span class="kw-2">&amp;</span>caches)
+                    .<span class="kw">await
+                </span>{
+                    <span class="prelude-val">Ok</span>(()) =&gt; {
+                        dbtx.insert_entry(
+                            <span class="kw-2">&amp;</span>AcceptedTransactionKey(txid),
+                            <span class="kw-2">&amp;</span>AcceptedTransaction { epoch, transaction },
+                        )
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                    }
+                    <span class="prelude-val">Err</span>(error) =&gt; {
+                        rejected_txs.insert(txid);
+                        dbtx.rollback_tx_to_savepoint().<span class="kw">await</span>;
+                        <span class="macro">warn!</span>(%error, <span class="string">&quot;Transaction failed&quot;</span>);
+                        dbtx.insert_entry(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid), <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, error))
+                            .<span class="kw">await
+                            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                    }
+                }
+            }
+            .instrument(span)
+            .<span class="kw">await</span>;
+        }
+
+        rejected_txs
+    }
+
+    <span class="doccomment">/// Saves the epoch history, calls `end_consensus_epoch` on all modules and bans misbehaving
+    /// peers
+    </span><span class="kw">async fn </span>finalize_process_epoch(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        outcome: HbbftConsensusOutcome,
+        rejected_txs: BTreeSet&lt;TransactionId&gt;,
+    ) -&gt; SignedEpochOutcome {
+        <span class="kw">let </span>epoch_peers: HashSet&lt;PeerId&gt; = outcome.contributions.keys().copied().collect();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
+
+        <span class="kw">let </span>epoch_history = <span class="self">self
+            </span>.save_epoch_history(outcome.clone(), dbtx, <span class="kw-2">&amp;mut </span>drop_peers, rejected_txs)
+            .<span class="kw">await</span>;
+
+        <span class="kw">for </span>(<span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+            <span class="kw">let </span>module_drop_peers = module.end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, dbtx).<span class="kw">await</span>;
+            drop_peers.extend(module_drop_peers);
+        }
+
+        <span class="kw">for </span>peer <span class="kw">in </span>drop_peers {
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>DropPeerKey(peer), <span class="kw-2">&amp;</span>())
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
 
         epoch_history
@@ -1071,13 +1131,7 @@
     ) -&gt; SignedEpochOutcome {
         <span class="kw">let </span>prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(<span class="number">1</span>));
         <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = outcome.contributions.keys().cloned().collect();
-        <span class="kw">let </span>maybe_prev_epoch = <span class="self">self
-            </span>.db
-            .begin_transaction()
-            .<span class="kw">await
-            </span>.get_value(<span class="kw-2">&amp;</span>prev_epoch_key)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>maybe_prev_epoch = dbtx.get_value(<span class="kw-2">&amp;</span>prev_epoch_key).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
 
         <span class="kw">let </span>current = SignedEpochOutcome::new(
             outcome.epoch,
