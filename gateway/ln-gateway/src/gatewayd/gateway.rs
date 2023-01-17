@@ -192,13 +192,7 @@ impl Gateway {
 
         let gw_client_cfg = self
             .client_builder
-            .create_config(
-                connect,
-                channel_id,
-                node_pub_key,
-                self.config.announce_address.clone(),
-                self.module_gens.clone(),
-            )
+            .create_config(connect, channel_id, node_pub_key, self.module_gens.clone())
             .await
             .expect("Failed to create gateway client config");
 

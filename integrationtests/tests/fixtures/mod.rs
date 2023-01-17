@@ -542,8 +542,12 @@ impl GatewayTest {
         };
 
         // Create federation client builder for the gateway
-        let client_builder: DynGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(PathBuf::new(), MemDbFactory.into()).into();
+        let client_builder: DynGatewayClientBuilder = StandardGatewayClientBuilder::new(
+            PathBuf::new(),
+            MemDbFactory.into(),
+            announce_addr.clone(),
+        )
+        .into();
 
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let adapter = Arc::new(ln_client_adapter);

@@ -24,11 +24,15 @@ use super::fed::MockApi;
 #[derive(Debug, Clone)]
 pub struct TestGatewayClientBuilder {
     db_factory: DynDbFactory,
+    gateway_api: Url,
 }
 
 impl TestGatewayClientBuilder {
-    pub fn new(db_factory: DynDbFactory) -> Self {
-        Self { db_factory }
+    pub fn new(db_factory: DynDbFactory, gateway_api: Url) -> Self {
+        Self {
+            db_factory,
+            gateway_api,
+        }
     }
 }
 
@@ -70,7 +74,6 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         _connect: WsFederationConnect,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        announce_address: Url,
         _module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig, LnGatewayError> {
         // TODO: use the connect info urls to get the federation name?
@@ -95,7 +98,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
             redeem_key: kp_fed,
             timelock_delta: 10,
             node_pub_key: node_pubkey,
-            api: announce_address,
+            api: self.gateway_api.clone(),
         })
     }
 
