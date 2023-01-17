@@ -3,10 +3,13 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::bail;
 pub use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
-use fedimint_api::{dyn_newtype_define, task::TaskHandle, Feerate};
+use fedimint_api::{
+    bitcoin_rpc::BitcoinRpcBackendType, dyn_newtype_define, task::TaskHandle, Feerate,
+};
 use tracing::info;
 
 #[cfg(feature = "bitcoincore-rpc")]
@@ -17,6 +20,13 @@ pub mod bitcoincore_rpc;
 /// Functions may panic if if the bitcoind node is not reachable.
 #[async_trait]
 pub trait IBitcoindRpc: Debug + Send + Sync {
+    /// `true` if it's real-bitcoin (not electrum) backend and thus supports `get_block` call
+    ///
+    /// This is a bit of a workaround to support electrum.
+    fn backend_type(&self) -> BitcoinRpcBackendType {
+        BitcoinRpcBackendType::Bitcoind
+    }
+
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 
@@ -47,6 +57,15 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
 
     /// Submits a transaction to the Bitcoin network
     async fn submit_transaction(&self, transaction: Transaction) -> Result<()>;
+
+    /// Check if a transaction was included in a given (only electrum)
+    async fn was_transaction_confirmed_in(
+        &self,
+        _transaction: &Transaction,
+        _height: u64,
+    ) -> Result<bool> {
+        bail!("is_transaction_confirmed_in call not supported in standard (non-electrum) backends")
+    }
 }
 
 dyn_newtype_define! {
@@ -100,6 +119,10 @@ impl<C> IBitcoindRpc for RetryClient<C>
 where
     C: IBitcoindRpc,
 {
+    fn backend_type(&self) -> BitcoinRpcBackendType {
+        self.inner.backend_type()
+    }
+
     async fn get_network(&self) -> Result<Network> {
         self.retry_call(|| async { self.inner.get_network().await })
             .await
@@ -128,5 +151,18 @@ where
     async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
         self.retry_call(|| async { self.inner.submit_transaction(transaction.clone()).await })
             .await
+    }
+
+    async fn was_transaction_confirmed_in(
+        &self,
+        transaction: &Transaction,
+        height: u64,
+    ) -> Result<bool> {
+        self.retry_call(|| async {
+            self.inner
+                .was_transaction_confirmed_in(transaction, height)
+                .await
+        })
+        .await
     }
 }

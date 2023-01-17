@@ -12,6 +12,7 @@ use axum::{
 };
 use axum_macros::debug_handler;
 use bitcoin::Network;
+use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
@@ -217,21 +218,22 @@ async fn post_guardians(
 #[derive(Template)]
 #[template(path = "params.html")]
 struct UrlConnection {
-    ro_bitcoind_rpc: String,
+    ro_bitcoin_rpc_type: &'static str,
+    ro_bitcoin_rpc_url: String,
 }
 
 async fn params_page(
     axum::extract::State(_state): axum::extract::State<MutableState>,
 ) -> UrlConnection {
+    let (ro_bitcoin_rpc_type, ro_bitcoin_rpc_url) =
+        match fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
+            Ok(BitcoindRpcBackend::Bitcoind(url)) => ("bitcoind", url.to_string()),
+            Ok(BitcoindRpcBackend::Electrum(url)) => ("electrum", url.to_string()),
+            Err(e) => ("error", e.to_string()),
+        };
     UrlConnection {
-        ro_bitcoind_rpc: fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env()
-            .as_ref()
-            .map(ToString::to_string)
-            .ok()
-            .unwrap_or(format!(
-                "Invalid value of {} env variable",
-                fedimint_api::bitcoin_rpc::FM_BITCOIND_RPC_ENV
-            )),
+        ro_bitcoin_rpc_type,
+        ro_bitcoin_rpc_url,
     }
 }
 
@@ -250,8 +252,6 @@ pub struct ParamsForm {
     bind_api: SocketAddr,
     /// Address we bind to for federation communication
     bind_p2p: SocketAddr,
-    /// `bitcoind` json rpc endpoint
-    bitcoind_rpc: Url,
     /// How many participants in federation consensus
     guardians_count: u32,
     /// Which bitcoin network the federation is using

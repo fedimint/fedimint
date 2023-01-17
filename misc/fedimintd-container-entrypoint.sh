@@ -25,4 +25,4 @@ mkdir -p "$FM_DATA_DIR"
 export FM_LISTEN_UI=0.0.0.0:8175
 
 1>&2 echo 'Starting fedimintd'
-env RUST_LOG=debug fedimintd "$FM_DATA_DIR/"
+fedimintd "$FM_DATA_DIR/"
