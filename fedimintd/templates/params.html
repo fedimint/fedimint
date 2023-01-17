@@ -41,9 +41,13 @@
     </div>
     <h5>Bitcoind settings</h5>
     <div class="form-group">
-      <label for="bitcoind_rpc">Bitcoin RPC Addr and Port</label>
+      <label for="bitcoind_rpc">Bitcoin Backend Type</label>
       <p type="text" class="form-control" style="border: none; margin-bottom: 0;">
-        {{ro_bitcoind_rpc}}
+        {{ro_bitcoin_rpc_type}}
+      </p>
+      <label for="bitcoind_rpc">Bitcoin Backend URL</label>
+      <p type="text" class="form-control" style="border: none; margin-bottom: 0;">
+        {{ro_bitcoin_rpc_url}}
       </p>
     </div>
     <div class="form-group">

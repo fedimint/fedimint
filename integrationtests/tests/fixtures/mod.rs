@@ -18,7 +18,7 @@ use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
 use cln_rpc::ClnRpc;
 use fake::FakeLightningTest;
-use fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env;
+use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core;
@@ -189,7 +189,12 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let bitcoin_rpc_url =
-                read_bitcoin_rpc_env_from_global_env().expect("invalid bitcoin rpc url");
+                match read_bitcoin_backend_from_global_env().expect("invalid bitcoin rpc url") {
+                    fedimint_api::bitcoin_rpc::BitcoindRpcBackend::Bitcoind(url) => url,
+                    fedimint_api::bitcoin_rpc::BitcoindRpcBackend::Electrum(_) => {
+                        panic!("Electrum backend not supported for tests")
+                    }
+                };
             let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
                 &bitcoin_rpc_url,
                 task_group.make_handle(),

@@ -1,7 +1,13 @@
+use std::fmt;
+
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
 use ::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
-use anyhow::format_err;
+use anyhow::{bail, format_err, Context};
+use bitcoin::consensus::Encodable;
+use bitcoin_hashes::hex::ToHex;
+use electrum_client::ElectrumApi;
+use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_api::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
@@ -41,6 +47,18 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
     ))
 }
 
+pub fn make_bitcoin_rpc_backend(
+    backend: &BitcoindRpcBackend,
+    task_handle: TaskHandle,
+) -> Result<DynBitcoindRpc> {
+    match backend {
+        BitcoindRpcBackend::Bitcoind(url) => make_bitcoind_rpc(url, task_handle)
+            .context("bitcoind rpc backend initialization failed"),
+        BitcoindRpcBackend::Electrum(url) => make_electrum_rpc(url, task_handle)
+            .context("electrum rpc backend initialization failed"),
+    }
+}
+
 pub fn make_bitcoind_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
     let (url, auth) = from_url_to_url_auth(url)?;
     let bitcoind_client =
@@ -51,6 +69,10 @@ pub fn make_bitcoind_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoi
     );
 
     Ok(retry_client.into())
+}
+
+pub fn make_electrum_rpc(url: &Url, _task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
+    Ok(ElectrumClient::new(url)?.into())
 }
 
 /// Wrapper around [`bitcoincore_rpc::Client`] logging failures
@@ -159,6 +181,114 @@ where
             }))) => Ok(()),
             Err(e) => Err(anyhow::Error::from(e)),
             Ok(_) => Ok(()),
+        })
+    }
+}
+
+pub struct ElectrumClient(electrum_client::Client);
+
+impl ElectrumClient {
+    fn new(url: &Url) -> anyhow::Result<Self> {
+        Ok(Self(electrum_client::Client::new(url.as_str())?))
+    }
+}
+
+impl fmt::Debug for ElectrumClient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ElectrumClient")
+    }
+}
+
+#[async_trait]
+impl IBitcoindRpc for ElectrumClient {
+    fn backend_type(&self) -> BitcoinRpcBackendType {
+        BitcoinRpcBackendType::Electrum
+    }
+
+    async fn get_network(&self) -> Result<Network> {
+        let resp = fedimint_api::task::block_in_place(|| {
+            self.0.server_features().map_err(anyhow::Error::from)
+        })?;
+        Ok(match resp.genesis_hash.to_hex().as_str() {
+            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" => Network::Bitcoin,
+            // https://blockstream.info/testnet/block/000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943
+            "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943" => Network::Testnet,
+            // https://explorer.bc-2.jp/block/00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6
+            "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6" => Network::Signet,
+            hash => {
+                warn!("Unknown genesis hash {hash} - assuming regtest");
+                Network::Regtest
+            }
+        })
+    }
+
+    async fn get_block_height(&self) -> Result<u64> {
+        fedimint_api::task::block_in_place(|| {
+            Ok(self.0.block_headers_subscribe_raw()?.height as u64)
+        })
+    }
+
+    async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
+        fedimint_api::task::block_in_place(|| {
+            Ok(self
+                .0
+                .block_headers(height as usize, 1)?
+                .headers
+                .get(0)
+                .ok_or_else(|| format_err!("empty block headers response"))?
+                .block_hash())
+        })
+    }
+
+    async fn get_block(&self, _hash: &BlockHash) -> Result<Block> {
+        bail!("get_block call not supported on electrum rpc backend")
+    }
+
+    async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
+        fedimint_api::task::block_in_place(|| {
+            Ok(Some(Feerate {
+                sats_per_kvb: (self.0.estimate_fee(confirmation_target as usize)? * 100_000_000f64)
+                    .ceil() as u64,
+            }))
+        })
+    }
+
+    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
+        fedimint_api::task::block_in_place(|| {
+            let mut bytes = vec![];
+            transaction
+                .consensus_encode(&mut bytes)
+                .expect("can't fail");
+            let _txid = self.0.transaction_broadcast_raw(&bytes)?;
+            Ok(())
+        })
+    }
+
+    async fn was_transaction_confirmed_in(
+        &self,
+        transaction: &Transaction,
+        height: u64,
+    ) -> Result<bool> {
+        if self.get_block_height().await? <= height {
+            bail!("Electrum backend does not contain the block at {height}H yet");
+        }
+
+        fedimint_api::task::block_in_place(|| {
+            let txid = transaction.txid();
+
+            let output = transaction
+                .output
+                .first()
+                .expect("Transaction must contain at least one output");
+
+            // if transaction is confirmed, we're going to find the confirmation event in the history of ifs first output
+            Ok(self
+                .0
+                .script_get_history(&output.script_pubkey)?
+                .iter()
+                .any(|history_item| {
+                    (history_item.height as u64) == height && history_item.tx_hash == txid
+                }))
         })
     }
 }

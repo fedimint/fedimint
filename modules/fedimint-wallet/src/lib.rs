@@ -19,7 +19,10 @@ use bitcoin::{
 };
 use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
-use fedimint_api::bitcoin_rpc::{fm_bitcoind_rpc_env_value_to_url, FM_BITCOIND_RPC_ENV};
+use fedimint_api::bitcoin_rpc::{
+    select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
+    FM_ELECTRUM_RPC_ENV,
+};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
@@ -810,13 +813,15 @@ impl Wallet {
         env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
-        let bitcoin_url = fm_bitcoind_rpc_env_value_to_url(
+        let bitcoin_backend = select_bitcoin_backend_from_envs(
             env.get(OsStr::new(FM_BITCOIND_RPC_ENV))
+                .map(OsString::as_os_str),
+            env.get(OsStr::new(FM_ELECTRUM_RPC_ENV))
                 .map(OsString::as_os_str),
         )?;
 
-        let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-            &bitcoin_url,
+        let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoin_rpc_backend(
+            &bitcoin_backend,
             task_group.make_handle(),
         )?;
 
@@ -1096,7 +1101,7 @@ impl Wallet {
                 .btc_rpc
                 .get_block_hash(height as u64)
                 .await
-                .expect("bitcoind rpc failed"); // TODO: use u64 for height everywhere
+                .expect("bitcoind rpc backend failed"); // TODO: use u64 for height everywhere
 
             let pending_transactions = dbtx
                 .find_by_prefix(&PendingTransactionPrefixKey)
@@ -1107,15 +1112,32 @@ impl Wallet {
                 })
                 .collect::<HashMap<_, _>>();
 
-            if !pending_transactions.is_empty() {
-                let block = self
-                    .btc_rpc
-                    .get_block(&block_hash)
-                    .await
-                    .expect("bitcoin rpc failed");
-                for transaction in block.txdata {
-                    if let Some(pending_tx) = pending_transactions.get(&transaction.txid()) {
-                        self.recognize_change_utxo(dbtx, pending_tx).await;
+            match self.btc_rpc.backend_type() {
+                BitcoinRpcBackendType::Bitcoind => {
+                    if !pending_transactions.is_empty() {
+                        let block = self
+                            .btc_rpc
+                            .get_block(&block_hash)
+                            .await
+                            .expect("bitcoin rpc failed");
+                        for transaction in block.txdata {
+                            if let Some(pending_tx) = pending_transactions.get(&transaction.txid())
+                            {
+                                self.recognize_change_utxo(dbtx, pending_tx).await;
+                            }
+                        }
+                    }
+                }
+                BitcoinRpcBackendType::Electrum => {
+                    for transaction in &pending_transactions {
+                        if self
+                            .btc_rpc
+                            .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
+                            .await
+                            .expect("bitcoin rpc backend failed")
+                        {
+                            self.recognize_change_utxo(dbtx, transaction.1).await;
+                        }
                     }
                 }
             }
