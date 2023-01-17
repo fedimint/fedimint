@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
-    crane.url = "github:ipetkov/crane?rev=5f353e7a4ff785d38ff0f0f2b80f29a65b6f14cb"; # https://github.com/ipetkov/crane/pull/183
+    crane.url = "github:ipetkov/crane?rev=98894bb39b03bfb379c5e10523cd61160e1ac782"; # https://github.com/ipetkov/crane/releases/tag/v0.11.0
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
