@@ -8,7 +8,6 @@ use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_api::Amount;
 use fedimint_server::modules::ln::contracts::Preimage;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::json;
 use tokio::io::{stdin, stdout};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
@@ -133,6 +132,17 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
     }
 }
 
+/// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+/// 16399 error code reports unknown payment details.
+///
+/// TODO: We should probably use a more specific error code based on htlc processing fail reason
+fn htlc_processing_failure() -> serde_json::Value {
+    serde_json::json!({
+        "result": "fail",
+        "failure_message": "1639"
+    })
+}
+
 /// Handle core-lightning "htlc_accepted" events by attempting to buy this preimage from the federation
 /// and completing the payment
 async fn htlc_accepted_hook(
@@ -140,15 +150,33 @@ async fn htlc_accepted_hook(
     value: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let htlc_accepted: HtlcAccepted = serde_json::from_value(value)?;
-    let preimage = plugin
-        .state()
-        .send(ReceivePaymentPayload { htlc_accepted })
-        .await?;
-    let pk = preimage.to_public_key()?;
-    Ok(serde_json::json!({
-      "result": "resolve",
-      "payment_key": pk.to_string(),
-    }))
+
+    // Filter and process intercepted HTLCs based on `short_channel_id` value.
+    //
+    // After https://github.com/fedimint/fedimint/pull/1180,
+    // all HTLCs to Fedimint clients should have route hint with `short_channel_id = 0u64`,
+    // unless the gateway is serving multiple federations.
+    if htlc_accepted.onion.short_channel_id == "0x0x0" {
+        let preimage = match plugin
+            .state()
+            .send(ReceivePaymentPayload { htlc_accepted })
+            .await
+        {
+            Ok(preimage) => preimage,
+            Err(_) => return Ok(htlc_processing_failure()),
+        };
+
+        let pk = preimage.to_public_key()?;
+        Ok(serde_json::json!({
+          "result": "resolve",
+          "payment_key": pk.to_string(),
+        }))
+    } else {
+        // HTLC is not relevant to fedimint
+        Ok(serde_json::json!({
+            "result": "continue",
+        }))
+    }
 }
 
 pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<ClnRpcRef, Error> {
@@ -171,8 +199,7 @@ pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<ClnRpcRef, Error>
                     .unwrap_or_else(|_| Err(anyhow!("htlc_accepted timeout")))
                     .or_else(|e| {
                         error!("htlc_accepted error {:?}", e);
-                        // cln_plugin doesn't handle errors very well ... tell it to proceed normally
-                        Ok(json!({ "result": "continue" }))
+                        Ok(htlc_processing_failure())
                     })
             });
             handle.await?
