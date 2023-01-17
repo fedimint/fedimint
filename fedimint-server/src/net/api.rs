@@ -155,7 +155,7 @@ fn attach_endpoints_erased(
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
                 AssertUnwindSafe((handler)(
-                    fedimint.modules.get(module_instance),
+                    fedimint.modules.get_expect(module_instance),
                     dbtx,
                     params,
                 ))

@@ -177,7 +177,7 @@ impl FedimintConsensus {
         let mut dbtx = self.db.begin_transaction().await;
 
         for input in &transaction.inputs {
-            let module = self.modules.get(input.module_instance_id());
+            let module = self.modules.get_expect(input.module_instance_id());
 
             let cache = module.build_verification_cache(&[input.clone()]);
             let interconnect = self.build_interconnect();
@@ -194,7 +194,7 @@ impl FedimintConsensus {
         for output in &transaction.outputs {
             let amount = self
                 .modules
-                .get(output.module_instance_id())
+                .get_expect(output.module_instance_id())
                 .validate_output(&mut dbtx, output)
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
@@ -306,7 +306,7 @@ impl FedimintConsensus {
 
         for (module_key, module_cis) in per_module_cis {
             self.modules
-                .get(module_key)
+                .get_expect(module_key)
                 .begin_consensus_epoch(dbtx, module_cis)
                 .await;
         }
@@ -541,7 +541,7 @@ impl FedimintConsensus {
         for input in transaction.inputs.iter() {
             let meta = self
                 .modules
-                .get(input.module_instance_id())
+                .get_expect(input.module_instance_id())
                 .apply_input(
                     &self.build_interconnect(),
                     dbtx,
@@ -562,7 +562,7 @@ impl FedimintConsensus {
             };
             let amount = self
                 .modules
-                .get(output.module_instance_id())
+                .get_expect(output.module_instance_id())
                 .apply_output(dbtx, &output, out_point)
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
@@ -594,7 +594,7 @@ impl FedimintConsensus {
                 };
                 let outcome = self
                     .modules
-                    .get(output.module_instance_id())
+                    .get_expect(output.module_instance_id())
                     .output_status(&mut dbtx, outpoint, output.module_instance_id())
                     .await
                     .expect("the transaction was processed, so should be known");
@@ -635,7 +635,7 @@ impl FedimintConsensus {
         let caches = module_inputs
             .into_iter()
             .map(|(module_key, inputs)| {
-                let module = self.modules.get(module_key);
+                let module = self.modules.get_expect(module_key);
                 (module_key, module.build_verification_cache(&inputs))
             })
             .collect();
