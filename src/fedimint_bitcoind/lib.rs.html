@@ -130,15 +130,54 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">pub use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Block, BlockHash, Network, Transaction};
-<span class="kw">use </span>fedimint_api::{dyn_newtype_define, task::TaskHandle, Feerate};
+<span class="kw">use </span>fedimint_api::{
+    bitcoin_rpc::BitcoinRpcBackendType, dyn_newtype_define, task::TaskHandle, Feerate,
+};
 <span class="kw">use </span>tracing::info;
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
@@ -149,6 +188,13 @@
 /// Functions may panic if if the bitcoind node is not reachable.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IBitcoindRpc: Debug + Send + Sync {
+    <span class="doccomment">/// `true` if it&#39;s real-bitcoin (not electrum) backend and thus supports `get_block` call
+    ///
+    /// This is a bit of a workaround to support electrum.
+    </span><span class="kw">fn </span>backend_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcBackendType {
+        BitcoinRpcBackendType::Bitcoind
+    }
+
     <span class="doccomment">/// Returns the Bitcoin network the node is connected to
     </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Network&gt;;
 
@@ -179,6 +225,15 @@
 
     <span class="doccomment">/// Submits a transaction to the Bitcoin network
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+
+    <span class="doccomment">/// Check if a transaction was included in a given (only electrum)
+    </span><span class="kw">async fn </span>was_transaction_confirmed_in(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _transaction: <span class="kw-2">&amp;</span>Transaction,
+        _height: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="macro">bail!</span>(<span class="string">&quot;is_transaction_confirmed_in call not supported in standard (non-electrum) backends&quot;</span>)
+    }
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -232,6 +287,10 @@
 <span class="kw">where
     </span>C: IBitcoindRpc,
 {
+    <span class="kw">fn </span>backend_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcBackendType {
+        <span class="self">self</span>.inner.backend_type()
+    }
+
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Network&gt; {
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_network().<span class="kw">await </span>})
             .<span class="kw">await
@@ -260,6 +319,19 @@
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.submit_transaction(transaction.clone()).<span class="kw">await </span>})
             .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>was_transaction_confirmed_in(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        transaction: <span class="kw-2">&amp;</span>Transaction,
+        height: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{
+            <span class="self">self</span>.inner
+                .was_transaction_confirmed_in(transaction, height)
+                .<span class="kw">await
+        </span>})
+        .<span class="kw">await
     </span>}
 }
 </code></pre></div>
