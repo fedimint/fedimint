@@ -2,7 +2,8 @@ use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::core::{DynInput, DynOutput};
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::{serde_module_encoding_wrapper, Amount, TransactionId};
+use fedimint_api::module::SerdeModuleEncoding;
+use fedimint_api::{Amount, TransactionId};
 use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use thiserror::Error;
@@ -20,7 +21,7 @@ pub struct Transaction {
     pub signature: Option<schnorr::Signature>,
 }
 
-serde_module_encoding_wrapper!(SerdeTransaction, Transaction);
+pub type SerdeTransaction = SerdeModuleEncoding<Transaction>;
 
 impl Transaction {
     /// Hash of the transaction (excluding the signature).
