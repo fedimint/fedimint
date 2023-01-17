@@ -17,5 +17,5 @@ where
 {
     let key = ModuleInstanceId::consensus_decode(&mut d, modules)?;
 
-    decode_fn(d, modules.get(key), key)
+    decode_fn(d, modules.get_expect(key), key)
 }

@@ -836,7 +836,7 @@ impl FederationTest {
                     svr.fedimint
                         .consensus
                         .modules
-                        .get(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+                        .get_expect(LEGACY_HARDCODED_INSTANCE_ID_MINT)
                         .apply_output(
                             &mut dbtx,
                             &core::DynOutput::from_typed(
@@ -908,7 +908,7 @@ impl FederationTest {
         let wallet = server
             .consensus
             .modules
-            .get(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .get_expect(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
