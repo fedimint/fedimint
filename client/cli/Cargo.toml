@@ -22,7 +22,7 @@ fedimint-core = { path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 fedimint-mint = { path = "../../modules/fedimint-mint" }
 rand = "0.8"
-serde = { version = "1.0.149", features = [ "derive" ] }
+serde = { version = "1.0.152", features = [ "derive" ] }
 tokio = { version = "1.23.1", features = ["full"] }
 tracing ="0.1.37"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
