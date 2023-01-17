@@ -156,7 +156,8 @@ impl Iterator for MemDbIter {
 #[cfg(test)]
 mod tests {
     use super::MemDatabase;
-    use crate::{db::Database, module::registry::ModuleDecoderRegistry};
+    use crate::db::Database;
+    use crate::module::registry::ModuleDecoderRegistry;
 
     fn database() -> Database {
         Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())

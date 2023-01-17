@@ -5,22 +5,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use fedimint_api::config::ClientConfig;
 use fedimint_api::core::ModuleInstanceId;
+use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
 use fedimint_api::server::DynServerModule;
-use fedimint_api::{
-    config::ClientConfig,
-    module::{api_endpoint, ApiEndpoint, ApiError},
-    task::TaskHandle,
-    TransactionId,
-};
+use fedimint_api::task::TaskHandle;
+use fedimint_api::TransactionId;
 use fedimint_core::epoch::SerdeEpochHistory;
 use fedimint_core::outcome::TransactionStatus;
 use futures::FutureExt;
-use jsonrpsee::{
-    server::ServerBuilder,
-    types::{error::CallError, ErrorObject},
-    RpcModule,
-};
+use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::ErrorObject;
+use jsonrpsee::RpcModule;
 use tracing::{debug, error};
 
 use crate::config::ServerConfig;

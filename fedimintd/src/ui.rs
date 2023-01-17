@@ -6,10 +6,8 @@ use anyhow::{format_err, Error};
 use askama::Template;
 use axum::extract::Form;
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::{
-    routing::{get, post},
-    Router,
-};
+use axum::routing::{get, post};
+use axum::Router;
 use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_api::config::ClientConfig;

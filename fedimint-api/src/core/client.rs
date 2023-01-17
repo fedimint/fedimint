@@ -5,8 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::ModuleKind;
-use crate::core::Decoder;
-use crate::core::DynDecoder;
+use crate::core::{Decoder, DynDecoder};
 use crate::module::TransactionItemAmount;
 use crate::{dyn_newtype_define, ServerModule};
 

@@ -1,17 +1,19 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_server::modules::{
-    ln::contracts::{ContractId, Preimage},
-    wallet::txoproof::TxOutProof,
-};
+use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
+use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, info, instrument, warn};
 
-use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
+use crate::ln::LnRpc;
+use crate::rpc::FederationInfo;
+use crate::utils::retry;
+use crate::{LnGatewayError, Result};
 
 pub struct GatewayActor {
     client: Arc<GatewayClient>,

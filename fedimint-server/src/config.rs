@@ -33,8 +33,7 @@ use tracing::info;
 use url::Url;
 
 use crate::fedimint_api::NumPeers;
-use crate::net::connect::TlsConfig;
-use crate::net::connect::{parse_host_port, Connector};
+use crate::net::connect::{parse_host_port, Connector, TlsConfig};
 use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 

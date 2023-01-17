@@ -30,34 +30,27 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_api::{ServerModule, TieredMulti};
+use fedimint_api::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::modules::ln::common::LightningDecoder;
 use fedimint_core::modules::ln::config::LightningClientConfig;
+use fedimint_core::modules::ln::contracts::incoming::{
+    IncomingContract, IncomingContractOffer, OfferId,
+};
+use fedimint_core::modules::ln::contracts::{
+    Contract, ContractId, DecryptedPreimage, IdentifyableContract, OutgoingContractOutcome,
+    Preimage,
+};
+use fedimint_core::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
 use fedimint_core::modules::mint::common::MintDecoder;
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
+use fedimint_core::modules::mint::{BlindNonce, MintOutput, MintOutputOutcome};
 use fedimint_core::modules::wallet::common::WalletDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
+use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::legacy::Transaction as LegacyTransaction;
-use fedimint_core::{
-    modules::{
-        ln::{
-            contracts::{
-                incoming::{IncomingContract, IncomingContractOffer, OfferId},
-                Contract, ContractId, DecryptedPreimage, IdentifyableContract,
-                OutgoingContractOutcome, Preimage,
-            },
-            ContractOutput, LightningGateway, LightningOutput,
-        },
-        mint::BlindNonce,
-        wallet::txoproof::TxOutProof,
-    },
-    transaction::legacy::{Input, Output},
-};
+use fedimint_core::transaction::legacy::{Input, Output, Transaction as LegacyTransaction};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -65,7 +58,8 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use ln::{db::LightningGatewayKey, PayInvoicePayload};
+use ln::db::LightningGatewayKey;
+use ln::PayInvoicePayload;
 use mint::NoteIssuanceRequests;
 use rand::distributions::Standard;
 use rand::prelude::*;
@@ -77,24 +71,20 @@ use threshold_crypto::PublicKey;
 use tracing::debug;
 use url::Url;
 
+use crate::api::MemberError;
 use crate::db::ClientSecretKey;
 use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
+use crate::ln::incoming::ConfirmedInvoice;
 use crate::ln::outgoing::OutgoingContractAccount;
-use crate::ln::LnClientError;
+use crate::ln::{LnClient, LnClientError};
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
-use crate::mint::MintClientError;
+use crate::mint::{MintClient, MintClientError, SpendableNote};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
-use crate::wallet::WalletClientError;
-use crate::{
-    api::MemberError,
-    ln::{incoming::ConfirmedInvoice, LnClient},
-    mint::{MintClient, SpendableNote},
-    wallet::WalletClient,
-};
+use crate::wallet::{WalletClient, WalletClientError};
 
 /// Number of blocks until outgoing lightning contracts times out and user client can get refund
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;

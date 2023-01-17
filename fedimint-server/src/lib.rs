@@ -19,8 +19,7 @@ pub use fedimint_core::*;
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
 use itertools::Itertools;
-use mint_client::api::WsFederationApi;
-use mint_client::api::{DynFederationApi, GlobalFederationApi};
+use mint_client::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -32,8 +31,7 @@ use crate::consensus::{
 use crate::db::LastEpochKey;
 use crate::fedimint_api::net::peers::IPeerConnections;
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::PeerSlice;
-use crate::net::peers::{PeerConnector, ReconnectPeerConnections};
+use crate::net::peers::{PeerConnector, PeerSlice, ReconnectPeerConnections};
 use crate::rng::RngGenerator;
 
 /// The actual implementation of the federated mint

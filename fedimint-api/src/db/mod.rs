@@ -7,10 +7,8 @@ use async_trait::async_trait;
 use thiserror::Error;
 use tracing::{trace, warn};
 
-use crate::{
-    encoding::{Decodable, Encodable},
-    fmt_utils::AbbreviateHexBytes,
-};
+use crate::encoding::{Decodable, Encodable};
+use crate::fmt_utils::AbbreviateHexBytes;
 
 pub mod mem_impl;
 

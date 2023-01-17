@@ -6,7 +6,8 @@ use std::time::Duration;
 pub use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
-use fedimint_api::{dyn_newtype_define, task::TaskHandle, Feerate};
+use fedimint_api::task::TaskHandle;
+use fedimint_api::{dyn_newtype_define, Feerate};
 use tracing::info;
 
 #[cfg(feature = "bitcoincore-rpc")]

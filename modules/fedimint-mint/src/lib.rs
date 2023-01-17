@@ -9,10 +9,9 @@ pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
     scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams,
-    ServerModuleConfig, TypedServerModuleConfig,
+    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};

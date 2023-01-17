@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -10,11 +9,9 @@ use futures::Future;
 use serde;
 use serde::Serialize;
 use serde_json::Value;
-use tracing::info;
-use tracing::warn;
+use tracing::{info, warn};
 
-use crate::api::IFederationApi;
-use crate::api::JsonRpcResult;
+use crate::api::{IFederationApi, JsonRpcResult};
 
 #[allow(clippy::type_complexity)]
 type Handler<State> = Pin<

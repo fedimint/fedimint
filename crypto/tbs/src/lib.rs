@@ -5,10 +5,8 @@
 
 use std::hash::Hasher;
 
-pub use bls12_381::G1Affine as MessagePoint;
-pub use bls12_381::G2Affine as PubKeyPoint;
-pub use bls12_381::Scalar;
 use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective};
+pub use bls12_381::{G1Affine as MessagePoint, G2Affine as PubKeyPoint, Scalar};
 use ff::Field;
 use group::Curve;
 use rand::rngs::OsRng;

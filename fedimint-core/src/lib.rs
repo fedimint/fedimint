@@ -1,9 +1,7 @@
 use thiserror::Error;
 
 pub mod modules {
-    pub use fedimint_ln as ln;
-    pub use fedimint_mint as mint;
-    pub use fedimint_wallet as wallet;
+    pub use {fedimint_ln as ln, fedimint_mint as mint, fedimint_wallet as wallet};
 }
 
 /// Fedimint toplevel config

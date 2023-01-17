@@ -7,9 +7,9 @@ use std::path::Path;
 use anyhow::Result;
 use async_trait::async_trait;
 use fedimint_api::db::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, PrefixIter,
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, IDatabase,
+    IDatabaseTransaction, PrefixIter,
 };
-use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 pub use sled;
 use sled::transaction::TransactionError;
 
@@ -194,7 +194,8 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
 
 #[cfg(test)]
 mod fedimint_sled_tests {
-    use fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+    use fedimint_api::db::Database;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
 
     use crate::SledDb;
 

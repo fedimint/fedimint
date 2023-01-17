@@ -13,11 +13,9 @@ use tokio::io::{stdin, stdout};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
+use crate::ln::{LightningError, LnRpc};
+use crate::rpc::GatewayRpcSender;
 use crate::ReceivePaymentPayload;
-use crate::{
-    ln::{LightningError, LnRpc},
-    rpc::GatewayRpcSender,
-};
 
 /// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
 fn as_fedimint_amount<'de, D>(amount: D) -> Result<Amount, D::Error>

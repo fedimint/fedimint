@@ -1,28 +1,22 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
-use fedimint_api::{
-    core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT},
-    msats, Amount, OutPoint, PeerId, Tiered, TieredMulti,
+use fedimint_api::core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+use fedimint_api::{msats, Amount, OutPoint, PeerId, Tiered, TieredMulti};
+use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::modules::mint::{
+    BlindNonce, MintInput, MintOutput, MintOutputConfirmation, OutputConfirmationSignatures,
 };
-use fedimint_core::{
-    epoch::ConsensusItem,
-    modules::mint::{
-        BlindNonce, MintInput, MintOutput, MintOutputConfirmation, OutputConfirmationSignatures,
-    },
-    transaction::Transaction,
-};
+use fedimint_core::transaction::Transaction;
 use fedimint_derive_secret::DerivableSecret;
 use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare};
 
 use super::{EcashRecoveryTracker, PlaintextEcashBackup};
-use crate::{
-    mint::{
-        db::OutputFinalizationKey, MintClient, NoteIndex, NoteIssuanceRequest,
-        NoteIssuanceRequests, SpendableNote,
-    },
-    Client,
+use crate::mint::db::OutputFinalizationKey;
+use crate::mint::{
+    MintClient, NoteIndex, NoteIssuanceRequest, NoteIssuanceRequests, SpendableNote,
 };
+use crate::Client;
 
 /// Simplest in-memory mint client for the purpose of writting tests
 /// (at least e-cash recovery ones).

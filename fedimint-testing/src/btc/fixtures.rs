@@ -1,12 +1,12 @@
-use std::{
-    iter::repeat,
-    sync::{Arc, Mutex},
-};
+use std::iter::repeat;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use bitcoin::hash_types::Txid;
+use bitcoin::hashes::Hash;
+use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
-    hash_types::Txid, hashes::Hash, util::merkleblock::PartialMerkleTree, Address, Block,
-    BlockHash, BlockHeader, Network, PackedLockTime, Transaction, TxOut,
+    Address, Block, BlockHash, BlockHeader, Network, PackedLockTime, Transaction, TxOut,
 };
 use fedimint_api::{Amount, Feerate};
 use fedimint_bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};

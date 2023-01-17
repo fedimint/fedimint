@@ -1,5 +1,4 @@
-use std::fmt;
-use std::thread_local;
+use std::{fmt, thread_local};
 
 pub fn rust_log_full_enabled() -> bool {
     // this will be called only once per-thread for best performance

@@ -2,13 +2,12 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use fedimint_api::task::TaskGroup;
-use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
-use ln_gateway::{
-    client::{DynGatewayClientBuilder, MemDbFactory},
-    config::GatewayConfig,
-    rpc::GatewayRequest,
-    LnGateway,
-};
+use fedimint_testing::btc::fixtures::FakeBitcoinTest;
+use fedimint_testing::btc::BitcoinTest;
+use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
+use ln_gateway::config::GatewayConfig;
+use ln_gateway::rpc::GatewayRequest;
+use ln_gateway::LnGateway;
 use mint_client::module_decode_stubs;
 use tokio::sync::mpsc;
 

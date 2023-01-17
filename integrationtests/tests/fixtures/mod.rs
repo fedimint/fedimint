@@ -7,21 +7,18 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::atomic::AtomicU16;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::KeyPair;
-use bitcoin::{secp256k1, Address};
+use bitcoin::{secp256k1, Address, KeyPair};
 use cln_rpc::ClnRpc;
 use fake::FakeLightningTest;
 use fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::ClientConfig;
-use fedimint_api::core;
 use fedimint_api::core::{
     DynModuleConsensusItem as PerModuleConsensusItem, ModuleConsensusItem,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -33,44 +30,38 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::{timeout, TaskGroup};
-use fedimint_api::OutPoint;
-use fedimint_api::PeerId;
-use fedimint_api::TieredMulti;
-use fedimint_api::{sats, Amount};
+use fedimint_api::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::{MintGen, MintOutput};
-use fedimint_server::config::{connect, ServerConfig};
-use fedimint_server::config::{ModuleInitRegistry, ServerConfigParams};
-use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
-use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
+use fedimint_server::config::{connect, ModuleInitRegistry, ServerConfig, ServerConfigParams};
+use fedimint_server::consensus::{
+    ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
+};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
-use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
+use fedimint_testing::btc::fixtures::FakeBitcoinTest;
+use fedimint_testing::btc::BitcoinTest;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
-use fedimint_wallet::Wallet;
-use fedimint_wallet::WalletConsensusItem;
-use fedimint_wallet::{SpendableUTXO, WalletGen};
+use fedimint_wallet::{SpendableUTXO, Wallet, WalletConsensusItem, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
-use ln_gateway::{
-    actor::GatewayActor,
-    client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
-    config::GatewayConfig,
-    rpc::GatewayRequest,
-    LnGateway,
-};
-use mint_client::module_decode_stubs;
+use ln_gateway::actor::GatewayActor;
+use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
+use ln_gateway::config::GatewayConfig;
+use ln_gateway::rpc::GatewayRequest;
+use ln_gateway::LnGateway;
+use mint_client::api::WsFederationApi;
+use mint_client::mint::SpendableNote;
 use mint_client::{
-    api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
-    UserClient, UserClientConfig,
+    module_decode_stubs, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
 };
 use rand::rngs::OsRng;
 use rand::RngCore;

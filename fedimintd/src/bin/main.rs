@@ -12,12 +12,10 @@ use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::WalletGen;
 use fedimintd::encrypt::*;
-use fedimintd::ui::run_ui;
-use fedimintd::ui::UiMessage;
+use fedimintd::ui::{run_ui, UiMessage};
 use fedimintd::*;
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::Layer;
+use tracing_subscriber::{EnvFilter, Layer};
 
 use crate::{JSON_EXT, LOCAL_CONFIG};
 

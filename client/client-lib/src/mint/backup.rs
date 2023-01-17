@@ -7,29 +7,24 @@
 //! them with federation. A successfully recovered snapshot can be used
 //! to avoid having to scan the whole history.
 
-use std::{
-    cmp::{max, Reverse},
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::RangeInclusive,
-};
+use std::cmp::{max, Reverse};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ops::RangeInclusive;
 
 use anyhow::Result;
-use fedimint_api::{
-    cancellable::{Cancellable, Cancelled},
-    core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    task::{TaskGroup, TaskHandle},
-    NumPeers, PeerId,
-};
-use fedimint_core::{
-    epoch::{ConsensusItem, SignedEpochOutcome},
-    modules::mint::{MintInput, MintOutput, MintOutputConfirmation},
-};
+use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+use fedimint_api::task::{TaskGroup, TaskHandle};
+use fedimint_api::{NumPeers, PeerId};
+use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
+use fedimint_core::modules::mint::{MintInput, MintOutput, MintOutputConfirmation};
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
-use super::{db::NextECashNoteIndexKeyPrefix, *};
+use super::db::NextECashNoteIndexKeyPrefix;
+use super::*;
 use crate::api::{self, GlobalFederationApi, MintFederationApi};
 
 impl MintClient {

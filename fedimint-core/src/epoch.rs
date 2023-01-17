@@ -1,8 +1,6 @@
-use std::collections::BTreeSet;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use bitcoin_hashes::sha256::Hash as Sha256;
-use bitcoin_hashes::sha256::HashEngine;
+use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use fedimint_api::core::DynModuleConsensusItem as ModuleConsensusItem;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -216,8 +214,10 @@ mod tests {
     use rand::rngs::OsRng;
     use threshold_crypto::{SecretKey, SecretKeySet};
 
-    use crate::epoch::{ConsensusItem, EpochOutcomeSignatureShare, Sha256};
-    use crate::epoch::{EpochOutcome, EpochOutcomeSignature, EpochVerifyError, SignedEpochOutcome};
+    use crate::epoch::{
+        ConsensusItem, EpochOutcome, EpochOutcomeSignature, EpochOutcomeSignatureShare,
+        EpochVerifyError, Sha256, SignedEpochOutcome,
+    };
 
     fn signed_history(
         epoch: u16,

@@ -7,14 +7,16 @@ use anyhow::{anyhow, Error};
 use bitcoin::{Address, Transaction, XOnlyPublicKey};
 use fedimint_api::config::FederationId;
 use fedimint_api::{Amount, TransactionId};
-use fedimint_server::{modules::ln::contracts::Preimage, modules::wallet::txoproof::TxOutProof};
+use fedimint_server::modules::ln::contracts::Preimage;
+use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::ln::PayInvoicePayload;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
-use crate::{cln::HtlcAccepted, LnGatewayError, Result};
+use crate::cln::HtlcAccepted;
+use crate::{LnGatewayError, Result};
 
 #[derive(Debug, Clone)]
 pub struct GatewayRpcSender {

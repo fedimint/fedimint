@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use bitcoin::Address;
-use bitcoin::KeyPair;
+use bitcoin::{Address, KeyPair};
 use db::PegInKey;
 use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
@@ -16,8 +15,7 @@ use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::api::GlobalFederationApi;
-use crate::api::OutputOutcomeError;
+use crate::api::{GlobalFederationApi, OutputOutcomeError};
 use crate::utils::ClientContext;
 use crate::MemberError;
 

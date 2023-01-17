@@ -1,8 +1,7 @@
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::Amount;
-use fedimint_core::modules::ln::contracts::{
-    outgoing::OutgoingContract, IdentifyableContract, Preimage,
-};
+use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
+use fedimint_core::modules::ln::contracts::{IdentifyableContract, Preimage};
 use fedimint_core::modules::ln::LightningInput;
 use serde::Serialize;
 

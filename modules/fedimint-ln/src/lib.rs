@@ -23,10 +23,9 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
-    TypedServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
@@ -40,8 +39,7 @@ use fedimint_api::module::{
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
-use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
-use fedimint_api::{OutPoint, ServerModule};
+use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -51,8 +49,8 @@ use url::Url;
 
 use crate::common::LightningDecoder;
 use crate::config::{LightningConfig, LightningConfigConsensus, LightningConfigPrivate};
+use crate::contracts::incoming::{IncomingContractOffer, OfferId};
 use crate::contracts::{
-    incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
     IdentifyableContract, Preimage, PreimageDecryptionShare,
 };

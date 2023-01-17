@@ -7,15 +7,12 @@ use std::time::Duration;
 use anyhow::Result;
 use fedimint_api::config::FederationId;
 use fixtures::{fixtures, Fixtures};
-use ln_gateway::rpc::rpc_client::{Error, Response};
-use ln_gateway::{
-    config::GatewayConfig,
-    rpc::{
-        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, WithdrawPayload,
-    },
-    utils::retry,
+use ln_gateway::config::GatewayConfig;
+use ln_gateway::rpc::rpc_client::{Error, Response, RpcClient};
+use ln_gateway::rpc::{
+    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
+use ln_gateway::utils::retry;
 use mint_client::api::WsFederationConnect;
 use tracing_subscriber::EnvFilter;
 use url::Url;

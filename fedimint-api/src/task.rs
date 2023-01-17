@@ -14,8 +14,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::JoinHandle;
-use tracing::debug;
-use tracing::info;
+use tracing::{debug, info};
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
 

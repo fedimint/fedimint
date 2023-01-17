@@ -5,10 +5,9 @@ use std::fmt;
 use async_trait::async_trait;
 use common::DummyDecoder;
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
     ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};

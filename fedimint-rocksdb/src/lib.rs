@@ -2,8 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::PrefixIter;
-use fedimint_api::db::{IDatabase, IDatabaseTransaction};
+use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixIter};
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 use tracing::warn;
@@ -163,7 +162,8 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
 
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
-    use fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+    use fedimint_api::db::Database;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
 
     use crate::RocksDb;
 
