@@ -399,6 +399,28 @@
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -420,11 +442,13 @@
 </span><span class="kw">pub struct </span>TieredMulti&lt;T&gt;(BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;);
 
 <span class="kw">impl</span>&lt;T&gt; TieredMulti&lt;T&gt; {
-    <span class="kw">pub fn </span>new(map: BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Returns a new `TieredMulti` with the given `BTreeMap` map
+    </span><span class="kw">pub fn </span>new(map: BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;) -&gt; <span class="self">Self </span>{
         TieredMulti(map)
     }
 
-    <span class="kw">pub fn </span>total_amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+    <span class="doccomment">/// Returns the total value of all notes in msat as `Amount`
+    </span><span class="kw">pub fn </span>total_amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="kw">let </span>milli_sat = <span class="self">self
             </span>.<span class="number">0
             </span>.iter()
@@ -433,23 +457,28 @@
         Amount { msats: milli_sat }
     }
 
-    <span class="kw">pub fn </span>item_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    <span class="doccomment">/// Returns the number of items in all vectors
+    </span><span class="kw">pub fn </span>count_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.<span class="number">0</span>.values().map(|coins| coins.len()).sum()
     }
 
-    <span class="kw">pub fn </span>tier_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    <span class="doccomment">/// Returns the number of tiers
+    </span><span class="kw">pub fn </span>count_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.<span class="number">0</span>.len()
     }
 
-    <span class="kw">pub fn </span>tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Amount&gt; {
+    <span class="doccomment">/// Returns an iterator over the keys
+    </span><span class="kw">pub fn </span>iter_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Amount&gt; {
         <span class="self">self</span>.<span class="number">0</span>.keys()
     }
 
-    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.item_count() == <span class="number">0
+    <span class="doccomment">/// Verifies whether all vectors in all tiers are empty
+    </span><span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.count_items() == <span class="number">0
     </span>}
 
-    <span class="kw">pub fn </span>map&lt;F, N, E&gt;(<span class="self">self</span>, f: F) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;N&gt;, E&gt;
+    <span class="doccomment">/// Applies the given closure to every `(Amount, T)` pair
+    </span><span class="kw">pub fn </span>map&lt;F, N, E&gt;(<span class="self">self</span>, f: F) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;N&gt;, E&gt;
     <span class="kw">where
         </span>F: Fn(Amount, T) -&gt; <span class="prelude-ty">Result</span>&lt;N, E&gt;,
     {
@@ -468,7 +497,8 @@
         <span class="prelude-val">Ok</span>(TieredMulti(res))
     }
 
-    <span class="kw">pub fn </span>structural_eq&lt;O&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>TieredMulti&lt;O&gt;) -&gt; bool {
+    <span class="doccomment">/// Verifies whether the structure of `self` and `other` is identical
+    </span><span class="kw">pub fn </span>structural_eq&lt;O&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>TieredMulti&lt;O&gt;) -&gt; bool {
         <span class="kw">let </span>tier_eq = <span class="self">self</span>.<span class="number">0</span>.keys().eq(other.<span class="number">0</span>.keys());
         <span class="kw">let </span>per_tier_eq = <span class="self">self
             </span>.<span class="number">0
@@ -479,36 +509,50 @@
         tier_eq &amp;&amp; per_tier_eq
     }
 
-    <span class="kw">pub fn </span>iter_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>Amount, <span class="kw-2">&amp;</span>Vec&lt;T&gt;)&gt; {
+    <span class="doccomment">/// Returns an borrowing iterator
+    </span><span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>Amount, <span class="kw-2">&amp;</span>Vec&lt;T&gt;)&gt; {
         <span class="self">self</span>.<span class="number">0</span>.iter()
     }
 
-    <span class="comment">// Note: order of the elements is important here: from lowest tiers to highest, then in order of elements in the Vec
+    <span class="doccomment">/// Returns an iterator over every `(Amount, &amp;T)`
+    ///
+    /// Note: The order of the elements is important:
+    /// from the lowest tier to the highest, then in order of elements in the Vec
     </span><span class="kw">pub fn </span>iter_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>T)&gt; + DoubleEndedIterator {
-        <span class="self">self</span>.<span class="number">0
+        <span class="comment">// Note: If you change the method implementation, make sure that the returned order of the
+        // elements stays consistent.
+        </span><span class="self">self</span>.<span class="number">0
             </span>.iter()
             .flat_map(|(amt, coins)| coins.iter().map(<span class="kw">move </span>|c| (<span class="kw-2">*</span>amt, c)))
     }
-    <span class="comment">// Note: order of the elements is important here: from lowest tiers to highest, then in order of elements in the Vec
+
+    <span class="doccomment">/// Returns an consuming iterator over every `(Amount, T)`
+    ///
+    /// Note: The order of the elements is important:
+    /// from the lowest tier to the highest, then in order of elements in the Vec
     </span><span class="kw">pub fn </span>into_iter_items(<span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, T)&gt; + DoubleEndedIterator {
-        <span class="self">self</span>.<span class="number">0
+        <span class="comment">// Note: If you change the method implementation, make sure that the returned order of the
+        // elements stays consistent.
+        </span><span class="self">self</span>.<span class="number">0
             </span>.into_iter()
             .flat_map(|(amt, coins)| coins.into_iter().map(<span class="kw">move </span>|c| (amt, c)))
     }
 
-    <span class="doccomment">/// Returns the max number of notes for any given denomination tier
-    </span><span class="kw">pub fn </span>max_tier_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    <span class="doccomment">/// Returns the length of the longest vector of all tiers
+    </span><span class="kw">pub fn </span>longest_tier_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.<span class="number">0</span>.values().map(|notes| notes.len()).max().unwrap_or(<span class="number">0</span>)
     }
 
-    <span class="kw">pub fn </span>check_tiers&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, keys: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), InvalidAmountTierError&gt; {
+    <span class="doccomment">/// Verifies that all keys in `self` are present in the keys of the given parameter `Tiered`
+    </span><span class="kw">pub fn </span>all_tiers_exist_in&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, keys: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), InvalidAmountTierError&gt; {
         <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.keys().find(|<span class="kw-2">&amp;</span>amt| keys.get(<span class="kw-2">*</span>amt).is_none()) {
             <span class="prelude-val">Some</span>(amt) =&gt; <span class="prelude-val">Err</span>(InvalidAmountTierError(<span class="kw-2">*</span>amt)),
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(()),
         }
     }
 
-    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Vec&lt;T&gt;&gt; {
+    <span class="doccomment">/// Returns an `Option` with a reference to the vector of the given `Amount`
+    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Vec&lt;T&gt;&gt; {
         <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>amt)
     }
 
