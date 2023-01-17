@@ -7,8 +7,8 @@ use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, WithdrawPayload,
+        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, ConnectLnPayload,
+        DepositAddressPayload, DepositPayload, WithdrawPayload,
     },
 };
 use mint_client::utils::from_hex;
@@ -68,6 +68,12 @@ pub enum Commands {
     ConnectFed {
         /// ConnectInfo code to connect to the federation
         connect: String,
+    },
+    /// Register gateway lightning rpc service
+    /// NOTE: This will replace any existing connection to a lightning service
+    ConnectLn {
+        /// URL to a gateway lightning rpc service
+        url: Url,
     },
 }
 
@@ -181,6 +187,14 @@ async fn main() {
                 )
                 .await
                 .expect("Failed to connect federation");
+
+            print_response(response).await;
+        }
+        Commands::ConnectLn { url } => {
+            let response = client
+                .connect_lightning(source_password(cli.rpcpassword), ConnectLnPayload { url })
+                .await
+                .expect("Failed to connect gateway lightning");
 
             print_response(response).await;
         }
