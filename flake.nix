@@ -328,6 +328,7 @@
         };
 
         commonCliTestArgs = commonArgs // {
+          pname = "fedimint-cli-test";
           src = filterWorkspaceCliTestFiles ./.;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
           # there's no point saving the `./target/` dir
@@ -338,7 +339,7 @@
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
           src = filterWorkspaceDepsBuildFiles ./.;
-          buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE && cargo check --profile $CARGO_PROFILE --all-targets && cargo build --profile $CARGO_PROFILE --all-targets";
+          buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE ; cargo check --profile $CARGO_PROFILE --all-targets ; cargo build --profile $CARGO_PROFILE --all-targets";
           doCheck = false;
         });
 
@@ -389,7 +390,7 @@
           pname = commonArgs.pname + "-lcov";
           cargoArtifacts = workspaceDepsCov;
           # TODO: as things are right now, the integration tests can't run in parallel
-          cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --profile $CARGO_PROFILE --workspace --lcov --output-path $out/lcov.info";
+          cargoBuildCommand = "mkdir -p $out ; env RUST_TEST_THREADS=1 cargo llvm-cov --profile $CARGO_PROFILE --workspace --lcov --output-path $out/lcov.info";
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
           doCheck = false;
         });
@@ -399,25 +400,32 @@
           cargoArtifacts = workspaceCov;
         });
 
-        cliTestReconnect = craneLib.cargoBuild (commonCliTestArgs // {
+        cliTestReconnect = craneLib.buildPackage (commonCliTestArgs // {
+          pname = "${commonCliTestArgs.pname}-reconnect";
           cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/reconnect-test.sh";
+          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/reconnect-test.sh";
+          doCheck = true;
         });
 
-        cliTestLatency = craneLib.cargoBuild (commonCliTestArgs // {
+        cliTestLatency = craneLib.buildPackage (commonCliTestArgs // {
+          pname = "${commonCliTestArgs.pname}-latency";
           cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/latency-test.sh";
-          doInstallCargoArtifacts = false;
+          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/latency-test.sh";
+          doCheck = true;
         });
 
-        cliTestCli = craneLib.cargoBuild (commonCliTestArgs // {
+        cliTestCli = craneLib.buildPackage (commonCliTestArgs // {
+          pname = "${commonCliTestArgs.pname}-cli";
           cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";
+          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/cli-test.sh";
+          doCheck = true;
         });
 
-        cliRustTests = craneLib.cargoBuild (commonCliTestArgs // {
+        cliRustTests = craneLib.buildPackage (commonCliTestArgs // {
+          pname = "${commonCliTestArgs.pname}-rust-tests";
           cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
+          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/rust-tests.sh";
+          doCheck = true;
         });
 
 
