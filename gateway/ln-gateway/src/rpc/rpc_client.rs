@@ -5,7 +5,8 @@ use serde::Serialize;
 use url::Url;
 
 use super::{
-    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
+    BalancePayload, ConnectFedPayload, ConnectLnPayload, DepositAddressPayload, DepositPayload,
+    WithdrawPayload,
 };
 
 pub struct RpcClient {
@@ -70,6 +71,15 @@ impl RpcClient {
         payload: ConnectFedPayload,
     ) -> Result<Response, Error> {
         let url = self.base_url.join("/connect").expect("invalid base url");
+        self.call(url, password, payload).await
+    }
+
+    pub async fn connect_lightning(
+        &self,
+        password: String,
+        payload: ConnectLnPayload,
+    ) -> Result<Response, Error> {
+        let url = self.base_url.join("/connectln").expect("invalid base url");
         self.call(url, password, payload).await
     }
 
