@@ -100,12 +100,19 @@
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_api::core::ModuleKind;
+<span class="kw">use </span>fedimint_api::encoding::Encodable;
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
@@ -120,14 +127,19 @@
     </span><span class="kw">pub </span>consensus: LightningConfigConsensus,
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>LightningConfigConsensus {
     <span class="doccomment">/// The threshold public keys for encrypting the LN preimage
     </span><span class="kw">pub </span>threshold_pub_keys: threshold_crypto::PublicKeySet,
-    <span class="doccomment">/// The number of decryption shares required
-    </span><span class="kw">pub </span>threshold: usize,
     <span class="doccomment">/// Fees charged for LN transactions
     </span><span class="kw">pub </span>fee_consensus: FeeConsensus,
+}
+
+<span class="kw">impl </span>LightningConfigConsensus {
+    <span class="doccomment">/// The number of decryption shares required
+    </span><span class="kw">pub fn </span>threshold(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.threshold_pub_keys.threshold() + <span class="number">1
+    </span>}
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,7 +155,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>LightningClientConfig {
     <span class="kw">pub </span>threshold_pub_key: threshold_crypto::PublicKey,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
@@ -188,7 +200,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>contract_input: fedimint_api::Amount,
     <span class="kw">pub </span>contract_output: fedimint_api::Amount,

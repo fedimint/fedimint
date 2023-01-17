@@ -1341,11 +1341,6 @@
 <a href="#1341" id="1341">1341</a>
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
-<a href="#1344" id="1344">1344</a>
-<a href="#1345" id="1345">1345</a>
-<a href="#1346" id="1346">1346</a>
-<a href="#1347" id="1347">1347</a>
-<a href="#1348" id="1348">1348</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -1357,11 +1352,11 @@
 <span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{ECashUserBackupSnapshot, EcashBackupKey};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
-    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams,
-    ServerModuleConfig, TypedServerModuleConfig,
+    scalar, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
+<span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -1527,7 +1522,6 @@
             .map(|<span class="kw-2">&amp;</span>peer| {
                 <span class="kw">let </span>config = MintConfig {
                     consensus: MintConfigConsensus {
-                        threshold: peers.threshold(),
                         peer_tbs_pks: peers
                             .iter()
                             .map(|<span class="kw-2">&amp;</span>key_peer| {
@@ -1616,7 +1610,6 @@
                     })
                     .collect(),
                 fee_consensus: Default::default(),
-                threshold: peers.threshold(),
                 max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },
         };
@@ -1624,18 +1617,16 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server.to_erased()))
     }
 
-    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="prelude-val">Ok</span>(config
-            .to_typed::&lt;MintConfig&gt;()<span class="question-mark">?
-            </span>.consensus
-            .to_client_config())
-    }
-
-    <span class="kw">fn </span>to_client_config_from_consensus_value(
+    <span class="kw">fn </span>to_config_response(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: serde_json::Value,
-    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;MintConfigConsensus&gt;(config)<span class="question-mark">?</span>.to_client_config())
+    ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
+        <span class="kw">let </span>config = serde_json::from_value::&lt;MintConfigConsensus&gt;(config)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(ModuleConfigResponse {
+            client: config.to_client_config(),
+            consensus_hash: config.hash()<span class="question-mark">?</span>,
+        })
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
@@ -2178,7 +2169,7 @@
         .map(|(amt, keys)| {
             <span class="comment">// TODO: avoid this through better aggregation API allowing references or
             </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-            (amt, keys.aggregate(cfg.consensus.threshold))
+            (amt, keys.aggregate(cfg.consensus.peer_tbs_pks.threshold()))
         })
         .collect();
 
@@ -2213,11 +2204,11 @@
         partial_sigs: Vec&lt;(PeerId, OutputConfirmationSignatures)&gt;,
     ) -&gt; (<span class="prelude-ty">Result</span>&lt;OutputOutcome, CombineError&gt;, MintShareErrors) {
         <span class="comment">// Terminate early if there are not enough shares
-        </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.cfg.consensus.threshold {
+        </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold() {
             <span class="kw">return </span>(
                 <span class="prelude-val">Err</span>(CombineError::TooFewShares(
                     partial_sigs.iter().map(|(peer, <span class="kw">_</span>)| peer).cloned().collect(),
-                    <span class="self">self</span>.cfg.consensus.threshold,
+                    <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold(),
                 )),
                 MintShareErrors(<span class="macro">vec!</span>[]),
             );
@@ -2310,11 +2301,11 @@
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
             <span class="comment">// Check that there are still sufficient
-            </span><span class="kw">if </span>valid_sigs.len() &lt; <span class="self">self</span>.cfg.consensus.threshold {
+            </span><span class="kw">if </span>valid_sigs.len() &lt; <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(CombineError::TooFewValidShares(
                     valid_sigs.len(),
                     partial_sigs.len(),
-                    <span class="self">self</span>.cfg.consensus.threshold,
+                    <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold(),
                 ));
             }
 
@@ -2322,7 +2313,7 @@
                 valid_sigs
                     .into_iter()
                     .map(|(peer, share)| (peer.to_usize(), share)),
-                <span class="self">self</span>.cfg.consensus.threshold,
+                <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold(),
             );
 
             <span class="prelude-val">Ok</span>((amt, sig))
@@ -2675,7 +2666,6 @@
 
         Mint::new(MintConfig {
             consensus: MintConfigConsensus {
-                threshold: THRESHOLD,
                 peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>]
                     .to_typed::&lt;MintConfig&gt;()
                     .unwrap()

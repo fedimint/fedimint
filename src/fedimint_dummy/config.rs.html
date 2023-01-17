@@ -67,11 +67,13 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_api::core::ModuleKind;
+<span class="kw">use </span>fedimint_api::encoding::Encodable;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -86,7 +88,7 @@
     </span><span class="kw">pub </span>consensus: DummyConfigConsensus,
 }
 
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>DummyConfigConsensus {
     <span class="kw">pub </span>something: u64,
 }
@@ -96,7 +98,7 @@
     <span class="kw">pub </span>something_private: u64,
 }
 
-<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>DummyClientConfig {
     <span class="kw">pub </span>something: u64,
 }

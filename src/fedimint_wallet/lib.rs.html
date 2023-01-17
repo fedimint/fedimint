@@ -1604,9 +1604,6 @@
 <a href="#1604" id="1604">1604</a>
 <a href="#1605" id="1605">1605</a>
 <a href="#1606" id="1606">1606</a>
-<a href="#1607" id="1607">1607</a>
-<a href="#1608" id="1608">1608</a>
-<a href="#1609" id="1609">1609</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1630,11 +1627,10 @@
 <span class="kw">use </span>config::WalletConfigConsensus;
 <span class="kw">use </span>fedimint_api::bitcoin_rpc::{fm_bitcoind_rpc_env_value_to_url, FM_BITCOIND_RPC_ENV};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
-    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
+<span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
@@ -1946,18 +1942,16 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(wallet_cfg.to_erased()))
     }
 
-    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="prelude-val">Ok</span>(config
-            .to_typed::&lt;WalletConfig&gt;()<span class="question-mark">?
-            </span>.consensus
-            .to_client_config())
-    }
-
-    <span class="kw">fn </span>to_client_config_from_consensus_value(
+    <span class="kw">fn </span>to_config_response(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: serde_json::Value,
-    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;WalletConfigConsensus&gt;(config)<span class="question-mark">?</span>.to_client_config())
+    ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
+        <span class="kw">let </span>config = serde_json::from_value::&lt;WalletConfigConsensus&gt;(config)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(ModuleConfigResponse {
+            client: config.to_client_config(),
+            consensus_hash: config.hash()<span class="question-mark">?</span>,
+        })
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
