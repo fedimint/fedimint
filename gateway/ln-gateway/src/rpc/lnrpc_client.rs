@@ -1,11 +1,15 @@
-use std::{fmt::Debug, net::SocketAddr, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_api::dyn_newtype_define;
 use futures::stream;
-use tonic::{transport::Channel, Request, Streaming};
+use tonic::{
+    transport::{Channel, Endpoint},
+    Request, Streaming,
+};
 use tracing::error;
+use url::Url;
 
 use crate::{
     gatewaylnrpc::{
@@ -62,14 +66,18 @@ pub struct NetworkLnRpcClient {
 }
 
 impl NetworkLnRpcClient {
-    async fn new(address: SocketAddr) -> Result<Self> {
-        // TODO: Use secure connections to `GatewayLightningServer`
-        let url = format!("http://{}", address);
-
-        let client = GatewayLightningClient::connect(url).await.map_err(|e| {
-            error!("Failed to connect to lnrpc server: {:?}", e);
-            LnGatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
+    async fn new(url: Url) -> Result<Self> {
+        let endpoint = Endpoint::from_shared(url.to_string()).map_err(|e| {
+            error!("Failed to create lnrpc endpoint from url : {:?}", e);
+            LnGatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
         })?;
+
+        let client = GatewayLightningClient::connect(endpoint)
+            .await
+            .map_err(|e| {
+                error!("Failed to connect to lnrpc server: {:?}", e);
+                LnGatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
+            })?;
 
         Ok(Self { client })
     }
@@ -138,7 +146,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
 /// A generic factory trait for creating `DynLnRpcClient` instances.
 #[async_trait]
 pub trait ILnRpcClientFactory: Debug {
-    async fn create(&self, address: SocketAddr) -> Result<DynLnRpcClient>;
+    async fn create(&self, url: Url) -> Result<DynLnRpcClient>;
 }
 
 dyn_newtype_define!(
@@ -153,7 +161,7 @@ pub struct NetworkLnRpcClientFactory;
 /// An `ILnRpcClientFactory` that creates `NetworkLnRpcClient` instances.
 #[async_trait]
 impl ILnRpcClientFactory for NetworkLnRpcClientFactory {
-    async fn create(&self, address: SocketAddr) -> Result<DynLnRpcClient> {
-        Ok(NetworkLnRpcClient::new(address).await?.into())
+    async fn create(&self, url: Url) -> Result<DynLnRpcClient> {
+        Ok(NetworkLnRpcClient::new(url).await?.into())
     }
 }
