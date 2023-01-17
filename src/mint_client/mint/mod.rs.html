@@ -1104,7 +1104,7 @@
     <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Input) -&gt; TransactionItemAmount {
         TransactionItemAmount {
             amount: input.total_amount(),
-            fee: <span class="self">self</span>.config.fee_consensus.coin_spend_abs * (input.count_items() <span class="kw">as </span>u64),
+            fee: <span class="self">self</span>.config.fee_consensus.note_spend_abs * (input.count_items() <span class="kw">as </span>u64),
         }
     }
 
@@ -1114,7 +1114,7 @@
     ) -&gt; TransactionItemAmount {
         TransactionItemAmount {
             amount: output.total_amount(),
-            fee: <span class="self">self</span>.config.fee_consensus.coin_issuance_abs * (output.count_items() <span class="kw">as </span>u64),
+            fee: <span class="self">self</span>.config.fee_consensus.note_issuance_abs * (output.count_items() <span class="kw">as </span>u64),
         }
     }
 }

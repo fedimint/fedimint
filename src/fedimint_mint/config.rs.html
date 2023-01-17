@@ -252,15 +252,15 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FeeConsensus {
-    <span class="kw">pub </span>coin_issuance_abs: fedimint_api::Amount,
-    <span class="kw">pub </span>coin_spend_abs: fedimint_api::Amount,
+    <span class="kw">pub </span>note_issuance_abs: fedimint_api::Amount,
+    <span class="kw">pub </span>note_spend_abs: fedimint_api::Amount,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>FeeConsensus {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            coin_issuance_abs: fedimint_api::Amount::ZERO,
-            coin_spend_abs: fedimint_api::Amount::ZERO,
+            note_issuance_abs: fedimint_api::Amount::ZERO,
+            note_spend_abs: fedimint_api::Amount::ZERO,
         }
     }
 }

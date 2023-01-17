@@ -1760,16 +1760,16 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input&gt; + Send,
     ) -&gt; <span class="self">Self</span>::VerificationCache {
-        <span class="comment">// We build a lookup table for checking the validity of all coins for certain amounts. This
+        <span class="comment">// We build a lookup table for checking the validity of all notes for certain amounts. This
         // calculation can happen massively in parallel since verification is a pure function and
         // thus has no side effects.
         </span><span class="kw">let </span>valid_notes = inputs
             .flat_map(|inputs| inputs.<span class="number">0</span>.iter_items())
             .par_bridge()
-            .filter_map(|(amount, coin)| {
+            .filter_map(|(amount, note)| {
                 <span class="kw">let </span>amount_key = <span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount)<span class="question-mark">?</span>;
-                <span class="kw">if </span>coin.verify(<span class="kw-2">*</span>amount_key) {
-                    <span class="prelude-val">Some</span>((<span class="kw-2">*</span>coin, amount))
+                <span class="kw">if </span>note.verify(<span class="kw-2">*</span>amount_key) {
+                    <span class="prelude-val">Some</span>((<span class="kw-2">*</span>note, amount))
                 } <span class="kw">else </span>{
                     <span class="prelude-val">None
                 </span>}
@@ -1786,19 +1786,19 @@
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>input.iter_items() {
-            <span class="kw">let </span>coin_valid = verification_cache
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>input.iter_items() {
+            <span class="kw">let </span>note_valid = verification_cache
                 .valid_notes
-                .get(coin) <span class="comment">// We validated the coin
-                </span>.map(|coint_amount| <span class="kw-2">*</span>coint_amount == amount) <span class="comment">// It has the right amount tier
-                </span>.unwrap_or(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the coin return false
+                .get(note) <span class="comment">// We validated the note
+                </span>.map(|notet_amount| <span class="kw-2">*</span>notet_amount == amount) <span class="comment">// It has the right amount tier
+                </span>.unwrap_or(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the note return false
 
-            </span><span class="kw">if </span>!coin_valid {
+            </span><span class="kw">if </span>!note_valid {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature).into_module_error_other();
             }
 
             <span class="kw">if </span>dbtx
-                .get_value(<span class="kw-2">&amp;</span>NonceKey(coin.<span class="number">0</span>))
+                .get_value(<span class="kw-2">&amp;</span>NonceKey(note.<span class="number">0</span>))
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>)
                 .is_some()
@@ -1810,11 +1810,11 @@
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.total_amount(),
-                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.coin_spend_abs * (input.count_items() <span class="kw">as </span>u64),
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.note_spend_abs * (input.count_items() <span class="kw">as </span>u64),
             },
             puk_keys: input
                 .iter_items()
-                .map(|(<span class="kw">_</span>, coin)| <span class="kw-2">*</span>coin.spend_key())
+                .map(|(<span class="kw">_</span>, note)| <span class="kw-2">*</span>note.spend_key())
                 .collect(),
         })
     }
@@ -1830,8 +1830,8 @@
             </span>.validate_input(interconnect, dbtx, cache, input)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>input.iter_items() {
-            <span class="kw">let </span>key = NonceKey(coin.<span class="number">0</span>);
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>input.iter_items() {
+            <span class="kw">let </span>key = NonceKey(note.<span class="number">0</span>);
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(key), <span class="kw-2">&amp;</span>amount)
                 .<span class="kw">await
@@ -1865,7 +1865,7 @@
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(TransactionItemAmount {
                 amount: output.total_amount(),
-                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.coin_issuance_abs
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.note_issuance_abs
                     * (output.count_items() <span class="kw">as </span>u64),
             })
         }
@@ -2375,7 +2375,7 @@
 }
 
 <span class="kw">impl </span>Note {
-    <span class="doccomment">/// Verify the coin&#39;s validity under a mit key `pk`
+    <span class="doccomment">/// Verify the note&#39;s validity under a mit key `pk`
     </span><span class="kw">pub fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: tbs::AggregatePublicKey) -&gt; bool {
         tbs::verify(<span class="self">self</span>.<span class="number">0</span>.to_message(), <span class="self">self</span>.<span class="number">1</span>, pk)
     }
