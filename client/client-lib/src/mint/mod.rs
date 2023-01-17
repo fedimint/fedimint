@@ -157,7 +157,7 @@ impl ClientModule for MintClient {
     fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.total_amount(),
-            fee: self.config.fee_consensus.coin_spend_abs * (input.count_items() as u64),
+            fee: self.config.fee_consensus.note_spend_abs * (input.count_items() as u64),
         }
     }
 
@@ -167,7 +167,7 @@ impl ClientModule for MintClient {
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: output.total_amount(),
-            fee: self.config.fee_consensus.coin_issuance_abs * (output.count_items() as u64),
+            fee: self.config.fee_consensus.note_issuance_abs * (output.count_items() as u64),
         }
     }
 }

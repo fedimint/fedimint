@@ -412,16 +412,16 @@ impl ServerModule for Mint {
         &'a self,
         inputs: impl Iterator<Item = &'a Self::Input> + Send,
     ) -> Self::VerificationCache {
-        // We build a lookup table for checking the validity of all coins for certain amounts. This
+        // We build a lookup table for checking the validity of all notes for certain amounts. This
         // calculation can happen massively in parallel since verification is a pure function and
         // thus has no side effects.
         let valid_notes = inputs
             .flat_map(|inputs| inputs.0.iter_items())
             .par_bridge()
-            .filter_map(|(amount, coin)| {
+            .filter_map(|(amount, note)| {
                 let amount_key = self.pub_key.get(&amount)?;
-                if coin.verify(*amount_key) {
-                    Some((*coin, amount))
+                if note.verify(*amount_key) {
+                    Some((*note, amount))
                 } else {
                     None
                 }
@@ -438,19 +438,19 @@ impl ServerModule for Mint {
         verification_cache: &Self::VerificationCache,
         input: &'a Self::Input,
     ) -> Result<InputMeta, ModuleError> {
-        for (amount, coin) in input.iter_items() {
-            let coin_valid = verification_cache
+        for (amount, note) in input.iter_items() {
+            let note_valid = verification_cache
                 .valid_notes
-                .get(coin) // We validated the coin
-                .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
-                .unwrap_or(false); // If we didn't validate the coin return false
+                .get(note) // We validated the note
+                .map(|notet_amount| *notet_amount == amount) // It has the right amount tier
+                .unwrap_or(false); // If we didn't validate the note return false
 
-            if !coin_valid {
+            if !note_valid {
                 return Err(MintError::InvalidSignature).into_module_error_other();
             }
 
             if dbtx
-                .get_value(&NonceKey(coin.0))
+                .get_value(&NonceKey(note.0))
                 .await
                 .expect("DB error")
                 .is_some()
@@ -462,11 +462,11 @@ impl ServerModule for Mint {
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.total_amount(),
-                fee: self.cfg.consensus.fee_consensus.coin_spend_abs * (input.count_items() as u64),
+                fee: self.cfg.consensus.fee_consensus.note_spend_abs * (input.count_items() as u64),
             },
             puk_keys: input
                 .iter_items()
-                .map(|(_, coin)| *coin.spend_key())
+                .map(|(_, note)| *note.spend_key())
                 .collect(),
         })
     }
@@ -482,8 +482,8 @@ impl ServerModule for Mint {
             .validate_input(interconnect, dbtx, cache, input)
             .await?;
 
-        for (amount, coin) in input.iter_items() {
-            let key = NonceKey(coin.0);
+        for (amount, note) in input.iter_items() {
+            let key = NonceKey(note.0);
             dbtx.insert_new_entry(&key, &()).await.expect("DB Error");
             dbtx.insert_new_entry(&MintAuditItemKey::Redemption(key), &amount)
                 .await
@@ -517,7 +517,7 @@ impl ServerModule for Mint {
         } else {
             Ok(TransactionItemAmount {
                 amount: output.total_amount(),
-                fee: self.cfg.consensus.fee_consensus.coin_issuance_abs
+                fee: self.cfg.consensus.fee_consensus.note_issuance_abs
                     * (output.count_items() as u64),
             })
         }
@@ -1027,7 +1027,7 @@ impl Mint {
 }
 
 impl Note {
-    /// Verify the coin's validity under a mit key `pk`
+    /// Verify the note's validity under a mit key `pk`
     pub fn verify(&self, pk: tbs::AggregatePublicKey) -> bool {
         tbs::verify(self.0.to_message(), self.1, pk)
     }

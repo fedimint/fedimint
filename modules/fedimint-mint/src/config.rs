@@ -119,15 +119,15 @@ impl TypedServerModuleConfig for MintConfig {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FeeConsensus {
-    pub coin_issuance_abs: fedimint_api::Amount,
-    pub coin_spend_abs: fedimint_api::Amount,
+    pub note_issuance_abs: fedimint_api::Amount,
+    pub note_spend_abs: fedimint_api::Amount,
 }
 
 impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            coin_issuance_abs: fedimint_api::Amount::ZERO,
-            coin_spend_abs: fedimint_api::Amount::ZERO,
+            note_issuance_abs: fedimint_api::Amount::ZERO,
+            note_spend_abs: fedimint_api::Amount::ZERO,
         }
     }
 }
