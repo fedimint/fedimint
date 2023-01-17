@@ -8,8 +8,8 @@ use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::instrument;
 
 use super::{
-    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayRpcSender,
-    InfoPayload, WithdrawPayload,
+    BalancePayload, ConnectFedPayload, ConnectLnPayload, DepositAddressPayload, DepositPayload,
+    GatewayRpcSender, InfoPayload, WithdrawPayload,
 };
 use crate::LnGatewayError;
 
@@ -29,6 +29,7 @@ pub async fn run_webserver(
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
         .route("/connect", post(connect))
+        .route("/connectln", post(connectln))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -114,6 +115,16 @@ async fn pay_invoice(
 async fn connect(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<ConnectFedPayload>,
+) -> Result<impl IntoResponse, LnGatewayError> {
+    rpc.send(payload).await?;
+    Ok(())
+}
+
+/// Connect a new gateway lightning rpc service
+#[instrument(skip_all, err)]
+async fn connectln(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<ConnectLnPayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     rpc.send(payload).await?;
     Ok(())
