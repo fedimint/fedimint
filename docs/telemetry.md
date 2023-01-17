@@ -1,4 +1,12 @@
-# Telemetry
+# Chrome Tracing
+
+Integration test can export chrome tracing file. 
+
+- run `FEDIMINT_TRACE_CHROME=1 cargo test test_name`
+- file `trace-{UNIX_TIME}.json` will be created in CWD.
+- open this file in [perfetto] or `chrome://tracing`
+
+# Open Telemetry
 
 Fedimint uses [opentelemetry] and [jaeger] for telemetry.
 
@@ -18,5 +26,6 @@ port `16686` is for jaeger web ui.
 cargo run --features telemetry --bin server -- --with-telemetry <CFG_PATH>
 ```
 
+[perfetto]: https://ui.perfetto.dev/
 [opentelemetry]: https://opentelemetry.io/
 [jaeger]: https://www.jaegertracing.io/

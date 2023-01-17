@@ -40,3 +40,4 @@ tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 url = "2.3.1"
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
+tracing-chrome = "0.7.0"

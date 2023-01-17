@@ -1245,6 +1245,7 @@ dependencies = [
  "threshold_crypto",
  "tokio",
  "tracing",
+ "tracing-chrome",
  "tracing-subscriber",
  "url",
 ]
@@ -2056,6 +2057,12 @@ checksum = "49409df3e3bf0856b916e2ceaca09ee28e6871cf7d9ce97a692cacfdb2a25a47"
 dependencies = [
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "json"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "jsonrpc"
@@ -4077,6 +4084,18 @@ dependencies = [
  "proc-macro2",
  "quote 1.0.23",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "tracing-chrome"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "865016457701971958e047b9f61add5bba70d7a7b084a13c9e54f9bb4f19d3a6"
+dependencies = [
+ "crossbeam-channel",
+ "json",
+ "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]
