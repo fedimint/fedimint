@@ -1,3 +1,7 @@
+use std::io::{Error, Write};
+
+use threshold_crypto::group::Curve;
+
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
@@ -34,6 +38,37 @@ impl_external_encode_bls!(tbs::BlindedMessage, tbs::MessagePoint, 48);
 impl_external_encode_bls!(tbs::BlindedSignatureShare, tbs::MessagePoint, 48);
 impl_external_encode_bls!(tbs::BlindedSignature, tbs::MessagePoint, 48);
 impl_external_encode_bls!(tbs::Signature, tbs::MessagePoint, 48);
+
+impl Encodable for threshold_crypto::PublicKeySet {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        for coefficient in self.coefficients() {
+            len += coefficient
+                .to_affine()
+                .to_compressed()
+                .consensus_encode(writer)?;
+        }
+        Ok(len)
+    }
+}
+
+impl Encodable for threshold_crypto::PublicKey {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.to_bytes().consensus_encode(writer)
+    }
+}
+
+impl Encodable for tbs::AggregatePublicKey {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.0.to_compressed().consensus_encode(writer)
+    }
+}
+
+impl Encodable for tbs::PublicKeyShare {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.0.to_compressed().consensus_encode(writer)
+    }
+}
 
 impl Encodable for tbs::BlindingKey {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {

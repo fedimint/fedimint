@@ -7,8 +7,9 @@ use fedimint_api::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_api::core::ModuleKind;
+use fedimint_api::encoding::Encodable;
 use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
+use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
@@ -23,14 +24,12 @@ pub struct MintConfig {
     pub consensus: MintConfigConsensus,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 pub struct MintConfigConsensus {
     /// The set of public keys for blind-signing all peers and note denominations
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     /// Fees charged for ecash transactions
     pub fee_consensus: FeeConsensus,
-    /// Number of signers required
-    pub threshold: usize,
     /// The maximum amount of change a client can request
     pub max_notes_per_denomination: u16,
 }
@@ -41,7 +40,7 @@ pub struct MintConfigPrivate {
     pub tbs_sks: Tiered<tbs::SecretKeyShare>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable)]
 pub struct MintClientConfig {
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
@@ -62,7 +61,7 @@ impl TypedServerModuleConsensusConfig for MintConfigConsensus {
                 .map(|(amt, keys)| {
                     // TODO: avoid this through better aggregation API allowing references or
                     let keys = keys.into_iter().copied().collect::<Vec<_>>();
-                    (amt, keys.aggregate(self.threshold))
+                    (amt, keys.aggregate(self.peer_tbs_pks.threshold()))
                 })
                 .collect();
 
@@ -117,7 +116,7 @@ impl TypedServerModuleConfig for MintConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
     pub note_issuance_abs: fedimint_api::Amount,
     pub note_spend_abs: fedimint_api::Amount,

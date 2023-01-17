@@ -9,11 +9,11 @@ pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    scalar, ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams,
-    ServerModuleConfig, TypedServerModuleConfig,
+    scalar, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
+use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -179,7 +179,6 @@ impl ModuleGen for MintGen {
             .map(|&peer| {
                 let config = MintConfig {
                     consensus: MintConfigConsensus {
-                        threshold: peers.threshold(),
                         peer_tbs_pks: peers
                             .iter()
                             .map(|&key_peer| {
@@ -268,7 +267,6 @@ impl ModuleGen for MintGen {
                     })
                     .collect(),
                 fee_consensus: Default::default(),
-                threshold: peers.threshold(),
                 max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },
         };
@@ -276,18 +274,16 @@ impl ModuleGen for MintGen {
         Ok(Ok(server.to_erased()))
     }
 
-    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
-        Ok(config
-            .to_typed::<MintConfig>()?
-            .consensus
-            .to_client_config())
-    }
-
-    fn to_client_config_from_consensus_value(
+    fn to_config_response(
         &self,
         config: serde_json::Value,
-    ) -> anyhow::Result<ClientModuleConfig> {
-        Ok(serde_json::from_value::<MintConfigConsensus>(config)?.to_client_config())
+    ) -> anyhow::Result<ModuleConfigResponse> {
+        let config = serde_json::from_value::<MintConfigConsensus>(config)?;
+
+        Ok(ModuleConfigResponse {
+            client: config.to_client_config(),
+            consensus_hash: config.hash()?,
+        })
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
@@ -830,7 +826,7 @@ impl Mint {
         .map(|(amt, keys)| {
             // TODO: avoid this through better aggregation API allowing references or
             let keys = keys.into_iter().copied().collect::<Vec<_>>();
-            (amt, keys.aggregate(cfg.consensus.threshold))
+            (amt, keys.aggregate(cfg.consensus.peer_tbs_pks.threshold()))
         })
         .collect();
 
@@ -865,11 +861,11 @@ impl Mint {
         partial_sigs: Vec<(PeerId, OutputConfirmationSignatures)>,
     ) -> (Result<OutputOutcome, CombineError>, MintShareErrors) {
         // Terminate early if there are not enough shares
-        if partial_sigs.len() < self.cfg.consensus.threshold {
+        if partial_sigs.len() < self.cfg.consensus.peer_tbs_pks.threshold() {
             return (
                 Err(CombineError::TooFewShares(
                     partial_sigs.iter().map(|(peer, _)| peer).cloned().collect(),
-                    self.cfg.consensus.threshold,
+                    self.cfg.consensus.peer_tbs_pks.threshold(),
                 )),
                 MintShareErrors(vec![]),
             );
@@ -962,11 +958,11 @@ impl Mint {
                 .collect::<Vec<_>>();
 
             // Check that there are still sufficient
-            if valid_sigs.len() < self.cfg.consensus.threshold {
+            if valid_sigs.len() < self.cfg.consensus.peer_tbs_pks.threshold() {
                 return Err(CombineError::TooFewValidShares(
                     valid_sigs.len(),
                     partial_sigs.len(),
-                    self.cfg.consensus.threshold,
+                    self.cfg.consensus.peer_tbs_pks.threshold(),
                 ));
             }
 
@@ -974,7 +970,7 @@ impl Mint {
                 valid_sigs
                     .into_iter()
                     .map(|(peer, share)| (peer.to_usize(), share)),
-                self.cfg.consensus.threshold,
+                self.cfg.consensus.peer_tbs_pks.threshold(),
             );
 
             Ok((amt, sig))
@@ -1327,7 +1323,6 @@ mod test {
 
         Mint::new(MintConfig {
             consensus: MintConfigConsensus {
-                threshold: THRESHOLD,
                 peer_tbs_pks: mint_server_cfg2[0]
                     .to_typed::<MintConfig>()
                     .unwrap()

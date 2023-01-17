@@ -1,8 +1,10 @@
+use std::io::{Error, Write};
 use std::str::FromStr;
 
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::PublicKey;
+use fedimint_api::encoding::Encodable;
 use miniscript::{MiniscriptKey, ToPublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +18,12 @@ pub struct CompressedPublicKey {
 impl CompressedPublicKey {
     pub fn new(key: secp256k1::PublicKey) -> Self {
         CompressedPublicKey { key }
+    }
+}
+
+impl Encodable for CompressedPublicKey {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.key.serialize().consensus_encode(writer)
     }
 }
 

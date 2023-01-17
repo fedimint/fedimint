@@ -21,11 +21,10 @@ use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
 use fedimint_api::bitcoin_rpc::{fm_bitcoind_rpc_env_value_to_url, FM_BITCOIND_RPC_ENV};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
+use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
@@ -337,18 +336,16 @@ impl ModuleGen for WalletGen {
         Ok(Ok(wallet_cfg.to_erased()))
     }
 
-    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
-        Ok(config
-            .to_typed::<WalletConfig>()?
-            .consensus
-            .to_client_config())
-    }
-
-    fn to_client_config_from_consensus_value(
+    fn to_config_response(
         &self,
         config: serde_json::Value,
-    ) -> anyhow::Result<ClientModuleConfig> {
-        Ok(serde_json::from_value::<WalletConfigConsensus>(config)?.to_client_config())
+    ) -> anyhow::Result<ModuleConfigResponse> {
+        let config = serde_json::from_value::<WalletConfigConsensus>(config)?;
+
+        Ok(ModuleConfigResponse {
+            client: config.to_client_config(),
+            consensus_hash: config.hash()?,
+        })
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {

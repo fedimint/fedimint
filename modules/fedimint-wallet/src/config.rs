@@ -7,6 +7,7 @@ use fedimint_api::config::ClientModuleConfig;
 use fedimint_api::config::TypedServerModuleConfig;
 use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
 use fedimint_api::core::ModuleKind;
+use fedimint_api::encoding::Encodable;
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
@@ -35,7 +36,7 @@ pub struct WalletConfigPrivate {
     pub peg_in_key: SecretKey,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 pub struct WalletConfigConsensus {
     /// Bitcoin network (e.g. testnet, bitcoin)
     pub network: Network,
@@ -51,7 +52,7 @@ pub struct WalletConfigConsensus {
     pub fee_consensus: FeeConsensus,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct WalletClientConfig {
     /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
@@ -68,7 +69,7 @@ impl TypedClientModuleConfig for WalletClientConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
     pub peg_in_abs: fedimint_api::Amount,
     pub peg_out_abs: fedimint_api::Amount,
