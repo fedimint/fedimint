@@ -38,6 +38,11 @@ windows:
           - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 --plugin=$FM_BIN_DIR/gateway-cln-extension &
           - echo $! >> $FM_PID_FILE
           - fg
+        - gateway:
+          - sleep 7 # wait for gateway-cln-extension to start
+          - $FM_BIN_DIR/gatewayd
+          - echo $! >> $FM_PID_FILE
+          - fg
         - federation:
           - sleep 1 # wait for bitcoind
           - ./scripts/start-fed.sh
