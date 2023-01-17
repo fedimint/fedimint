@@ -18,6 +18,7 @@ use mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
+use url::Url;
 
 use crate::{
     actor_fork::GatewayActor,
@@ -27,8 +28,9 @@ use crate::{
     rpc::{
         lnrpc_client::{DynLnRpcClient, DynLnRpcClientFactory},
         rpc_server::run_webserver,
-        BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayInfo,
-        GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload, WithdrawPayload,
+        BalancePayload, ConnectFedPayload, ConnectLnPayload, DepositAddressPayload, DepositPayload,
+        GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
+        WithdrawPayload,
     },
     LnGatewayError, Result,
 };
@@ -80,6 +82,27 @@ impl Gateway {
         gw.load_federation_actors(decoders2).await;
 
         gw
+    }
+
+    /// Create a lightning rpc client that connects to some gateway lightning service at the address provided
+    /// This will replace any existing lightning rpc clients already connected
+    pub async fn connect_lnrpc_client(&self, url: Url) -> Result<DynLnRpcClient> {
+        let lnrpc = self.lnrpc_factory.create(url).await?;
+
+        // Get node pubkey from the proposed lnrpc server as a way to test the new connection
+        let _ = lnrpc.get_pubkey().await?;
+
+        self.lnrpc.lock().await.replace(lnrpc.clone());
+        Ok(lnrpc)
+    }
+
+    async fn handle_connect_lnrpc(&self, payload: ConnectLnPayload) -> Result<()> {
+        if let Err(e) = self.connect_lnrpc_client(payload.url).await {
+            error!("Failed to connect to lnrpc server: {}", e);
+            return Err(e);
+        }
+
+        Ok(())
     }
 
     async fn get_lnrpc_client(&self) -> Result<DynLnRpcClient> {
@@ -310,6 +333,11 @@ impl Gateway {
                 match msg {
                     GatewayRequest::Info(inner) => {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
+                    }
+                    GatewayRequest::ConnectLightning(inner) => {
+                        inner
+                            .handle(|payload| self.handle_connect_lnrpc(payload))
+                            .await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
                         inner
