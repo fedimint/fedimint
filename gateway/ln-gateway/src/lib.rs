@@ -42,9 +42,9 @@ use crate::{
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
-        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
-        ReceivePaymentPayload, WithdrawPayload,
+        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, ConnectLnPayload,
+        DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender,
+        InfoPayload, ReceivePaymentPayload, WithdrawPayload,
     },
 };
 
@@ -285,6 +285,12 @@ impl LnGateway {
             .await
     }
 
+    async fn unimplemented_handle_connect_lnrpc(&self, _payload: ConnectLnPayload) -> Result<()> {
+        Err(LnGatewayError::Other(anyhow::anyhow!(
+            "Not implemented: connect_lnrpc"
+        )))
+    }
+
     pub async fn run(mut self) -> Result<()> {
         let mut tg = self.task_group.clone();
 
@@ -321,6 +327,11 @@ impl LnGateway {
                 match msg {
                     GatewayRequest::Info(inner) => {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
+                    }
+                    GatewayRequest::ConnectLightning(inner) => {
+                        inner
+                            .handle(|payload| self.unimplemented_handle_connect_lnrpc(payload))
+                            .await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
                         inner
