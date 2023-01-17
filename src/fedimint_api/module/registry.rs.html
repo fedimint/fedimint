@@ -72,24 +72,14 @@
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::DynDecoder;
 <span class="kw">pub use </span><span class="kw">crate</span>::core::ModuleInstanceId;
 <span class="kw">use </span><span class="kw">crate</span>::server::DynServerModule;
 
-<span class="attr">#[derive(Debug, Clone)]
+<span class="doccomment">/// Module Registry hold module-specific data `M` by the `ModuleInstanceId`
+</span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ModuleRegistry&lt;M&gt;(BTreeMap&lt;ModuleInstanceId, M&gt;);
 
 <span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
@@ -104,28 +94,34 @@
     }
 }
 
+<span class="kw">impl</span>&lt;M&gt; FromIterator&lt;(ModuleInstanceId, M)&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
+    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (ModuleInstanceId, M)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(iter)
+    }
+}
+
 <span class="kw">impl</span>&lt;M&gt; ModuleRegistry&lt;M&gt; {
-    <span class="kw">pub fn </span>new(decoders: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleInstanceId, M)&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(decoders.into_iter().collect())
+    <span class="doccomment">/// Create [`Self`] from an iterator of pairs
+    </span><span class="kw">pub fn </span>new(iter: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleInstanceId, M)&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(iter.into_iter().collect())
     }
 
-    <span class="doccomment">/// Return an iterator over all modules
+    <span class="doccomment">/// Return an iterator over all module data
     </span><span class="kw">pub fn </span>iter_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>M)&gt; {
         <span class="self">self</span>.<span class="number">0</span>.iter().map(|(id, m)| (<span class="kw-2">*</span>id, m))
     }
 
-    <span class="kw">pub fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>ModuleInstanceId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>M&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.get_mut(key)
+    <span class="doccomment">/// Get module data by instance id
+    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>M&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>id)
     }
 
-    <span class="doccomment">/// Return the server module belonging to the module identified by the supplied `module_key`
+    <span class="doccomment">/// Return the module data belonging to the module identified by the supplied `module_id`
     ///
     /// # Panics
     /// If the module isn&#39;t in the registry
-    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>M {
-        <span class="self">self</span>.<span class="number">0
-            </span>.get(<span class="kw-2">&amp;</span>module_key)
-            .expect(<span class="string">&quot;CIs were decoded, so the module exists&quot;</span>)
+    </span><span class="kw">pub fn </span>get_expect(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>M {
+        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;Instance ID not found&quot;</span>)
     }
 }
 
@@ -139,8 +135,7 @@
         </span>ModuleDecoderRegistry::from_iter(<span class="self">self</span>.<span class="number">0</span>.iter().map(|(<span class="kw-2">&amp;</span>id, module)| (id, module.decoder())))
     }
 
-    <span class="comment">// TODO: move into `ModuleRegistry` impl by splitting `module_key` fn into separate trait
-    </span><span class="doccomment">/// Add a module to the registry
+    <span class="doccomment">/// Add a module to the registry
     </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, module: DynServerModule) {
         <span class="macro">assert!</span>(
             <span class="self">self</span>.<span class="number">0</span>.insert(id, module).is_none(),
@@ -150,23 +145,6 @@
 }
 
 <span class="doccomment">/// Collection of decoders belonging to modules, typically obtained from a `ModuleRegistry`
-</span><span class="attr">#[derive(Debug, Default, Clone)]
-</span><span class="kw">pub struct </span>ModuleDecoderRegistry(BTreeMap&lt;ModuleInstanceId, DynDecoder&gt;);
-
-<span class="kw">impl </span>ModuleDecoderRegistry {
-    <span class="doccomment">/// Return the decoder belonging to the module identified by the supplied `module_key`
-    ///
-    /// # Panics
-    /// If the decoder isn&#39;t in the registry
-    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>DynDecoder {
-        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>module_key).expect(<span class="string">&quot;Module not found&quot;</span>)
-    }
-}
-
-<span class="kw">impl </span>FromIterator&lt;(ModuleInstanceId, DynDecoder)&gt; <span class="kw">for </span>ModuleDecoderRegistry {
-    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (ModuleInstanceId, DynDecoder)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
-        ModuleDecoderRegistry(iter.into_iter().collect())
-    }
-}
+</span><span class="kw">pub type </span>ModuleDecoderRegistry = ModuleRegistry&lt;DynDecoder&gt;;
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (4781233a7 2023-01-16)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>

@@ -879,7 +879,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
-            <span class="kw">let </span>module = <span class="self">self</span>.modules.get(input.module_instance_id());
+            <span class="kw">let </span>module = <span class="self">self</span>.modules.get_expect(input.module_instance_id());
 
             <span class="kw">let </span>cache = module.build_verification_cache(<span class="kw-2">&amp;</span>[input.clone()]);
             <span class="kw">let </span>interconnect = <span class="self">self</span>.build_interconnect();
@@ -896,7 +896,7 @@
         <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.outputs {
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
-                .get(output.module_instance_id())
+                .get_expect(output.module_instance_id())
                 .validate_output(<span class="kw-2">&amp;mut </span>dbtx, output)
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
@@ -1008,7 +1008,7 @@
 
         <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
             <span class="self">self</span>.modules
-                .get(module_key)
+                .get_expect(module_key)
                 .begin_consensus_epoch(dbtx, module_cis)
                 .<span class="kw">await</span>;
         }
@@ -1243,7 +1243,7 @@
         <span class="kw">for </span>input <span class="kw">in </span>transaction.inputs.iter() {
             <span class="kw">let </span>meta = <span class="self">self
                 </span>.modules
-                .get(input.module_instance_id())
+                .get_expect(input.module_instance_id())
                 .apply_input(
                     <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
                     dbtx,
@@ -1264,7 +1264,7 @@
             };
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
-                .get(output.module_instance_id())
+                .get_expect(output.module_instance_id())
                 .apply_output(dbtx, <span class="kw-2">&amp;</span>output, out_point)
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
@@ -1296,7 +1296,7 @@
                 };
                 <span class="kw">let </span>outcome = <span class="self">self
                     </span>.modules
-                    .get(output.module_instance_id())
+                    .get_expect(output.module_instance_id())
                     .output_status(<span class="kw-2">&amp;mut </span>dbtx, outpoint, output.module_instance_id())
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
@@ -1337,7 +1337,7 @@
         </span><span class="kw">let </span>caches = module_inputs
             .into_iter()
             .map(|(module_key, inputs)| {
-                <span class="kw">let </span>module = <span class="self">self</span>.modules.get(module_key);
+                <span class="kw">let </span>module = <span class="self">self</span>.modules.get_expect(module_key);
                 (module_key, module.build_verification_cache(<span class="kw-2">&amp;</span>inputs))
             })
             .collect();
