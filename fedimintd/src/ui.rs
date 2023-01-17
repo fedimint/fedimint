@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{format_err, Error};
 use askama::Template;
-use axum::extract::{Extension, Form};
+use axum::extract::Form;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::{
     routing::{get, post},
@@ -47,7 +47,7 @@ pub struct Guardian {
 #[template(path = "home.html")]
 struct HomeTemplate {}
 
-async fn home_page(Extension(_): Extension<MutableState>) -> HomeTemplate {
+async fn home_page(axum::extract::State(_): axum::extract::State<MutableState>) -> HomeTemplate {
     HomeTemplate {}
 }
 
@@ -58,7 +58,7 @@ struct RunTemplate {
     has_connection_string: bool,
 }
 
-async fn run_page(Extension(state): Extension<MutableState>) -> RunTemplate {
+async fn run_page(axum::extract::State(state): axum::extract::State<MutableState>) -> RunTemplate {
     let state = state.lock().await;
     let path = state.data_dir.join("client.json");
     let connection_string: String = match std::fs::File::open(path) {
@@ -84,7 +84,9 @@ struct AddGuardiansTemplate {
     connect_string: String,
 }
 
-async fn add_guardians_page(Extension(state): Extension<MutableState>) -> AddGuardiansTemplate {
+async fn add_guardians_page(
+    axum::extract::State(state): axum::extract::State<MutableState>,
+) -> AddGuardiansTemplate {
     let state = state.lock().await;
     let params = state.params.clone().expect("invalid state");
     AddGuardiansTemplate {
@@ -101,7 +103,7 @@ pub struct GuardiansForm {
 
 #[debug_handler]
 async fn post_guardians(
-    Extension(state): Extension<MutableState>,
+    axum::extract::State(state): axum::extract::State<MutableState>,
     Form(form): Form<GuardiansForm>,
 ) -> Result<Redirect, UIError> {
     let mut state = state.lock().await;
@@ -116,7 +118,7 @@ async fn post_guardians(
         .join(CONSENSUS_CONFIG)
         .with_extension(JSON_EXT);
     if std::path::Path::new(&consensus_path).exists() {
-        return Ok(Redirect::to("/run".parse().unwrap()));
+        return Ok(Redirect::to("/run"));
     }
 
     // Make vec of guardians
@@ -206,9 +208,9 @@ async fn post_guardians(
         })
         .await;
     match dkg_receiver.await.expect("failed to read over channel") {
-        UiMessage::DKGSuccess => Ok(Redirect::to("/run".parse().unwrap())),
+        UiMessage::DKGSuccess => Ok(Redirect::to("/run")),
         // TODO: flash a message that it failed
-        UiMessage::DKGFailure => Ok(Redirect::to("/add_guardians".parse().unwrap())),
+        UiMessage::DKGFailure => Ok(Redirect::to("/add_guardians")),
     }
 }
 
@@ -218,7 +220,9 @@ struct UrlConnection {
     ro_bitcoind_rpc: String,
 }
 
-async fn params_page(Extension(_state): Extension<MutableState>) -> UrlConnection {
+async fn params_page(
+    axum::extract::State(_state): axum::extract::State<MutableState>,
+) -> UrlConnection {
     UrlConnection {
         ro_bitcoind_rpc: fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env()
             .as_ref()
@@ -259,7 +263,7 @@ pub struct ParamsForm {
 
 #[debug_handler]
 async fn post_federation_params(
-    Extension(state): Extension<MutableState>,
+    axum::extract::State(state): axum::extract::State<MutableState>,
     Form(form): Form<ParamsForm>,
 ) -> Result<Redirect, UIError> {
     let mut state = state.lock().await;
@@ -290,7 +294,7 @@ async fn post_federation_params(
         network: form.network,
     });
 
-    Ok(Redirect::to("/add_guardians".parse().unwrap()))
+    Ok(Redirect::to("/add_guardians"))
 }
 
 pub struct UIError(pub StatusCode, pub String);
@@ -308,7 +312,7 @@ impl IntoResponse for UIError {
     }
 }
 
-async fn qr(Extension(state): Extension<MutableState>) -> impl IntoResponse {
+async fn qr(axum::extract::State(state): axum::extract::State<MutableState>) -> impl IntoResponse {
     let state = state.lock().await;
     let path = state.data_dir.join("client.json");
     let connection_string: String = match std::fs::File::open(path) {
@@ -322,10 +326,7 @@ async fn qr(Extension(state): Extension<MutableState>) -> impl IntoResponse {
     };
     let png_bytes: Vec<u8> =
         qrcode_generator::to_png_to_vec(connection_string, QrCodeEcc::Low, 1024).unwrap();
-    (
-        axum::response::Headers([(axum::http::header::CONTENT_TYPE, "image/png")]),
-        png_bytes,
-    )
+    ([(axum::http::header::CONTENT_TYPE, "image/png")], png_bytes)
 }
 
 // FIXME: this is so similar to ParamsForm ...
@@ -380,7 +381,7 @@ pub async fn run_ui(
         .route("/post_guardians", post(post_guardians))
         .route("/run", get(run_page))
         .route("/qr", get(qr))
-        .layer(Extension(state));
+        .with_state(state);
 
     axum::Server::bind(&bind_addr)
         .serve(app.into_make_service())
