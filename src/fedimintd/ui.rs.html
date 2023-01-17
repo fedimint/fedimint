@@ -387,13 +387,14 @@
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{format_err, Error};
 <span class="kw">use </span>askama::Template;
-<span class="kw">use </span>axum::extract::{Extension, Form};
+<span class="kw">use </span>axum::extract::Form;
 <span class="kw">use </span>axum::response::{IntoResponse, Redirect, Response};
 <span class="kw">use </span>axum::{
     routing::{get, post},
@@ -436,7 +437,7 @@
 #[template(path = <span class="string">&quot;home.html&quot;</span>)]
 </span><span class="kw">struct </span>HomeTemplate {}
 
-<span class="kw">async fn </span>home_page(Extension(<span class="kw">_</span>): Extension&lt;MutableState&gt;) -&gt; HomeTemplate {
+<span class="kw">async fn </span>home_page(axum::extract::State(<span class="kw">_</span>): axum::extract::State&lt;MutableState&gt;) -&gt; HomeTemplate {
     HomeTemplate {}
 }
 
@@ -447,7 +448,7 @@
     has_connection_string: bool,
 }
 
-<span class="kw">async fn </span>run_page(Extension(state): Extension&lt;MutableState&gt;) -&gt; RunTemplate {
+<span class="kw">async fn </span>run_page(axum::extract::State(state): axum::extract::State&lt;MutableState&gt;) -&gt; RunTemplate {
     <span class="kw">let </span>state = state.lock().<span class="kw">await</span>;
     <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
     <span class="kw">let </span>connection_string: String = <span class="kw">match </span>std::fs::File::open(path) {
@@ -473,7 +474,9 @@
     connect_string: String,
 }
 
-<span class="kw">async fn </span>add_guardians_page(Extension(state): Extension&lt;MutableState&gt;) -&gt; AddGuardiansTemplate {
+<span class="kw">async fn </span>add_guardians_page(
+    axum::extract::State(state): axum::extract::State&lt;MutableState&gt;,
+) -&gt; AddGuardiansTemplate {
     <span class="kw">let </span>state = state.lock().<span class="kw">await</span>;
     <span class="kw">let </span>params = state.params.clone().expect(<span class="string">&quot;invalid state&quot;</span>);
     AddGuardiansTemplate {
@@ -490,7 +493,7 @@
 
 <span class="attr">#[debug_handler]
 </span><span class="kw">async fn </span>post_guardians(
-    Extension(state): Extension&lt;MutableState&gt;,
+    axum::extract::State(state): axum::extract::State&lt;MutableState&gt;,
     Form(form): Form&lt;GuardiansForm&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Redirect, UIError&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>state = state.lock().<span class="kw">await</span>;
@@ -505,7 +508,7 @@
         .join(CONSENSUS_CONFIG)
         .with_extension(JSON_EXT);
     <span class="kw">if </span>std::path::Path::new(<span class="kw-2">&amp;</span>consensus_path).exists() {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/run&quot;</span>.parse().unwrap()));
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/run&quot;</span>));
     }
 
     <span class="comment">// Make vec of guardians
@@ -595,9 +598,9 @@
         })
         .<span class="kw">await</span>;
     <span class="kw">match </span>dkg_receiver.<span class="kw">await</span>.expect(<span class="string">&quot;failed to read over channel&quot;</span>) {
-        UiMessage::DKGSuccess =&gt; <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/run&quot;</span>.parse().unwrap())),
+        UiMessage::DKGSuccess =&gt; <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/run&quot;</span>)),
         <span class="comment">// TODO: flash a message that it failed
-        </span>UiMessage::DKGFailure =&gt; <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/add_guardians&quot;</span>.parse().unwrap())),
+        </span>UiMessage::DKGFailure =&gt; <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/add_guardians&quot;</span>)),
     }
 }
 
@@ -607,7 +610,9 @@
     ro_bitcoind_rpc: String,
 }
 
-<span class="kw">async fn </span>params_page(Extension(_state): Extension&lt;MutableState&gt;) -&gt; UrlConnection {
+<span class="kw">async fn </span>params_page(
+    axum::extract::State(_state): axum::extract::State&lt;MutableState&gt;,
+) -&gt; UrlConnection {
     UrlConnection {
         ro_bitcoind_rpc: fedimint_api::bitcoin_rpc::read_bitcoin_rpc_env_from_global_env()
             .as_ref()
@@ -648,7 +653,7 @@
 
 <span class="attr">#[debug_handler]
 </span><span class="kw">async fn </span>post_federation_params(
-    Extension(state): Extension&lt;MutableState&gt;,
+    axum::extract::State(state): axum::extract::State&lt;MutableState&gt;,
     Form(form): Form&lt;ParamsForm&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Redirect, UIError&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>state = state.lock().<span class="kw">await</span>;
@@ -679,7 +684,7 @@
         network: form.network,
     });
 
-    <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/add_guardians&quot;</span>.parse().unwrap()))
+    <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/add_guardians&quot;</span>))
 }
 
 <span class="kw">pub struct </span>UIError(<span class="kw">pub </span>StatusCode, <span class="kw">pub </span>String);
@@ -697,7 +702,7 @@
     }
 }
 
-<span class="kw">async fn </span>qr(Extension(state): Extension&lt;MutableState&gt;) -&gt; <span class="kw">impl </span>IntoResponse {
+<span class="kw">async fn </span>qr(axum::extract::State(state): axum::extract::State&lt;MutableState&gt;) -&gt; <span class="kw">impl </span>IntoResponse {
     <span class="kw">let </span>state = state.lock().<span class="kw">await</span>;
     <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
     <span class="kw">let </span>connection_string: String = <span class="kw">match </span>std::fs::File::open(path) {
@@ -711,10 +716,7 @@
     };
     <span class="kw">let </span>png_bytes: Vec&lt;u8&gt; =
         qrcode_generator::to_png_to_vec(connection_string, QrCodeEcc::Low, <span class="number">1024</span>).unwrap();
-    (
-        axum::response::Headers([(axum::http::header::CONTENT_TYPE, <span class="string">&quot;image/png&quot;</span>)]),
-        png_bytes,
-    )
+    ([(axum::http::header::CONTENT_TYPE, <span class="string">&quot;image/png&quot;</span>)], png_bytes)
 }
 
 <span class="comment">// FIXME: this is so similar to ParamsForm ...
@@ -769,7 +771,7 @@
         .route(<span class="string">&quot;/post_guardians&quot;</span>, post(post_guardians))
         .route(<span class="string">&quot;/run&quot;</span>, get(run_page))
         .route(<span class="string">&quot;/qr&quot;</span>, get(qr))
-        .layer(Extension(state));
+        .with_state(state);
 
     axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr)
         .serve(app.into_make_service())
