@@ -945,35 +945,12 @@
 <a href="#945" id="945">945</a>
 <a href="#946" id="946">946</a>
 <a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a>
-<a href="#949" id="949">949</a>
-<a href="#950" id="950">950</a>
-<a href="#951" id="951">951</a>
-<a href="#952" id="952">952</a>
-<a href="#953" id="953">953</a>
-<a href="#954" id="954">954</a>
-<a href="#955" id="955">955</a>
-<a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a>
-<a href="#958" id="958">958</a>
-<a href="#959" id="959">959</a>
-<a href="#960" id="960">960</a>
-<a href="#961" id="961">961</a>
-<a href="#962" id="962">962</a>
-<a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
-<a href="#965" id="965">965</a>
-<a href="#966" id="966">966</a>
-<a href="#967" id="967">967</a>
-<a href="#968" id="968">968</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
-<span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>bitcoin_hashes::hex::FromHex;
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::core::client::ClientModule;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
@@ -988,7 +965,6 @@
 };
 <span class="kw">use </span>fedimint_core::transaction::legacy::{Input, Output, Transaction};
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
-<span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 <span class="kw">use </span>thiserror::Error;
@@ -1113,8 +1089,7 @@
 </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableNote {
     <span class="kw">pub </span>note: Note,
-    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;deserialize_key_pair&quot;</span>)]
-    </span><span class="kw">pub </span>spend_key: KeyPair,
+    <span class="kw">pub </span>spend_key: KeyPair,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>MintClient {
@@ -1608,23 +1583,6 @@
     }
 }
 
-<span class="comment">// TODO: remove once rust-bitcoin/rust-secp256k1#491 is fixed
-</span><span class="kw">fn </span>deserialize_key_pair&lt;<span class="lifetime">&#39;de</span>, D: serde::Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;(
-    d: D,
-) -&gt; std::result::Result&lt;KeyPair, D::Error&gt; {
-    <span class="kw">if </span>d.is_human_readable() {
-        <span class="kw">let </span>hex_bytes: Cow&lt;<span class="lifetime">&#39;_</span>, str&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bytes =
-            Vec::from_hex(hex_bytes.as_ref()).map_err(|<span class="kw">_</span>| D::Error::custom(<span class="string">&quot;Invalid hex&quot;</span>))<span class="question-mark">?</span>;
-        KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, <span class="kw-2">&amp;</span>bytes)
-            .map_err(|<span class="kw">_</span>| D::Error::custom(<span class="string">&quot;Not a valid private key&quot;</span>))
-    } <span class="kw">else </span>{
-        <span class="kw">let </span>bytes: [u8; <span class="number">32</span>] = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-        KeyPair::from_seckey_slice(secp256k1_zkp::SECP256K1, <span class="kw-2">&amp;</span>bytes)
-            .map_err(|<span class="kw">_</span>| D::Error::custom(<span class="string">&quot;Not a valid private key&quot;</span>))
-    }
-}
-
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
@@ -1935,4 +1893,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (9e75dddf6 2023-01-15)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (4781233a7 2023-01-16)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>
