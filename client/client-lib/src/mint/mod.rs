@@ -157,7 +157,7 @@ impl ClientModule for MintClient {
     fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.total_amount(),
-            fee: self.config.fee_consensus.coin_spend_abs * (input.item_count() as u64),
+            fee: self.config.fee_consensus.coin_spend_abs * (input.count_items() as u64),
         }
     }
 
@@ -167,7 +167,7 @@ impl ClientModule for MintClient {
     ) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: output.total_amount(),
-            fee: self.config.fee_consensus.coin_issuance_abs * (output.item_count() as u64),
+            fee: self.config.fee_consensus.coin_issuance_abs * (output.count_items() as u64),
         }
     }
 }
@@ -283,8 +283,8 @@ impl MintClient {
 
         debug!(
             %amount,
-            coins = %sig_req.0.item_count(),
-            tiers = ?sig_req.0.tiers().collect::<Vec<_>>(),
+            coins = %sig_req.0.count_items(),
+            tiers = ?sig_req.0.iter_tiers().collect::<Vec<_>>(),
             "Generated issuance request"
         );
 
@@ -548,7 +548,7 @@ impl NoteIssuanceRequests {
     }
 
     pub fn coin_count(&self) -> usize {
-        self.coins.item_count()
+        self.coins.count_items()
     }
 
     pub fn coin_amount(&self) -> Amount {
