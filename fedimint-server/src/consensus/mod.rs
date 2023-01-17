@@ -21,7 +21,6 @@ use fedimint_core::outcome::TransactionStatus;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use rand::rngs::OsRng;
 use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
@@ -32,9 +31,7 @@ use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
     ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
 };
-use crate::rng::RngGenerator;
 use crate::transaction::{Transaction, TransactionError};
-use crate::OsRngGen;
 
 pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
 pub type HbbftConsensusOutcome = hbbft::honey_badger::Batch<Vec<ConsensusItem>, PeerId>;
@@ -69,8 +66,6 @@ pub struct ConsensusProposal {
 // TODO: we should make other fields private and get rid of this
 #[non_exhaustive]
 pub struct FedimintConsensus {
-    /// Cryptographic random number generator used for everything
-    pub rng_gen: Box<dyn RngGenerator<Rng = OsRng>>,
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
@@ -109,7 +104,6 @@ impl FedimintConsensus {
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            rng_gen: Box::new(OsRngGen),
             modules: module_inits.init_all(&cfg, &db, task_group).await?,
             cfg,
             module_inits,
@@ -126,7 +120,6 @@ impl FedimintConsensus {
         modules: ModuleRegistry<DynServerModule>,
     ) -> Self {
         Self {
-            rng_gen: Box::new(OsRngGen),
             modules,
             cfg,
             module_inits,

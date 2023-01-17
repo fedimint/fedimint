@@ -34,7 +34,6 @@ use crate::fedimint_api::net::peers::IPeerConnections;
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::PeerSlice;
 use crate::net::peers::{PeerConnector, ReconnectPeerConnections};
-use crate::rng::RngGenerator;
 
 /// The actual implementation of the federated mint
 pub mod consensus;
@@ -50,9 +49,6 @@ pub mod config;
 
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
-
-/// Some abstractions to handle randomness
-mod rng;
 
 type PeerMessage = (PeerId, EpochMessage);
 
@@ -449,15 +445,6 @@ impl FedimintServer {
             )
             .await
             .expect("Failed to send rejoin requests");
-    }
-}
-
-pub struct OsRngGen;
-impl RngGenerator for OsRngGen {
-    type Rng = OsRng;
-
-    fn get_rng(&self) -> Self::Rng {
-        OsRng
     }
 }
 
