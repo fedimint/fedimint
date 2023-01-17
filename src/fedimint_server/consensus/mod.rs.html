@@ -693,13 +693,6 @@
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
-<a href="#696" id="696">696</a>
-<a href="#697" id="697">697</a>
-<a href="#698" id="698">698</a>
-<a href="#699" id="699">699</a>
-<a href="#700" id="700">700</a>
-<a href="#701" id="701">701</a>
-<a href="#702" id="702">702</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -723,7 +716,6 @@
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>hbbft::honey_badger::Batch;
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
@@ -734,9 +726,7 @@
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
     ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
 };
-<span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{Transaction, TransactionError};
-<span class="kw">use </span><span class="kw">crate</span>::OsRngGen;
 
 <span class="kw">pub type </span>HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;;
 <span class="kw">pub type </span>HbbftConsensusOutcome = hbbft::honey_badger::Batch&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;;
@@ -771,8 +761,6 @@
 <span class="comment">// TODO: we should make other fields private and get rid of this
 </span><span class="attr">#[non_exhaustive]
 </span><span class="kw">pub struct </span>FedimintConsensus {
-    <span class="doccomment">/// Cryptographic random number generator used for everything
-    </span><span class="kw">pub </span>rng_gen: Box&lt;<span class="kw">dyn </span>RngGenerator&lt;Rng = OsRng&gt;&gt;,
     <span class="doccomment">/// Configuration describing the federation and containing our secrets
     </span><span class="kw">pub </span>cfg: ServerConfig,
 
@@ -811,7 +799,6 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            rng_gen: Box::new(OsRngGen),
             modules: module_inits.init_all(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;</span>db, task_group).<span class="kw">await</span><span class="question-mark">?</span>,
             cfg,
             module_inits,
@@ -828,7 +815,6 @@
         modules: ModuleRegistry&lt;DynServerModule&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            rng_gen: Box::new(OsRngGen),
             modules,
             cfg,
             module_inits,
