@@ -14,6 +14,7 @@ use mint_client::ln::PayInvoicePayload;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
+use url::Url;
 
 use crate::{cln::HtlcAccepted, LnGatewayError, Result};
 
@@ -52,6 +53,12 @@ impl GatewayRpcSender {
             })
             .map_err(|e| e.into())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConnectLnPayload {
+    /// URL to a gateway lightning extension service
+    pub url: Url,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -113,6 +120,7 @@ pub struct GatewayInfo {
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
+    ConnectLightning(GatewayRequestInner<ConnectLnPayload>),
     ConnectFederation(GatewayRequestInner<ConnectFedPayload>),
     ReceivePayment(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
@@ -149,6 +157,7 @@ macro_rules! impl_gateway_request_trait {
 }
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
+impl_gateway_request_trait!(ConnectLnPayload, (), GatewayRequest::ConnectLightning);
 impl_gateway_request_trait!(ConnectFedPayload, (), GatewayRequest::ConnectFederation);
 impl_gateway_request_trait!(
     ReceivePaymentPayload,
