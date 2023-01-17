@@ -32,7 +32,7 @@ tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.37"
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 tracing ="0.1.37"
-impl-tools = "0.6.1"
+impl-tools = "0.6.2"
 
 [dev-dependencies]
 rand = "0.8"
