@@ -363,6 +363,7 @@
 <a href="#363" id="363">363</a>
 <a href="#364" id="364">364</a>
 <a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
@@ -371,7 +372,8 @@
 <span class="kw">use </span>fedimint_api::core::DynModuleConsensusItem <span class="kw">as </span>ModuleConsensusItem;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_api::module::SerdeModuleEncoding;
+<span class="kw">use </span>fedimint_api::{BitcoinHash, PeerId, TransactionId};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -385,7 +387,7 @@
     Module(ModuleConsensusItem),
 }
 
-<span class="macro">serde_module_encoding_wrapper!</span>(SerdeConsensusItem, ConsensusItem);
+<span class="kw">pub type </span>SerdeConsensusItem = SerdeModuleEncoding&lt;ConsensusItem&gt;;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>EpochOutcomeSignatureShare(<span class="kw">pub </span>SignatureShare);
@@ -400,7 +402,7 @@
     <span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;EpochOutcomeSignature&gt;,
 }
 
-<span class="macro">serde_module_encoding_wrapper!</span>(SerdeEpochHistory, SignedEpochOutcome);
+<span class="kw">pub type </span>SerdeEpochHistory = SerdeModuleEncoding&lt;SignedEpochOutcome&gt;;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>EpochOutcome {

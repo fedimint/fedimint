@@ -521,6 +521,33 @@
 <a href="#521" id="521">521</a>
 <a href="#522" id="522">522</a>
 <a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -528,11 +555,13 @@
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::instrument;
 
@@ -543,6 +572,7 @@
     OutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseTransaction};
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
 <span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
@@ -657,6 +687,8 @@
 
 <span class="kw">pub use </span>__api_endpoint <span class="kw">as </span>api_endpoint;
 <span class="kw">use </span>fedimint_api::config::ModuleConfigResponse;
+
+<span class="kw">use </span><span class="self">self</span>::registry::ModuleDecoderRegistry;
 
 <span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; = BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;;
 <span class="kw">type </span>HandlerFn&lt;M&gt; = Box&lt;
@@ -1043,6 +1075,28 @@
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
     /// their input and the current epoch.
     </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt;;
+}
+
+<span class="doccomment">/// Creates a struct that can be used to make our module-decodable structs interact with
+/// `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper that holds the data as serialized
+</span><span class="comment">// bytes internally.
+</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>SerdeModuleEncoding&lt;T: Encodable + Decodable&gt;(Vec&lt;u8&gt;, <span class="attr">#[serde(skip)] </span>PhantomData&lt;T&gt;);
+
+<span class="kw">impl</span>&lt;T: Encodable + Decodable&gt; From&lt;<span class="kw-2">&amp;</span>T&gt; <span class="kw">for </span>SerdeModuleEncoding&lt;T&gt; {
+    <span class="kw">fn </span>from(value: <span class="kw-2">&amp;</span>T) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
+        fedimint_api::encoding::Encodable::consensus_encode(value, <span class="kw-2">&amp;mut </span>bytes)
+            .expect(<span class="string">&quot;Writing to buffer can never fail&quot;</span>);
+        <span class="self">Self</span>(bytes, PhantomData)
+    }
+}
+
+<span class="kw">impl</span>&lt;T: Encodable + Decodable&gt; SerdeModuleEncoding&lt;T&gt; {
+    <span class="kw">pub fn </span>try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
+        Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>reader, modules)
+    }
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (3984bc583 2023-01-17)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>

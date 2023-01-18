@@ -165,7 +165,7 @@
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::serde_module_encoding_wrapper;
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::module::SerdeModuleEncoding;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -181,7 +181,7 @@
     },
 }
 
-<span class="macro">serde_module_encoding_wrapper!</span>(SerdeOutputOutcome, fedimint_api::core::DynOutputOutcome);
+<span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;fedimint_api::core::DynOutputOutcome&gt;;
 
 <span class="kw">pub mod </span>legacy {
     <span class="kw">use </span>fedimint_api::core::{
