@@ -207,6 +207,33 @@
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -217,7 +244,6 @@
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
-<span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::io::{stdin, stdout};
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, instrument};
@@ -342,6 +368,17 @@
     }
 }
 
+<span class="doccomment">/// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+/// 16399 error code reports unknown payment details.
+///
+/// TODO: We should probably use a more specific error code based on htlc processing fail reason
+</span><span class="kw">fn </span>htlc_processing_failure() -&gt; serde_json::Value {
+    <span class="macro">serde_json::json!</span>({
+        <span class="string">&quot;result&quot;</span>: <span class="string">&quot;fail&quot;</span>,
+        <span class="string">&quot;failure_message&quot;</span>: <span class="string">&quot;1639&quot;
+    </span>})
+}
+
 <span class="doccomment">/// Handle core-lightning &quot;htlc_accepted&quot; events by attempting to buy this preimage from the federation
 /// and completing the payment
 </span><span class="kw">async fn </span>htlc_accepted_hook(
@@ -349,15 +386,33 @@
     value: serde_json::Value,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, Error&gt; {
     <span class="kw">let </span>htlc_accepted: HtlcAccepted = serde_json::from_value(value)<span class="question-mark">?</span>;
-    <span class="kw">let </span>preimage = plugin
-        .state()
-        .send(ReceivePaymentPayload { htlc_accepted })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>pk = preimage.to_public_key()<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span>({
-      <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>,
-      <span class="string">&quot;payment_key&quot;</span>: pk.to_string(),
-    }))
+
+    <span class="comment">// Filter and process intercepted HTLCs based on `short_channel_id` value.
+    //
+    // After https://github.com/fedimint/fedimint/pull/1180,
+    // all HTLCs to Fedimint clients should have route hint with `short_channel_id = 0u64`,
+    // unless the gateway is serving multiple federations.
+    </span><span class="kw">if </span>htlc_accepted.onion.short_channel_id == <span class="string">&quot;0x0x0&quot; </span>{
+        <span class="kw">let </span>preimage = <span class="kw">match </span>plugin
+            .state()
+            .send(ReceivePaymentPayload { htlc_accepted })
+            .<span class="kw">await
+        </span>{
+            <span class="prelude-val">Ok</span>(preimage) =&gt; preimage,
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(htlc_processing_failure()),
+        };
+
+        <span class="kw">let </span>pk = preimage.to_public_key()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span>({
+          <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>,
+          <span class="string">&quot;payment_key&quot;</span>: pk.to_string(),
+        }))
+    } <span class="kw">else </span>{
+        <span class="comment">// HTLC is not relevant to fedimint
+        </span><span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span>({
+            <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot;</span>,
+        }))
+    }
 }
 
 <span class="kw">pub async fn </span>build_cln_rpc(sender: GatewayRpcSender) -&gt; <span class="prelude-ty">Result</span>&lt;ClnRpcRef, Error&gt; {
@@ -380,8 +435,7 @@
                     </span>.unwrap_or_else(|<span class="kw">_</span>| <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;htlc_accepted timeout&quot;</span>)))
                     .or_else(|e| {
                         <span class="macro">error!</span>(<span class="string">&quot;htlc_accepted error {:?}&quot;</span>, e);
-                        <span class="comment">// cln_plugin doesn&#39;t handle errors very well ... tell it to proceed normally
-                        </span><span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>}))
+                        <span class="prelude-val">Ok</span>(htlc_processing_failure())
                     })
             });
             handle.<span class="kw">await</span><span class="question-mark">?
@@ -417,4 +471,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (4781233a7 2023-01-16)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (3984bc583 2023-01-17)" data-search-js="search-181581080540673f.js" data-settings-js="settings-a2afdefbb7c817f1.js" data-settings-css="settings-84508a86fe805444.css" ></div></body></html>
