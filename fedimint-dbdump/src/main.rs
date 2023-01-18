@@ -234,7 +234,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::OutputOutcomeKeyPrefix,
                         MintRange::OutputOutcomeKey,
-                        fedimint_mint::OutputOutcome,
+                        fedimint_mint::MintOutputBlindSignatures,
                         mint,
                         "Output Outcomes"
                     );

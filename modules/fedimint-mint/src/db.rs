@@ -6,7 +6,7 @@ use fedimint_api::{Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::{Nonce, OutputConfirmationSignatures, OutputOutcome};
+use crate::{MintOutputBlindSignatures, Nonce, OutputConfirmationSignatures};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -102,7 +102,7 @@ pub struct OutputOutcomeKey(pub OutPoint);
 impl DatabaseKeyPrefixConst for OutputOutcomeKey {
     const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
     type Key = Self;
-    type Value = OutputOutcome;
+    type Value = MintOutputBlindSignatures;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -111,7 +111,7 @@ pub struct OutputOutcomeKeyPrefix;
 impl DatabaseKeyPrefixConst for OutputOutcomeKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
     type Key = OutputOutcomeKey;
-    type Value = OutputOutcome;
+    type Value = MintOutputBlindSignatures;
 }
 
 /// Represents the amounts of issued (signed) and redeemed (verified) coins for auditing

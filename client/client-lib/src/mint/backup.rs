@@ -22,7 +22,7 @@ use fedimint_api::{
 };
 use fedimint_core::{
     epoch::{ConsensusItem, SignedEpochOutcome},
-    modules::mint::{MintInput, MintOutput, MintOutputConfirmation},
+    modules::mint::{MintConsensusItem, MintInput, MintOutput},
 };
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
@@ -680,7 +680,7 @@ impl EcashRecoveryTracker {
         }
     }
 
-    pub fn handle_output_confirmation(&mut self, peer_id: PeerId, sigs: &MintOutputConfirmation) {
+    pub fn handle_output_confirmation(&mut self, peer_id: PeerId, sigs: &MintConsensusItem) {
         let enough_shares = if let Some((output_data, peer_shares)) =
             self.pending_outputs.get_mut(&sigs.out_point)
         {
@@ -833,7 +833,7 @@ impl EcashRecoveryTracker {
                 if module_item.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                     let mint_item = module_item
                         .as_any()
-                        .downcast_ref::<MintOutputConfirmation>()
+                        .downcast_ref::<MintConsensusItem>()
                         .expect("mint key just checked");
 
                     self.handle_output_confirmation(peer_id, mint_item);
