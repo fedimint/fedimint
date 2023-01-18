@@ -227,12 +227,12 @@
 };
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::config::{ConfigResponse, FederationId};
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::{
-    config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define,
 };
-<span class="kw">use </span>fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_server::config::load_from_file;
 <span class="kw">use </span>mint_client::{
     api::{DynFederationApi, GlobalFederationApi, WsFederationApi, WsFederationConnect},
@@ -366,8 +366,8 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
         <span class="kw">let </span>api: DynFederationApi = WsFederationApi::new(connect.members).into();
 
-        <span class="kw">let </span>client_cfg: ClientConfig = api
-            .get_client_config()
+        <span class="kw">let </span>response: ConfigResponse = api
+            .download_client_config()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to get client config&quot;</span>);
 
@@ -377,7 +377,7 @@
 
         <span class="prelude-val">Ok</span>(GatewayClientConfig {
             mint_channel_id,
-            client_config: client_cfg,
+            client_config: response.client,
             redeem_key: kp_fed,
             timelock_delta: <span class="number">10</span>,
             node_pub_key: node_pubkey,

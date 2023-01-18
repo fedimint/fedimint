@@ -1128,6 +1128,14 @@
 <a href="#1128" id="1128">1128</a>
 <a href="#1129" id="1129">1129</a>
 <a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::pin::Pin;
@@ -1138,7 +1146,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
-<span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::config::{ClientConfig, ConfigResponse};
 <span class="kw">use </span>fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -1413,7 +1421,7 @@
                             <span class="kw">for </span>(failed_peer, error) <span class="kw">in </span>failed {
                                 member_errors.insert(failed_peer, error);
                             }
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError(BTreeMap::new()));
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError(member_errors));
                         }
                         QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
                     }
@@ -1511,6 +1519,9 @@
         timeout: Duration,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; OutputOutcomeResult&lt;R&gt;;
+
+    <span class="doccomment">/// Fetch verifiable client configuration info
+    </span><span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ConfigResponse&gt;;
 }
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
@@ -1653,6 +1664,11 @@
         fedimint_api::task::timeout(timeout, poll())
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
+    </span>}
+
+    <span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ConfigResponse&gt; {
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/config&quot;</span>.to_owned(), erased_no_param())
+            .<span class="kw">await
     </span>}
 }
 

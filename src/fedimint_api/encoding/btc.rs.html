@@ -144,9 +144,38 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
+<span class="kw">use </span>miniscript::descriptor::WshInner;
+<span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
@@ -182,6 +211,31 @@
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::Txid);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::util::merkleblock::PartialMerkleTree);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::util::psbt::PartiallySignedTransaction);
+
+<span class="kw">impl</span>&lt;T: Encodable + MiniscriptKey&gt; Encodable <span class="kw">for </span>Descriptor&lt;T&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        <span class="kw">match </span><span class="self">self </span>{
+            Descriptor::Wsh(multi) =&gt; <span class="kw">match </span>multi.clone().into_inner() {
+                WshInner::SortedMulti(keys) =&gt; {
+                    <span class="kw">for </span>key <span class="kw">in </span>keys.pks {
+                        len += key.consensus_encode(writer)<span class="question-mark">?</span>;
+                    }
+                    len += (keys.k <span class="kw">as </span>u16).consensus_encode(writer)<span class="question-mark">?</span>;
+                }
+                <span class="kw">_ </span>=&gt; <span class="macro">unimplemented!</span>(),
+            },
+            <span class="kw">_ </span>=&gt; <span class="macro">unimplemented!</span>(),
+        }
+        <span class="prelude-val">Ok</span>(len)
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Network {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="self">self</span>.magic().consensus_encode(writer)
+    }
+}
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Amount {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {

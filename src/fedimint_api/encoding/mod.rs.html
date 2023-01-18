@@ -1173,7 +1173,7 @@
 }
 <span class="doccomment">/// Wrappers for `T` that are `De-Serializable`, while we need them in `Encodable` contex
 </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
-</span><span class="kw">pub struct </span>SerdeEncodable&lt;T&gt;(T);
+</span><span class="kw">pub struct </span>SerdeEncodable&lt;T&gt;(<span class="kw">pub </span>T);
 
 <span class="kw">impl</span>&lt;T&gt; Encodable <span class="kw">for </span>SerdeEncodable&lt;T&gt;
 <span class="kw">where

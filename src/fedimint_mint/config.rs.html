@@ -130,7 +130,6 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -140,8 +139,9 @@
     TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_api::core::ModuleKind;
+<span class="kw">use </span>fedimint_api::encoding::Encodable;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>fedimint_api::{Amount, PeerId, Tiered, TieredMultiZip};
+<span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
@@ -156,14 +156,12 @@
     </span><span class="kw">pub </span>consensus: MintConfigConsensus,
 }
 
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>MintConfigConsensus {
     <span class="doccomment">/// The set of public keys for blind-signing all peers and note denominations
     </span><span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
     <span class="doccomment">/// Fees charged for ecash transactions
     </span><span class="kw">pub </span>fee_consensus: FeeConsensus,
-    <span class="doccomment">/// Number of signers required
-    </span><span class="kw">pub </span>threshold: usize,
     <span class="doccomment">/// The maximum amount of change a client can request
     </span><span class="kw">pub </span>max_notes_per_denomination: u16,
 }
@@ -174,7 +172,7 @@
     </span><span class="kw">pub </span>tbs_sks: Tiered&lt;tbs::SecretKeyShare&gt;,
 }
 
-<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>MintClientConfig {
     <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
@@ -195,7 +193,7 @@
                 .map(|(amt, keys)| {
                     <span class="comment">// TODO: avoid this through better aggregation API allowing references or
                     </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                    (amt, keys.aggregate(<span class="self">self</span>.threshold))
+                    (amt, keys.aggregate(<span class="self">self</span>.peer_tbs_pks.threshold()))
                 })
                 .collect();
 
@@ -250,7 +248,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>note_issuance_abs: fedimint_api::Amount,
     <span class="kw">pub </span>note_spend_abs: fedimint_api::Amount,

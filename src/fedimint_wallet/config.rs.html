@@ -173,6 +173,7 @@
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::bail;
@@ -182,6 +183,7 @@
 <span class="kw">use </span>fedimint_api::config::TypedServerModuleConfig;
 <span class="kw">use </span>fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::ModuleKind;
+<span class="kw">use </span>fedimint_api::encoding::Encodable;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_api::{Feerate, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
@@ -210,7 +212,7 @@
     </span><span class="kw">pub </span>peg_in_key: SecretKey,
 }
 
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>WalletConfigConsensus {
     <span class="doccomment">/// Bitcoin network (e.g. testnet, bitcoin)
     </span><span class="kw">pub </span>network: Network,
@@ -226,7 +228,7 @@
     </span><span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>WalletClientConfig {
     <span class="doccomment">/// The federations public peg-in-descriptor
     </span><span class="kw">pub </span>peg_in_descriptor: PegInDescriptor,
@@ -243,7 +245,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>peg_in_abs: fedimint_api::Amount,
     <span class="kw">pub </span>peg_out_abs: fedimint_api::Amount,
