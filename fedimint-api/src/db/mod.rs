@@ -8,6 +8,7 @@ use thiserror::Error;
 use tracing::{trace, warn};
 
 use crate::{
+    core::ModuleInstanceId,
     encoding::{Decodable, Encodable},
     fmt_utils::AbbreviateHexBytes,
 };
@@ -17,6 +18,8 @@ pub mod mem_impl;
 pub use tests::*;
 
 use crate::module::registry::ModuleDecoderRegistry;
+
+pub const MODULE_GLOBAL_PREFIX: u8 = 0xff;
 
 pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
@@ -69,7 +72,10 @@ impl Database {
     }
 
     pub async fn begin_transaction(&self) -> DatabaseTransaction {
-        DatabaseTransaction::new(self.0.db.begin_transaction().await, &self.0.module_decoders)
+        DatabaseTransaction::new(
+            self.0.db.begin_transaction().await,
+            self.0.module_decoders.clone(),
+        )
     }
 }
 
@@ -152,10 +158,86 @@ impl Drop for CommitTracker {
     }
 }
 
+struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated> {
+    tx: &'isolated mut DatabaseTransaction<'parent>,
+    prefix: Vec<u8>,
+}
+
+impl<'isolated, 'parent: 'isolated> IsolatedDatabaseTransaction<'isolated, 'parent> {
+    pub fn new(
+        dbtx: &'isolated mut DatabaseTransaction<'parent>,
+        module_instance_id: ModuleInstanceId,
+    ) -> IsolatedDatabaseTransaction<'isolated, 'parent> {
+        let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
+        module_instance_id
+            .consensus_encode(&mut prefix_bytes)
+            .expect("Error encoding module instance id as prefix");
+        IsolatedDatabaseTransaction {
+            tx: dbtx,
+            prefix: prefix_bytes,
+        }
+    }
+}
+
+#[async_trait]
+impl<'isolated, 'parent> IDatabaseTransaction<'isolated>
+    for IsolatedDatabaseTransaction<'isolated, 'parent>
+{
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        let mut key_with_prefix = self.prefix.clone();
+        key_with_prefix.append(&mut key.to_vec());
+        self.tx
+            .raw_insert_bytes(key_with_prefix.as_slice(), value)
+            .await
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let mut key_with_prefix = self.prefix.clone();
+        key_with_prefix.append(&mut key.to_vec());
+        self.tx.raw_get_bytes(key_with_prefix.as_slice()).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let mut key_with_prefix = self.prefix.clone();
+        key_with_prefix.append(&mut key.to_vec());
+        self.tx.raw_remove_entry(key_with_prefix.as_slice()).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+        let mut prefix_with_module = self.prefix.clone();
+        prefix_with_module.append(&mut key_prefix.to_vec());
+        let raw_prefix = self
+            .tx
+            .raw_find_by_prefix(prefix_with_module.as_slice())
+            .await;
+        Box::new(raw_prefix.map(|pair| match pair {
+            Ok(kv) => {
+                let key = kv.0;
+                let stripped_key = &key[(self.prefix.len())..];
+                Ok((stripped_key.to_vec(), kv.1))
+            }
+            _ => pair,
+        }))
+    }
+
+    async fn commit_tx(self: Box<Self>) -> Result<()> {
+        tracing::warn!("DatabaseTransaction inside modules cannot be committed");
+        Ok(())
+    }
+
+    async fn rollback_tx_to_savepoint(&mut self) {
+        self.tx.rollback_tx_to_savepoint().await
+    }
+
+    async fn set_tx_savepoint(&mut self) {
+        self.tx.set_tx_savepoint().await
+    }
+}
+
 #[doc = " A handle to a type-erased database implementation"]
 pub struct DatabaseTransaction<'a> {
     tx: Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
-    decoders: &'a ModuleDecoderRegistry,
+    decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
 }
 
@@ -173,17 +255,37 @@ impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
     }
 }
 
-impl<'a> DatabaseTransaction<'a> {
+impl<'parent> DatabaseTransaction<'parent> {
     pub fn new(
-        dbtx: Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
-        decoders: &'a ModuleDecoderRegistry,
-    ) -> DatabaseTransaction<'a> {
+        dbtx: Box<dyn IDatabaseTransaction<'parent> + Send + 'parent>,
+        decoders: ModuleDecoderRegistry,
+    ) -> DatabaseTransaction<'parent> {
         DatabaseTransaction {
             tx: dbtx,
             decoders,
             commit_tracker: CommitTracker {
                 is_committed: false,
                 has_writes: false,
+            },
+        }
+    }
+
+    pub fn with_module_prefix<'isolated>(
+        &'isolated mut self,
+        module_instance_id: ModuleInstanceId,
+    ) -> DatabaseTransaction<'isolated>
+    where
+        'parent: 'isolated,
+    {
+        let decoders = self.decoders.clone();
+        let isolated = Box::new(IsolatedDatabaseTransaction::new(self, module_instance_id));
+        DatabaseTransaction {
+            tx: isolated,
+            decoders,
+            // DatabaseTransaction passed to modules cannot be committed, so the commit tracker is set to committed to surpress the warning
+            commit_tracker: CommitTracker {
+                is_committed: true,
+                has_writes: true,
             },
         }
     }
@@ -208,7 +310,7 @@ impl<'a> DatabaseTransaction<'a> {
             std::any::type_name::<K::Value>(),
             AbbreviateHexBytes(&value_bytes)
         );
-        Ok(Some(K::Value::from_bytes(&value_bytes, self.decoders)?))
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
     }
 
     pub async fn find_by_prefix<KP>(
@@ -252,7 +354,7 @@ impl<'a> DatabaseTransaction<'a> {
                     std::any::type_name::<K::Value>(),
                     AbbreviateHexBytes(&old_val_bytes)
                 );
-                Ok(Some(K::Value::from_bytes(&old_val_bytes, self.decoders)?))
+                Ok(Some(K::Value::from_bytes(&old_val_bytes, &self.decoders)?))
             }
             None => Ok(None),
         }
@@ -293,7 +395,7 @@ impl<'a> DatabaseTransaction<'a> {
             None => return Ok(None),
         };
 
-        Ok(Some(K::Value::from_bytes(&value_bytes, self.decoders)?))
+        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
     }
 
     pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
@@ -455,6 +557,9 @@ mod tests {
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
+
+    const TEST_MODULE_PREFIX: u16 = 1;
+    const ALT_MODULE_PREFIX: u16 = 2;
 
     pub async fn verify_insert_elements(db: Database) {
         let mut dbtx = db.begin_transaction().await;
@@ -878,5 +983,88 @@ mod tests {
         }
 
         assert_eq!(returned_keys, expected_keys);
+    }
+
+    pub async fn verify_module_prefix(db: Database) {
+        let mut test_dbtx = db.begin_transaction().await;
+        {
+            let mut test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
+
+            assert!(test_module_dbtx
+                .insert_entry(&TestKey(100), &TestVal(101))
+                .await
+                .is_ok());
+
+            assert!(test_module_dbtx
+                .insert_entry(&TestKey(101), &TestVal(102))
+                .await
+                .is_ok());
+        }
+
+        test_dbtx.commit_tx().await.expect("DB Error");
+
+        let mut alt_dbtx = db.begin_transaction().await;
+        {
+            let mut alt_module_dbtx = alt_dbtx.with_module_prefix(ALT_MODULE_PREFIX);
+
+            assert!(alt_module_dbtx
+                .insert_entry(&TestKey(100), &TestVal(103))
+                .await
+                .is_ok());
+
+            assert!(alt_module_dbtx
+                .insert_entry(&TestKey(101), &TestVal(104))
+                .await
+                .is_ok());
+        }
+
+        alt_dbtx.commit_tx().await.expect("DB Error");
+
+        // verfiy test_module_dbtx can only see key/value pairs from its own module
+        let mut test_dbtx = db.begin_transaction().await;
+        let mut test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
+        assert_eq!(
+            test_module_dbtx.get_value(&TestKey(100)).await.unwrap(),
+            Some(TestVal(101))
+        );
+
+        assert_eq!(
+            test_module_dbtx.get_value(&TestKey(101)).await.unwrap(),
+            Some(TestVal(102))
+        );
+
+        let mut returned_keys = 0;
+        let expected_keys = 2;
+        for res in test_module_dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
+            match res.as_ref().unwrap().0 {
+                TestKey(100) => {
+                    assert!(res.unwrap().1.eq(&TestVal(101)));
+                    returned_keys += 1;
+                }
+                TestKey(101) => {
+                    assert!(res.unwrap().1.eq(&TestVal(102)));
+                    returned_keys += 1;
+                }
+                _ => {
+                    returned_keys += 1;
+                }
+            }
+        }
+
+        assert_eq!(returned_keys, expected_keys);
+
+        let removed = test_module_dbtx.remove_entry(&TestKey(100)).await;
+        assert!(removed.is_ok());
+        assert_eq!(removed.unwrap(), Some(TestVal(101)));
+        assert_eq!(
+            test_module_dbtx.get_value(&TestKey(100)).await.unwrap(),
+            None
+        );
+
+        // test_dbtx on its own wont find the key because it does not use a module prefix
+        let mut test_dbtx = db.begin_transaction().await;
+        assert_eq!(test_dbtx.get_value(&TestKey(101)).await.unwrap(), None);
+
+        test_dbtx.commit_tx().await.expect("DB Error");
     }
 }

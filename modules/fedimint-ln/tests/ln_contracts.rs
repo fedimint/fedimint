@@ -211,7 +211,15 @@ async fn test_incoming() {
     fed.consensus_round(&[], &[(offer_out_point, offer_output)])
         .await;
     let offers = fed
-        .fetch_from_all(|m, db| async { m.get_offers(&mut db.begin_transaction().await).await })
+        .fetch_from_all(|m, db, module_instance_id| async {
+            m.get_offers(
+                &mut db
+                    .begin_transaction()
+                    .await
+                    .with_module_prefix(*module_instance_id),
+            )
+            .await
+        })
         .await;
     assert_eq!(offers, vec![offer.clone()]);
 

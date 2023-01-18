@@ -18,7 +18,7 @@ pub mod btc;
 
 #[derive(Debug)]
 pub struct FakeFed<Module> {
-    pub members: Vec<(PeerId, Module, Database)>,
+    pub members: Vec<(PeerId, Module, Database, ModuleInstanceId)>,
     client_cfg: ClientModuleConfig,
     block_height: Arc<std::sync::atomic::AtomicU64>,
 }
@@ -63,7 +63,7 @@ where
                 ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder().into())]),
             );
             let member = constructor(cfg, db.clone()).await?;
-            members.push((peer, member, db));
+            members.push((peer, member, db, module_instance_id));
         }
 
         Ok(FakeFed {
@@ -98,9 +98,17 @@ where
         }
 
         let mut results = vec![];
-        for (_, member, db) in &self.members {
+        for (_, member, db, module_instance_id) in &self.members {
             let mut dbtx = db.begin_transaction().await;
-            results.push(member_validate(member, &mut dbtx, &fake_ic, input).await);
+            results.push(
+                member_validate(
+                    member,
+                    &mut dbtx.with_module_prefix(*module_instance_id),
+                    &fake_ic,
+                    input,
+                )
+                .await,
+            );
             dbtx.commit_tx().await.expect("DB tx failed");
         }
 
@@ -109,10 +117,16 @@ where
 
     pub async fn verify_output(&self, output: &Module::Output) -> bool {
         let mut results = Vec::new();
-        for (_, member, db) in self.members.iter() {
+        for (_, member, db, module_instance_id) in self.members.iter() {
             results.push(
                 member
-                    .validate_output(&mut db.begin_transaction().await, output)
+                    .validate_output(
+                        &mut db
+                            .begin_transaction()
+                            .await
+                            .with_module_prefix(*module_instance_id),
+                        output,
+                    )
                     .await
                     .is_err(),
             );
@@ -131,10 +145,15 @@ where
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
         // TODO: only include some of the proposals for realism
         let mut consensus = vec![];
-        for (id, member, db) in &mut self.members {
+        for (id, member, db, module_instance_id) in &mut self.members {
             consensus.extend(
                 member
-                    .consensus_proposal(&mut db.begin_transaction().await)
+                    .consensus_proposal(
+                        &mut db
+                            .begin_transaction()
+                            .await
+                            .with_module_prefix(*module_instance_id),
+                    )
                     .await
                     .into_iter()
                     .map(|ci| (*id, ci)),
@@ -142,33 +161,33 @@ where
         }
 
         let peers: HashSet<PeerId> = self.members.iter().map(|p| p.0).collect();
-        for (_peer, member, db) in &mut self.members {
+        for (_peer, member, db, module_instance_id) in &mut self.members {
             let database = db as &mut Database;
             let mut dbtx = database.begin_transaction().await;
+            {
+                let mut module_dbtx = dbtx.with_module_prefix(*module_instance_id);
 
-            member
-                .begin_consensus_epoch(&mut dbtx, consensus.clone())
-                .await;
-
-            let cache = member.build_verification_cache(inputs.iter());
-            for input in inputs {
                 member
-                    .apply_input(&fake_ic, &mut dbtx, input, &cache)
-                    .await
-                    .expect("Faulty input");
+                    .begin_consensus_epoch(&mut module_dbtx, consensus.clone())
+                    .await;
+
+                let cache = member.build_verification_cache(inputs.iter());
+                for input in inputs {
+                    member
+                        .apply_input(&fake_ic, &mut module_dbtx, input, &cache)
+                        .await
+                        .expect("Faulty input");
+                }
+
+                for (out_point, output) in outputs {
+                    member
+                        .apply_output(&mut module_dbtx, output, *out_point)
+                        .await
+                        .expect("Faulty output");
+                }
+
+                member.end_consensus_epoch(&peers, &mut module_dbtx).await;
             }
-
-            for (out_point, output) in outputs {
-                member
-                    .apply_output(&mut dbtx, output, *out_point)
-                    .await
-                    .expect("Faulty output");
-            }
-
-            dbtx.commit_tx().await.expect("DB Error");
-
-            let mut dbtx = database.begin_transaction().await;
-            member.end_consensus_epoch(&peers, &mut dbtx).await;
 
             dbtx.commit_tx().await.expect("DB Error");
         }
@@ -180,29 +199,24 @@ where
         // main consensus loop into another thread to optimize latency. This test will probably fail
         // then.
         let mut results = Vec::new();
-        for (_, member, db) in self.members.iter() {
+        for (_, member, db, module_instance_id) in self.members.iter() {
             results.push(
                 member
-                    .output_status(&mut db.begin_transaction().await, out_point)
+                    .output_status(
+                        &mut db
+                            .begin_transaction()
+                            .await
+                            .with_module_prefix(*module_instance_id),
+                        out_point,
+                    )
                     .await,
             );
         }
         assert_all_equal(results.into_iter())
     }
 
-    pub async fn patch_dbs<U>(&mut self, update: U)
-    where
-        U: Fn(&mut DatabaseTransaction),
-    {
-        for (_, _, db) in &mut self.members {
-            let mut dbtx = db.begin_transaction().await;
-            update(&mut dbtx);
-            dbtx.commit_tx().await.expect("DB Error");
-        }
-    }
-
     pub async fn generate_fake_utxo(&mut self) {
-        for (_, _, db) in &mut self.members {
+        for (_, _, db, module_instance_id) in &mut self.members {
             let mut dbtx = db.begin_transaction().await;
             let out_point = bitcoin::OutPoint::default();
             let tweak = [42; 32];
@@ -211,20 +225,26 @@ where
                 amount: bitcoin::Amount::from_sat(48000),
             };
 
-            dbtx.insert_entry(&fedimint_wallet::db::UTXOKey(out_point), &utxo)
-                .await
-                .unwrap();
+            {
+                let mut module_dbtx = dbtx.with_module_prefix(*module_instance_id);
+                module_dbtx
+                    .insert_entry(&fedimint_wallet::db::UTXOKey(out_point), &utxo)
+                    .await
+                    .unwrap();
 
-            dbtx.insert_entry(
-                &fedimint_wallet::db::RoundConsensusKey,
-                &fedimint_wallet::RoundConsensus {
-                    block_height: 0,
-                    fee_rate: fedimint_api::Feerate { sats_per_kvb: 0 },
-                    randomness_beacon: tweak,
-                },
-            )
-            .await
-            .unwrap();
+                module_dbtx
+                    .insert_entry(
+                        &fedimint_wallet::db::RoundConsensusKey,
+                        &fedimint_wallet::RoundConsensus {
+                            block_height: 0,
+                            fee_rate: fedimint_api::Feerate { sats_per_kvb: 0 },
+                            randomness_beacon: tweak,
+                        },
+                    )
+                    .await
+                    .unwrap();
+            }
+
             dbtx.commit_tx().await.expect("DB Error");
         }
     }
@@ -240,12 +260,12 @@ where
     pub async fn fetch_from_all<'a: 'b, 'b, O, F, Fut>(&'a mut self, fetch: F) -> O
     where
         O: Debug + Eq + Send,
-        F: Fn(&'b mut Module, &'b mut Database) -> Fut,
+        F: Fn(&'b mut Module, &'b mut Database, &'b ModuleInstanceId) -> Fut,
         Fut: futures::Future<Output = O> + Send,
     {
         let mut results = Vec::new();
-        for (_, member, db) in self.members.iter_mut() {
-            results.push(fetch(member, db).await);
+        for (_, member, db, module_instance_id) in self.members.iter_mut() {
+            results.push(fetch(member, db, module_instance_id).await);
         }
         assert_all_equal(results.into_iter())
     }

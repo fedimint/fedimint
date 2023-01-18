@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use fedimint_api::db::DatabaseKeyPrefixConst;
+use fedimint_api::db::{DatabaseKeyPrefixConst, MODULE_GLOBAL_PREFIX};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{PeerId, TransactionId};
 use fedimint_core::epoch::SignedEpochOutcome;
@@ -19,6 +19,7 @@ pub enum DbKeyPrefix {
     RejectedTransaction = 0x04,
     EpochHistory = 0x05,
     LastEpoch = 0x06,
+    Module = MODULE_GLOBAL_PREFIX,
 }
 
 impl std::fmt::Display for DbKeyPrefix {

@@ -858,7 +858,7 @@ impl ServerModule for Lightning {
                 "/account",
                 async |module: &Lightning, dbtx, contract_id: ContractId| -> ContractAccount {
                     module
-                        .get_contract_account(&mut dbtx, contract_id)
+                        .get_contract_account(dbtx, contract_id)
                         .await
                         .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
                 }
@@ -866,14 +866,14 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 "/offers",
                 async |module: &Lightning, dbtx, _params: ()| -> Vec<IncomingContractOffer> {
-                    Ok(module.get_offers(&mut dbtx).await)
+                    Ok(module.get_offers(dbtx).await)
                 }
             },
             api_endpoint! {
                 "/offer",
                 async |module: &Lightning, dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     let offer = module
-                        .get_offer(&mut dbtx, payment_hash)
+                        .get_offer(dbtx, payment_hash)
                         .await
                         .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
 
@@ -884,14 +884,13 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 "/list_gateways",
                 async |module: &Lightning, dbtx, _v: ()| -> Vec<LightningGateway> {
-                    Ok(module.list_gateways(&mut dbtx).await)
+                    Ok(module.list_gateways(dbtx).await)
                 }
             },
             api_endpoint! {
                 "/register_gateway",
                 async |module: &Lightning, dbtx, gateway: LightningGateway| -> () {
-                    module.register_gateway(&mut dbtx, gateway).await;
-                    dbtx.commit_tx().await.expect("DB Error");
+                    module.register_gateway(dbtx, gateway).await;
                     Ok(())
                 }
             },

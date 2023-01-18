@@ -237,7 +237,7 @@ mod tests {
             .await
             .members
             .iter()
-            .map(|(peer_id, _, _)| *peer_id)
+            .map(|(peer_id, _, _, _)| *peer_id)
             .collect();
         FederationApiFaker::new(fed, members).with(
             "/fetch_transaction",
@@ -369,9 +369,14 @@ mod tests {
         let wallet_value = fed
             .lock()
             .await
-            .fetch_from_all(|wallet, db| async {
+            .fetch_from_all(|wallet, db, module_instance_id| async {
                 wallet
-                    .get_wallet_value(&mut db.begin_transaction().await)
+                    .get_wallet_value(
+                        &mut db
+                            .begin_transaction()
+                            .await
+                            .with_module_prefix(*module_instance_id),
+                    )
                     .await
             })
             .await;
@@ -385,9 +390,14 @@ mod tests {
         let wallet_value = fed
             .lock()
             .await
-            .fetch_from_all(|wallet, db| async {
+            .fetch_from_all(|wallet, db, module_instance_id| async {
                 wallet
-                    .get_wallet_value(&mut db.begin_transaction().await)
+                    .get_wallet_value(
+                        &mut db
+                            .begin_transaction()
+                            .await
+                            .with_module_prefix(*module_instance_id),
+                    )
                     .await
             })
             .await;

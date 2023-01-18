@@ -680,7 +680,7 @@ mod tests {
             .await
             .members
             .iter()
-            .map(|(peer_id, _, _)| *peer_id)
+            .map(|(peer_id, _, _, _)| *peer_id)
             .collect();
         FederationApiFaker::new(fed, members).with(
             "/fetch_transaction",

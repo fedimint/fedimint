@@ -230,4 +230,9 @@ mod tests {
     async fn test_dbtx_remove_by_prefix() {
         fedimint_api::db::verify_remove_by_prefix(database()).await;
     }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_dbtx() {
+        fedimint_api::db::verify_module_prefix(database()).await;
+    }
 }

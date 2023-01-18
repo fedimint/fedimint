@@ -30,6 +30,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
                     module,
                     self.fedimint.database_transaction().await,
                     data,
+                    Some(module_id),
                 )
                 .await;
             }

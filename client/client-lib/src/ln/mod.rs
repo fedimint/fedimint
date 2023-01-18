@@ -362,7 +362,7 @@ mod tests {
             .await
             .members
             .iter()
-            .map(|(peer_id, _, _)| *peer_id)
+            .map(|(peer_id, _, _, _)| *peer_id)
             .collect();
         FederationApiFaker::new(fed, members)
             // TODO: is the output here is supposed to be a mint or wallet?
@@ -390,9 +390,15 @@ mod tests {
                     Ok(mint
                         .lock()
                         .await
-                        .fetch_from_all(|m, db| async {
-                            m.get_contract_account(&mut db.begin_transaction().await, contract)
-                                .await
+                        .fetch_from_all(|m, db, module_instance_id| async {
+                            m.get_contract_account(
+                                &mut db
+                                    .begin_transaction()
+                                    .await
+                                    .with_module_prefix(*module_instance_id),
+                                contract,
+                            )
+                            .await
                         })
                         .await
                         .unwrap())
