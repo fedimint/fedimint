@@ -8,7 +8,7 @@ use fedimint_api::{
 use fedimint_core::{
     epoch::ConsensusItem,
     modules::mint::{
-        BlindNonce, MintConsensusItem, MintInput, MintOutput, OutputConfirmationSignatures,
+        BlindNonce, MintConsensusItem, MintInput, MintOutput, MintOutputSignatureShare,
     },
     transaction::Transaction,
 };
@@ -177,7 +177,7 @@ impl MicroMintFed {
                     *peer_id,
                     MintConsensusItem {
                         out_point,
-                        signatures: OutputConfirmationSignatures(TieredMulti::from_iter(
+                        signatures: MintOutputSignatureShare(TieredMulti::from_iter(
                             output.0.iter_items().map(|(amount, blind_nonce)| {
                                 let blind_message = blind_nonce.0;
 

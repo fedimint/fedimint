@@ -81,13 +81,13 @@ pub struct MintConsensusItem {
     /// Reference to a Federation Transaction containing an [`MintOutput`] with `BlindNonce`s the signatures` are for
     pub out_point: OutPoint,
     /// (Partial) signatures
-    pub signatures: OutputConfirmationSignatures,
+    pub signatures: MintOutputSignatureShare,
 }
 
 // FIXME: optimize out blinded msg by making the mint remember it
 /// Blind signature share from one Federation peer for a single [`MintOutput`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct OutputConfirmationSignatures(
+pub struct MintOutputSignatureShare(
     pub TieredMulti<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>,
 );
 
@@ -555,8 +555,8 @@ impl ServerModule for Mint {
             out_point: OutPoint,
             // TODO: remove Option, make it mandatory
             // TODO: make it only the message, remove msg from PartialSigResponse
-            our_contribution: Option<OutputConfirmationSignatures>,
-            signature_shares: Vec<(PeerId, OutputConfirmationSignatures)>,
+            our_contribution: Option<MintOutputSignatureShare>,
+            signature_shares: Vec<(PeerId, MintOutputSignatureShare)>,
         }
 
         let mut drop_peers = BTreeSet::new();
@@ -845,8 +845,8 @@ impl Mint {
     fn blind_sign(
         &self,
         output: TieredMulti<BlindNonce>,
-    ) -> Result<OutputConfirmationSignatures, MintError> {
-        Ok(OutputConfirmationSignatures(output.map(
+    ) -> Result<MintOutputSignatureShare, MintError> {
+        Ok(MintOutputSignatureShare(output.map(
             |amt, msg| -> Result<_, InvalidAmountTierError> {
                 let sec_key = self.sec_key.tier(&amt)?;
                 let blind_signature = sign_blinded_msg(msg.0, *sec_key);
@@ -857,8 +857,8 @@ impl Mint {
 
     fn combine(
         &self,
-        our_contribution: Option<OutputConfirmationSignatures>,
-        partial_sigs: Vec<(PeerId, OutputConfirmationSignatures)>,
+        our_contribution: Option<MintOutputSignatureShare>,
+        partial_sigs: Vec<(PeerId, MintOutputSignatureShare)>,
     ) -> (
         Result<MintOutputBlindSignatures, CombineError>,
         MintShareErrors,
@@ -996,7 +996,7 @@ impl Mint {
         dbtx: &mut DatabaseTransaction<'a>,
         peer: PeerId,
         output_id: OutPoint,
-        partial_sig: OutputConfirmationSignatures,
+        partial_sig: MintOutputSignatureShare,
     ) {
         if dbtx
             .get_value(&OutputOutcomeKey(output_id))

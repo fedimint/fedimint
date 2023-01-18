@@ -6,7 +6,7 @@ use fedimint_api::{Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::{MintOutputBlindSignatures, Nonce, OutputConfirmationSignatures};
+use crate::{MintOutputBlindSignatures, MintOutputSignatureShare, Nonce};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -51,7 +51,7 @@ pub struct ProposedPartialSignatureKey {
 impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {
     const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
     type Key = Self;
-    type Value = OutputConfirmationSignatures;
+    type Value = MintOutputSignatureShare;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -60,7 +60,7 @@ pub struct ProposedPartialSignaturesKeyPrefix;
 impl DatabaseKeyPrefixConst for ProposedPartialSignaturesKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
     type Key = ProposedPartialSignatureKey;
-    type Value = OutputConfirmationSignatures;
+    type Value = MintOutputSignatureShare;
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -72,7 +72,7 @@ pub struct ReceivedPartialSignatureKey {
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKey {
     const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = Self;
-    type Value = OutputConfirmationSignatures;
+    type Value = MintOutputSignatureShare;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -83,7 +83,7 @@ pub struct ReceivedPartialSignatureKeyOutputPrefix {
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = ReceivedPartialSignatureKey;
-    type Value = OutputConfirmationSignatures;
+    type Value = MintOutputSignatureShare;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -92,7 +92,7 @@ pub struct ReceivedPartialSignaturesKeyPrefix;
 impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
     const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = ReceivedPartialSignatureKey;
-    type Value = OutputConfirmationSignatures;
+    type Value = MintOutputSignatureShare;
 }
 
 /// Transaction id and output index identifying an output outcome
