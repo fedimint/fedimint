@@ -901,7 +901,7 @@
 };
 <span class="kw">use </span>fedimint_core::{
     epoch::{ConsensusItem, SignedEpochOutcome},
-    modules::mint::{MintInput, MintOutput, MintOutputConfirmation},
+    modules::mint::{MintConsensusItem, MintInput, MintOutput},
 };
 <span class="kw">use </span>fedimint_mint::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
@@ -1559,7 +1559,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>handle_output_confirmation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, sigs: <span class="kw-2">&amp;</span>MintOutputConfirmation) {
+    <span class="kw">pub fn </span>handle_output_confirmation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, sigs: <span class="kw-2">&amp;</span>MintConsensusItem) {
         <span class="kw">let </span>enough_shares = <span class="kw">if let </span><span class="prelude-val">Some</span>((output_data, peer_shares)) =
             <span class="self">self</span>.pending_outputs.get_mut(<span class="kw-2">&amp;</span>sigs.out_point)
         {
@@ -1712,7 +1712,7 @@
                 <span class="kw">if </span>module_item.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                     <span class="kw">let </span>mint_item = module_item
                         .as_any()
-                        .downcast_ref::&lt;MintOutputConfirmation&gt;()
+                        .downcast_ref::&lt;MintConsensusItem&gt;()
                         .expect(<span class="string">&quot;mint key just checked&quot;</span>);
 
                     <span class="self">self</span>.handle_output_confirmation(peer_id, mint_item);

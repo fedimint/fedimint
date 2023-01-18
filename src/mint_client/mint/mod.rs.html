@@ -945,6 +945,7 @@
 <a href="#945" id="945">945</a>
 <a href="#946" id="946">946</a>
 <a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -961,7 +962,8 @@
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::{
-    BlindNonce, Mint, MintInput, MintOutput, MintOutputOutcome, Nonce, Note, OutputOutcome,
+    BlindNonce, Mint, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce,
+    Note,
 };
 <span class="kw">use </span>fedimint_core::transaction::legacy::{Input, Output, Transaction};
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
@@ -1464,12 +1466,12 @@
 }
 
 <span class="kw">impl </span>NoteIssuanceRequests {
-    <span class="doccomment">/// Finalize the issuance request using a [`OutputOutcome`] from the mint containing the blind
+    <span class="doccomment">/// Finalize the issuance request using a [`MintOutputBlindSignatures`] from the mint containing the blind
     /// signatures for all coins in this `IssuanceRequest`. It also takes the mint&#39;s
     /// [`AggregatePublicKey`] to validate the supplied blind signatures.
     </span><span class="kw">pub fn </span>finalize(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        bsigs: OutputOutcome,
+        bsigs: MintOutputBlindSignatures,
         mint_pub_key: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
     ) -&gt; std::result::Result&lt;TieredMulti&lt;SpendableNote&gt;, CoinFinalizationError&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.coins.structural_eq(<span class="kw-2">&amp;</span>bsigs.<span class="number">0</span>) {

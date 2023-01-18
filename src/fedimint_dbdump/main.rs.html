@@ -929,7 +929,7 @@
                         <span class="self">self</span>,
                         MintRange::OutputOutcomeKeyPrefix,
                         MintRange::OutputOutcomeKey,
-                        fedimint_mint::OutputOutcome,
+                        fedimint_mint::MintOutputBlindSignatures,
                         mint,
                         <span class="string">&quot;Output Outcomes&quot;
                     </span>);
@@ -939,7 +939,7 @@
                         <span class="self">self</span>,
                         MintRange::ProposedPartialSignaturesKeyPrefix,
                         MintRange::ProposedPartialSignatureKey,
-                        fedimint_mint::OutputConfirmationSignatures,
+                        fedimint_mint::MintOutputSignatureShare,
                         mint,
                         <span class="string">&quot;Proposed Signature Shares&quot;
                     </span>);
@@ -949,7 +949,7 @@
                         <span class="self">self</span>,
                         MintRange::ReceivedPartialSignaturesKeyPrefix,
                         MintRange::ReceivedPartialSignatureKey,
-                        fedimint_mint::OutputConfirmationSignatures,
+                        fedimint_mint::MintOutputSignatureShare,
                         mint,
                         <span class="string">&quot;Received Signature Shares&quot;
                     </span>);
