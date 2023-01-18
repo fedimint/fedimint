@@ -212,8 +212,6 @@
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::SocketAddr, path::PathBuf};
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
@@ -312,8 +310,6 @@
                     announce_address,
                     <span class="comment">// TODO: Generate a strong random password
                     </span>password: source_password(cli.rpcpassword),
-                    <span class="comment">// TODO: Remove this field with hardcoded value once we have fixed Issue 664:
-                    </span>default_federation: FederationId::dummy(),
                 },
             )
             .expect(<span class="string">&quot;Failed to write gateway configs to file&quot;</span>);
