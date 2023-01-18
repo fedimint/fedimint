@@ -220,9 +220,11 @@ impl LnGateway {
 
         // FIXME: Issue 664: We should avoid having a special reference to a federation
         // all requests, including `ReceivePaymentPayload`, should contain the federation id
-        // TODO: Parse federation id from routing hint in htlc_accepted message
-        self.select_actor(self.config.default_federation.clone())
-            .await?
+        //
+        // We use a random federation as the default (works because we only have one federation registered)
+        //
+        // TODO: Use subscribe intercept htlc streams to avoid actor selection with every intercepted htlc!
+        self.actors.lock().await.values().collect::<Vec<_>>()[0]
             .buy_preimage_internal(&payment_hash, &invoice_amount)
             .await
     }

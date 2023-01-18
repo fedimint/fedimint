@@ -37,7 +37,6 @@ async fn test_gateway_authentication() -> Result<()> {
 
     let cfg = GatewayConfig {
         password: gw_password.clone(),
-        default_federation: federation_id.clone(),
         bind_address: gw_bind_address,
         announce_address: gw_announce_address.clone(),
     };

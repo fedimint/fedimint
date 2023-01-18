@@ -96,8 +96,6 @@ async fn main() {
                     announce_address,
                     // TODO: Generate a strong random password
                     password: source_password(cli.rpcpassword),
-                    // TODO: Remove this field with hardcoded value once we have fixed Issue 664:
-                    default_federation: FederationId::dummy(),
                 },
             )
             .expect("Failed to write gateway configs to file");
