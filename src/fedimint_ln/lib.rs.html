@@ -1016,6 +1016,11 @@
 <a href="#1016" id="1016">1016</a>
 <a href="#1017" id="1017">1017</a>
 <a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1041,10 +1046,11 @@
 <span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig, TypedServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -1286,6 +1292,7 @@
                     LightningConfig {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
+                            threshold: peers.threshold(),
                             fee_consensus: FeeConsensus::default(),
                         },
                         private: LightningConfigPrivate {
@@ -1324,6 +1331,7 @@
         <span class="kw">let </span>server = LightningConfig {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
+                threshold: peers.threshold(),
                 fee_consensus: Default::default(),
             },
             private: LightningConfigPrivate {
@@ -1334,16 +1342,18 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server.to_erased()))
     }
 
-    <span class="kw">fn </span>to_config_response(
+    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+        <span class="prelude-val">Ok</span>(config
+            .to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?
+            </span>.consensus
+            .to_client_config())
+    }
+
+    <span class="kw">fn </span>to_client_config_from_consensus_value(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: serde_json::Value,
-    ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
-        <span class="kw">let </span>config = serde_json::from_value::&lt;LightningConfigConsensus&gt;(config)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(ModuleConfigResponse {
-            client: config.to_client_config(),
-            consensus_hash: config.hash()<span class="question-mark">?</span>,
-        })
+    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+        <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;LightningConfigConsensus&gt;(config)<span class="question-mark">?</span>.to_client_config())
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
@@ -1740,10 +1750,10 @@
                 <span class="macro">warn!</span>(<span class="string">&quot;{} did not contribute valid decryption shares&quot;</span>, peer);
             }
 
-            <span class="kw">if </span>valid_shares.len() &lt; <span class="self">self</span>.cfg.consensus.threshold() {
+            <span class="kw">if </span>valid_shares.len() &lt; <span class="self">self</span>.cfg.consensus.threshold {
                 <span class="macro">warn!</span>(
                     valid_shares = %valid_shares.len(),
-                    shares_needed = %<span class="self">self</span>.cfg.consensus.threshold(),
+                    shares_needed = %<span class="self">self</span>.cfg.consensus.threshold,
                     <span class="string">&quot;Too few decryption shares&quot;
                 </span>);
                 <span class="kw">continue</span>;

@@ -234,10 +234,10 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
-<span class="kw">use </span>fedimint_api::config::ConfigResponse;
 <span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="kw">use </span>fedimint_api::{
+    config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
     TransactionId,
@@ -450,8 +450,8 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/config&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, _v: ()| -&gt; ConfigResponse {
-                <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.to_config_response(<span class="kw-2">&amp;</span>fedimint.module_inits))
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, _v: ()| -&gt; ClientConfig {
+                <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.to_client_config(<span class="kw-2">&amp;</span>fedimint.module_inits))
             }
         },
     ]

@@ -917,44 +917,16 @@
 <a href="#917" id="917">917</a>
 <a href="#918" id="918">918</a>
 <a href="#919" id="919">919</a>
-<a href="#920" id="920">920</a>
-<a href="#921" id="921">921</a>
-<a href="#922" id="922">922</a>
-<a href="#923" id="923">923</a>
-<a href="#924" id="924">924</a>
-<a href="#925" id="925">925</a>
-<a href="#926" id="926">926</a>
-<a href="#927" id="927">927</a>
-<a href="#928" id="928">928</a>
-<a href="#929" id="929">929</a>
-<a href="#930" id="930">930</a>
-<a href="#931" id="931">931</a>
-<a href="#932" id="932">932</a>
-<a href="#933" id="933">933</a>
-<a href="#934" id="934">934</a>
-<a href="#935" id="935">935</a>
-<a href="#936" id="936">936</a>
-<a href="#937" id="937">937</a>
-<a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::os::unix::prelude::OsStrExt;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
-<span class="kw">use </span>bitcoin::hashes::sha256;
-<span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, DkgRunner,
-    FederationId, JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ThresholdKeys,
-    TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, FederationId, JsonWithKind,
+    ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
@@ -979,8 +951,6 @@
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::BitcoinHash;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::NumPeers;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, Connector};
@@ -1097,56 +1067,36 @@
 }
 
 <span class="kw">impl </span>ServerConfigConsensus {
-    <span class="doccomment">/// encodes the fields into a sha256 hash for comparison
-    /// TODO use the derive macro to automatically pick up new fields here
-    </span><span class="kw">fn </span>try_to_config_response(
+    <span class="kw">pub fn </span>try_to_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry,
-    ) -&gt; anyhow::Result&lt;ConfigResponse&gt; {
-        <span class="kw">let </span>modules: BTreeMap&lt;ModuleInstanceId, ModuleConfigResponse&gt; = <span class="self">self
-            </span>.modules
-            .iter()
-            .map(|(module_instance_id, v)| {
-                <span class="kw">let </span>kind = v.kind();
-                <span class="prelude-val">Ok</span>((
-                    <span class="kw-2">*</span>module_instance_id,
-                    module_config_gens
-                        .get(kind)
-                        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;module config gen not found: {kind}&quot;</span>))<span class="question-mark">?
-                        </span>.to_config_response(v.value().clone())<span class="question-mark">?</span>,
-                ))
-            })
-            .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
-        <span class="self">self</span>.code_version.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.federation_name.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.auth_pk_set.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.auth_pk_set.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.epoch_pk_set.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.api.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="kw">for </span>(k, v) <span class="kw">in </span>modules.iter() {
-            k.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-            v.consensus_hash.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        }
-        <span class="kw">let </span>consensus_hash = sha256::Hash::from_engine(engine);
-
-        <span class="kw">let </span>client = ClientConfig {
+    ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+        <span class="prelude-val">Ok</span>(ClientConfig {
             federation_name: <span class="self">self</span>.federation_name.clone(),
             federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
             nodes: <span class="self">self</span>.api.values().cloned().collect(),
-            modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
-        };
-
-        <span class="prelude-val">Ok</span>(ConfigResponse {
-            client,
-            consensus_hash,
+            modules: <span class="self">self
+                </span>.modules
+                .iter()
+                .map(|(module_instance_id, v)| {
+                    <span class="kw">let </span>kind = v.kind();
+                    <span class="prelude-val">Ok</span>((
+                        <span class="kw-2">*</span>module_instance_id,
+                        module_config_gens
+                            .get(kind)
+                            .ok_or_else(|| {
+                                <span class="macro">anyhow::format_err!</span>(<span class="string">&quot;module config gen not found: {kind}&quot;</span>)
+                            })<span class="question-mark">?
+                            </span>.to_client_config_from_consensus_value(v.value().clone())<span class="question-mark">?</span>,
+                    ))
+                })
+                .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>,
         })
     }
 
-    <span class="kw">pub fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry) -&gt; ConfigResponse {
-        <span class="self">self</span>.try_to_config_response(module_config_gens)
+    <span class="kw">pub fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry) -&gt; ClientConfig {
+        <span class="self">self</span>.try_to_client_config(module_config_gens)
             .expect(<span class="string">&quot;configuration mismatch&quot;</span>)
     }
 }

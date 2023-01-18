@@ -307,6 +307,9 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt;
@@ -314,10 +317,11 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>common::DummyDecoder;
 <span class="kw">use </span>fedimint_api::cancellable::Cancellable;
+<span class="kw">use </span>fedimint_api::config::TypedServerModuleConsensusConfig;
 <span class="kw">use </span>fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
+    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -427,16 +431,18 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server.to_erased()))
     }
 
-    <span class="kw">fn </span>to_config_response(
+    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ServerModuleConfig) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+        <span class="prelude-val">Ok</span>(config
+            .to_typed::&lt;DummyConfig&gt;()<span class="question-mark">?
+            </span>.consensus
+            .to_client_config())
+    }
+
+    <span class="kw">fn </span>to_client_config_from_consensus_value(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: serde_json::Value,
-    ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
-        <span class="kw">let </span>config = serde_json::from_value::&lt;DummyConfigConsensus&gt;(config)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(ModuleConfigResponse {
-            client: config.to_client_config(),
-            consensus_hash: config.hash()<span class="question-mark">?</span>,
-        })
+    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+        <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;DummyConfigConsensus&gt;(config)<span class="question-mark">?</span>.to_client_config())
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
