@@ -505,7 +505,7 @@ where
 }
 /// Wrappers for `T` that are `De-Serializable`, while we need them in `Encodable` contex
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
-pub struct SerdeEncodable<T>(pub T);
+pub struct SerdeEncodable<T>(T);
 
 impl<T> Encodable for SerdeEncodable<T>
 where

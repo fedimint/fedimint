@@ -10,11 +10,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
+use serde_json::Value;
 use thiserror::Error;
 use tracing::instrument;
 
 use crate::cancellable::Cancellable;
-use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
+use crate::config::{ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
     Decoder, DynDecoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
     OutputOutcome,
@@ -133,7 +134,6 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
-use fedimint_api::config::ModuleConfigResponse;
 
 type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
 type HandlerFn<M> = Box<
@@ -270,8 +270,13 @@ pub trait IModuleGen: Debug {
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>>;
 
-    fn to_config_response(&self, config: serde_json::Value)
-        -> anyhow::Result<ModuleConfigResponse>;
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig>;
+
+    // TODO: There's a bit of confusion here between whole config as one value, `ServerModuleConfig`, and just consensus part
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<ClientModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 }
@@ -320,8 +325,12 @@ pub trait ModuleGen: Debug + Sized {
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>>;
 
-    fn to_config_response(&self, config: serde_json::Value)
-        -> anyhow::Result<ModuleConfigResponse>;
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig>;
+
+    fn to_client_config_from_consensus_value(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<ClientModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 }
@@ -378,11 +387,15 @@ where
         .await
     }
 
-    fn to_config_response(
+    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
+        <Self as ModuleGen>::to_client_config(self, config)
+    }
+
+    fn to_client_config_from_consensus_value(
         &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<ModuleConfigResponse> {
-        <Self as ModuleGen>::to_config_response(self, config)
+        config: Value,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        <Self as ModuleGen>::to_client_config_from_consensus_value(self, config)
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {

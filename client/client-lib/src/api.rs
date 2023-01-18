@@ -8,7 +8,7 @@ use std::{cmp, result};
 use async_trait::async_trait;
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::config::{ClientConfig, ConfigResponse};
+use fedimint_api::config::ClientConfig;
 use fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -381,9 +381,6 @@ pub trait GlobalFederationApi {
         timeout: Duration,
         decoders: &ModuleDecoderRegistry,
     ) -> OutputOutcomeResult<R>;
-
-    /// Fetch verifiable client configuration info
-    async fn download_client_config(&self) -> FederationResult<ConfigResponse>;
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
@@ -526,11 +523,6 @@ where
         fedimint_api::task::timeout(timeout, poll())
             .await
             .map_err(|_| OutputOutcomeError::Timeout(timeout))?
-    }
-
-    async fn download_client_config(&self) -> FederationResult<ConfigResponse> {
-        self.request_current_consensus("/config".to_owned(), vec![])
-            .await
     }
 }
 

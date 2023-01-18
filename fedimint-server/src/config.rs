@@ -4,13 +4,10 @@ use std::net::SocketAddr;
 use std::os::unix::prelude::OsStrExt;
 
 use anyhow::{bail, format_err};
-use bitcoin::hashes::sha256;
-use bitcoin::hashes::sha256::HashEngine;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, DkgRunner,
-    FederationId, JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ThresholdKeys,
-    TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigGenParams, DkgPeerMsg, DkgRunner, FederationId, JsonWithKind,
+    ServerModuleConfig, ThresholdKeys, TypedServerModuleConfig,
 };
 use fedimint_api::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
@@ -35,8 +32,6 @@ use tokio_rustls::rustls;
 use tracing::info;
 use url::Url;
 
-use crate::fedimint_api::encoding::Encodable;
-use crate::fedimint_api::BitcoinHash;
 use crate::fedimint_api::NumPeers;
 use crate::net::connect::TlsConfig;
 use crate::net::connect::{parse_host_port, Connector};
@@ -153,56 +148,36 @@ pub struct ServerConfigParams {
 }
 
 impl ServerConfigConsensus {
-    /// encodes the fields into a sha256 hash for comparison
-    /// TODO use the derive macro to automatically pick up new fields here
-    fn try_to_config_response(
+    pub fn try_to_client_config(
         &self,
         module_config_gens: &ModuleInitRegistry,
-    ) -> anyhow::Result<ConfigResponse> {
-        let modules: BTreeMap<ModuleInstanceId, ModuleConfigResponse> = self
-            .modules
-            .iter()
-            .map(|(module_instance_id, v)| {
-                let kind = v.kind();
-                Ok((
-                    *module_instance_id,
-                    module_config_gens
-                        .get(kind)
-                        .ok_or_else(|| format_err!("module config gen not found: {kind}"))?
-                        .to_config_response(v.value().clone())?,
-                ))
-            })
-            .collect::<anyhow::Result<_>>()?;
-
-        let mut engine = HashEngine::default();
-        self.code_version.consensus_encode(&mut engine)?;
-        self.federation_name.consensus_encode(&mut engine)?;
-        self.auth_pk_set.consensus_encode(&mut engine)?;
-        self.auth_pk_set.consensus_encode(&mut engine)?;
-        self.epoch_pk_set.consensus_encode(&mut engine)?;
-        self.api.consensus_encode(&mut engine)?;
-        for (k, v) in modules.iter() {
-            k.consensus_encode(&mut engine)?;
-            v.consensus_hash.consensus_encode(&mut engine)?;
-        }
-        let consensus_hash = sha256::Hash::from_engine(engine);
-
-        let client = ClientConfig {
+    ) -> anyhow::Result<ClientConfig> {
+        Ok(ClientConfig {
             federation_name: self.federation_name.clone(),
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
             nodes: self.api.values().cloned().collect(),
-            modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
-        };
-
-        Ok(ConfigResponse {
-            client,
-            consensus_hash,
+            modules: self
+                .modules
+                .iter()
+                .map(|(module_instance_id, v)| {
+                    let kind = v.kind();
+                    Ok((
+                        *module_instance_id,
+                        module_config_gens
+                            .get(kind)
+                            .ok_or_else(|| {
+                                anyhow::format_err!("module config gen not found: {kind}")
+                            })?
+                            .to_client_config_from_consensus_value(v.value().clone())?,
+                    ))
+                })
+                .collect::<anyhow::Result<_>>()?,
         })
     }
 
-    pub fn to_config_response(&self, module_config_gens: &ModuleInitRegistry) -> ConfigResponse {
-        self.try_to_config_response(module_config_gens)
+    pub fn to_client_config(&self, module_config_gens: &ModuleInitRegistry) -> ClientConfig {
+        self.try_to_client_config(module_config_gens)
             .expect("configuration mismatch")
     }
 }

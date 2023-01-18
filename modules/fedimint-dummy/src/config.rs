@@ -3,7 +3,6 @@ use fedimint_api::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_api::core::ModuleKind;
-use fedimint_api::encoding::Encodable;
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::PeerId;
 use serde::{Deserialize, Serialize};
@@ -18,7 +17,7 @@ pub struct DummyConfig {
     pub consensus: DummyConfigConsensus,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DummyConfigConsensus {
     pub something: u64,
 }
@@ -28,7 +27,7 @@ pub struct DummyConfigPrivate {
     pub something_private: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DummyClientConfig {
     pub something: u64,
 }

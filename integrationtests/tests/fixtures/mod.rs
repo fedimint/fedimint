@@ -263,8 +263,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 ServerConfig::trusted_dealer_gen("", &peers, &params, module_inits.clone(), OsRng);
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
-                .to_config_response(&module_inits)
-                .client;
+                .to_client_config(&module_inits);
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
@@ -419,10 +418,7 @@ async fn distributed_config(
 
     Ok((
         configs.into_iter().collect(),
-        config
-            .consensus
-            .to_config_response(&module_config_gens)
-            .client,
+        config.consensus.to_client_config(&module_config_gens),
     ))
 }
 
