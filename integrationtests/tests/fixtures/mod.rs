@@ -497,7 +497,6 @@ impl GatewayTest {
             bind_address: bind_addr,
             announce_address: announce_addr,
             password: "abc".into(),
-            default_federation: gw_client_cfg.client_config.federation_id.clone(),
         };
 
         let gateway = LnGateway::new(

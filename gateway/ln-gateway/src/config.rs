@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 
-use fedimint_api::config::FederationId;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -12,7 +11,4 @@ pub struct GatewayConfig {
     pub announce_address: Url,
     /// webserver authentication password
     pub password: String,
-    // FIXME: Issue 664: We should avoid having a special reference to a federation
-    // all requests, including `ReceivePaymentPayload`, should contain the federation id
-    pub default_federation: FederationId,
 }
