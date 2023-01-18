@@ -434,10 +434,11 @@ where
             self.resend_queue.ack(ack);
         }
 
-        self.incoming
-            .send(msg.msg)
-            .await
-            .expect("Peer connection went away");
+        if self.incoming.send(msg.msg).await.is_err() {
+            // ignore error - if the other side is not there,
+            // it means we're are probably shutting down
+            debug!("Could not deliver message to recipient - probably shutting down");
+        }
 
         Ok(())
     }
