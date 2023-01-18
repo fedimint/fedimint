@@ -718,6 +718,10 @@
 <a href="#718" id="718">718</a>
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -726,7 +730,7 @@
 <span class="kw">use </span>std::process::exit;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
+<span class="kw">use </span>bitcoin::{secp256k1, Address, Network, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::core::{
@@ -803,7 +807,9 @@
     },
 
     Info {
-        network: String,
+        federation_id: String,
+        federation_name: String,
+        network: Network,
         total_amount: Amount,
         total_num_notes: usize,
         details: BTreeMap&lt;Amount, usize&gt;,
@@ -1247,7 +1253,9 @@
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))
                 .collect();
             <span class="prelude-val">Ok</span>(CliOutput::Info {
-                network: client.wallet_client().config.network.to_string(),
+                federation_id: client.config().as_ref().federation_id.to_string(),
+                federation_name: client.config().as_ref().federation_name.clone(),
+                network: client.wallet_client().config.network,
                 total_amount: (coins.total_amount()),
                 total_num_notes: (coins.count_items()),
                 details: (details_vec),
