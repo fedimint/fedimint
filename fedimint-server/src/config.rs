@@ -83,7 +83,7 @@ pub struct ServerConfigPrivate {
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 pub struct ServerConfigConsensus {
     /// The version of the binary code running
     pub code_version: String,
@@ -101,6 +101,7 @@ pub struct ServerConfigConsensus {
     /// Network addresses and names for all peer APIs
     pub api: BTreeMap<PeerId, ApiEndpoint>,
     /// All configuration that needs to be the same for modules
+    #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
@@ -175,12 +176,7 @@ impl ServerConfigConsensus {
             .collect::<anyhow::Result<_>>()?;
 
         let mut engine = HashEngine::default();
-        self.code_version.consensus_encode(&mut engine)?;
-        self.federation_name.consensus_encode(&mut engine)?;
-        self.auth_pk_set.consensus_encode(&mut engine)?;
-        self.auth_pk_set.consensus_encode(&mut engine)?;
-        self.epoch_pk_set.consensus_encode(&mut engine)?;
-        self.api.consensus_encode(&mut engine)?;
+        self.consensus_encode(&mut engine)?;
         for (k, v) in modules.iter() {
             k.consensus_encode(&mut engine)?;
             v.consensus_hash.consensus_encode(&mut engine)?;

@@ -311,12 +311,6 @@ impl ServerModuleConfig {
 pub trait TypedServerModuleConsensusConfig: DeserializeOwned + Serialize + Encodable {
     /// Derive client side config for this module (type-erased)
     fn to_client_config(&self) -> ClientModuleConfig;
-
-    fn hash(&self) -> anyhow::Result<sha256::Hash> {
-        let mut engine = HashEngine::default();
-        self.consensus_encode(&mut engine)?;
-        Ok(sha256::Hash::from_engine(engine))
-    }
 }
 
 /// Module (server side) config
