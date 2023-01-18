@@ -670,6 +670,21 @@
 <a href="#670" id="670">670</a>
 <a href="#671" id="671">671</a>
 <a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
@@ -924,27 +939,34 @@
     </span>M: Debug + Clone,
 {
     <span class="kw">async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: <span class="kw-2">&amp;</span>TaskHandle) {
+        <span class="kw">let </span>peer = <span class="self">self</span>.common.peer;
+
         <span class="comment">// Note: `state_transition` internally uses channel operations (`send` and `recv`)
         // which will disconnect when other tasks are shutting down returning here,
         // so we probably don&#39;t need any `timeout` here.
         </span><span class="kw">while </span>!task_handle.is_shutting_down() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition().<span class="kw">await </span>{
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition(task_handle).<span class="kw">await </span>{
                 <span class="self">self </span>= new_self;
             } <span class="kw">else </span>{
                 <span class="kw">break</span>;
             }
         }
+        <span class="macro">info!</span>(<span class="question-mark">?</span>peer, <span class="string">&quot;Shutting down peer connection state machine&quot;</span>);
     }
 
-    <span class="kw">async fn </span>state_transition(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">async fn </span>state_transition(<span class="self">self</span>, task_handle: <span class="kw-2">&amp;</span>TaskHandle) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>PeerConnectionStateMachine { <span class="kw-2">mut </span>common, state } = <span class="self">self</span>;
 
         <span class="kw">match </span>state {
             PeerConnectionState::Disconnected(disconnected) =&gt; {
-                common.state_transition_disconnected(disconnected).<span class="kw">await
+                common
+                    .state_transition_disconnected(disconnected, task_handle)
+                    .<span class="kw">await
             </span>}
             PeerConnectionState::Connected(connected) =&gt; {
-                common.state_transition_connected(connected).<span class="kw">await
+                common
+                    .state_transition_connected(connected, task_handle)
+                    .<span class="kw">await
             </span>}
         }
         .map(|new_state| PeerConnectionStateMachine {
@@ -961,6 +983,7 @@
     <span class="kw">async fn </span>state_transition_connected(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         <span class="kw-2">mut </span>connected: ConnectedPeerConnectionState&lt;M&gt;,
+        task_handle: <span class="kw-2">&amp;</span>TaskHandle,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;PeerConnectionState&lt;M&gt;&gt; {
         <span class="prelude-val">Some</span>(<span class="macro">tokio::select! </span>{
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
@@ -989,6 +1012,9 @@
             <span class="prelude-val">Some</span>(msg_res) = connected.connection.next() =&gt; {
                 <span class="self">self</span>.receive_message(connected, msg_res).<span class="kw">await
             </span>},
+            <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+                <span class="kw">return </span><span class="prelude-val">None</span>;
+            },
         })
     }
 
@@ -1118,6 +1144,7 @@
     <span class="kw">async fn </span>state_transition_disconnected(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         disconnected: DisconnectedPeerConnectionState,
+        task_handle: <span class="kw-2">&amp;</span>TaskHandle,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;PeerConnectionState&lt;M&gt;&gt; {
         <span class="prelude-val">Some</span>(<span class="macro">tokio::select! </span>{
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
@@ -1143,7 +1170,10 @@
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at) =&gt; {
                 <span class="self">self</span>.reconnect(disconnected).<span class="kw">await
-            </span>}
+            </span>},
+            <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+                <span class="kw">return </span><span class="prelude-val">None</span>;
+            },
         })
     }
 
