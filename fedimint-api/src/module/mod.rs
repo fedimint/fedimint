@@ -5,11 +5,13 @@ pub mod registry;
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -20,6 +22,7 @@ use crate::core::{
     OutputOutcome,
 };
 use crate::db::{Database, DatabaseTransaction};
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
@@ -134,6 +137,8 @@ macro_rules! __api_endpoint {
 
 pub use __api_endpoint as api_endpoint;
 use fedimint_api::config::ModuleConfigResponse;
+
+use self::registry::ModuleDecoderRegistry;
 
 type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
 type HandlerFn<M> = Box<
@@ -520,4 +525,26 @@ pub trait ServerModule: Debug + Sized {
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
     /// their input and the current epoch.
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>>;
+}
+
+/// Creates a struct that can be used to make our module-decodable structs interact with
+/// `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper that holds the data as serialized
+// bytes internally.
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SerdeModuleEncoding<T: Encodable + Decodable>(Vec<u8>, #[serde(skip)] PhantomData<T>);
+
+impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding<T> {
+    fn from(value: &T) -> Self {
+        let mut bytes = vec![];
+        fedimint_api::encoding::Encodable::consensus_encode(value, &mut bytes)
+            .expect("Writing to buffer can never fail");
+        Self(bytes, PhantomData)
+    }
+}
+
+impl<T: Encodable + Decodable> SerdeModuleEncoding<T> {
+    pub fn try_into_inner(&self, modules: &ModuleDecoderRegistry) -> Result<T, DecodeError> {
+        let mut reader = std::io::Cursor::new(&self.0);
+        Decodable::consensus_decode(&mut reader, modules)
+    }
 }

@@ -6,7 +6,8 @@ use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::core::DynModuleConsensusItem as ModuleConsensusItem;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::{serde_module_encoding_wrapper, BitcoinHash, PeerId, TransactionId};
+use fedimint_api::module::SerdeModuleEncoding;
+use fedimint_api::{BitcoinHash, PeerId, TransactionId};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -20,7 +21,7 @@ pub enum ConsensusItem {
     Module(ModuleConsensusItem),
 }
 
-serde_module_encoding_wrapper!(SerdeConsensusItem, ConsensusItem);
+pub type SerdeConsensusItem = SerdeModuleEncoding<ConsensusItem>;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EpochOutcomeSignatureShare(pub SignatureShare);
@@ -35,7 +36,7 @@ pub struct SignedEpochOutcome {
     pub signature: Option<EpochOutcomeSignature>,
 }
 
-serde_module_encoding_wrapper!(SerdeEpochHistory, SignedEpochOutcome);
+pub type SerdeEpochHistory = SerdeModuleEncoding<SignedEpochOutcome>;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct EpochOutcome {
