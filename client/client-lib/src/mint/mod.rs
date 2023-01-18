@@ -14,7 +14,8 @@ use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{
-    BlindNonce, Mint, MintInput, MintOutput, MintOutputOutcome, Nonce, Note, OutputOutcome,
+    BlindNonce, Mint, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce,
+    Note,
 };
 use fedimint_core::transaction::legacy::{Input, Output, Transaction};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
@@ -517,12 +518,12 @@ impl Extend<(Amount, NoteIssuanceRequest)> for NoteIssuanceRequests {
 }
 
 impl NoteIssuanceRequests {
-    /// Finalize the issuance request using a [`OutputOutcome`] from the mint containing the blind
+    /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from the mint containing the blind
     /// signatures for all coins in this `IssuanceRequest`. It also takes the mint's
     /// [`AggregatePublicKey`] to validate the supplied blind signatures.
     pub fn finalize(
         &self,
-        bsigs: OutputOutcome,
+        bsigs: MintOutputBlindSignatures,
         mint_pub_key: &Tiered<AggregatePublicKey>,
     ) -> std::result::Result<TieredMulti<SpendableNote>, CoinFinalizationError> {
         if !self.coins.structural_eq(&bsigs.0) {

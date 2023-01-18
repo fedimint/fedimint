@@ -14,7 +14,7 @@ use fedimint_api::task::TaskGroup;
 use fedimint_api::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
-use fedimint_mint::{MintOutputConfirmation, OutputConfirmationSignatures};
+use fedimint_mint::{MintConsensusItem, MintOutputSignatureShare};
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::legacy::Output;
@@ -396,9 +396,9 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
         let bad_proposal = vec![ConsensusItem::Module(
             fedimint_api::core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                MintOutputConfirmation {
+                MintConsensusItem {
                     out_point,
-                    signatures: OutputConfirmationSignatures(TieredMulti::default()),
+                    signatures: MintOutputSignatureShare(TieredMulti::default()),
                 },
             ),
         )];

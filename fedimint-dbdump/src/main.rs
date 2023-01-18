@@ -234,7 +234,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::OutputOutcomeKeyPrefix,
                         MintRange::OutputOutcomeKey,
-                        fedimint_mint::OutputOutcome,
+                        fedimint_mint::MintOutputBlindSignatures,
                         mint,
                         "Output Outcomes"
                     );
@@ -244,7 +244,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::ProposedPartialSignaturesKeyPrefix,
                         MintRange::ProposedPartialSignatureKey,
-                        fedimint_mint::OutputConfirmationSignatures,
+                        fedimint_mint::MintOutputSignatureShare,
                         mint,
                         "Proposed Signature Shares"
                     );
@@ -254,7 +254,7 @@ impl<'a> DatabaseDump<'a> {
                         self,
                         MintRange::ReceivedPartialSignaturesKeyPrefix,
                         MintRange::ReceivedPartialSignatureKey,
-                        fedimint_mint::OutputConfirmationSignatures,
+                        fedimint_mint::MintOutputSignatureShare,
                         mint,
                         "Received Signature Shares"
                     );

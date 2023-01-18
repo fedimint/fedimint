@@ -9,7 +9,7 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 
-use crate::{MintInput, MintOutput, MintOutputConfirmation, MintOutputOutcome};
+use crate::{MintConsensusItem, MintInput, MintOutput, MintOutputOutcome};
 
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
@@ -68,7 +68,7 @@ impl Decoder for MintDecoder {
     type Input = MintInput;
     type Output = MintOutput;
     type OutputOutcome = MintOutputOutcome;
-    type ConsensusItem = MintOutputConfirmation;
+    type ConsensusItem = MintConsensusItem;
 
     fn decode_input(&self, mut d: &mut dyn io::Read) -> Result<MintInput, DecodeError> {
         MintInput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
@@ -88,7 +88,7 @@ impl Decoder for MintDecoder {
     fn decode_consensus_item(
         &self,
         mut r: &mut dyn io::Read,
-    ) -> Result<MintOutputConfirmation, DecodeError> {
-        MintOutputConfirmation::consensus_decode(&mut r, &ModuleDecoderRegistry::default())
+    ) -> Result<MintConsensusItem, DecodeError> {
+        MintConsensusItem::consensus_decode(&mut r, &ModuleDecoderRegistry::default())
     }
 }

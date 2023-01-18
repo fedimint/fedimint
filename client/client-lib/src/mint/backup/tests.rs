@@ -8,7 +8,7 @@ use fedimint_api::{
 use fedimint_core::{
     epoch::ConsensusItem,
     modules::mint::{
-        BlindNonce, MintInput, MintOutput, MintOutputConfirmation, OutputConfirmationSignatures,
+        BlindNonce, MintConsensusItem, MintInput, MintOutput, MintOutputSignatureShare,
     },
     transaction::Transaction,
 };
@@ -169,15 +169,15 @@ impl MicroMintFed {
         &self,
         out_point: OutPoint,
         output: &MintOutput,
-    ) -> Vec<(PeerId, MintOutputConfirmation)> {
+    ) -> Vec<(PeerId, MintConsensusItem)> {
         self.sec_key_shares
             .iter()
             .map(|(peer_id, sec_keys)| {
                 (
                     *peer_id,
-                    MintOutputConfirmation {
+                    MintConsensusItem {
                         out_point,
-                        signatures: OutputConfirmationSignatures(TieredMulti::from_iter(
+                        signatures: MintOutputSignatureShare(TieredMulti::from_iter(
                             output.0.iter_items().map(|(amount, blind_nonce)| {
                                 let blind_message = blind_nonce.0;
 
@@ -210,7 +210,7 @@ impl MicroMintFed {
     fn combine_output_confirmations(
         &self,
         note_iss_requests: &[(Amount, BlindNonce, NoteIssuanceRequest)],
-        confirmations: &[(PeerId, MintOutputConfirmation)],
+        confirmations: &[(PeerId, MintConsensusItem)],
     ) -> Vec<(Amount, SpendableNote)> {
         let mut confs_by_order: Vec<HashMap<PeerId, BlindedSignatureShare>> = vec![];
 
