@@ -6,12 +6,12 @@ use std::{
 };
 
 use async_trait::async_trait;
-use fedimint_api::config::{ConfigResponse, FederationId};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{
+    config::ClientConfig,
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define,
 };
+use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_server::config::load_from_file;
 use mint_client::{
     api::{DynFederationApi, GlobalFederationApi, WsFederationApi, WsFederationConnect},
@@ -145,8 +145,8 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
     ) -> Result<GatewayClientConfig> {
         let api: DynFederationApi = WsFederationApi::new(connect.members).into();
 
-        let response: ConfigResponse = api
-            .download_client_config()
+        let client_cfg: ClientConfig = api
+            .get_client_config()
             .await
             .expect("Failed to get client config");
 
@@ -156,7 +156,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
         Ok(GatewayClientConfig {
             mint_channel_id,
-            client_config: response.client,
+            client_config: client_cfg,
             redeem_key: kp_fed,
             timelock_delta: 10,
             node_pub_key: node_pubkey,

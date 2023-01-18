@@ -77,10 +77,7 @@ pub fn write_nonprivate_configs(
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
     plaintext_json_write(
-        &server
-            .consensus
-            .to_config_response(module_config_gens)
-            .client,
+        &server.consensus.to_client_config(module_config_gens),
         path.join(CLIENT_CONFIG),
     )
 }

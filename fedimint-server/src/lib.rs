@@ -4,15 +4,13 @@ use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
 
-use anyhow::bail;
 use config::ServerConfig;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::encoding::DecodeError;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::net::peers::PeerConnections;
-use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
+use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
@@ -89,28 +87,11 @@ impl FedimintServer {
     ) -> anyhow::Result<()> {
         let server = FedimintServer::new(cfg.clone(), consensus, decoders, task_group).await;
         let server_consensus = server.consensus.clone();
-        let consensus_hash = server
-            .cfg
-            .consensus
-            .to_config_response(&server_consensus.module_inits)
-            .consensus_hash;
-
         task_group
             .spawn("api-server", |handle| {
                 net::api::run_server(cfg, server_consensus, handle)
             })
             .await;
-
-        loop {
-            info!("Waiting for peers to agree on a consensus config hash");
-            match server.api.download_client_config().await {
-                Ok(response) if response.consensus_hash == consensus_hash => break,
-                Ok(_) => bail!("Our consensus config doesn't match peers!"),
-                Err(_) => {}
-            }
-            sleep(Duration::from_millis(1000)).await;
-        }
-
         task_group
             .spawn_local("consensus", move |handle| server.run_consensus(handle))
             .await;
