@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 
-use bitcoin::{secp256k1, Address, Transaction};
+use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::{
@@ -83,7 +83,9 @@ enum CliOutput {
     },
 
     Info {
-        network: String,
+        federation_id: String,
+        federation_name: String,
+        network: Network,
         total_amount: Amount,
         total_num_notes: usize,
         details: BTreeMap<Amount, usize>,
@@ -527,7 +529,9 @@ async fn handle_command(
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))
                 .collect();
             Ok(CliOutput::Info {
-                network: client.wallet_client().config.network.to_string(),
+                federation_id: client.config().as_ref().federation_id.to_string(),
+                federation_name: client.config().as_ref().federation_name.clone(),
+                network: client.wallet_client().config.network,
                 total_amount: (coins.total_amount()),
                 total_num_notes: (coins.count_items()),
                 details: (details_vec),
