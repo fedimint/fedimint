@@ -669,6 +669,7 @@
 <a href="#669" id="669">669</a>
 <a href="#670" id="670">670</a>
 <a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
@@ -1105,10 +1106,11 @@
             <span class="self">self</span>.resend_queue.ack(ack);
         }
 
-        <span class="self">self</span>.incoming
-            .send(msg.msg)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Peer connection went away&quot;</span>);
+        <span class="kw">if </span><span class="self">self</span>.incoming.send(msg.msg).<span class="kw">await</span>.is_err() {
+            <span class="comment">// ignore error - if the other side is not there,
+            // it means we&#39;re are probably shutting down
+            </span><span class="macro">debug!</span>(<span class="string">&quot;Could not deliver message to recipient - probably shutting down&quot;</span>);
+        }
 
         <span class="prelude-val">Ok</span>(())
     }
