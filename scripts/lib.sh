@@ -156,3 +156,9 @@ function show_verbose_output()
         cat
     fi
 }
+
+function await_gateway_registered() {
+    until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" -gt "0" ]; do
+        sleep $POLL_INTERVAL
+    done
+}

@@ -26,6 +26,8 @@ do
 done
 time2=$(date +%s.%N)
 
+await_gateway_registered
+
 ## outgoing lightning
 for i in $( seq 1 $ITERATIONS )
 do
