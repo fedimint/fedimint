@@ -168,7 +168,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
     let decoders = module_decode_stubs();
 
-    match env::var("FM_TEST_DISABLE_MOCKS") {
+    let fixtures = match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
@@ -248,14 +248,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .await;
 
-            Ok(Fixtures {
+            Fixtures {
                 fed,
                 user,
                 bitcoin: Box::new(bitcoin),
                 gateway,
                 lightning: Box::new(lightning),
                 task_group,
-            })
+            }
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
@@ -328,16 +328,24 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .await;
 
-            Ok(Fixtures {
+            Fixtures {
                 fed,
                 user,
                 bitcoin: Box::new(bitcoin),
                 gateway,
                 lightning: Box::new(lightning),
                 task_group,
-            })
+            }
         }
+    };
+
+    // Wait till the gateway has registered itself
+    while fixtures.user.client.fetch_active_gateway().await.is_err() {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        info!("Waiting for gateway to register");
     }
+
+    Ok(fixtures)
 }
 
 pub fn peers(peers: &[u16]) -> Vec<PeerId> {
