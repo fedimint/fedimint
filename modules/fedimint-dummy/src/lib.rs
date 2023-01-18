@@ -5,11 +5,10 @@ use std::fmt;
 use async_trait::async_trait;
 use common::DummyDecoder;
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::TypedServerModuleConsensusConfig;
 use fedimint_api::config::{
-    ClientModuleConfig, ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
+use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -119,18 +118,16 @@ impl ModuleGen for DummyConfigGenerator {
         Ok(Ok(server.to_erased()))
     }
 
-    fn to_client_config(&self, config: ServerModuleConfig) -> anyhow::Result<ClientModuleConfig> {
-        Ok(config
-            .to_typed::<DummyConfig>()?
-            .consensus
-            .to_client_config())
-    }
-
-    fn to_client_config_from_consensus_value(
+    fn to_config_response(
         &self,
         config: serde_json::Value,
-    ) -> anyhow::Result<ClientModuleConfig> {
-        Ok(serde_json::from_value::<DummyConfigConsensus>(config)?.to_client_config())
+    ) -> anyhow::Result<ModuleConfigResponse> {
+        let config = serde_json::from_value::<DummyConfigConsensus>(config)?;
+
+        Ok(ModuleConfigResponse {
+            client: config.to_client_config(),
+            consensus_hash: config.hash()?,
+        })
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
