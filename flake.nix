@@ -428,6 +428,13 @@
           doCheck = true;
         });
 
+        cliTestAlwaysFail = craneLib.buildPackage (commonCliTestArgs // {
+          pname = "${commonCliTestArgs.pname}-always-fail";
+          cargoArtifacts = workspaceBuild;
+          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/always-fail-test.sh";
+          doCheck = true;
+        });
+
 
         pkg = { name, dirs, defaultBin ? null }:
           let
@@ -726,6 +733,7 @@
             latency = cliTestLatency;
             cli = cliTestCli;
             rust-tests = cliRustTests;
+            always-fail = cliTestAlwaysFail;
           };
 
           cross = builtins.mapAttrs
