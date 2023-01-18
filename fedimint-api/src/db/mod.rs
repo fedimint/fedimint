@@ -18,23 +18,6 @@ pub use tests::*;
 
 use crate::module::registry::ModuleDecoderRegistry;
 
-#[derive(Debug, Default)]
-pub struct DatabaseInsertOperation {
-    pub key: Vec<u8>,
-    pub value: Vec<u8>,
-}
-
-#[derive(Debug, Default)]
-pub struct DatabaseDeleteOperation {
-    pub key: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub enum DatabaseOperation {
-    Insert(DatabaseInsertOperation),
-    Delete(DatabaseDeleteOperation),
-}
-
 pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
     type Key: DatabaseKey;
