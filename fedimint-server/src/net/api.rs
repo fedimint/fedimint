@@ -5,10 +5,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use fedimint_api::config::ConfigResponse;
 use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::{
-    config::ClientConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
     TransactionId,
@@ -221,8 +221,8 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/config",
-            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> ClientConfig {
-                Ok(fedimint.cfg.consensus.to_client_config(&fedimint.module_inits))
+            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> ConfigResponse {
+                Ok(fedimint.cfg.consensus.to_config_response(&fedimint.module_inits))
             }
         },
     ]
