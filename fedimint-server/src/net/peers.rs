@@ -252,27 +252,34 @@ where
     M: Debug + Clone,
 {
     async fn run(mut self, task_handle: &TaskHandle) {
+        let peer = self.common.peer;
+
         // Note: `state_transition` internally uses channel operations (`send` and `recv`)
         // which will disconnect when other tasks are shutting down returning here,
         // so we probably don't need any `timeout` here.
         while !task_handle.is_shutting_down() {
-            if let Some(new_self) = self.state_transition().await {
+            if let Some(new_self) = self.state_transition(task_handle).await {
                 self = new_self;
             } else {
                 break;
             }
         }
+        info!(?peer, "Shutting down peer connection state machine");
     }
 
-    async fn state_transition(self) -> Option<Self> {
+    async fn state_transition(self, task_handle: &TaskHandle) -> Option<Self> {
         let PeerConnectionStateMachine { mut common, state } = self;
 
         match state {
             PeerConnectionState::Disconnected(disconnected) => {
-                common.state_transition_disconnected(disconnected).await
+                common
+                    .state_transition_disconnected(disconnected, task_handle)
+                    .await
             }
             PeerConnectionState::Connected(connected) => {
-                common.state_transition_connected(connected).await
+                common
+                    .state_transition_connected(connected, task_handle)
+                    .await
             }
         }
         .map(|new_state| PeerConnectionStateMachine {
@@ -289,6 +296,7 @@ where
     async fn state_transition_connected(
         &mut self,
         mut connected: ConnectedPeerConnectionState<M>,
+        task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
@@ -316,6 +324,9 @@ where
             },
             Some(msg_res) = connected.connection.next() => {
                 self.receive_message(connected, msg_res).await
+            },
+            _ = task_handle.make_shutdown_rx().await => {
+                return None;
             },
         })
     }
@@ -446,6 +457,7 @@ where
     async fn state_transition_disconnected(
         &mut self,
         disconnected: DisconnectedPeerConnectionState,
+        task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
@@ -471,7 +483,10 @@ where
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at) => {
                 self.reconnect(disconnected).await
-            }
+            },
+            _ = task_handle.make_shutdown_rx().await => {
+                return None;
+            },
         })
     }
 
