@@ -500,6 +500,7 @@
 <a href="#500" id="500">500</a>
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -534,6 +535,7 @@
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::LastEpochKey;
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::IPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::PeerSlice;
@@ -759,7 +761,7 @@
                         last_outcome.epoch,
                         <span class="self">self</span>.last_processed_epoch
                             .as_ref()
-                            .map(|epoch| epoch.outcome.hash()),
+                            .and_then(|epoch| epoch.outcome.consensus_hash().ok()),
                         <span class="prelude-val">None</span>,
                         <span class="bool-val">true</span>,
                     )

@@ -357,23 +357,15 @@
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
-<span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_api::core::DynModuleConsensusItem <span class="kw">as </span>ModuleConsensusItem;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::SerdeModuleEncoding;
-<span class="kw">use </span>fedimint_api::{BitcoinHash, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_api::{PeerId, TransactionId};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -421,14 +413,6 @@
     </span><span class="kw">pub </span>rejected_txs: BTreeSet&lt;TransactionId&gt;,
 }
 
-<span class="kw">impl </span>EpochOutcome {
-    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Sha256 {
-        <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine).unwrap();
-        Sha256::from_engine(engine)
-    }
-}
-
 <span class="kw">impl </span>SignedEpochOutcome {
     <span class="kw">pub fn </span>new(
         epoch: u64,
@@ -448,7 +432,7 @@
         };
 
         SignedEpochOutcome {
-            hash: outcome.hash(),
+            hash: outcome.consensus_hash().expect(<span class="string">&quot;Hashes&quot;</span>),
             outcome,
             signature: <span class="prelude-val">None</span>,
         }
@@ -513,14 +497,15 @@
         <span class="kw">if </span><span class="self">self</span>.outcome.epoch &gt; <span class="number">0 </span>{
             <span class="kw">match </span>prev_epoch {
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::MissingPreviousEpoch),
-                <span class="prelude-val">Some</span>(prev_epoch) <span class="kw">if </span><span class="prelude-val">Some</span>(prev_epoch.outcome.hash()) != <span class="self">self</span>.outcome.last_hash =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::InvalidPreviousEpochHash)
+                <span class="prelude-val">Some</span>(prev_epoch) =&gt; {
+                    <span class="kw">if </span>prev_epoch.outcome.consensus_hash().ok() != <span class="self">self</span>.outcome.last_hash {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::InvalidPreviousEpochHash);
+                    }
                 }
-                <span class="kw">_ </span>=&gt; {}
             }
         }
 
-        <span class="kw">if </span><span class="self">self</span>.hash == <span class="self">self</span>.outcome.hash() {
+        <span class="kw">if </span><span class="prelude-val">Some</span>(<span class="self">self</span>.hash) == <span class="self">self</span>.outcome.consensus_hash().ok() {
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(EpochVerifyError::InvalidEpochHash)
@@ -579,6 +564,7 @@
     <span class="kw">use </span>std::collections::{BTreeSet, HashSet};
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
+    <span class="kw">use </span>fedimint_api::encoding::Encodable;
     <span class="kw">use </span>fedimint_api::PeerId;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>threshold_crypto::{SecretKey, SecretKeySet};
@@ -592,7 +578,7 @@
         sk: <span class="kw-2">&amp;</span>SecretKey,
     ) -&gt; SignedEpochOutcome {
         <span class="kw">let </span>missing_sig = history(epoch, prev_epoch, <span class="prelude-val">None</span>);
-        <span class="kw">let </span>signature = sk.sign(missing_sig.outcome.hash());
+        <span class="kw">let </span>signature = sk.sign(missing_sig.outcome.consensus_hash().expect(<span class="string">&quot;Hashes&quot;</span>));
         history(epoch, prev_epoch, <span class="prelude-val">Some</span>(EpochOutcomeSignature(signature)))
     }
 
@@ -611,7 +597,7 @@
         };
 
         SignedEpochOutcome {
-            hash: outcome.hash(),
+            hash: outcome.consensus_hash().expect(<span class="string">&quot;Hashes&quot;</span>),
             outcome,
             signature,
         }

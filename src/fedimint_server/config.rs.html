@@ -938,10 +938,6 @@
 <a href="#938" id="938">938</a>
 <a href="#939" id="939">939</a>
 <a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1027,7 +1023,7 @@
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>ServerConfigConsensus {
     <span class="doccomment">/// The version of the binary code running
     </span><span class="kw">pub </span>code_version: String,
@@ -1045,6 +1041,7 @@
     <span class="doccomment">/// Network addresses and names for all peer APIs
     </span><span class="kw">pub </span>api: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
     <span class="doccomment">/// All configuration that needs to be the same for modules
+    </span><span class="attr">#[encodable_ignore]
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
 }
 
@@ -1119,12 +1116,7 @@
             .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
-        <span class="self">self</span>.code_version.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.federation_name.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.auth_pk_set.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.auth_pk_set.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.epoch_pk_set.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="self">self</span>.api.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
         <span class="kw">for </span>(k, v) <span class="kw">in </span>modules.iter() {
             k.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
             v.consensus_hash.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
