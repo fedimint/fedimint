@@ -514,7 +514,7 @@ impl FedimintConsensus {
         for (instance_id, module) in self.modules.iter_modules() {
             items.extend(
                 module
-                    .consensus_proposal(&mut dbtx, instance_id)
+                    .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
                     .await
                     .into_iter()
                     .map(ConsensusItem::Module),
@@ -603,7 +603,11 @@ impl FedimintConsensus {
                 let outcome = self
                     .modules
                     .get_expect(output.module_instance_id())
-                    .output_status(&mut dbtx, outpoint, output.module_instance_id())
+                    .output_status(
+                        &mut dbtx.with_module_prefix(output.module_instance_id()),
+                        outpoint,
+                        output.module_instance_id(),
+                    )
                     .await
                     .expect("the transaction was processed, so should be known");
                 outputs.push((&outcome).into())

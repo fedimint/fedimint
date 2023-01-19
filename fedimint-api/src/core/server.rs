@@ -193,14 +193,11 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<DynModuleConsensusItem> {
-        <Self as ServerModule>::consensus_proposal(
-            self,
-            &mut dbtx.with_module_prefix(module_instance_id),
-        )
-        .await
-        .into_iter()
-        .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
-        .collect()
+        <Self as ServerModule>::consensus_proposal(self, dbtx)
+            .await
+            .into_iter()
+            .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
+            .collect()
     }
 
     /// This function is called once before transaction processing starts. All module consensus
@@ -377,13 +374,9 @@ where
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome> {
-        <Self as ServerModule>::output_status(
-            self,
-            &mut dbtx.with_module_prefix(module_instance_id),
-            out_point,
-        )
-        .await
-        .map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
+        <Self as ServerModule>::output_status(self, dbtx, out_point)
+            .await
+            .map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
     }
 
     /// Queries the database and returns all assets and liabilities of the module.
