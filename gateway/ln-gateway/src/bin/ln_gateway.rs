@@ -25,6 +25,7 @@ use tracing::error;
 
 /// Fedimint gateway packaged as a CLN plugin
 #[tokio::main]
+#[deprecated(note = "Prefer to use `gateway-cln-extension` binary instead")]
 async fn main() -> Result<(), Error> {
     let mut args = std::env::args();
 
