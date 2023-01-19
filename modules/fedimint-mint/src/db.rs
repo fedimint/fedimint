@@ -155,7 +155,7 @@ impl DatabaseKeyPrefixConst for EcashBackupKeyPrefix {
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct ECashUserBackupSnapshot {
     pub timestamp: SystemTime,
-    #[serde(with = "hex::serde")]
+    #[serde(with = "fedimint_api::hex::serde")]
     pub data: Vec<u8>,
 }
 

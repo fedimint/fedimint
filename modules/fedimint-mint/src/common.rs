@@ -14,7 +14,7 @@ use crate::{MintConsensusItem, MintInput, MintOutput, MintOutputOutcome};
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
     pub id: secp256k1::XOnlyPublicKey,
-    #[serde(with = "hex::serde")]
+    #[serde(with = "fedimint_api::hex::serde")]
     pub payload: Vec<u8>,
     pub timestamp: std::time::SystemTime,
 }

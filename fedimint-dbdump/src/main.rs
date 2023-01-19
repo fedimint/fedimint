@@ -40,7 +40,7 @@ macro_rules! push_db_pair_items {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct SerdeWrapper(#[serde(with = "hex::serde")] Vec<u8>);
+struct SerdeWrapper(#[serde(with = "fedimint_api::hex::serde")] Vec<u8>);
 
 impl SerdeWrapper {
     fn from_encodable<T: Encodable>(e: T) -> SerdeWrapper {
