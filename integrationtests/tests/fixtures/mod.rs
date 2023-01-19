@@ -77,6 +77,7 @@ use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
 use tokio::sync::Mutex;
 use tracing::{debug, info};
+use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
@@ -149,13 +150,25 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == BASE_PORT_INIT {
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
-            )
-            .init();
+        if env::var_os("FEDIMINT_TRACE_CHROME").map_or(false, |x| !x.is_empty()) {
+            let (cr_layer, gaurd) = tracing_chrome::ChromeLayerBuilder::new()
+                .include_args(true)
+                .build();
+            // drop gaurd cause file to written and closed
+            // in this case file will closed after exit of program
+            std::mem::forget(gaurd);
+
+            tracing_subscriber::registry().with(cr_layer).init();
+        } else {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
+                )
+                .init();
+        }
     }
+
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let params = ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test");
     let max_evil = hbbft::util::max_faulty(peers.len());
