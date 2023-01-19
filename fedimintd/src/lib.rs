@@ -2,7 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::format_err;
-use fedimint_server::config::{ModuleGenRegistry, ServerConfig};
+use fedimint_api::config::ModuleGenRegistry;
+use fedimint_server::config::ServerConfig;
 use ring::aead::LessSafeKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;

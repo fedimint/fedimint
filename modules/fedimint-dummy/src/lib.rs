@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::fmt;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256;
 use common::DummyDecoder;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{
@@ -25,7 +26,8 @@ use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::config::{DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+use crate::config::{DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+use crate::serde_json::Value;
 
 pub mod common;
 pub mod config;
@@ -132,6 +134,10 @@ impl ModuleGen for DummyConfigGenerator {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<DummyConfig>()?.validate_config(identity)
+    }
+
+    fn hash_client_module(&self, config: Value) -> anyhow::Result<sha256::Hash> {
+        serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash()
     }
 }
 

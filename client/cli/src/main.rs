@@ -8,21 +8,25 @@ use std::sync::Arc;
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::config::load_from_file;
 use fedimint_core::modules::ln::common::LightningDecoder;
 use fedimint_core::modules::ln::contracts::ContractId;
+use fedimint_core::modules::ln::LightningGen;
 use fedimint_core::modules::wallet::common::WalletDecoder;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
+use fedimint_core::modules::wallet::WalletGen;
 use fedimint_mint::common::MintDecoder;
+use fedimint_mint::MintGen;
 use mint_client::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
 };
@@ -410,7 +414,13 @@ async fn main() {
             (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
         ]);
 
-        let client = Client::new(cfg.clone(), decoders, db, Default::default()).await;
+        let module_gens = ModuleGenRegistry::from(vec![
+            DynModuleGen::from(WalletGen),
+            DynModuleGen::from(MintGen),
+            DynModuleGen::from(LightningGen),
+        ]);
+
+        let client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await;
 
         let cli_result = handle_command(cli, client, rng).await;
 

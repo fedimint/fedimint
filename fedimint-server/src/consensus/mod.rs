@@ -4,9 +4,12 @@ pub mod debug;
 mod interconnect;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ffi::OsString;
 use std::iter::FromIterator;
+use std::os::unix::prelude::OsStrExt;
 use std::sync::Arc;
 
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -23,9 +26,9 @@ use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use thiserror::Error;
 use tokio::sync::Notify;
-use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
+use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
-use crate::config::{ModuleGenRegistry, ServerConfig};
+use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
@@ -97,14 +100,46 @@ struct FundingVerifier {
 }
 
 impl FedimintConsensus {
+    pub fn get_env_vars_map() -> BTreeMap<OsString, OsString> {
+        std::env::vars_os()
+            // We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
+            .collect()
+    }
+
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
         module_inits: ModuleGenRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
+        let mut modules = BTreeMap::new();
+
+        let env = Self::get_env_vars_map();
+
+        for (module_id, module_cfg) in &cfg.consensus.modules {
+            let kind = module_cfg.kind();
+
+            let Some(init) = module_inits.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
+            };
+            info!(module_instance_id = *module_id, kind = %kind, "Init module");
+
+            let module = init
+                .init(
+                    cfg.get_module_config(*module_id)?,
+                    db.clone(),
+                    &env,
+                    task_group,
+                )
+                .await?;
+            modules.insert(*module_id, module);
+        }
+
         Ok(Self {
-            modules: module_inits.init_all(&cfg, &db, task_group).await?,
+            modules: ModuleRegistry::from(modules),
             cfg,
             module_inits,
             db,

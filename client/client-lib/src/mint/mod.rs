@@ -732,6 +732,7 @@ mod tests {
 
         let client_context = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(module_id, MintDecoder.into())]),
+            module_gens: Default::default(),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
@@ -887,6 +888,7 @@ mod tests {
             },
             context: Arc::new(ClientContext {
                 decoders: ModuleDecoderRegistry::from_iter([(module_id, MintDecoder.into())]),
+                module_gens: Default::default(),
                 db: Database::new(db, module_decode_stubs()),
                 api: WsFederationApi::new(vec![]).into(),
                 secp: Default::default(),

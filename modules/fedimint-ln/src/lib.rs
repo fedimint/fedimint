@@ -49,7 +49,9 @@ use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
 use crate::common::LightningDecoder;
-use crate::config::{LightningConfig, LightningConfigConsensus, LightningConfigPrivate};
+use crate::config::{
+    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
+};
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
@@ -332,6 +334,13 @@ impl ModuleGen for LightningGen {
         config
             .to_typed::<LightningConfig>()?
             .validate_config(identity)
+    }
+
+    fn hash_client_module(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
+        serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash()
     }
 }
 

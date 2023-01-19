@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use fedimint_api::config::{ConfigResponse, FederationId};
+use fedimint_api::config::{ConfigResponse, FederationId, ModuleGenRegistry};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
@@ -78,6 +78,7 @@ pub trait IGatewayClientBuilder: Debug {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>>;
 
     /// Create a new gateway federation client config from connect info
@@ -123,6 +124,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>> {
         let federation_id = config.client_config.federation_id.clone();
 
@@ -133,7 +135,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         )?;
         let ctx = secp256k1::Secp256k1::new();
 
-        Ok(Client::new(config, decoders, db, ctx).await)
+        Ok(Client::new(config, decoders, module_gens, db, ctx).await)
     }
 
     async fn create_config(

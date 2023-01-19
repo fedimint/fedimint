@@ -47,7 +47,7 @@ use threshold_crypto::group::Curve;
 use tracing::{debug, error, info, warn};
 
 use crate::common::MintDecoder;
-use crate::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
+use crate::config::{MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate};
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
     ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
@@ -288,6 +288,13 @@ impl ModuleGen for MintGen {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<MintConfig>()?.validate_config(identity)
+    }
+
+    fn hash_client_module(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
+        serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
     }
 }
 

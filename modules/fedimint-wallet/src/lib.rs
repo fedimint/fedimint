@@ -56,7 +56,7 @@ use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::common::WalletDecoder;
-use crate::config::WalletConfig;
+use crate::config::{WalletClientConfig, WalletConfig};
 use crate::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
     PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
@@ -353,6 +353,10 @@ impl ModuleGen for WalletGen {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<WalletConfig>()?.validate_config(identity)
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
     }
 }
 

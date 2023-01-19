@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex::FromHex;
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -62,6 +63,7 @@ pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Er
 #[derive(Debug)]
 pub struct ClientContext {
     pub decoders: ModuleDecoderRegistry,
+    pub module_gens: ModuleGenRegistry,
     pub db: Database,
     pub api: DynFederationApi,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,

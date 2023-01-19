@@ -1,4 +1,6 @@
 use cln_plugin::Error;
+use fedimint_api::config::ModuleGenRegistry;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::{
     core::{
         LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -7,6 +9,9 @@ use fedimint_api::{
     module::registry::ModuleDecoderRegistry,
     task::TaskGroup,
 };
+use fedimint_server::modules::ln::LightningGen;
+use fedimint_server::modules::mint::MintGen;
+use fedimint_server::modules::wallet::WalletGen;
 use fedimint_server::{
     config::load_from_file,
     modules::{
@@ -52,12 +57,18 @@ async fn main() -> Result<(), Error> {
         (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
         (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
     ]);
+    let module_gens = ModuleGenRegistry::from(vec![
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
+    ]);
 
     // Create gateway instance
     let task_group = TaskGroup::new();
     let gateway = LnGateway::new(
         gw_cfg,
         decoders,
+        module_gens,
         ln_rpc,
         client_builder,
         tx,

@@ -906,7 +906,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 #[should_panic]
 async fn audit_negative_balance_sheet_panics() {
-    test(2, |fed, user, _bitcoin, _, _| async move {
+    test(2, |fed, user, _, _, _| async move {
         fed.mint_coins_for_user(&user, sats(2000)).await;
         fed.run_consensus_epochs(1).await;
     })
@@ -1064,6 +1064,14 @@ async fn ecash_can_be_recovered() -> Result<()> {
         assert_eq!(user_send.total_coins().await, sats(1500));
 
         task_group.join_all().await.unwrap();
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn verifies_client_configs() -> Result<()> {
+    test(2, |_, user, _, _, _| async move {
+        user.client.verify_config().await.expect("verifies");
     })
     .await
 }
