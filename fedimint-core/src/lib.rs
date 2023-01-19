@@ -11,6 +11,7 @@ pub mod config;
 pub mod epoch;
 pub mod outcome;
 pub mod transaction;
+pub mod util;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
