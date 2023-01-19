@@ -232,7 +232,7 @@ enum Command {
     /// Reissue tokens received from a third party to avoid double spends
     Reissue {
         #[clap(value_parser = parse_ecash)]
-        coins: TieredMulti<SpendableNote>,
+        notes: TieredMulti<SpendableNote>,
     },
 
     /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
@@ -468,8 +468,8 @@ async fn handle_command(
                 "peg-in failed (no further information)",
             ),
 
-        Command::Reissue { coins } => {
-            let id = client.reissue(coins, &mut rng).await;
+        Command::Reissue { notes } => {
+            let id = client.reissue(notes, &mut rng).await;
             id.transform(
                 |v| CliOutput::Reissue { id: (v) },
                 CliErrorKind::GeneralFederationError,
@@ -523,7 +523,7 @@ async fn handle_command(
             }
         }
         Command::Info => {
-            let coins = client.coins().await;
+            let coins = client.notes().await;
             let details_vec = coins
                 .iter()
                 .map(|(amount, coins)| (amount.to_owned(), coins.len()))

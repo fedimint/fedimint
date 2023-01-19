@@ -210,11 +210,11 @@ SUBCOMMANDS:
     join-federation   Join a federation using it's ConnectInfo
     ln-invoice        Create a lightning invoice to receive payment via gateway
     ln-pay            Pay a lightning invoice via a gateway
-    peg-in            Issue tokens in exchange for a peg-in proof (not yet implemented, just
+    peg-in            Issue notes in exchange for a peg-in proof (not yet implemented, just
                           creates notes)
     peg-in-address    Generate a new peg-in address, funds sent to it can later be claimed
     peg-out           Withdraw funds from the federation
-    reissue           Reissue tokens received from a third party to avoid double spends
+    reissue           Reissue notes received from a third party to avoid double spends
     spend             Prepare notes to send to a third party as a payment
     validate          Validate tokens without claiming them (only checks if signatures valid,
                           does not check if nonce unspent)

@@ -200,7 +200,7 @@ pub mod legacy {
     /// Inputs can not have keys if the transaction value is 0. This is useful for non-monetary transactions to announce information to the mint like incoming LN contract offers.
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
-        // TODO: maybe treat every coin as a seperate input?
+        // TODO: maybe treat every note as a seperate input?
         Mint(<fedimint_mint::Mint as ServerModule>::Input),
         Wallet(<fedimint_wallet::Wallet as ServerModule>::Input),
         LN(<fedimint_ln::Lightning as ServerModule>::Input),

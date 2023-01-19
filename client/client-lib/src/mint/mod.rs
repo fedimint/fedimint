@@ -268,7 +268,7 @@ impl MintClient {
             Vec::new();
         let denominations = TieredMulti::represent_amount(
             amount,
-            &self.coins().await,
+            &self.notes().await,
             &self.config.tbs_pks,
             notes_per_denomination,
         );
@@ -293,7 +293,7 @@ impl MintClient {
     }
 
     pub async fn select_input(&self, amount: Amount) -> Result<(Vec<KeyPair>, Input)> {
-        Self::ecash_input(self.select_coins(amount).await?)
+        Self::ecash_input(self.select_notes(amount).await?)
     }
 
     pub fn ecash_input(ecash: TieredMulti<SpendableNote>) -> Result<(Vec<KeyPair>, Input)> {
@@ -314,7 +314,7 @@ impl MintClient {
         Ok((key_pairs, Input::Mint(MintInput(input))))
     }
 
-    pub async fn coins(&self) -> TieredMulti<SpendableNote> {
+    pub async fn notes(&self) -> TieredMulti<SpendableNote> {
         self.start_dbtx()
             .await
             .find_by_prefix(&CoinKeyPrefix)
@@ -392,13 +392,13 @@ impl MintClient {
         NoteIssuanceRequest::new(ctx, secret)
     }
 
-    pub async fn select_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
-        let coins = self.coins().await;
-        let selected_coins = coins.select_coins(amount).ok_or_else(|| {
-            MintClientError::InsufficientBalance(amount, TieredMulti::total_amount(&coins))
+    pub async fn select_notes(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
+        let notes = self.notes().await;
+        let selected_notes = notes.select_notes(amount).ok_or_else(|| {
+            MintClientError::InsufficientBalance(amount, TieredMulti::total_amount(&notes))
         })?;
 
-        Ok(selected_coins)
+        Ok(selected_notes)
     }
 
     pub async fn receive_coins<'a, F, Fut>(
@@ -781,7 +781,7 @@ mod tests {
         const ISSUE_AMOUNT: Amount = Amount::from_sats(12);
         issue_tokens(&fed, &client, &context.db, ISSUE_AMOUNT).await;
 
-        assert_eq!(client.coins().await.total_amount(), ISSUE_AMOUNT)
+        assert_eq!(client.notes().await.total_amount(), ISSUE_AMOUNT)
     }
 
     #[test_log::test(tokio::test)]
@@ -806,7 +806,7 @@ mod tests {
         let secp = &client.context.secp;
         let _tbs_pks = &client.config.tbs_pks;
         let rng = rand::rngs::OsRng;
-        let coins = client.select_coins(SPEND_AMOUNT).await.unwrap();
+        let coins = client.select_notes(SPEND_AMOUNT).await.unwrap();
         let (spend_keys, ecash_input) = MintClient::ecash_input(coins.clone()).unwrap();
 
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
@@ -833,7 +833,7 @@ mod tests {
                 .await;
 
             // The right amount of money is left
-            assert_eq!(client.coins().await.total_amount(), SPEND_AMOUNT);
+            assert_eq!(client.notes().await.total_amount(), SPEND_AMOUNT);
 
             // Double spends aren't possible
             assert!(fed.lock().await.verify_input(&input).await.is_err());
@@ -842,7 +842,7 @@ mod tests {
         // We can exactly spend the remainder
         let dbtx = client.context.db.begin_transaction().await;
         let mut builder = TransactionBuilder::default();
-        let coins = client.select_coins(SPEND_AMOUNT).await.unwrap();
+        let coins = client.select_notes(SPEND_AMOUNT).await.unwrap();
         let rng = rand::rngs::OsRng;
         let (spend_keys, ecash_input) = MintClient::ecash_input(coins).unwrap();
 
@@ -864,7 +864,7 @@ mod tests {
             );
 
             // No money is left
-            assert_eq!(client.coins().await.total_amount(), Amount::ZERO);
+            assert_eq!(client.notes().await.total_amount(), Amount::ZERO);
         }
     }
 
