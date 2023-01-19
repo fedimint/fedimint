@@ -478,11 +478,11 @@ pub trait ServerModule: Debug + Sized {
         output: &Self::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
-    /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
+    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
     /// reset and the operation will take no effect.
     ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or coin issuance) and can
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
     /// be used to retrieve its outcome later using `output_status`.
     ///
     /// This function may only be called after `begin_consensus_epoch` and before

@@ -598,10 +598,10 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
         (peg_out.fees.amount().into(), out_point)
     }
 
-    /// Returns the amount denominations of all coins from lowest to highest
-    pub async fn coin_amounts(&self) -> Vec<Amount> {
+    /// Returns the amount denominations of all notes from lowest to highest
+    pub async fn note_amounts(&self) -> Vec<Amount> {
         self.client
-            .coins()
+            .notes()
             .await
             .iter()
             .flat_map(|(a, c)| repeat(*a).take(c.len()))
@@ -611,16 +611,16 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
 
     /// Returns sum total of all coins
     pub async fn total_coins(&self) -> Amount {
-        self.client.coins().await.total_amount()
+        self.client.notes().await.total_amount()
     }
 
     pub async fn assert_total_coins(&self, amount: Amount) {
         self.client.fetch_all_coins().await;
         assert_eq!(self.total_coins().await, amount);
     }
-    pub async fn assert_coin_amounts(&self, amounts: Vec<Amount>) {
+    pub async fn assert_note_amounts(&self, amounts: Vec<Amount>) {
         self.client.fetch_all_coins().await;
-        assert_eq!(self.coin_amounts().await, amounts);
+        assert_eq!(self.note_amounts().await, amounts);
     }
 }
 
@@ -731,7 +731,7 @@ impl FederationTest {
         let coins = user
             .client
             .mint_client()
-            .select_coins(amount)
+            .select_notes(amount)
             .await
             .unwrap();
         if coins.total_amount() == amount {

@@ -114,7 +114,7 @@ impl DatabaseKeyPrefixConst for OutputOutcomeKeyPrefix {
     type Value = MintOutputBlindSignatures;
 }
 
-/// Represents the amounts of issued (signed) and redeemed (verified) coins for auditing
+/// Represents the amounts of issued (signed) and redeemed (verified) notes for auditing
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub enum MintAuditItemKey {
     Issuance(OutPoint),

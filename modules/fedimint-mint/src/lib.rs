@@ -308,7 +308,7 @@ pub struct MintInput(pub TieredMulti<Note>);
 
 impl std::fmt::Display for MintInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mint Coins {}", self.0.total_amount())
+        write!(f, "Mint Notes {}", self.0.total_amount())
     }
 }
 
@@ -320,7 +320,7 @@ pub struct MintOutput(pub TieredMulti<BlindNonce>);
 
 impl std::fmt::Display for MintOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mint Coins {}", self.0.total_amount())
+        write!(f, "Mint Notes {}", self.0.total_amount())
     }
 }
 
@@ -1106,15 +1106,15 @@ pub enum CombineError {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
 pub enum MintError {
-    #[error("One of the supplied coins had an invalid mint signature")]
-    InvalidCoin,
-    #[error("Insufficient coin value: reissuing {0} but only got {1} in coins")]
-    TooFewCoins(Amount, Amount),
-    #[error("One of the supplied coins was already spent previously")]
+    #[error("One of the supplied notes had an invalid mint signature")]
+    InvalidNote,
+    #[error("Insufficient note value: reissuing {0} but only got {1} in notes")]
+    TooFewNotes(Amount, Amount),
+    #[error("One of the supplied notes was already spent previously")]
     SpentCoin,
-    #[error("One of the coins had an invalid amount not issued by the mint: {0:?}")]
+    #[error("One of the notes had an invalid amount not issued by the mint: {0:?}")]
     InvalidAmountTier(Amount),
-    #[error("One of the coins had an invalid signature")]
+    #[error("One of the notes had an invalid signature")]
     InvalidSignature,
     #[error("Exceeded maximum notes per denomination {0}, found {1}")]
     ExceededMaxNotes(u16, usize),
@@ -1182,7 +1182,7 @@ mod test {
     fn test_issuance() {
         let (pk, mut mints) = build_mints();
 
-        let nonce = Message::from_bytes(&b"test coin"[..]);
+        let nonce = Message::from_bytes(&b"test note"[..]);
         let bkey = BlindingKey::random();
         let bmsg = blind_message(nonce, bkey);
         let blind_tokens = TieredMulti::new(
