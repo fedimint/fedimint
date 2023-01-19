@@ -530,6 +530,16 @@ impl FedimintConsensus {
 
         let tx_hash = transaction.tx_hash();
 
+        // Prevent transaction replays
+        if dbtx
+            .get_value(&AcceptedTransactionKey(tx_hash))
+            .await
+            .expect("DB error")
+            .is_some()
+        {
+            return Err(TransactionSubmissionError::TransactionReplayError(tx_hash));
+        }
+
         let mut pub_keys = Vec::new();
         for input in transaction.inputs.iter() {
             let meta = self
@@ -690,4 +700,6 @@ pub enum TransactionSubmissionError {
     TransactionError(#[from] TransactionError),
     #[error("Module input or output error in tx {0}: {1}")]
     ModuleError(TransactionId, ModuleError),
+    #[error("Transaction was already successfully processed: {0}")]
+    TransactionReplayError(TransactionId),
 }
