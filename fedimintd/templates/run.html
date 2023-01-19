@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %} Fedimint {% endblock %}
-{% block head %} <meta http-equiv="refresh" content="5" /> {% endblock %}
+{% block head %}
+{% if !has_connection_string %}
+ <meta http-equiv="refresh" content="5" />
+{% endif %}
+{% endblock %}
 
 {% block content %}
 <div class="container text-center mt-5 p-3">
