@@ -77,6 +77,10 @@ jobs:
       - name: Integration Tests (no fixtures)
         run: nix build -L .#debug.cli-test.rust-tests
 
+      - name: Always fail
+        # this must fail, so we know nix build is actually running tests
+        run: "! nix build -L .#debug.cli-test.always-fail"
+
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another
