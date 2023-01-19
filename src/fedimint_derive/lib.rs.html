@@ -315,6 +315,26 @@
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
 <a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
 </pre><pre class="rust"><code><span class="attr">#![cfg_attr(feature = <span class="string">&quot;diagnostics&quot;</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>heck::ToSnakeCase;
@@ -456,7 +476,16 @@
             }
         }
         syn::Data::Enum(DataEnum { variants, .. }) =&gt; {
-            <span class="kw">let </span>match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
+            <span class="kw">if </span>variants.is_empty() {
+                <span class="macro">quote! </span>{
+                    <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
+                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+                            <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{}
+                        }
+                    }
+                }
+            } <span class="kw">else </span>{
+                <span class="kw">let </span>match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
                 <span class="kw">let </span>variant_ident = variant.ident.clone();
 
                 <span class="kw">if </span>variant.fields.iter().any(|field| field.ident.is_none()) {
@@ -488,15 +517,15 @@
                     }
                 }
             });
-
-            <span class="macro">quote! </span>{
-                <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
-                    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
-                        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                        <span class="kw">match </span><span class="self">self </span>{
-                            #(#match_arms)*
+                <span class="macro">quote! </span>{
+                    <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
+                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+                            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+                            <span class="kw">match </span><span class="self">self </span>{
+                                #(#match_arms)*
+                            }
+                            <span class="prelude-val">Ok</span>(len)
                         }
-                        <span class="prelude-val">Ok</span>(len)
                     }
                 }
             }
@@ -564,7 +593,17 @@
             }
         }
         syn::Data::Enum(DataEnum { variants, .. }) =&gt; {
-            <span class="kw">let </span>match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
+            <span class="kw">if </span>variants.is_empty() {
+                <span class="macro">quote! </span>{
+                    <span class="kw">impl </span>::fedimint_api::encoding::Decodable <span class="kw">for </span>#ident {
+                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(_d: <span class="kw-2">&amp;mut </span>D, _modules: <span class="kw-2">&amp;</span>::fedimint_api::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
+                        {
+                            <span class="prelude-val">Err</span>(DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Enum without variants can&#39;t be instantiated&quot;</span>)))
+                        }
+                    }
+                }
+            } <span class="kw">else </span>{
+                <span class="kw">let </span>match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
                 <span class="kw">let </span>variant_ident = variant.ident.clone();
 
                 <span class="kw">if </span>variant.fields.iter().any(|field| field.ident.is_none()) {
@@ -599,18 +638,19 @@
                 }
             });
 
-            <span class="macro">quote! </span>{
-                <span class="kw">impl </span>::fedimint_api::encoding::Decodable <span class="kw">for </span>#ident {
-                    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
-                    {
-                        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_api::encoding::Decodable&gt;::consensus_decode(d, modules)<span class="question-mark">? </span><span class="kw">as </span>usize;
-                        <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
-                            #(#match_arms)*
-                            <span class="kw">_ </span>=&gt; {
-                                <span class="kw">return </span><span class="prelude-val">Err</span>(::fedimint_api::encoding::DecodeError::from_str(<span class="string">&quot;invalid enum variant&quot;</span>));
-                            }
-                        };
-                        <span class="prelude-val">Ok</span>(decoded)
+                <span class="macro">quote! </span>{
+                    <span class="kw">impl </span>::fedimint_api::encoding::Decodable <span class="kw">for </span>#ident {
+                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_api::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt;
+                        {
+                            <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_api::encoding::Decodable&gt;::consensus_decode(d, modules)<span class="question-mark">? </span><span class="kw">as </span>usize;
+                            <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
+                                #(#match_arms)*
+                                <span class="kw">_ </span>=&gt; {
+                                    <span class="kw">return </span><span class="prelude-val">Err</span>(::fedimint_api::encoding::DecodeError::from_str(<span class="string">&quot;invalid enum variant&quot;</span>));
+                                }
+                            };
+                            <span class="prelude-val">Ok</span>(decoded)
+                        }
                     }
                 }
             }
