@@ -548,6 +548,9 @@
 <a href="#548" id="548">548</a>
 <a href="#549" id="549">549</a>
 <a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -726,7 +729,6 @@
             skip_all,
             fields(method = E::PATH),
             ret,
-            err(Debug),
         )]
         </span><span class="kw">async fn </span>handle_request&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, E&gt;(
             state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>E::State,
@@ -739,8 +741,12 @@
             E::Response: Debug,
         {
             <span class="macro">tracing::trace!</span>(target: <span class="string">&quot;fedimint_server::request&quot;</span>, <span class="question-mark">?</span>param, <span class="string">&quot;recieved request&quot;</span>);
-            E::handle(state, dbtx, param).<span class="kw">await
-        </span>}
+            <span class="kw">let </span>result = E::handle(state, dbtx, param).<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = <span class="kw-2">&amp;</span>result {
+                <span class="macro">tracing::trace!</span>(target: <span class="string">&quot;fedimint_server::request&quot;</span>, <span class="question-mark">?</span>error, <span class="string">&quot;error&quot;</span>);
+            }
+            result
+        }
 
         ApiEndpoint {
             path: E::PATH,
