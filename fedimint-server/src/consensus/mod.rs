@@ -177,10 +177,9 @@ impl FedimintConsensus {
             let meta = module
                 .validate_input(
                     &interconnect,
-                    &mut dbtx,
+                    &mut dbtx.with_module_prefix(input.module_instance_id()),
                     &cache,
                     input,
-                    input.module_instance_id(),
                 )
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
@@ -194,7 +193,10 @@ impl FedimintConsensus {
             let amount = self
                 .modules
                 .get_expect(output.module_instance_id())
-                .validate_output(&mut dbtx, output, output.module_instance_id())
+                .validate_output(
+                    &mut dbtx.with_module_prefix(output.module_instance_id()),
+                    output,
+                )
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
@@ -306,7 +308,7 @@ impl FedimintConsensus {
         for (module_key, module_cis) in per_module_cis {
             self.modules
                 .get_expect(module_key)
-                .begin_consensus_epoch(dbtx, module_cis, module_key)
+                .begin_consensus_epoch(&mut dbtx.with_module_prefix(module_key), module_cis)
                 .await;
         }
     }
@@ -388,7 +390,7 @@ impl FedimintConsensus {
 
         for (module_key, module) in self.modules.iter_modules() {
             let module_drop_peers = module
-                .end_consensus_epoch(&epoch_peers, dbtx, module_key)
+                .end_consensus_epoch(&epoch_peers, &mut dbtx.with_module_prefix(module_key))
                 .await;
             drop_peers.extend(module_drop_peers);
         }
@@ -479,9 +481,8 @@ impl FedimintConsensus {
             .map(|(module_instance_id, module)| {
                 Box::pin(async move {
                     let mut dbtx = self.database_transaction().await;
-                    module
-                        .await_consensus_proposal(&mut dbtx, module_instance_id)
-                        .await
+                    let mut module_dbtx = dbtx.with_module_prefix(module_instance_id);
+                    module.await_consensus_proposal(&mut module_dbtx).await
                 })
             })
             .collect::<Vec<_>>();
@@ -547,10 +548,9 @@ impl FedimintConsensus {
                 .get_expect(input.module_instance_id())
                 .apply_input(
                     &self.build_interconnect(),
-                    dbtx,
+                    &mut dbtx.with_module_prefix(input.module_instance_id()),
                     input,
                     caches.get_cache(input.module_instance_id()),
-                    input.module_instance_id(),
                 )
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
@@ -567,7 +567,11 @@ impl FedimintConsensus {
             let amount = self
                 .modules
                 .get_expect(output.module_instance_id())
-                .apply_output(dbtx, &output, out_point, output.module_instance_id())
+                .apply_output(
+                    &mut dbtx.with_module_prefix(output.module_instance_id()),
+                    &output,
+                    out_point,
+                )
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
             funding_verifier.add_output(amount);
@@ -652,7 +656,7 @@ impl FedimintConsensus {
         let mut audit = Audit::default();
         for (module_instance_id, module) in self.modules.iter_modules() {
             module
-                .audit(&mut dbtx, &mut audit, module_instance_id)
+                .audit(&mut dbtx.with_module_prefix(module_instance_id), &mut audit)
                 .await
         }
         audit

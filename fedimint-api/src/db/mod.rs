@@ -1,6 +1,6 @@
-use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::{error::Error, marker::PhantomData};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -158,56 +158,70 @@ impl Drop for CommitTracker {
     }
 }
 
-struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated> {
-    tx: &'isolated mut DatabaseTransaction<'parent>,
+/// IsolatedDatabaseTransaction is a wrapper around DatabaseTransaction that is responsible for
+/// inserting and striping prefixes before reading or writing to the database. It does this by
+/// implementing IDatabaseTransaction and manipulating the prefix bytes in the raw insert/get
+/// functions. This is done to isolate modules/module instances from each other inside the database,
+/// which allows the same module to be instantiated twice or two different modules to use the same
+/// key.
+struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated, T: Send + Encodable> {
+    inner_tx: &'isolated mut DatabaseTransaction<'parent>,
     prefix: Vec<u8>,
+    _marker: PhantomData<T>,
 }
 
-impl<'isolated, 'parent: 'isolated> IsolatedDatabaseTransaction<'isolated, 'parent> {
+impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
+    IsolatedDatabaseTransaction<'isolated, 'parent, T>
+{
     pub fn new(
         dbtx: &'isolated mut DatabaseTransaction<'parent>,
-        module_instance_id: ModuleInstanceId,
-    ) -> IsolatedDatabaseTransaction<'isolated, 'parent> {
+        prefix: T,
+    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
         let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
-        module_instance_id
+        prefix
             .consensus_encode(&mut prefix_bytes)
             .expect("Error encoding module instance id as prefix");
         IsolatedDatabaseTransaction {
-            tx: dbtx,
+            inner_tx: dbtx,
             prefix: prefix_bytes,
+            _marker: PhantomData::<T>,
         }
     }
 }
 
 #[async_trait]
-impl<'isolated, 'parent> IDatabaseTransaction<'isolated>
-    for IsolatedDatabaseTransaction<'isolated, 'parent>
+impl<'isolated, 'parent, T: Send + Encodable + 'isolated> IDatabaseTransaction<'isolated>
+    for IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let mut key_with_prefix = self.prefix.clone();
-        key_with_prefix.append(&mut key.to_vec());
-        self.tx
+        key_with_prefix.extend_from_slice(key);
+        self.inner_tx
             .raw_insert_bytes(key_with_prefix.as_slice(), value)
             .await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let mut key_with_prefix = self.prefix.clone();
-        key_with_prefix.append(&mut key.to_vec());
-        self.tx.raw_get_bytes(key_with_prefix.as_slice()).await
+        key_with_prefix.extend_from_slice(key);
+        self.inner_tx
+            .raw_get_bytes(key_with_prefix.as_slice())
+            .await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let mut key_with_prefix = self.prefix.clone();
-        key_with_prefix.append(&mut key.to_vec());
-        self.tx.raw_remove_entry(key_with_prefix.as_slice()).await
+        key_with_prefix.extend_from_slice(key);
+        self.inner_tx
+            .raw_remove_entry(key_with_prefix.as_slice())
+            .await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let mut prefix_with_module = self.prefix.clone();
-        prefix_with_module.append(&mut key_prefix.to_vec());
+        prefix_with_module.extend_from_slice(key_prefix);
         let raw_prefix = self
-            .tx
+            .inner_tx
             .raw_find_by_prefix(prefix_with_module.as_slice())
             .await;
         Box::new(raw_prefix.map(|pair| match pair {
@@ -221,16 +235,15 @@ impl<'isolated, 'parent> IDatabaseTransaction<'isolated>
     }
 
     async fn commit_tx(self: Box<Self>) -> Result<()> {
-        tracing::warn!("DatabaseTransaction inside modules cannot be committed");
-        Ok(())
+        panic!("DatabaseTransaction inside modules cannot be committed");
     }
 
     async fn rollback_tx_to_savepoint(&mut self) {
-        self.tx.rollback_tx_to_savepoint().await
+        self.inner_tx.rollback_tx_to_savepoint().await
     }
 
     async fn set_tx_savepoint(&mut self) {
-        self.tx.set_tx_savepoint().await
+        self.inner_tx.set_tx_savepoint().await
     }
 }
 

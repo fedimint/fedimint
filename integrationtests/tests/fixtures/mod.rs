@@ -873,13 +873,12 @@ impl FederationTest {
                         .modules
                         .get_expect(LEGACY_HARDCODED_INSTANCE_ID_MINT)
                         .apply_output(
-                            &mut dbtx,
+                            &mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_MINT),
                             &core::DynOutput::from_typed(
                                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                                 MintOutput(tokens.clone()),
                             ),
                             out_point,
-                            LEGACY_HARDCODED_INSTANCE_ID_MINT,
                         )
                         .await
                         .unwrap();
