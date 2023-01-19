@@ -17,6 +17,7 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
+use fedimint_core::util::SanitizedUrl;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_server::config::ModuleInitRegistry;
@@ -227,8 +228,14 @@ async fn params_page(
 ) -> UrlConnection {
     let (ro_bitcoin_rpc_type, ro_bitcoin_rpc_url) =
         match fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
-            Ok(BitcoindRpcBackend::Bitcoind(url)) => ("bitcoind", url.to_string()),
-            Ok(BitcoindRpcBackend::Electrum(url)) => ("electrum", url.to_string()),
+            Ok(BitcoindRpcBackend::Bitcoind(url)) => {
+                let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
+                ("bitcoind", url_str)
+            }
+            Ok(BitcoindRpcBackend::Electrum(url)) => {
+                let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
+                ("electrum", url_str)
+            }
             Err(e) => ("error", e.to_string()),
         };
     UrlConnection {
