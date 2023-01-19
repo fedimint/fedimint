@@ -690,6 +690,4 @@ pub enum TransactionSubmissionError {
     TransactionError(#[from] TransactionError),
     #[error("Module input or output error in tx {0}: {1}")]
     ModuleError(TransactionId, ModuleError),
-    #[error("Transaction conflict error")]
-    TransactionConflictError,
 }
