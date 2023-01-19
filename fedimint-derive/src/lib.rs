@@ -139,7 +139,16 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
             }
         }
         syn::Data::Enum(DataEnum { variants, .. }) => {
-            let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
+            if variants.is_empty() {
+                quote! {
+                    impl Encodable for #ident {
+                        fn consensus_encode<W: std::io::Write>(&self, _writer: &mut W) -> std::result::Result<usize, std::io::Error> {
+                            match *self {}
+                        }
+                    }
+                }
+            } else {
+                let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
                 let variant_ident = variant.ident.clone();
 
                 if variant.fields.iter().any(|field| field.ident.is_none()) {
@@ -171,15 +180,15 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                     }
                 }
             });
-
-            quote! {
-                impl Encodable for #ident {
-                    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::result::Result<usize, std::io::Error> {
-                        let mut len = 0;
-                        match self {
-                            #(#match_arms)*
+                quote! {
+                    impl Encodable for #ident {
+                        fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::result::Result<usize, std::io::Error> {
+                            let mut len = 0;
+                            match self {
+                                #(#match_arms)*
+                            }
+                            Ok(len)
                         }
-                        Ok(len)
                     }
                 }
             }
@@ -247,7 +256,17 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
             }
         }
         syn::Data::Enum(DataEnum { variants, .. }) => {
-            let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
+            if variants.is_empty() {
+                quote! {
+                    impl ::fedimint_api::encoding::Decodable for #ident {
+                        fn consensus_decode<D: std::io::Read>(_d: &mut D, _modules: &::fedimint_api::module::registry::ModuleDecoderRegistry) -> std::result::Result<Self, ::fedimint_api::encoding::DecodeError>
+                        {
+                            Err(DecodeError::new_custom(anyhow::anyhow!("Enum without variants can't be instantiated")))
+                        }
+                    }
+                }
+            } else {
+                let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
                 let variant_ident = variant.ident.clone();
 
                 if variant.fields.iter().any(|field| field.ident.is_none()) {
@@ -282,18 +301,19 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                 }
             });
 
-            quote! {
-                impl ::fedimint_api::encoding::Decodable for #ident {
-                    fn consensus_decode<D: std::io::Read>(d: &mut D, modules: &::fedimint_api::module::registry::ModuleDecoderRegistry) -> std::result::Result<Self, ::fedimint_api::encoding::DecodeError>
-                    {
-                        let variant = <u64 as ::fedimint_api::encoding::Decodable>::consensus_decode(d, modules)? as usize;
-                        let decoded = match variant {
-                            #(#match_arms)*
-                            _ => {
-                                return Err(::fedimint_api::encoding::DecodeError::from_str("invalid enum variant"));
-                            }
-                        };
-                        Ok(decoded)
+                quote! {
+                    impl ::fedimint_api::encoding::Decodable for #ident {
+                        fn consensus_decode<D: std::io::Read>(d: &mut D, modules: &::fedimint_api::module::registry::ModuleDecoderRegistry) -> std::result::Result<Self, ::fedimint_api::encoding::DecodeError>
+                        {
+                            let variant = <u64 as ::fedimint_api::encoding::Decodable>::consensus_decode(d, modules)? as usize;
+                            let decoded = match variant {
+                                #(#match_arms)*
+                                _ => {
+                                    return Err(::fedimint_api::encoding::DecodeError::from_str("invalid enum variant"));
+                                }
+                            };
+                            Ok(decoded)
+                        }
                     }
                 }
             }

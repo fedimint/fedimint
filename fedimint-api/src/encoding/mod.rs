@@ -677,4 +677,18 @@ mod tests {
     fn test_systemtime() {
         test_roundtrip(SystemTime::now());
     }
+
+    #[test]
+    fn test_derive_empty_enum_decode() {
+        #[derive(Debug, Encodable, Decodable)]
+        enum NotConstructable {}
+
+        let vec = vec![42u8];
+        let mut cursor = Cursor::new(vec);
+
+        assert!(
+            NotConstructable::consensus_decode(&mut cursor, &ModuleDecoderRegistry::default())
+                .is_err()
+        );
+    }
 }
