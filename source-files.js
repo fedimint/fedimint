@@ -7,7 +7,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
 "fedimint_client":["",[],["lib.rs"]],\
-"fedimint_core":["",[],["config.rs","epoch.rs","lib.rs","outcome.rs","transaction.rs"]],\
+"fedimint_core":["",[],["config.rs","epoch.rs","lib.rs","outcome.rs","transaction.rs","util.rs"]],\
 "fedimint_dbdump":["",[],["main.rs"]],\
 "fedimint_derive":["",[],["lib.rs"]],\
 "fedimint_derive_secret":["",[],["lib.rs"]],\

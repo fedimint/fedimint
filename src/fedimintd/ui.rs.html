@@ -388,6 +388,13 @@
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
 <a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -407,6 +414,7 @@
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::util::SanitizedUrl;
 <span class="kw">use </span>fedimint_ln::LightningGen;
 <span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
@@ -617,8 +625,14 @@
 ) -&gt; UrlConnection {
     <span class="kw">let </span>(ro_bitcoin_rpc_type, ro_bitcoin_rpc_url) =
         <span class="kw">match </span>fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
-            <span class="prelude-val">Ok</span>(BitcoindRpcBackend::Bitcoind(url)) =&gt; (<span class="string">&quot;bitcoind&quot;</span>, url.to_string()),
-            <span class="prelude-val">Ok</span>(BitcoindRpcBackend::Electrum(url)) =&gt; (<span class="string">&quot;electrum&quot;</span>, url.to_string()),
+            <span class="prelude-val">Ok</span>(BitcoindRpcBackend::Bitcoind(url)) =&gt; {
+                <span class="kw">let </span>url_str = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, SanitizedUrl::new_borrowed(<span class="kw-2">&amp;</span>url));
+                (<span class="string">&quot;bitcoind&quot;</span>, url_str)
+            }
+            <span class="prelude-val">Ok</span>(BitcoindRpcBackend::Electrum(url)) =&gt; {
+                <span class="kw">let </span>url_str = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, SanitizedUrl::new_borrowed(<span class="kw-2">&amp;</span>url));
+                (<span class="string">&quot;electrum&quot;</span>, url_str)
+            }
             <span class="prelude-val">Err</span>(e) =&gt; (<span class="string">&quot;error&quot;</span>, e.to_string()),
         };
     UrlConnection {
