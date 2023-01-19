@@ -32,6 +32,7 @@ use crate::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
 };
 use crate::db::LastEpochKey;
+use crate::fedimint_api::encoding::Encodable;
 use crate::fedimint_api::net::peers::IPeerConnections;
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::PeerSlice;
@@ -257,7 +258,7 @@ impl FedimintServer {
                         last_outcome.epoch,
                         self.last_processed_epoch
                             .as_ref()
-                            .map(|epoch| epoch.outcome.hash()),
+                            .and_then(|epoch| epoch.outcome.consensus_hash().ok()),
                         None,
                         true,
                     )

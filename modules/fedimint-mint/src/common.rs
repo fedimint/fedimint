@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::io;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::sha256;
 use fedimint_api::core::Decoder;
 use fedimint_api::encoding::DecodeError;
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -21,12 +21,8 @@ pub struct BackupRequest {
 
 impl BackupRequest {
     fn hash(&self) -> sha256::Hash {
-        let mut sha = sha256::HashEngine::default();
-
-        self.consensus_encode(&mut sha)
-            .expect("Encoding to hash engine can't fail");
-
-        sha256::Hash::from_engine(sha)
+        self.consensus_hash()
+            .expect("Encoding to hash engine can't fail")
     }
 
     pub fn sign(self, keypair: &KeyPair) -> anyhow::Result<SignedBackupRequest> {

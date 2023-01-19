@@ -3,7 +3,7 @@
 use heck::ToSnakeCase;
 use proc_macro::{self, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Index};
+use syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Field, Index};
 
 #[proc_macro_derive(UnzipConsensus)]
 pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
@@ -81,7 +81,23 @@ pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-#[proc_macro_derive(Encodable)]
+fn do_not_ignore(field: &Field) -> bool {
+    !field.attrs.iter().any(|attr| {
+        attr.path
+            .segments
+            .iter()
+            .any(|segment| segment.ident == *"encodable_ignore")
+    })
+}
+
+fn panic_if_ignored(field: &Field) -> bool {
+    if !do_not_ignore(field) {
+        panic!("Trying to derive decodable from a struct with ignored fields");
+    }
+    true
+}
+
+#[proc_macro_derive(Encodable, attributes(encodable_ignore))]
 pub fn derive_encodable(input: TokenStream) -> TokenStream {
     let DeriveInput { ident, data, .. } = parse_macro_input!(input);
 
@@ -91,6 +107,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                 // Tuple struct
                 let field_names = fields
                     .iter()
+                    .filter(|f| do_not_ignore(f))
                     .enumerate()
                     .map(|(idx, _)| Index::from(idx))
                     .collect::<Vec<_>>();
@@ -107,6 +124,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                 // Tuple struct
                 let field_names = fields
                     .iter()
+                    .filter(|f| do_not_ignore(f))
                     .map(|field| field.ident.clone().unwrap())
                     .collect::<Vec<_>>();
                 quote! {
@@ -128,6 +146,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                     let variant_fields = variant
                         .fields
                         .iter()
+                        .filter(|f| do_not_ignore(f))
                         .enumerate()
                         .map(|(idx, _)| format_ident!("bound_{}", idx))
                         .collect::<Vec<_>>();
@@ -141,6 +160,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                     let variant_fields = variant
                         .fields
                         .iter()
+                        .filter(|f| do_not_ignore(f))
                         .map(|field| field.ident.clone().unwrap())
                         .collect::<Vec<_>>();
                     quote! {
@@ -191,6 +211,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                 // Tuple struct
                 let field_names = fields
                     .iter()
+                    .filter(|f| panic_if_ignored(f))
                     .enumerate()
                     .map(|(idx, _)| format_ident!("field_{}", idx))
                     .collect::<Vec<_>>();
@@ -208,6 +229,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                 // Tuple struct
                 let field_names = fields
                     .iter()
+                    .filter(|f| panic_if_ignored(f))
                     .map(|field| field.ident.clone().unwrap())
                     .collect::<Vec<_>>();
                 quote! {
@@ -232,6 +254,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                     let variant_fields = variant
                         .fields
                         .iter()
+                        .filter(|f| panic_if_ignored(f))
                         .enumerate()
                         .map(|(idx, _)| format_ident!("bound_{}", idx))
                         .collect::<Vec<_>>();
@@ -245,6 +268,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                     let variant_fields = variant
                         .fields
                         .iter()
+                        .filter(|f| panic_if_ignored(f))
                         .map(|field| field.ident.clone().unwrap())
                         .collect::<Vec<_>>();
                     quote! {

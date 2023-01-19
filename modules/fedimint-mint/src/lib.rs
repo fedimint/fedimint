@@ -282,7 +282,7 @@ impl ModuleGen for MintGen {
 
         Ok(ModuleConfigResponse {
             client: config.to_client_config(),
-            consensus_hash: config.hash()?,
+            consensus_hash: config.consensus_hash()?,
         })
     }
 
