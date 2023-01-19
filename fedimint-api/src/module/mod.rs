@@ -176,7 +176,6 @@ impl ApiEndpoint<()> {
             skip_all,
             fields(method = E::PATH),
             ret,
-            err(Debug),
         )]
         async fn handle_request<'a, 'b, E>(
             state: &'a E::State,
@@ -189,7 +188,11 @@ impl ApiEndpoint<()> {
             E::Response: Debug,
         {
             tracing::trace!(target: "fedimint_server::request", ?param, "recieved request");
-            E::handle(state, dbtx, param).await
+            let result = E::handle(state, dbtx, param).await;
+            if let Err(error) = &result {
+                tracing::trace!(target: "fedimint_server::request", ?error, "error");
+            }
+            result
         }
 
         ApiEndpoint {
