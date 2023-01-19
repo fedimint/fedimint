@@ -26,6 +26,7 @@ pub mod core;
 pub mod db;
 pub mod encoding;
 pub mod fmt_utils;
+pub mod hex;
 pub mod macros;
 pub mod module;
 pub mod net;
