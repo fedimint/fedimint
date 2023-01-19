@@ -538,7 +538,7 @@
     /// Inputs can not have keys if the transaction value is 0. This is useful for non-monetary transactions to announce information to the mint like incoming LN contract offers.
     </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>Input {
-        <span class="comment">// TODO: maybe treat every coin as a seperate input?
+        <span class="comment">// TODO: maybe treat every note as a seperate input?
         </span>Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Input),
         Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Input),
         LN(&lt;fedimint_ln::Lightning <span class="kw">as </span>ServerModule&gt;::Input),

@@ -1894,15 +1894,15 @@
         amount: Amount,
         rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>notes = <span class="self">self</span>.mint_client().select_notes(amount).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>final_coins = <span class="kw">if </span>coins.total_amount() == amount {
-            coins
+        <span class="kw">let </span>final_notes = <span class="kw">if </span>notes.total_amount() == amount {
+            notes
         } <span class="kw">else </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
-            <span class="kw">let </span>change = <span class="macro">vec!</span>[amount, coins.total_amount() - amount];
+            <span class="kw">let </span>change = <span class="macro">vec!</span>[amount, notes.total_amount() - amount];
 
-            <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = MintClient::ecash_input(coins)<span class="question-mark">?</span>;
+            <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = MintClient::ecash_input(notes)<span class="question-mark">?</span>;
             tx.input(<span class="kw-2">&amp;mut </span>keys, input);
             <span class="kw">let </span>tx = tx
                 .build_with_change(<span class="self">self</span>.mint_client(), rng, change, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)
@@ -1910,16 +1910,16 @@
 
             <span class="self">self</span>.context.api.submit_transaction(tx).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
-            <span class="self">self</span>.mint_client().select_coins(amount).<span class="kw">await</span><span class="question-mark">?
+            <span class="self">self</span>.mint_client().select_notes(amount).<span class="kw">await</span><span class="question-mark">?
         </span>};
         <span class="macro">assert_eq!</span>(
-            final_coins.total_amount(),
+            final_notes.total_amount(),
             amount,
             <span class="string">&quot;should have exact change&quot;
         </span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>final_coins.iter_items() {
+        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>final_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>CoinKey {
                 amount,
                 nonce: coin.note.<span class="number">0</span>,
@@ -1929,7 +1929,7 @@
         }
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="prelude-val">Ok</span>(final_coins)
+        <span class="prelude-val">Ok</span>(final_notes)
     }
 
     <span class="doccomment">/// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
@@ -1942,9 +1942,9 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any coin
+    <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any note
     /// inputs back.
-    </span><span class="kw">pub async fn </span>reissue_pending_coins&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+    </span><span class="kw">pub async fn </span>reissue_pending_notes&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>pending = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>PendingCoinsKeyPrefix)
@@ -1952,9 +1952,9 @@
             </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>));
 
         <span class="kw">let </span>stream = pending
-            .map(|(key, coins)| <span class="kw">async move </span>{
+            .map(|(key, notes)| <span class="kw">async move </span>{
                 <span class="kw">match </span><span class="self">self</span>.context.api.fetch_tx_outcome(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>((key, coins)),
+                    <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>((key, notes)),
                     <span class="prelude-val">Ok</span>(TransactionStatus::Accepted { .. }) =&gt; {
                         <span class="prelude-val">Ok</span>((key, TieredMulti::&lt;SpendableNote&gt;::default()))
                     }
@@ -1964,15 +1964,15 @@
             .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>all_coins = TieredMulti::&lt;SpendableNote&gt;::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>all_notes = TieredMulti::&lt;SpendableNote&gt;::default();
         <span class="kw">for </span>result <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
-            <span class="kw">let </span>(key, coins) = result<span class="question-mark">?</span>;
-            all_coins.extend(coins);
+            <span class="kw">let </span>(key, notes) = result<span class="question-mark">?</span>;
+            all_notes.extend(notes);
             dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="self">self</span>.reissue(all_coins, rng).<span class="kw">await
+        <span class="self">self</span>.reissue(all_notes, rng).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>await_consensus_block_height(
@@ -2003,8 +2003,8 @@
             .collect()
     }
 
-    <span class="kw">pub async fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
-        <span class="self">self</span>.mint_client().coins().<span class="kw">await
+    <span class="kw">pub async fn </span>notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
+        <span class="self">self</span>.mint_client().notes().<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {

@@ -1216,7 +1216,7 @@
             Vec::new();
         <span class="kw">let </span>denominations = TieredMulti::represent_amount(
             amount,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.coins().<span class="kw">await</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.notes().<span class="kw">await</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
             notes_per_denomination,
         );
@@ -1241,7 +1241,7 @@
     }
 
     <span class="kw">pub async fn </span>select_input(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, Input)&gt; {
-        <span class="self">Self</span>::ecash_input(<span class="self">self</span>.select_coins(amount).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="self">Self</span>::ecash_input(<span class="self">self</span>.select_notes(amount).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">pub fn </span>ecash_input(ecash: TieredMulti&lt;SpendableNote&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, Input)&gt; {
@@ -1262,7 +1262,7 @@
         <span class="prelude-val">Ok</span>((key_pairs, Input::Mint(MintInput(input))))
     }
 
-    <span class="kw">pub async fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
+    <span class="kw">pub async fn </span>notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.start_dbtx()
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
@@ -1340,13 +1340,13 @@
         NoteIssuanceRequest::new(ctx, secret)
     }
 
-    <span class="kw">pub async fn </span>select_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-        <span class="kw">let </span>coins = <span class="self">self</span>.coins().<span class="kw">await</span>;
-        <span class="kw">let </span>selected_coins = coins.select_coins(amount).ok_or_else(|| {
-            MintClientError::InsufficientBalance(amount, TieredMulti::total_amount(<span class="kw-2">&amp;</span>coins))
+    <span class="kw">pub async fn </span>select_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
+        <span class="kw">let </span>notes = <span class="self">self</span>.notes().<span class="kw">await</span>;
+        <span class="kw">let </span>selected_notes = notes.select_notes(amount).ok_or_else(|| {
+            MintClientError::InsufficientBalance(amount, TieredMulti::total_amount(<span class="kw-2">&amp;</span>notes))
         })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(selected_coins)
+        <span class="prelude-val">Ok</span>(selected_notes)
     }
 
     <span class="kw">pub async fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>, F, Fut&gt;(
@@ -1729,7 +1729,7 @@
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sats(<span class="number">12</span>);
         issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, ISSUE_AMOUNT).<span class="kw">await</span>;
 
-        <span class="macro">assert_eq!</span>(client.coins().<span class="kw">await</span>.total_amount(), ISSUE_AMOUNT)
+        <span class="macro">assert_eq!</span>(client.notes().<span class="kw">await</span>.total_amount(), ISSUE_AMOUNT)
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
@@ -1754,7 +1754,7 @@
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
         <span class="kw">let </span>_tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
         <span class="kw">let </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>coins = client.select_notes(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>(spend_keys, ecash_input) = MintClient::ecash_input(coins.clone()).unwrap();
 
         builder.input(<span class="kw-2">&amp;mut </span>spend_keys.clone(), ecash_input.clone());
@@ -1781,7 +1781,7 @@
                 .<span class="kw">await</span>;
 
             <span class="comment">// The right amount of money is left
-            </span><span class="macro">assert_eq!</span>(client.coins().<span class="kw">await</span>.total_amount(), SPEND_AMOUNT);
+            </span><span class="macro">assert_eq!</span>(client.notes().<span class="kw">await</span>.total_amount(), SPEND_AMOUNT);
 
             <span class="comment">// Double spends aren&#39;t possible
             </span><span class="macro">assert!</span>(fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).<span class="kw">await</span>.is_err());
@@ -1790,7 +1790,7 @@
         <span class="comment">// We can exactly spend the remainder
         </span><span class="kw">let </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
-        <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>coins = client.select_notes(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>(spend_keys, ecash_input) = MintClient::ecash_input(coins).unwrap();
 
@@ -1812,7 +1812,7 @@
             );
 
             <span class="comment">// No money is left
-            </span><span class="macro">assert_eq!</span>(client.coins().<span class="kw">await</span>.total_amount(), Amount::ZERO);
+            </span><span class="macro">assert_eq!</span>(client.notes().<span class="kw">await</span>.total_amount(), Amount::ZERO);
         }
     }
 
