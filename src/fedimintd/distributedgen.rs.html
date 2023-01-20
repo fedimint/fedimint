@@ -222,7 +222,7 @@
 
     <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
-    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
+    <span class="kw">let </span>module_config_gens = ModuleGenRegistry::from(<span class="macro">vec!</span>[
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),

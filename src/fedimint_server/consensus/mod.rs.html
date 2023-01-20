@@ -720,7 +720,7 @@
 <span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
-<span class="kw">use </span><span class="kw">crate</span>::config::{ModuleInitRegistry, ServerConfig};
+<span class="kw">use </span><span class="kw">crate</span>::config::{ModuleGenRegistry, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::interconnect::FedimintInterconnect;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
@@ -764,7 +764,7 @@
     <span class="doccomment">/// Configuration describing the federation and containing our secrets
     </span><span class="kw">pub </span>cfg: ServerConfig,
 
-    <span class="kw">pub </span>module_inits: ModuleInitRegistry,
+    <span class="kw">pub </span>module_inits: ModuleGenRegistry,
 
     <span class="kw">pub </span>modules: ServerModuleRegistry,
     <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash
@@ -795,7 +795,7 @@
     <span class="kw">pub async fn </span>new(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ModuleInitRegistry,
+        module_inits: ModuleGenRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
@@ -811,7 +811,7 @@
     </span><span class="kw">pub fn </span>new_with_modules(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ModuleInitRegistry,
+        module_inits: ModuleGenRegistry,
         modules: ModuleRegistry&lt;DynServerModule&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{

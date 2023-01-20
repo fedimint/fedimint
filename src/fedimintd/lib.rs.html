@@ -110,7 +110,7 @@
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>fedimint_server::config::{ModuleInitRegistry, ServerConfig};
+<span class="kw">use </span>fedimint_server::config::{ModuleGenRegistry, ServerConfig};
 <span class="kw">use </span>ring::aead::LessSafeKey;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
@@ -180,7 +180,7 @@
 </span><span class="kw">pub fn </span>write_nonprivate_configs(
     server: <span class="kw-2">&amp;</span>ServerConfig,
     path: PathBuf,
-    module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry,
+    module_config_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry,
 ) -&gt; anyhow::Result&lt;()&gt; {
     plaintext_json_write(<span class="kw-2">&amp;</span>server.local, path.join(LOCAL_CONFIG))<span class="question-mark">?</span>;
     plaintext_json_write(<span class="kw-2">&amp;</span>server.consensus, path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>;

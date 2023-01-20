@@ -409,7 +409,7 @@
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
-<span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
+<span class="kw">use </span>fedimint_server::config::ModuleGenRegistry;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>mint_client::api::WsFederationConnect;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
@@ -739,7 +739,7 @@
     password: String,
     task_group: TaskGroup,
     dkg_task_group: <span class="prelude-ty">Option</span>&lt;TaskGroup&gt;,
-    module_gens: ModuleInitRegistry,
+    module_gens: ModuleGenRegistry,
 }
 <span class="kw">type </span>MutableState = Arc&lt;Mutex&lt;State&gt;&gt;;
 
@@ -755,7 +755,7 @@
     bind_addr: SocketAddr,
     password: String,
     task_group: TaskGroup,
-    module_gens: ModuleInitRegistry,
+    module_gens: ModuleGenRegistry,
 ) {
     <span class="kw">let </span>state = Arc::new(Mutex::new(State {
         params: <span class="prelude-val">None</span>,

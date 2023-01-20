@@ -238,7 +238,7 @@
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_ln::LightningGen;
 <span class="kw">use </span>fedimint_mint::MintGen;
-<span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
+<span class="kw">use </span>fedimint_server::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_wallet::WalletGen;
 <span class="kw">use </span>fedimintd::distributedgen::{create_cert, run_dkg};
 <span class="kw">use </span>fedimintd::encrypt::<span class="kw-2">*</span>;
@@ -360,7 +360,7 @@
         )
         .init();
 
-    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
+    <span class="kw">let </span>module_config_gens = ModuleGenRegistry::from(<span class="macro">vec!</span>[
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),
