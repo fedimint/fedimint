@@ -84,7 +84,6 @@
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt::{Debug, Display, Formatter};
 
@@ -154,7 +153,6 @@
         ];
 
         <span class="kw">for </span>(url_str, sanitized_display_expected, sanitized_debug_expected) <span class="kw">in </span>test_cases {
-            <span class="macro">dbg!</span>(<span class="kw-2">&amp;</span>url_str);
             <span class="kw">let </span>url = Url::parse(url_str).unwrap();
             <span class="kw">let </span>sanitized_url = SanitizedUrl::new_borrowed(<span class="kw-2">&amp;</span>url);
 
