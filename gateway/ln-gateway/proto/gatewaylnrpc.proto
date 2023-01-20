@@ -24,15 +24,10 @@ service GatewayLightning {
   rpc SubscribeInterceptHtlcs(SubscribeInterceptHtlcsRequest)
       returns (stream SubscribeInterceptHtlcsResponse) {}
 
-  /* CompleteHtlcs allows a client to stream Success or Failure responses
-   * for every HTLC that was intercepted and processed.
-   *
-   * Recommendation:
-   * GatewayLightning client implementations should consider batching HTLC
-   * responses back to server after processing.
+  /* CompleteHtlc allows a client to send a Success or Failure response
+   * for a HTLC that was intercepted and processed.
    */
-  rpc CompleteHtlcs(stream CompleteHtlcsRequest)
-      returns (stream CompleteHtlcsResponse) {}
+  rpc CompleteHtlc(CompleteHtlcsRequest) returns (CompleteHtlcsResponse) {}
 }
 
 message GetPubKeyRequest {}

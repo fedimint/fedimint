@@ -1,16 +1,14 @@
 use std::{
-    collections::HashMap, net::SocketAddr, path::PathBuf, pin::Pin, str::FromStr, sync::Arc,
-    time::Duration,
+    array::TryFromSliceError, collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr,
+    sync::Arc, time::Duration,
 };
 
 use anyhow::anyhow;
-use bitcoin::XOnlyPublicKey;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::{hex::ToHex, sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
 use fedimint_api::{task::TaskGroup, Amount};
-use futures::Stream;
 use ln_gateway::gatewaylnrpc::{
     complete_htlcs_request::{Action, Cancel, Settle},
     gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
@@ -260,85 +258,73 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(ReceiverStream::new(receiver)))
     }
 
-    type CompleteHtlcsStream =
-        Pin<Box<dyn Stream<Item = Result<CompleteHtlcsResponse, tonic::Status>> + Send + 'static>>;
-
-    async fn complete_htlcs(
+    async fn complete_htlc(
         &self,
-        request: tonic::Request<tonic::Streaming<CompleteHtlcsRequest>>,
-    ) -> Result<tonic::Response<Self::CompleteHtlcsStream>, Status> {
-        let mut requests = request.into_inner();
-
-        let mut results: Vec<Result<CompleteHtlcsResponse, tonic::Status>> = Vec::new();
-
-        while let Some(CompleteHtlcsRequest {
+        request: tonic::Request<CompleteHtlcsRequest>,
+    ) -> Result<tonic::Response<CompleteHtlcsResponse>, Status> {
+        let CompleteHtlcsRequest {
             action,
             intercepted_htlc_id,
-        }) = requests.message().await?
-        {
-            let hash = match sha256::Hash::from_slice(&intercepted_htlc_id) {
-                Ok(hash) => hash,
-                Err(e) => {
-                    error!("Invalid intercepted_htlc_id: {:?}", e);
-                    results.push(Err(Status::invalid_argument(e.to_string())));
-                    continue;
+        } = request.into_inner();
+
+        let hash = match sha256::Hash::from_slice(&intercepted_htlc_id) {
+            Ok(hash) => hash,
+            Err(e) => {
+                error!("Invalid intercepted_htlc_id: {:?}", e);
+                return Err(Status::invalid_argument(e.to_string()));
+            }
+        };
+
+        if let Some(outcome) = self.interceptor.outcomes.lock().await.remove(&hash) {
+            // Translate action request into a cln rpc response for `htlc_accepted` event
+            let htlca_res = match action {
+                Some(Action::Settle(Settle { preimage })) => {
+                    let assert_pk: Result<[u8; 32], TryFromSliceError> =
+                        preimage.as_slice().try_into();
+                    if let Ok(pk) = assert_pk {
+                        serde_json::json!({ "result": "resolve", "payment_key": pk.to_hex() })
+                    } else {
+                        htlc_processing_failure()
+                    }
+                }
+                Some(Action::Cancel(Cancel { reason: _ })) => {
+                    // TODO: Translate the reason into a BOLT 4 failure message
+                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                    htlc_processing_failure()
+                }
+                None => {
+                    error!("No action specified for intercepted htlc id: {:?}", hash);
+                    return Err(Status::internal(
+                        "No action specified on this intercepted htlc",
+                    ));
                 }
             };
 
-            if let Some(outcome) = self.interceptor.outcomes.lock().await.remove(&hash) {
-                // Translate action request into a cln rpc response for `htlc_accepted` event
-                let htlca_res = match action {
-                    Some(Action::Settle(Settle { preimage })) => {
-                        if let Ok(pk) = XOnlyPublicKey::from_slice(&preimage) {
-                            serde_json::json!({ "result": "resolve", "payment_key": pk.to_string() })
-                        } else {
-                            temp_node_failure()
-                        }
-                    }
-                    Some(Action::Cancel(Cancel { reason: _ })) => {
-                        // TODO: Translate the reason into a BOLT 4 failure message
-                        // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                        temp_node_failure()
-                    }
-                    None => {
-                        error!("No action specified for intercepted htlc id: {:?}", hash);
-                        results.push(Err(Status::internal(
-                            "No action specified on this intercepted htlc",
-                        )));
-                        continue;
-                    }
-                };
-
-                // Send translated response to the HTLC interceptor for submission to the cln rpc
-                match outcome.send(htlca_res) {
-                    Ok(_) => {
-                        results.push(Ok(CompleteHtlcsResponse {}));
-                    }
-                    Err(e) => {
-                        error!(
-                            "Failed to send htlc_accepted response to interceptor: {:?}",
-                            e
-                        );
-                        results.push(Err(Status::internal(
-                            "Failed to send htlc_accepted outcome to interceptor",
-                        )));
-                    }
-                };
-                continue;
-            }
-
+            // Send translated response to the HTLC interceptor for submission to the cln rpc
+            match outcome.send(htlca_res) {
+                Ok(_) => {
+                    return Ok(tonic::Response::new(CompleteHtlcsResponse {}));
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to send htlc_accepted response to interceptor: {:?}",
+                        e
+                    );
+                    return Err(Status::internal(
+                        "Failed to send htlc_accepted outcome to interceptor",
+                    ));
+                }
+            };
+        } else {
             error!(
-                "No reference found for this intercepted and processed htlc id: {:?}",
+                "No interceptor reference found for this processed htlc with id: {:?}",
                 intercepted_htlc_id
             );
-            results.push(Err(Status::internal(
-                "No reference found for this intercepted and processed htlc",
-            )))
+            // TODO: Use error codes to signal the gateway to take reactionary actions
+            return Err(Status::internal(
+                "No interceptor reference found for this processed htlc. Potential loss of funds",
+            ));
         }
-
-        Ok(tonic::Response::new(
-            Box::pin(tokio_stream::iter(results)) as Self::CompleteHtlcsStream
-        ))
     }
 }
 
@@ -349,11 +335,13 @@ pub enum ClnExtensionError {
 }
 
 // BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-// 2002 error code reports general temporary failure of this processing node.
-fn temp_node_failure() -> serde_json::Value {
+// 16399 error code reports unknown payment details.
+//
+// TODO: We should probably use a more specific error code based on htlc processing fail reason
+fn htlc_processing_failure() -> serde_json::Value {
     serde_json::json!({
         "result": "fail",
-        "failure_message": "2002"
+        "failure_message": "1639"
     })
 }
 
@@ -411,18 +399,18 @@ impl ClnHtlcInterceptor {
                     return tokio::time::timeout(Duration::from_secs(30), async {
                         receiver.await.unwrap_or_else(|e| {
                             error!("Failed to receive outcome of intercepted htlc: {:?}", e);
-                            temp_node_failure()
+                            htlc_processing_failure()
                         })
                     })
                     .await
                     .unwrap_or_else(|e| {
                         error!("await_htlc_processing error {:?}", e);
-                        temp_node_failure()
+                        htlc_processing_failure()
                     });
                 }
                 Err(e) => {
                     error!("Failed to send htlc to subscription: {:?}", e);
-                    return temp_node_failure();
+                    return htlc_processing_failure();
                 }
             }
         }
