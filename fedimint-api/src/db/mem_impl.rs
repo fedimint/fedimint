@@ -6,11 +6,25 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin_hashes::hex::ToHex;
 
-use super::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, IDatabase,
-    IDatabaseTransaction,
-};
+use super::{IDatabase, IDatabaseTransaction};
 use crate::db::PrefixIter;
+
+#[derive(Debug, Default)]
+pub struct DatabaseInsertOperation {
+    pub key: Vec<u8>,
+    pub value: Vec<u8>,
+}
+
+#[derive(Debug, Default)]
+pub struct DatabaseDeleteOperation {
+    pub key: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub enum DatabaseOperation {
+    Insert(DatabaseInsertOperation),
+    Delete(DatabaseDeleteOperation),
+}
 
 #[derive(Debug, Default)]
 pub struct MemDatabase {

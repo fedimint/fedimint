@@ -18,23 +18,6 @@ pub use tests::*;
 
 use crate::module::registry::ModuleDecoderRegistry;
 
-#[derive(Debug, Default)]
-pub struct DatabaseInsertOperation {
-    pub key: Vec<u8>,
-    pub value: Vec<u8>,
-}
-
-#[derive(Debug, Default)]
-pub struct DatabaseDeleteOperation {
-    pub key: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub enum DatabaseOperation {
-    Insert(DatabaseInsertOperation),
-    Delete(DatabaseDeleteOperation),
-}
-
 pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
     type Key: DatabaseKey;
@@ -115,8 +98,8 @@ impl Database {
 /// | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes |
 /// | -------- | ------------------ | ---------- | ------------------- | -------------- | ----------- |
 /// | MemoryDB | Prevented          | Prevented  | Prevented           | Prevented      | Possible    |
-/// | SledDB   | Prevented          | Prevented  | Possible            | Possible       | Possible    |
 /// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
+/// | Sqlite   | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
 #[async_trait]
 pub trait IDatabaseTransaction<'a>: 'a + Send {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
