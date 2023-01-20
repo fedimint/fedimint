@@ -369,6 +369,8 @@ pub trait TypedClientModuleConfig: DeserializeOwned + Serialize + Encodable {
 pub enum DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
     DistributedGen((String, SupportedDkgMessage)),
+    // Dkg completed on our side
+    Done,
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types

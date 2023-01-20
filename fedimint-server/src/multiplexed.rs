@@ -99,6 +99,8 @@ where
     }
 
     /// Await receipt of a message from any connected peer.
+    //
+    // TODO: I don't think this is cancelation-correct. --dpc
     async fn receive(&self, key: MuxKey) -> Cancellable<(PeerId, Msg)> {
         loop {
             // Note: tokio locks are FIFO, so no need to sleep between loop iterations,
@@ -138,6 +140,8 @@ where
                 // Since all other threads holding `out_of_order` use `connections.try_lock`,
                 // and release `out_of_order`, we are guaranteed to get this lock and not
                 // deadlock.
+                // TODO: Can drop `new_msg` on cancelation. Which we currently don't do, but
+                // worth mentioning. --dpc
                 let mut out_of_order = self.inner.out_of_order.lock().await;
                 // TODO: use `raw_entry` to avoid clone once stable
                 let peer_msgs_pending_count = out_of_order.peer_counts.entry(peer).or_default();
