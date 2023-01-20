@@ -17,7 +17,7 @@ use fedimint_api::config::ClientConfig;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_core::util::SanitizedUrl;
-use fedimint_server::config::ModuleInitRegistry;
+use fedimint_server::config::ModuleGenRegistry;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
@@ -347,7 +347,7 @@ struct State {
     password: String,
     task_group: TaskGroup,
     dkg_task_group: Option<TaskGroup>,
-    module_gens: ModuleInitRegistry,
+    module_gens: ModuleGenRegistry,
 }
 type MutableState = Arc<Mutex<State>>;
 
@@ -363,7 +363,7 @@ pub async fn run_ui(
     bind_addr: SocketAddr,
     password: String,
     task_group: TaskGroup,
-    module_gens: ModuleInitRegistry,
+    module_gens: ModuleGenRegistry,
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,

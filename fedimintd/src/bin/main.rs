@@ -7,7 +7,7 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
-use fedimint_server::config::ModuleInitRegistry;
+use fedimint_server::config::ModuleGenRegistry;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::WalletGen;
@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     let mut task_group = TaskGroup::new();
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
-    let module_inits = ModuleInitRegistry::from(vec![
+    let module_inits = ModuleGenRegistry::from(vec![
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),
