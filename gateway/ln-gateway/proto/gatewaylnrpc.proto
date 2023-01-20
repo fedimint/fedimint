@@ -8,11 +8,9 @@ service GatewayLightning {
   /* GetPubKey returns the public key of the associated lightning node */
   rpc GetPubKey(GetPubKeyRequest) returns (GetPubKeyResponse) {}
 
-  /* PayInvoice allows a client to stream requests to to pay any number of
-   * invoices using the associated lightning node
+  /* PayInvoice attempts to pay an invoice using the associated lightning node
    */
-  rpc PayInvoice(stream PayInvoiceRequest) returns (stream PayInvoiceResponse) {
-  }
+  rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse) {}
 
   /* SubscribeInterceptHtlcs opens a stream for a client to receive specific
    * HTLCs that have a specific short channel id. For every HTLC intercepted and
