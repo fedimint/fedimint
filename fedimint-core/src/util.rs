@@ -67,7 +67,6 @@ mod tests {
         ];
 
         for (url_str, sanitized_display_expected, sanitized_debug_expected) in test_cases {
-            dbg!(&url_str);
             let url = Url::parse(url_str).unwrap();
             let sanitized_url = SanitizedUrl::new_borrowed(&url);
 
