@@ -799,7 +799,7 @@
                                 epoch,
                                 contributions: BTreeMap::from_iter(items.into_iter()),
                             },
-                            <span class="kw-2">&amp;</span>rejected_txs,
+                            rejected_txs.clone(),
                         )
                         .<span class="kw">await</span>;
                     <span class="self">self</span>.last_processed_epoch = <span class="prelude-val">Some</span>(epoch);

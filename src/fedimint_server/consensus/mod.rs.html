@@ -714,6 +714,8 @@
 <a href="#714" id="714">714</a>
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -934,67 +936,69 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Calculate the result of the `consesnsus_outcome` and save it/them.
+    <span class="doccomment">/// Calculate the result of the `consensus_outcome` and save it/them.
     ///
     /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is coming from a
     /// a reference (already signed) `OutcomeHistory`, that contains `rejected_txs`,
     /// so we can check it against our own `rejected_txs` we calculate in this function.
-    /// **Note**: `reference_rejecte_txs` **must** come from a validated/trustworthy
+    ///
+    /// **Note**: `reference_rejected_txs` **must** come from a validated/trustworthy
     /// source and be correct, or it can cause a panic.
     </span><span class="attr">#[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     </span><span class="kw">pub async fn </span>process_consensus_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         consensus_outcome: HbbftConsensusOutcome,
-        reference_rejected_txs: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;BTreeSet&lt;TransactionId&gt;&gt;,
+        reference_rejected_txs: <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;TransactionId&gt;&gt;,
     ) -&gt; SignedEpochOutcome {
-        <span class="kw">let </span>epoch = consensus_outcome.epoch;
-        <span class="kw">let </span>outcome = consensus_outcome.clone();
+        <span class="kw">let </span>epoch_history = <span class="self">self
+            </span>.db
+            .autocommit(
+                |dbtx| {
+                    <span class="kw">let </span>consensus_outcome = consensus_outcome.clone();
+                    <span class="kw">let </span>reference_rejected_txs = reference_rejected_txs.clone();
 
-        <span class="kw">let </span>UnzipConsensusItem {
-            epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
-            transaction: transaction_cis,
-            module: module_cis,
-        } = consensus_outcome
-            .contributions
-            .into_iter()
-            .flat_map(|(peer, cis)| cis.into_iter().map(<span class="kw">move </span>|ci| (peer, ci)))
-            .unzip_consensus_item();
+                    Box::pin(<span class="kw">async move </span>{
+                        <span class="kw">let </span>epoch = consensus_outcome.epoch;
+                        <span class="kw">let </span>outcome = consensus_outcome.clone();
 
-        <span class="kw">let </span>epoch_history = <span class="kw">loop </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+                        <span class="kw">let </span>UnzipConsensusItem {
+                            epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
+                            transaction: transaction_cis,
+                            module: module_cis,
+                        } = consensus_outcome
+                            .contributions
+                            .into_iter()
+                            .flat_map(|(peer, cis)| cis.into_iter().map(<span class="kw">move </span>|ci| (peer, ci)))
+                            .unzip_consensus_item();
 
-            <span class="self">self</span>.process_module_consensus_items(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>module_cis)
-                .<span class="kw">await</span>;
+                        <span class="self">self</span>.process_module_consensus_items(dbtx, <span class="kw-2">&amp;</span>module_cis).<span class="kw">await</span>;
 
-            <span class="kw">let </span>rejected_txs = <span class="self">self
-                </span>.process_transactions(<span class="kw-2">&amp;mut </span>dbtx, epoch, <span class="kw-2">&amp;</span>transaction_cis)
-                .<span class="kw">await</span>;
+                        <span class="kw">let </span>rejected_txs = <span class="self">self
+                            </span>.process_transactions(dbtx, epoch, <span class="kw-2">&amp;</span>transaction_cis)
+                            .<span class="kw">await</span>;
 
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(reference_rejected_txs) = reference_rejected_txs.as_ref() {
-                <span class="comment">// Result of the consensus are supposed to be deterministic.
-                // If our result is not the same as what the (honest) majority of the federation
-                // signed over, it&#39;s a catastrophical bug/mismatch of Federation&#39;s fedimintd
-                // implementations.
-                </span><span class="macro">assert_eq!</span>(
-                    reference_rejected_txs, <span class="kw-2">&amp;</span>rejected_txs,
-                    <span class="string">&quot;rejected_txs mismatch: reference = {:?} != {:?}&quot;</span>,
-                    reference_rejected_txs, rejected_txs
-                );
-            }
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(reference_rejected_txs) = reference_rejected_txs.as_ref() {
+                            <span class="comment">// Result of the consensus are supposed to be deterministic.
+                            // If our result is not the same as what the (honest) majority of the federation
+                            // signed over, it&#39;s a catastrophical bug/mismatch of Federation&#39;s fedimintd
+                            // implementations.
+                            </span><span class="macro">assert_eq!</span>(
+                                reference_rejected_txs, <span class="kw-2">&amp;</span>rejected_txs,
+                                <span class="string">&quot;rejected_txs mismatch: reference = {:?} != {:?}&quot;</span>,
+                                reference_rejected_txs, rejected_txs
+                            );
+                        }
 
-            <span class="kw">let </span>epoch_history = <span class="self">self
-                </span>.finalize_process_epoch(<span class="kw-2">&amp;mut </span>dbtx, outcome.clone(), rejected_txs)
-                .<span class="kw">await</span>;
-
-            <span class="kw">match </span>dbtx.commit_tx().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(()) =&gt; {
-                    <span class="kw">break </span>epoch_history;
-                }
-                <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">error!</span>(%error, <span class="string">&quot;Committing DB transaction failed, retrying!&quot;</span>);
-                }
-            }
-        };
+                        <span class="kw">let </span>epoch_history = <span class="self">self
+                            </span>.finalize_process_epoch(dbtx, outcome.clone(), rejected_txs)
+                            .<span class="kw">await</span>;
+                        <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, ()&gt;::Ok(epoch_history)
+                    })
+                },
+                <span class="prelude-val">Some</span>(<span class="number">100</span>),
+            )
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Committing consensus epoch failed&quot;</span>);
 
         <span class="kw">let </span>audit = <span class="self">self</span>.audit().<span class="kw">await</span>;
         <span class="kw">if </span>audit.sum().milli_sat &lt; <span class="number">0 </span>{
