@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::os::unix::prelude::OsStrExt;
+use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use bitcoin::hashes::sha256;
@@ -21,7 +22,7 @@ use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
-use fedimint_api::task::TaskGroup;
+use fedimint_api::task::{timeout, Elapsed, TaskGroup};
 use fedimint_api::{Amount, PeerId};
 pub use fedimint_core::config::*;
 use fedimint_core::modules::mint::MintGenParams;
@@ -32,7 +33,7 @@ use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
-use tracing::info;
+use tracing::{error, info};
 use url::Url;
 
 use crate::fedimint_api::encoding::Encodable;
@@ -615,6 +616,36 @@ impl ServerConfig {
                 },
             );
         }
+
+        info!("Sending confirmations to other peers.");
+        // Note: Since our outgoing buffers are asynchronous, we don't actually know
+        // if other peers received our message, just because we received theirs.
+        // That's why we need to do a one last best effort sync.
+        connections
+            .send(peers, MODULE_INSTANCE_ID_GLOBAL, DkgPeerMsg::Done)
+            .await?;
+
+        info!("Waiting for confirmations from other peers.");
+        if let Err(Elapsed) = timeout(Duration::from_secs(30), async {
+            let mut done_peers = BTreeSet::from([*our_id]);
+
+            while done_peers.len() < peers.len() {
+                match connections.receive(MODULE_INSTANCE_ID_GLOBAL).await {
+                    Ok((peer_id, DkgPeerMsg::Done)) => {
+                        info!(%peer_id, "Got completion confirmation");
+                        done_peers.insert(peer_id);
+                    },
+                    Ok((peer_id, msg)) => {
+                        error!(%peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
+                    },
+                    Err(Cancelled) => {/* ignore shutdown for time being, we'll timeout soon anyway */},
+                }
+            }
+        })
+        .await
+        {
+            error!("Timeout waiting for dkg completion confirmation from other peers");
+        };
 
         let server = ServerConfig::from(
             code_version,
