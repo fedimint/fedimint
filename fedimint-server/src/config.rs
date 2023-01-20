@@ -159,7 +159,7 @@ impl ServerConfigConsensus {
     /// TODO use the derive macro to automatically pick up new fields here
     fn try_to_config_response(
         &self,
-        module_config_gens: &ModuleInitRegistry,
+        module_config_gens: &ModuleGenRegistry,
     ) -> anyhow::Result<ConfigResponse> {
         let modules: BTreeMap<ModuleInstanceId, ModuleConfigResponse> = self
             .modules
@@ -198,16 +198,16 @@ impl ServerConfigConsensus {
         })
     }
 
-    pub fn to_config_response(&self, module_config_gens: &ModuleInitRegistry) -> ConfigResponse {
+    pub fn to_config_response(&self, module_config_gens: &ModuleGenRegistry) -> ConfigResponse {
         self.try_to_config_response(module_config_gens)
             .expect("configuration mismatch")
     }
 }
 
 #[derive(Clone)]
-pub struct ModuleInitRegistry(BTreeMap<ModuleKind, DynModuleGen>);
+pub struct ModuleGenRegistry(BTreeMap<ModuleKind, DynModuleGen>);
 
-impl From<Vec<DynModuleGen>> for ModuleInitRegistry {
+impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
     fn from(value: Vec<DynModuleGen>) -> Self {
         Self(BTreeMap::from_iter(
             value.into_iter().map(|i| (i.module_kind(), i)),
@@ -215,7 +215,7 @@ impl From<Vec<DynModuleGen>> for ModuleInitRegistry {
     }
 }
 
-impl ModuleInitRegistry {
+impl ModuleGenRegistry {
     pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
         self.0.get(k)
     }
@@ -269,7 +269,7 @@ impl ModuleInitRegistry {
     ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::DynServerModule>> {
         let mut modules = BTreeMap::new();
 
-        let env = ModuleInitRegistry::get_env_vars_map();
+        let env = ModuleGenRegistry::get_env_vars_map();
 
         for (module_id, module_cfg) in &cfg.consensus.modules {
             let kind = module_cfg.kind();
@@ -450,7 +450,7 @@ impl ServerConfig {
     pub fn validate_config(
         &self,
         identity: &PeerId,
-        module_config_gens: &ModuleInitRegistry,
+        module_config_gens: &ModuleGenRegistry,
     ) -> anyhow::Result<()> {
         let peers = self.local.p2p.clone();
         let consensus = self.consensus.clone();
@@ -492,7 +492,7 @@ impl ServerConfig {
         code_version: &str,
         peers: &[PeerId],
         params: &HashMap<PeerId, ServerConfigParams>,
-        module_config_gens: ModuleInitRegistry,
+        module_config_gens: ModuleGenRegistry,
         mut rng: impl RngCore + CryptoRng,
     ) -> BTreeMap<PeerId, Self> {
         let netinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
@@ -552,7 +552,7 @@ impl ServerConfig {
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ServerConfigParams,
-        module_config_gens: ModuleInitRegistry,
+        module_config_gens: ModuleGenRegistry,
         mut rng: impl RngCore + CryptoRng,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<Self>> {

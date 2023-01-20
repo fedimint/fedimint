@@ -25,7 +25,7 @@ use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
 
-use crate::config::{ModuleInitRegistry, ServerConfig};
+use crate::config::{ModuleGenRegistry, ServerConfig};
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
@@ -69,7 +69,7 @@ pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
-    pub module_inits: ModuleInitRegistry,
+    pub module_inits: ModuleGenRegistry,
 
     pub modules: ServerModuleRegistry,
     /// KV Database into which all state is persisted to recover from in case of a crash
@@ -100,7 +100,7 @@ impl FedimintConsensus {
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ModuleInitRegistry,
+        module_inits: ModuleGenRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -116,7 +116,7 @@ impl FedimintConsensus {
     pub fn new_with_modules(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ModuleInitRegistry,
+        module_inits: ModuleGenRegistry,
         modules: ModuleRegistry<DynServerModule>,
     ) -> Self {
         Self {

@@ -41,7 +41,7 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::{MintGen, MintOutput};
 use fedimint_server::config::{connect, ServerConfig};
-use fedimint_server::config::{ModuleInitRegistry, ServerConfigParams};
+use fedimint_server::config::{ModuleGenRegistry, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
@@ -173,7 +173,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let params = ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test");
     let max_evil = hbbft::util::max_faulty(peers.len());
 
-    let module_inits = ModuleInitRegistry::from(vec![
+    let module_inits = ModuleGenRegistry::from(vec![
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),
@@ -394,7 +394,7 @@ async fn distributed_config(
     code_version: &str,
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
-    module_config_gens: ModuleInitRegistry,
+    module_config_gens: ModuleGenRegistry,
     _max_evil: usize,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
@@ -1054,7 +1054,7 @@ impl FederationTest {
         database_gen: &impl Fn(ModuleDecoderRegistry) -> Database,
         bitcoin_gen: &impl Fn() -> DynBitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
-        module_inits: ModuleInitRegistry,
+        module_inits: ModuleGenRegistry,
         override_modules: impl Fn(
             ServerConfig,
             Database,
@@ -1072,7 +1072,7 @@ impl FederationTest {
             let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
 
             let mut modules = BTreeMap::new();
-            let env_vars = ModuleInitRegistry::get_env_vars_map();
+            let env_vars = ModuleGenRegistry::get_env_vars_map();
 
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();

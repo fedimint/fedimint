@@ -84,7 +84,7 @@ pub async fn run_dkg(
 
     let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
-    let module_config_gens = ModuleInitRegistry::from(vec![
+    let module_config_gens = ModuleGenRegistry::from(vec![
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),

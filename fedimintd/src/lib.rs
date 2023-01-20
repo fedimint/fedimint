@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::format_err;
-use fedimint_server::config::{ModuleInitRegistry, ServerConfig};
+use fedimint_server::config::{ModuleGenRegistry, ServerConfig};
 use ring::aead::LessSafeKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -72,7 +72,7 @@ pub fn encrypted_json_read<T: Serialize + DeserializeOwned>(
 pub fn write_nonprivate_configs(
     server: &ServerConfig,
     path: PathBuf,
-    module_config_gens: &ModuleInitRegistry,
+    module_config_gens: &ModuleGenRegistry,
 ) -> anyhow::Result<()> {
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
