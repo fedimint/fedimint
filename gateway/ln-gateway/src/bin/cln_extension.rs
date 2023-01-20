@@ -30,32 +30,26 @@ use tracing::{debug, error};
 
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
-    /// Gateway CLN extension service bind address
-    #[arg(long = "addr", env = "GW_CLN_EXTENSION_BIND_ADDRESS")]
-    pub addr: SocketAddr,
+    /// Gateway CLN extension service listen address
+    #[arg(long = "listen", env = "GW_CLN_EXTENSION_LISTEN_ADDRESS")]
+    pub listen: SocketAddr,
 }
 
 // Note: Once this binary is stable, we should be able to remove current 'ln_gateway'
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let service = ClnRpcService::new()
+    let (service, listen) = ClnRpcService::new()
         .await
         .expect("Failed to create cln rpc service");
 
-    // Parse configurations
-    let addr = match ClnExtensionOpts::try_parse() {
-        Ok(opts) => opts.addr,
-        Err(_) => service.addr,
-    };
-
     debug!(
-        "Starting gateway-cln-extension with bind address : {}",
-        addr
+        "Starting gateway-cln-extension with listen address : {}",
+        listen
     );
 
     Server::builder()
         .add_service(GatewayLightningServer::new(service))
-        .serve(addr)
+        .serve(listen)
         .await
         .map_err(|_| ClnExtensionError::Error(anyhow!("Failed to start server")))?;
 
@@ -109,16 +103,15 @@ pub struct ClnRpcService {
     client: Arc<Mutex<ClnRpc>>,
     interceptor: Arc<ClnHtlcInterceptor>,
     task_group: TaskGroup,
-    pub addr: SocketAddr,
 }
 
 impl ClnRpcService {
-    pub async fn new() -> Result<Self, ClnExtensionError> {
+    pub async fn new() -> Result<(Self, SocketAddr), ClnExtensionError> {
         let interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
-                "addr",
+                "listen",
                 // Set an invalid default address in the extension to force the extension plugin user
                 // to supply a valid address via an environment variable or cln plugin config option.
                 options::Value::String("default-dont-use".into()),
@@ -145,18 +138,32 @@ impl ClnRpcService {
             let socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
             let client = ClnRpc::new(socket).await.expect("connect to ln_socket");
 
-            let addr = match plugin.option("addr") {
-                Some(options::Value::String(address)) => SocketAddr::from_str(&address)
-                    .map_err(|e| ClnExtensionError::Error(anyhow!("{}", e)))?,
-                _ => unreachable!(),
+            // Parse configurations or read from
+            let listen: SocketAddr = match ClnExtensionOpts::try_parse() {
+                Ok(opts) => opts.listen,
+                // FIXME: cln_plugin doesn't yet support optional parameters
+                Err(_) => match plugin.option("listen") {
+                    Some(options::Value::String(listen)) => {
+                        if listen == "default-dont-use" {
+                            panic!(
+                                "Gateway cln extension is missing a listen address configuration. You can set it via GW_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --listen config option to the cln plugin"
+                            )
+                        } else {
+                            SocketAddr::from_str(&listen).expect("invalid listen address")
+                        }
+                    }
+                    _ => unreachable!(),
+                },
             };
 
-            Ok(Self {
-                client: Arc::new(Mutex::new(client)),
-                task_group: TaskGroup::new(),
-                interceptor,
-                addr,
-            })
+            Ok((
+                Self {
+                    client: Arc::new(Mutex::new(client)),
+                    task_group: TaskGroup::new(),
+                    interceptor,
+                },
+                listen,
+            ))
         } else {
             Err(ClnExtensionError::Error(anyhow!(
                 "Failed to start cln plugin"
