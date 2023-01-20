@@ -35,7 +35,7 @@ url = { version = "2.3.1", features = ["serde"] }
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
 
 [dev-dependencies]
-tokio = {version = "1.23.1", features = [ "full" ] }
+tokio = {version = "1.24.2", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 fedimint-testing = { path = "../../fedimint-testing" }
