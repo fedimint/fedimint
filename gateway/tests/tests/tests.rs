@@ -122,7 +122,7 @@ async fn test_gateway_authentication() -> Result<()> {
     };
     test_auth(&gw_password, |pw| client_ref.withdraw(pw, payload.clone())).await?;
 
-    task_group.shutdown_join_all().await
+    task_group.shutdown_join_all(None).await
 }
 
 /// Test that a given endpoint/functionality of func fails with the wrong password but works with the correct one

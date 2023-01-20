@@ -139,7 +139,7 @@ where
         fixtures.lightning,
     )
     .await;
-    fixtures.task_group.shutdown_join_all().await
+    fixtures.task_group.shutdown_join_all(None).await
 }
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
@@ -196,7 +196,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             .await
             .expect("distributed config should not be canceled");
             config_task_group
-                .shutdown_join_all()
+                .shutdown_join_all(None)
                 .await
                 .expect("Distributed config did not exit cleanly");
 

@@ -1063,7 +1063,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
             .unwrap();
         assert_eq!(user_send.total_coins().await, sats(1500));
 
-        task_group.join_all().await.unwrap();
+        task_group.join_all(None).await.unwrap();
     })
     .await
 }

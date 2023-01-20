@@ -157,7 +157,7 @@ async fn post_guardians(
     if let Some(dkg_task_group) = state.dkg_task_group.clone() {
         tracing::info!("killing dkg task group");
         dkg_task_group
-            .shutdown_join_all()
+            .shutdown_join_all(None)
             .await
             .expect("couldn't shut down dkg task group");
         state_copy.lock().await.dkg_state = None;
@@ -196,7 +196,7 @@ async fn post_guardians(
                     tracing::info!("DKG succeeded");
                     // Shut down DKG to prevent port collisions
                     dkg_task_group
-                        .shutdown_join_all()
+                        .shutdown_join_all(None)
                         .await
                         .expect("couldn't shut down DKG task group");
                     // Tell this route that DKG succeeded

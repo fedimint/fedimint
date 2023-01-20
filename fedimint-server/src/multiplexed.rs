@@ -245,7 +245,7 @@ pub mod test {
             drop(conn1);
             drop(conn2);
 
-            task_group.join_all().await.expect("no failures");
+            task_group.join_all(None).await.expect("no failures");
         }
     }
 }

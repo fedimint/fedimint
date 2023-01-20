@@ -78,7 +78,7 @@ async fn main() -> Result<(), Error> {
     .await;
 
     if let Err(e) = gateway.run().await {
-        task_group.shutdown_join_all().await?;
+        task_group.shutdown_join_all(None).await?;
 
         error!("Gateway stopped with error: {}", e);
         return Err(e.into());

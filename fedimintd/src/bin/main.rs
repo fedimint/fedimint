@@ -146,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
     FedimintServer::run(cfg, consensus, decoders, &mut task_group).await?;
 
     local_task_set.await;
-    task_group.join_all().await?;
+    task_group.join_all(None).await?;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();
