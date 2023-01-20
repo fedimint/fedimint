@@ -114,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
         let local_cfg_path = opts.data_dir.join(LOCAL_CONFIG).with_extension(JSON_EXT);
         if !std::path::Path::new(&local_cfg_path).exists() {
             loop {
-                if let UiMessage::DKGSuccess = ui_receiver
+                if let UiMessage::DkgSuccess = ui_receiver
                     .recv()
                     .await
                     .expect("failed to receive setup message")
