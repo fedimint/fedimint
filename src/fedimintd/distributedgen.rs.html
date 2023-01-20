@@ -137,23 +137,15 @@
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::net::peers::IMuxPeerConnections;
-<span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">use </span>fedimint_ln::LightningGen;
 <span class="kw">use </span>fedimint_mint::MintGen;
@@ -247,12 +239,6 @@
         task_group,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="comment">// When testing on localhost, it&#39;s possible to get
-    // one peer that finished dkg, while other didn&#39;t.
-    // TODO: We should flush the outgoing peer buffers instead
-    // to make sure other peers received our messages.
-    </span>sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
 
     drop(connections);
 
