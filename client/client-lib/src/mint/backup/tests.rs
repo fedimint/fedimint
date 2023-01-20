@@ -67,7 +67,7 @@ impl MicroMintClient {
                     (
                         OutputFinalizationKey(out_point),
                         NoteIssuanceRequests {
-                            coins: TieredMulti::from_iter(iss_reqs),
+                            notes: TieredMulti::from_iter(iss_reqs),
                         },
                     )
                 })

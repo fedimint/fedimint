@@ -36,9 +36,9 @@ Dump the blocks from within the wallet range of server-1
 fedimint-dbdump $FM_CFG_DIR/server-1/database --range=wallet --prefix=blockhash
 ```
 
-Dump the used coins from the mint range and the accepted transactions from the consensus range
+Dump the used notes from the mint range and the accepted transactions from the consensus range
 ```shell
-fedimint-dbdump $FM_CFG_DIR/server-1/database --range=mint,consensus --prefix=coinnonce,acceptedtransaction
+fedimint-dbdump $FM_CFG_DIR/server-1/database --range=mint,consensus --prefix=notenonce,acceptedtransaction
 ```
 
 Dump the entire client database

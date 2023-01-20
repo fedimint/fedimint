@@ -32,7 +32,7 @@ The Database is split into different key spaces based on prefixing that can be u
 
 | Name               | Prefix | Key                                                 | Value                 |
 |--------------------|--------|-----------------------------------------------------|-----------------------|
-| CoinNonce          | `0x10` | coin nonce (unknown bytes, bincode magic currently) | none                  |
+| NoteNonce          | `0x10` | note nonce (unknown bytes, bincode magic currently) | none                  |
 | ProposedPartialSig | `0x11` | mint outpoint (40 bytes)                            | blind signature share |
 | ReceivedPartialSig | `0x12` | mint outpoint (40 bytes), peer (2 bytes)            | blind signature share |
 | OutputOutcome      | `0x13` | mint outpoint (40 bytes)                            | blind signature       |
@@ -80,9 +80,9 @@ The Database is split into different key spaces based on prefixing that can be u
 ### MintClient
 | Name                   | Prefix | Key                                | Value                        |
 |------------------------|--------|------------------------------------|------------------------------|
-| Coin                   | `0x20` | amount (8 bytes), nonce (32 bytes) | `SpendableCoin`              |
+| Note                   | `0x20` | amount (8 bytes), nonce (32 bytes) | `SpendableNote`              |
 | OutputFinalizationData | `0x21` | issuance_id (32 bytes)             | `NoteIssuanceRequests`       |
-| PendingCoins           | `0x27` | mint tx id (sha256 payment hash)   | `TieredMulti<SpendableCoin>` |
+| PendingNotes           | `0x27` | mint tx id (sha256 payment hash)   | `TieredMulti<SpendableNote>` |
 | NotesPerDenomination   | `0x2b` | determines how many notes to issue | `u16`                        |
 
 ### WalletClient

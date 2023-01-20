@@ -45,7 +45,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
 
         user.client.peg_in(proof, tx, rng()).await.unwrap();
         fed.run_consensus_epochs(2).await; // peg in epoch + partial sigs epoch
-        user.assert_total_coins(sats(peg_in_amount)).await;
+        user.assert_total_notes(sats(peg_in_amount)).await;
 
         let peg_out_address = bitcoin.get_new_address();
         let (fees, out_point) = user.peg_out(peg_out_amount, &peg_out_address).await;
@@ -91,7 +91,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
             bitcoin.mine_block_and_get_received(&peg_out_address),
             sats(peg_out_amount)
         );
-        user.assert_total_coins(sats(peg_in_amount - peg_out_amount) - fees)
+        user.assert_total_notes(sats(peg_in_amount - peg_out_amount) - fees)
             .await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
@@ -138,7 +138,7 @@ async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
         assert_eq!(received1 + received2, sats(1000));
         user.client.reissue_pending_notes(rng()).await.unwrap();
         fed.run_consensus_epochs(2).await; // reissue the notes from the tx that failed
-        user.assert_total_coins(sats(5000 - 1000) - fees).await;
+        user.assert_total_notes(sats(5000 - 1000) - fees).await;
     })
     .await
 }
@@ -178,15 +178,15 @@ async fn ecash_can_be_exchanged_directly_between_users() -> Result<()> {
         let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
 
         fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
-        assert_eq!(user_send.total_coins().await, sats(5000));
-        assert_eq!(user_receive.total_coins().await, sats(0));
+        assert_eq!(user_send.total_notes().await, sats(5000));
+        assert_eq!(user_receive.total_notes().await, sats(0));
 
         let ecash = fed.spend_ecash(&user_send, sats(3500)).await;
         user_receive.client.reissue(ecash, rng()).await.unwrap();
-        fed.run_consensus_epochs(2).await; // process transaction + sign new coins
+        fed.run_consensus_epochs(2).await; // process transaction + sign new notes
 
-        user_send.assert_total_coins(sats(1500)).await;
-        user_receive.assert_total_coins(sats(3500)).await;
+        user_send.assert_total_notes(sats(1500)).await;
+        user_receive.assert_total_notes(sats(3500)).await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -203,13 +203,13 @@ async fn ecash_cannot_double_spent_with_different_nodes() -> Result<()> {
 
         let out2 = user2.client.reissue(ecash.clone(), rng()).await.unwrap();
         let out3 = user3.client.reissue(ecash, rng()).await.unwrap();
-        fed.run_consensus_epochs(2).await; // process transaction + sign new coins
+        fed.run_consensus_epochs(2).await; // process transaction + sign new notes
 
-        let res2 = user2.client.fetch_coins(out2).await;
-        let res3 = user3.client.fetch_coins(out3).await;
+        let res2 = user2.client.fetch_notes(out2).await;
+        let res3 = user3.client.fetch_notes(out3).await;
         assert!(res2.is_err() || res3.is_err()); //no double spend
         assert_eq!(
-            user2.total_coins().await + user3.total_coins().await,
+            user2.total_notes().await + user3.total_notes().await,
             sats(2000)
         );
         assert_eq!(fed.max_balance_sheet(), 0);
@@ -235,22 +235,22 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
 
         fed.mine_spendable_utxo(&dummy_user, &*bitcoin, Amount::from_sat(1000))
             .await;
-        fed.mint_coins_for_user(&user_send, msats(8)).await;
-        let coins = vec![msats(1), msats(1), msats(2), msats(4)];
-        assert_eq!(user_send.note_amounts().await, coins);
+        fed.mint_notes_for_user(&user_send, msats(8)).await;
+        let notes = vec![msats(1), msats(1), msats(2), msats(4)];
+        assert_eq!(user_send.note_amounts().await, notes);
 
         user_receive
             .client
-            .receive_coins(msats(5), |coins| async {
+            .receive_notes(msats(5), |notes| async {
                 user_send
                     .client
-                    .pay_to_blind_nonces(coins, rng())
+                    .pay_to_blind_nonces(notes, rng())
                     .await
                     .unwrap()
             })
             .await;
 
-        fed.run_consensus_epochs(2).await; // process transaction + sign new coins
+        fed.run_consensus_epochs(2).await; // process transaction + sign new notes
 
         user_receive
             .assert_note_amounts(vec![msats(1), msats(2), msats(2)])
@@ -362,9 +362,9 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .claim_incoming_contract(contract_id, rng())
             .await
             .unwrap();
-        fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(2).await; // contract to mint coins, sign coins
+        fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
-        user.assert_total_coins(payment_amount).await;
+        user.assert_total_notes(payment_amount).await;
         assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
         assert_eq!(fed.max_balance_sheet(), 0);
     })
@@ -376,12 +376,12 @@ async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
     test(4, |fed, user, bitcoin, _, _| async move {
         fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
             .await;
-        fed.database_add_coins_for_user(&user, sats(2000)).await;
+        fed.database_add_notes_for_user(&user, sats(2000)).await;
 
         fed.subset_peers(&[3]).override_proposal(vec![]);
         drop_peer_3_during_epoch(&fed).await.unwrap();
 
-        user.assert_total_coins(sats(2000)).await;
+        user.assert_total_notes(sats(2000)).await;
         assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
     })
     .await
@@ -392,7 +392,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
     test(4, |fed, user, bitcoin, _, _| async move {
         fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
             .await;
-        let out_point = fed.database_add_coins_for_user(&user, sats(2000)).await;
+        let out_point = fed.database_add_notes_for_user(&user, sats(2000)).await;
         let bad_proposal = vec![ConsensusItem::Module(
             fedimint_api::core::DynModuleConsensusItem::from_typed(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -406,7 +406,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
         fed.subset_peers(&[3]).override_proposal(bad_proposal);
         drop_peer_3_during_epoch(&fed).await.unwrap();
 
-        user.assert_total_coins(sats(2000)).await;
+        user.assert_total_notes(sats(2000)).await;
         assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
     })
     .await
@@ -439,7 +439,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
             .fund_outgoing_ln_contract(invoice, rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(1).await; // send coins to LN contract
+        fed.run_consensus_epochs(1).await; // send notes to LN contract
 
         let contract_account = user
             .client
@@ -489,14 +489,14 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
 
         receiving_user
             .client
-            .fetch_coins(receiving_outpoint)
+            .fetch_notes(receiving_outpoint)
             .await
             .unwrap();
         debug!("User fetched funds paid to incoming contract");
 
-        user.assert_total_coins(sats(2000 - 1010)).await; // user sent a 1000 sat + 10 sat fee invoice
-        gateway.user.assert_total_coins(sats(2010)).await; // gateway routed internally and earned fee
-        receiving_user.assert_total_coins(sats(1000)).await; // this user received the 1000 sat invoice
+        user.assert_total_notes(sats(2000 - 1010)).await; // user sent a 1000 sat + 10 sat fee invoice
+        gateway.user.assert_total_notes(sats(2010)).await; // gateway routed internally and earned fee
+        receiving_user.assert_total_notes(sats(1000)).await; // this user received the 1000 sat invoice
 
         assert_eq!(lightning.amount_sent().await, sats(0)); // We did not route any payments over the lightning network
         assert_eq!(fed.max_balance_sheet(), 0);
@@ -534,15 +534,15 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
             .pay_invoice(gateway.adapter.clone(), contract_id)
             .await
             .unwrap();
-        fed.run_consensus_epochs(2).await; // contract to mint coins, sign coins
+        fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway
             .actor
             .await_outgoing_contract_claimed(contract_id, claim_outpoint)
             .await
             .unwrap();
-        user.assert_total_coins(sats(2000 - 1010)).await;
-        gateway.user.assert_total_coins(sats(1010)).await;
+        user.assert_total_notes(sats(2000 - 1010)).await;
+        gateway.user.assert_total_notes(sats(1010)).await;
 
         tokio::time::sleep(Duration::from_millis(500)).await; // FIXME need to wait for listfunds to update
         assert_eq!(lightning.amount_sent().await, sats(1000));
@@ -577,7 +577,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
             .fund_outgoing_ln_contract(invoice, rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(1).await; // send coins to LN contract
+        fed.run_consensus_epochs(1).await; // send notes to LN contract
 
         let contract_account = user
             .client
@@ -637,8 +637,8 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
 
         fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
             .await;
-        assert_eq!(user.total_coins().await, sats(0));
-        assert_eq!(gateway.user.total_coins().await, starting_balance);
+        assert_eq!(user.total_notes().await, sats(0));
+        assert_eq!(gateway.user.total_notes().await, starting_balance);
 
         // Create lightning invoice whose associated "offer" is accepted by federation consensus
         let invoice = tokio::join!(
@@ -665,9 +665,9 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         // Gateway funds have been escrowed
         gateway
             .user
-            .assert_total_coins(starting_balance - preimage_price)
+            .assert_total_notes(starting_balance - preimage_price)
             .await;
-        user.assert_total_coins(sats(0)).await;
+        user.assert_total_notes(sats(0)).await;
 
         // Gateway receives decrypted preimage
         let preimage = gateway
@@ -691,9 +691,9 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         // Ecash tokens have been transferred from gateway to user
         gateway
             .user
-            .assert_total_coins(starting_balance - preimage_price)
+            .assert_total_notes(starting_balance - preimage_price)
             .await;
-        user.assert_total_coins(preimage_price).await;
+        user.assert_total_notes(preimage_price).await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -707,8 +707,8 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
 
         fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
             .await;
-        assert_eq!(user.total_coins().await, sats(0));
-        assert_eq!(gateway.user.total_coins().await, starting_balance);
+        assert_eq!(user.total_notes().await, sats(0));
+        assert_eq!(gateway.user.total_notes().await, starting_balance);
 
         // Manually construct offer where sha256(preimage) != hash
         let kp = KeyPair::new(&secp(), &mut rng());
@@ -738,9 +738,9 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         // Gateway funds have been escrowed
         gateway
             .user
-            .assert_total_coins(starting_balance - payment_amount)
+            .assert_total_notes(starting_balance - payment_amount)
             .await;
-        user.assert_total_coins(sats(0)).await;
+        user.assert_total_notes(sats(0)).await;
 
         // User gets error when they try to claim gateway's escrowed ecash
         let response = user
@@ -758,8 +758,8 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
         // Gateway has clawed back their escrowed funds
-        gateway.user.assert_total_coins(starting_balance).await;
-        user.assert_total_coins(sats(0)).await;
+        gateway.user.assert_total_notes(starting_balance).await;
+        user.assert_total_notes(sats(0)).await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -776,7 +776,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
             .fund_outgoing_ln_contract(invoice.await, rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(1).await; // send coins to LN contract
+        fed.run_consensus_epochs(1).await; // send notes to LN contract
 
         // Create a random preimage that has no association to the contract invoice
         let rand_slice: [u8; 32] = rand::random();
@@ -788,7 +788,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
         assert!(response.is_err());
 
         bitcoin.mine_blocks(100); // create non-empty epoch
-        fed.run_consensus_epochs(1).await; // if valid would create contract to mint coins
+        fed.run_consensus_epochs(1).await; // if valid would create contract to mint notes
 
         let ln_items = fed
             .last_consensus_items()
@@ -817,7 +817,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()
             .fund_outgoing_ln_contract(invoice.await, rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(1).await; // send coins to LN contract
+        fed.run_consensus_epochs(1).await; // send notes to LN contract
 
         gateway
             .client
@@ -844,8 +844,8 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()
             .await
             .unwrap();
         fed.run_consensus_epochs(2).await;
-        user.client.fetch_coins(outpoint).await.unwrap();
-        assert_eq!(user.total_coins().await, sats(1010));
+        user.client.fetch_notes(outpoint).await.unwrap();
+        assert_eq!(user.total_notes().await, sats(1010));
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -859,7 +859,7 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
         fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
         let ecash = fed.spend_ecash(&user_send, sats(5000)).await;
 
-        // If epochs run before the reissue tx, then there won't be any coins to fetch
+        // If epochs run before the reissue tx, then there won't be any notes to fetch
         join_all(vec![
             Either::Left(async {
                 tokio::time::sleep(Duration::from_millis(500)).await;
@@ -871,7 +871,7 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
         ])
         .await;
 
-        user_receive.assert_total_coins(sats(5000)).await;
+        user_receive.assert_total_notes(sats(5000)).await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -897,7 +897,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
 
         user.client.peg_in(proof, tx, rng()).await.unwrap();
         fed.run_consensus_epochs(2).await; // peg-in + blind sign
-        user.assert_total_coins(sats(1000)).await;
+        user.assert_total_notes(sats(1000)).await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -907,7 +907,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
 #[should_panic]
 async fn audit_negative_balance_sheet_panics() {
     test(2, |fed, user, _, _, _| async move {
-        fed.mint_coins_for_user(&user, sats(2000)).await;
+        fed.mint_notes_for_user(&user, sats(2000)).await;
         fed.run_consensus_epochs(1).await;
     })
     .await
@@ -943,7 +943,7 @@ async fn can_have_federations_with_one_peer() -> Result<()> {
         bitcoin.mine_blocks(110);
         fed.run_consensus_epochs(1).await;
         fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
-        user.assert_total_coins(sats(1000)).await;
+        user.assert_total_notes(sats(1000)).await;
     })
     .await
 }
@@ -1024,8 +1024,8 @@ async fn ecash_can_be_recovered() -> Result<()> {
         let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
 
         fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
-        assert_eq!(user_send.total_coins().await, sats(5000));
-        assert_eq!(user_receive.total_coins().await, sats(0));
+        assert_eq!(user_send.total_notes().await, sats(5000));
+        assert_eq!(user_receive.total_notes().await, sats(0));
 
         user_send
             .client
@@ -1036,7 +1036,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
 
         user_send.client.mint_client().wipe_notes().await.unwrap();
 
-        user_send.assert_total_coins(sats(0)).await;
+        user_send.assert_total_notes(sats(0)).await;
 
         let mut task_group = TaskGroup::new();
 
@@ -1048,11 +1048,11 @@ async fn ecash_can_be_recovered() -> Result<()> {
             .unwrap()
             .unwrap();
 
-        assert_eq!(user_send.total_coins().await, sats(5000));
+        assert_eq!(user_send.total_notes().await, sats(5000));
 
         let ecash = fed.spend_ecash(&user_send, sats(3500)).await;
         user_receive.client.reissue(ecash, rng()).await.unwrap();
-        fed.run_consensus_epochs(2).await; // process transaction + sign new coins
+        fed.run_consensus_epochs(2).await; // process transaction + sign new notes
 
         user_send
             .client
@@ -1061,7 +1061,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(user_send.total_coins().await, sats(1500));
+        assert_eq!(user_send.total_notes().await, sats(1500));
 
         task_group.join_all(None).await.unwrap();
     })

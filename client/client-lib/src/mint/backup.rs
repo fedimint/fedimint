@@ -76,7 +76,7 @@ impl MintClient {
         Self::wipe_notes_static(&mut dbtx).await?;
 
         for (amount, note) in snapshot.spendable_notes {
-            let key = CoinKey {
+            let key = NoteKey {
                 amount,
                 nonce: note.note.0,
             };
@@ -110,7 +110,7 @@ impl MintClient {
     ///
     /// Useful for cleaning previous data before restoring data recovered from backup.
     async fn wipe_notes_static(dbtx: &mut DatabaseTransaction<'_>) -> Result<()> {
-        dbtx.remove_by_prefix(&CoinKeyPrefix).await?;
+        dbtx.remove_by_prefix(&NoteKeyPrefix).await?;
         dbtx.remove_by_prefix(&OutputFinalizationKeyPrefix).await?;
         dbtx.remove_by_prefix(&NextECashNoteIndexKeyPrefix).await?;
         Ok(())
@@ -502,7 +502,7 @@ impl EcashRecoveryTracker {
                         finalization_key.0,
                         (
                             issuance_requests
-                                .coins
+                                .notes
                                 .iter_items()
                                 .map(|(amount, iss_req)| {
                                     (amount, (iss_req.recover_blind_nonce().0, Some(*iss_req)))
@@ -566,7 +566,7 @@ impl EcashRecoveryTracker {
 
     pub fn handle_output(&mut self, out_point: OutPoint, output: &MintOutput) {
         // There is nothing preventing other users from creating valid transactions
-        // mining coins to our own blind nonce, possibly even racing with us.
+        // mining notes to our own blind nonce, possibly even racing with us.
         // Including amount in blind nonce derivation helps us avoid accidentally using
         // a nonce mined for as smaller amount, but it doesn't eliminate completely
         // the possibility that we might use a note mined in a different transaction,
@@ -856,7 +856,7 @@ impl EcashRecoveryTracker {
                     (
                         out_point,
                         NoteIssuanceRequests {
-                            coins: TieredMulti::from_iter(data.0.into_iter_items().filter_map(
+                            notes: TieredMulti::from_iter(data.0.into_iter_items().filter_map(
                                 |(amount, (_bn, opt_note_iss_req))| {
                                     opt_note_iss_req.map(|iss_req| (amount, iss_req))
                                 },

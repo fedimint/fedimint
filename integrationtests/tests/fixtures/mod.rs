@@ -629,17 +629,17 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
             .collect::<Vec<Amount>>()
     }
 
-    /// Returns sum total of all coins
-    pub async fn total_coins(&self) -> Amount {
+    /// Returns sum total of all notes
+    pub async fn total_notes(&self) -> Amount {
         self.client.notes().await.total_amount()
     }
 
-    pub async fn assert_total_coins(&self, amount: Amount) {
-        self.client.fetch_all_coins().await;
-        assert_eq!(self.total_coins().await, amount);
+    pub async fn assert_total_notes(&self, amount: Amount) {
+        self.client.fetch_all_notes().await;
+        assert_eq!(self.total_notes().await, amount);
     }
     pub async fn assert_note_amounts(&self, amounts: Vec<Amount>) {
-        self.client.fetch_all_coins().await;
+        self.client.fetch_all_notes().await;
         assert_eq!(self.note_amounts().await, amounts);
     }
 }
@@ -748,13 +748,13 @@ impl FederationTest {
         user: &UserTest<C>,
         amount: Amount,
     ) -> TieredMulti<SpendableNote> {
-        let coins = user
+        let notes = user
             .client
             .mint_client()
             .select_notes(amount)
             .await
             .unwrap();
-        if coins.total_amount() == amount {
+        if notes.total_amount() == amount {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
         }
 
@@ -766,7 +766,7 @@ impl FederationTest {
         .unwrap()
     }
 
-    /// Mines a UTXO then mints coins for user, assuring that the balance sheet of the federation
+    /// Mines a UTXO then mints notes for user, assuring that the balance sheet of the federation
     /// nets out to zero.
     pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone>(
         &self,
@@ -777,19 +777,19 @@ impl FederationTest {
         assert_eq!(amount.msats % 1000, 0);
         let sats = bitcoin::Amount::from_sat(amount.msats / 1000);
         self.mine_spendable_utxo(user, bitcoin, sats).await;
-        self.mint_coins_for_user(user, amount).await;
+        self.mint_notes_for_user(user, amount).await;
     }
 
-    /// Inserts coins directly into the databases of federation nodes, runs consensus to sign them
-    /// then fetches the coins for the user client.
-    pub async fn mint_coins_for_user<C: AsRef<ClientConfig> + Clone>(
+    /// Inserts notes directly into the databases of federation nodes, runs consensus to sign them
+    /// then fetches the notes for the user client.
+    pub async fn mint_notes_for_user<C: AsRef<ClientConfig> + Clone>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
     ) {
-        self.database_add_coins_for_user(user, amount).await;
+        self.database_add_notes_for_user(user, amount).await;
         self.run_consensus_epochs(1).await;
-        user.client.fetch_all_coins().await;
+        user.client.fetch_all_notes().await;
     }
 
     /// Mines a UTXO owned by the federation.
@@ -852,8 +852,8 @@ impl FederationTest {
         true
     }
 
-    /// Inserts coins directly into the databases of federation nodes
-    pub async fn database_add_coins_for_user<C: AsRef<ClientConfig> + Clone>(
+    /// Inserts notes directly into the databases of federation nodes
+    pub async fn database_add_notes_for_user<C: AsRef<ClientConfig> + Clone>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
@@ -865,7 +865,7 @@ impl FederationTest {
         };
 
         user.client
-            .receive_coins(amount, |tokens| async move {
+            .receive_notes(amount, |tokens| async move {
                 for server in &self.servers {
                     let svr = server.borrow_mut();
                     let mut dbtx = svr.database.begin_transaction().await;

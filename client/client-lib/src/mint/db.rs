@@ -10,9 +10,9 @@ use crate::mint::{NoteIssuanceRequests, SpendableNote};
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    Coin = 0x20,
+    Note = 0x20,
     OutputFinalizationData = 0x21,
-    PendingCoins = 0x27,
+    PendingNotes = 0x27,
     NextECashNoteIndex = 0x2a,
     NotesPerDenomination = 0x2b,
 }
@@ -24,41 +24,41 @@ impl std::fmt::Display for DbKeyPrefix {
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-pub struct CoinKey {
+pub struct NoteKey {
     pub amount: Amount,
     pub nonce: Nonce,
 }
 
-impl DatabaseKeyPrefixConst for CoinKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::Coin as u8;
+impl DatabaseKeyPrefixConst for NoteKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::Note as u8;
     type Key = Self;
     type Value = SpendableNote;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
-pub struct CoinKeyPrefix;
+pub struct NoteKeyPrefix;
 
-impl DatabaseKeyPrefixConst for CoinKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::Coin as u8;
-    type Key = CoinKey;
+impl DatabaseKeyPrefixConst for NoteKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::Note as u8;
+    type Key = NoteKey;
     type Value = SpendableNote;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-pub struct PendingCoinsKey(pub TransactionId);
+pub struct PendingNotesKey(pub TransactionId);
 
-impl DatabaseKeyPrefixConst for PendingCoinsKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::PendingCoins as u8;
+impl DatabaseKeyPrefixConst for PendingNotesKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::PendingNotes as u8;
     type Key = Self;
     type Value = TieredMulti<SpendableNote>;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
-pub struct PendingCoinsKeyPrefix;
+pub struct PendingNotesKeyPrefix;
 
-impl DatabaseKeyPrefixConst for PendingCoinsKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::PendingCoins as u8;
-    type Key = PendingCoinsKey;
+impl DatabaseKeyPrefixConst for PendingNotesKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::PendingNotes as u8;
+    type Key = PendingNotesKey;
     type Value = TieredMulti<SpendableNote>;
 }
 

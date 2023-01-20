@@ -85,7 +85,7 @@ use crate::ln::db::{
 };
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
-use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
+use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
 use crate::mint::MintClientError;
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
@@ -357,7 +357,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// they can no longer be potentially double-spent.
     ///
     /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
-    /// easily poll the transaction status using [`MintClient::fetch_coins`] until it returns
+    /// easily poll the transaction status using [`MintClient::fetch_notes`] until it returns
     /// `Ok(())`, indicating we received our newly issued e-cash tokens.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
@@ -367,7 +367,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         // Ensure we have the notes in the DB (in case we received them from another user)
         let mut dbtx = self.context.db.begin_transaction().await;
         for (amount, note) in notes.clone() {
-            let key = CoinKey {
+            let key = NoteKey {
                 amount,
                 nonce: note.note.0,
             };
@@ -428,17 +428,17 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Receive e-cash directly from another user when online (vs. offline transfer)
     ///
-    /// Generates coins that another user will pay for and let us know the OutPoint in `create_tx`
+    /// Generates notes that another user will pay for and let us know the OutPoint in `create_tx`
     /// Payer can use the `pay_to_blind_nonces` function
     /// Allows transfer of e-cash without risk of double-spend or not having exact change
-    pub async fn receive_coins<F, Fut>(&self, amount: Amount, create_tx: F)
+    pub async fn receive_notes<F, Fut>(&self, amount: Amount, create_tx: F)
     where
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
     {
         let mut dbtx = self.context.db.begin_transaction().await;
         self.mint_client()
-            .receive_coins(amount, &mut dbtx, create_tx)
+            .receive_notes(amount, &mut dbtx, create_tx)
             .await;
         dbtx.commit_tx().await.expect("DB Error");
     }
@@ -531,7 +531,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .await;
 
             self.context.api.submit_transaction(tx).await?;
-            self.fetch_all_coins().await;
+            self.fetch_all_notes().await;
             self.mint_client().select_notes(amount).await?
         };
         assert_eq!(
@@ -541,10 +541,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         );
 
         let mut dbtx = self.context.db.begin_transaction().await;
-        for (amount, coin) in final_notes.iter_items() {
-            dbtx.remove_entry(&CoinKey {
+        for (amount, note) in final_notes.iter_items() {
+            dbtx.remove_entry(&NoteKey {
                 amount,
-                nonce: coin.note.0,
+                nonce: note.note.0,
             })
             .await
             .expect("DB Error");
@@ -557,9 +557,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
-    pub async fn fetch_coins<'a>(&self, outpoint: OutPoint) -> Result<()> {
+    pub async fn fetch_notes<'a>(&self, outpoint: OutPoint) -> Result<()> {
         let mut dbtx = self.context.db.begin_transaction().await;
-        self.mint_client().fetch_coins(&mut dbtx, outpoint).await?;
+        self.mint_client().fetch_notes(&mut dbtx, outpoint).await?;
         dbtx.commit_tx().await.expect("DB Error");
         Ok(())
     }
@@ -569,7 +569,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub async fn reissue_pending_notes<R: RngCore + CryptoRng>(&self, rng: R) -> Result<OutPoint> {
         let mut dbtx = self.context.db.begin_transaction().await;
         let pending = dbtx
-            .find_by_prefix(&PendingCoinsKeyPrefix)
+            .find_by_prefix(&PendingNotesKeyPrefix)
             .await
             .map(|res| res.expect("DB error"));
 
@@ -616,9 +616,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         }
     }
 
-    pub async fn fetch_all_coins<'a>(&self) -> Vec<Result<OutPoint>> {
+    pub async fn fetch_all_notes<'a>(&self) -> Vec<Result<OutPoint>> {
         self.mint_client()
-            .fetch_all_coins()
+            .fetch_all_notes()
             .await
             .into_iter()
             .map(|res| res.map_err(|e| e.into()))
@@ -1260,7 +1260,7 @@ impl Client<GatewayClientConfig> {
         Ok(())
     }
 
-    pub async fn list_fetchable_coins(&self) -> Vec<OutPoint> {
+    pub async fn list_fetchable_notes(&self) -> Vec<OutPoint> {
         self.mint_client()
             .list_active_issuances()
             .await

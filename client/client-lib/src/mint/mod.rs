@@ -4,7 +4,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
+use db::{NoteKey, NoteKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -25,7 +25,7 @@ use thiserror::Error;
 use tracing::{debug, trace, warn};
 
 use crate::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
-use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingCoinsKey};
+use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
 use crate::utils::ClientContext;
 use crate::{ChildId, DerivableSecret, MintDecoder};
 
@@ -92,15 +92,15 @@ impl fmt::Display for NoteIndex {
         self.0.fmt(f)
     }
 }
-/// Single [`Note`] issuance request to the mint.
+/// Single [`Note`] issuance request to the mint.f
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
 /// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequest {
-    /// Spend key from which the coin nonce (corresponding public key) is derived
+    /// Spend key from which the note nonce (corresponding public key) is derived
     spend_key: KeyPair,
-    /// Key to unblind the blind signature supplied by the mint for this coin
+    /// Key to unblind the blind signature supplied by the mint for this note
     blinding_key: BlindingKey,
 }
 
@@ -114,7 +114,7 @@ impl NoteIssuanceRequest {
         &self,
         bsig: BlindedSignature,
         mint_pub_key: AggregatePublicKey,
-    ) -> std::result::Result<SpendableNote, CoinFinalizationError> {
+    ) -> std::result::Result<SpendableNote, NoteFinalizationError> {
         let sig = unblind_signature(self.blinding_key, bsig);
         let note = Note(self.nonce(), sig);
         if note.verify(mint_pub_key) {
@@ -125,7 +125,7 @@ impl NoteIssuanceRequest {
 
             Ok(spendable_note)
         } else {
-            Err(CoinFinalizationError::InvalidSignature)
+            Err(NoteFinalizationError::InvalidSignature)
         }
     }
 }
@@ -135,8 +135,8 @@ impl NoteIssuanceRequest {
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequests {
-    /// Finalization data for all coin outputs in this request
-    coins: TieredMulti<NoteIssuanceRequest>,
+    /// Finalization data for all note outputs in this request
+    notes: TieredMulti<NoteIssuanceRequest>,
 }
 
 /// A [`Note`] with associated secret key that allows to proof ownership (spend it)
@@ -188,7 +188,7 @@ impl MintClient {
         for input in &tx.inputs {
             if let Input::Mint(MintInput(notes)) = input {
                 for (amount, note) in notes.clone() {
-                    let key = CoinKey {
+                    let key = NoteKey {
                         amount,
                         nonce: note.0,
                     };
@@ -221,19 +221,19 @@ impl MintClient {
         // move ecash to pending state, awaiting a transaction
         if !input_ecash.is_empty() {
             let pending = TieredMulti::from_iter(input_ecash.into_iter());
-            dbtx.insert_entry(&PendingCoinsKey(txid), &pending)
+            dbtx.insert_entry(&PendingNotesKey(txid), &pending)
                 .await
                 .expect("DB Error");
         }
 
         // write ecash outputs to db to await for tx success to be fetched later
-        for (out_idx, coins) in change_outputs.iter() {
+        for (out_idx, notes) in change_outputs.iter() {
             dbtx.insert_new_entry(
                 &OutputFinalizationKey(OutPoint {
                     txid,
                     out_idx: *out_idx as u64,
                 }),
-                &coins.clone(),
+                &notes.clone(),
             )
             .await
             .expect("DB Error");
@@ -279,17 +279,17 @@ impl MintClient {
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
         }
-        let (coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
+        let (note_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
             amount_requests.into_iter().unzip();
 
         debug!(
             %amount,
-            coins = %sig_req.0.count_items(),
+            notes = %sig_req.0.count_items(),
             tiers = ?sig_req.0.iter_tiers().collect::<Vec<_>>(),
             "Generated issuance request"
         );
 
-        (coin_finalization_data, sig_req.0)
+        (note_finalization_data, sig_req.0)
     }
 
     pub async fn select_input(&self, amount: Amount) -> Result<(Vec<KeyPair>, Input)> {
@@ -306,7 +306,7 @@ impl MintClient {
                 if &spend_pub_key == note.note.spend_key() {
                     Ok((note.spend_key, (amt, note.note)))
                 } else {
-                    Err(MintClientError::ReceivedUspendableCoin)
+                    Err(MintClientError::ReceivedUspendableNote)
                 }
             })
             .collect::<Result<Vec<_>>>()?;
@@ -317,11 +317,11 @@ impl MintClient {
     pub async fn notes(&self) -> TieredMulti<SpendableNote> {
         self.start_dbtx()
             .await
-            .find_by_prefix(&CoinKeyPrefix)
+            .find_by_prefix(&NoteKeyPrefix)
             .await
             .map(|res| {
-                let (key, spendable_coin) = res.expect("DB error");
-                (key.amount, spendable_coin)
+                let (key, spendable_note) = res.expect("DB error");
+                (key.amount, spendable_note)
             })
             .collect()
     }
@@ -331,11 +331,11 @@ impl MintClient {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> TieredMulti<SpendableNote> {
-        dbtx.find_by_prefix(&CoinKeyPrefix)
+        dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
             .map(|res| {
-                let (key, spendable_coin) = res.expect("DB error");
-                (key.amount, spendable_coin)
+                let (key, spendable_note) = res.expect("DB error");
+                (key.amount, spendable_note)
             })
             .collect()
     }
@@ -401,7 +401,7 @@ impl MintClient {
         Ok(selected_notes)
     }
 
-    pub async fn receive_coins<'a, F, Fut>(
+    pub async fn receive_notes<'a, F, Fut>(
         &self,
         amount: Amount,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -411,16 +411,16 @@ impl MintClient {
         Fut: futures::Future<Output = OutPoint>,
     {
         let notes_per_denomination = self.notes_per_denomination(dbtx).await;
-        let (finalization, coins) = self
+        let (finalization, notes) = self
             .create_ecash(amount, notes_per_denomination, dbtx)
             .await;
-        let out_point = create_tx(coins).await;
+        let out_point = create_tx(notes).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
             .await
             .expect("DB Error");
     }
 
-    pub async fn fetch_coins<'a>(
+    pub async fn fetch_notes<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         outpoint: OutPoint,
@@ -434,7 +434,7 @@ impl MintClient {
             .await
             .expect("DB error")
             .ok_or(MintClientError::FinalizationError(
-                CoinFinalizationError::UnknownIssuance,
+                NoteFinalizationError::UnknownIssuance,
             ))?;
 
         let bsig = self
@@ -446,14 +446,14 @@ impl MintClient {
             .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
 
-        let coins = issuance.finalize(bsig, &self.config.tbs_pks)?;
+        let notes = issuance.finalize(bsig, &self.config.tbs_pks)?;
 
-        for (amount, coin) in coins.into_iter() {
-            let key = CoinKey {
+        for (amount, note) in notes.into_iter() {
+            let key = NoteKey {
                 amount,
-                nonce: coin.note.0,
+                nonce: note.note.0,
             };
-            let value = coin;
+            let value = note;
             dbtx.insert_new_entry(&key, &value).await.expect("DB Error");
         }
         dbtx.remove_entry(&OutputFinalizationKey(outpoint))
@@ -477,7 +477,7 @@ impl MintClient {
             .collect()
     }
 
-    pub async fn fetch_all_coins(&self) -> Vec<Result<OutPoint>> {
+    pub async fn fetch_all_notes(&self) -> Vec<Result<OutPoint>> {
         let active_issuances = self.list_active_issuances().await;
         if active_issuances.is_empty() {
             return Vec::new();
@@ -487,7 +487,7 @@ impl MintClient {
         for (out_point, _) in active_issuances.into_iter() {
             loop {
                 let mut dbtx = self.context.db.begin_transaction().await;
-                match self.fetch_coins(&mut dbtx, out_point).await {
+                match self.fetch_notes(&mut dbtx, out_point).await {
                     Ok(_) => {
                         dbtx.commit_tx().await.expect("DB Error");
                         results.push(Ok(out_point));
@@ -513,33 +513,33 @@ impl MintClient {
 
 impl Extend<(Amount, NoteIssuanceRequest)> for NoteIssuanceRequests {
     fn extend<T: IntoIterator<Item = (Amount, NoteIssuanceRequest)>>(&mut self, iter: T) {
-        self.coins.extend(iter)
+        self.notes.extend(iter)
     }
 }
 
 impl NoteIssuanceRequests {
     /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from the mint containing the blind
-    /// signatures for all coins in this `IssuanceRequest`. It also takes the mint's
+    /// signatures for all notes in this `IssuanceRequest`. It also takes the mint's
     /// [`AggregatePublicKey`] to validate the supplied blind signatures.
     pub fn finalize(
         &self,
         bsigs: MintOutputBlindSignatures,
         mint_pub_key: &Tiered<AggregatePublicKey>,
-    ) -> std::result::Result<TieredMulti<SpendableNote>, CoinFinalizationError> {
-        if !self.coins.structural_eq(&bsigs.0) {
-            return Err(CoinFinalizationError::WrongMintAnswer);
+    ) -> std::result::Result<TieredMulti<SpendableNote>, NoteFinalizationError> {
+        if !self.notes.structural_eq(&bsigs.0) {
+            return Err(NoteFinalizationError::WrongMintAnswer);
         }
 
-        self.coins
+        self.notes
             .iter_items()
             .zip(bsigs.0)
             .enumerate()
-            .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
+            .map(|(idx, ((amt, note_req), (_amt, bsig)))| {
                 Ok((
                     amt,
-                    match coin_req.finalize(bsig, *mint_pub_key.tier(&amt)?) {
-                        Err(CoinFinalizationError::InvalidSignature) => {
-                            Err(CoinFinalizationError::InvalidSignatureAtIdx(idx))
+                    match note_req.finalize(bsig, *mint_pub_key.tier(&amt)?) {
+                        Err(NoteFinalizationError::InvalidSignature) => {
+                            Err(NoteFinalizationError::InvalidSignatureAtIdx(idx))
                         }
                         other => other,
                     }?,
@@ -548,17 +548,17 @@ impl NoteIssuanceRequests {
             .collect()
     }
 
-    pub fn coin_count(&self) -> usize {
-        self.coins.count_items()
+    pub fn note_count(&self) -> usize {
+        self.notes.count_items()
     }
 
-    pub fn coin_amount(&self) -> Amount {
-        self.coins.total_amount()
+    pub fn note_amount(&self) -> Amount {
+        self.notes.total_amount()
     }
 }
 
 impl NoteIssuanceRequest {
-    /// Generate a request session for a single coin and returns it plus the corresponding blinded
+    /// Generate a request session for a single note and returns it plus the corresponding blinded
     /// message
     fn new<C>(ctx: &Secp256k1<C>, secret: DerivableSecret) -> (NoteIssuanceRequest, BlindNonce)
     where
@@ -585,7 +585,7 @@ impl NoteIssuanceRequest {
 type Result<T> = std::result::Result<T, MintClientError>;
 
 #[derive(Error, Debug)]
-pub enum CoinFinalizationError {
+pub enum NoteFinalizationError {
     #[error("The returned answer does not fit the request")]
     WrongMintAnswer,
     #[error("The blind signature")]
@@ -605,7 +605,7 @@ pub enum MintClientError {
     #[error("Error querying federation: {0}")]
     ApiError(#[from] MemberError),
     #[error("Could not finalize issuance request: {0}")]
-    FinalizationError(#[from] CoinFinalizationError),
+    FinalizationError(#[from] NoteFinalizationError),
     #[error("Insufficient balance. Amount requested={0} Mint balance={1}")]
     InsufficientBalance(Amount, Amount),
     #[error("The transaction outcome received from the mint did not contain a result for output {0} yet")]
@@ -616,8 +616,8 @@ pub enum MintClientError {
     InvalidOutcomeWrongStructure(OutPoint),
     #[error("The transaction outcome returned by the mint has an invalid type (output {0})")]
     InvalidOutcomeType(OutPoint),
-    #[error("One of the coins meant to be spent is unspendable")]
-    ReceivedUspendableCoin,
+    #[error("One of the notes meant to be spent is unspendable")]
+    ReceivedUspendableNote,
 }
 
 impl MintClientError {
@@ -631,9 +631,9 @@ impl MintClientError {
     }
 }
 
-impl From<InvalidAmountTierError> for CoinFinalizationError {
+impl From<InvalidAmountTierError> for NoteFinalizationError {
     fn from(e: InvalidAmountTierError) -> Self {
-        CoinFinalizationError::InvalidAmountTier(e.0)
+        NoteFinalizationError::InvalidAmountTier(e.0)
     }
 }
 
@@ -752,7 +752,7 @@ mod tests {
 
         let mut dbtx = client_db.begin_transaction().await;
         client
-            .receive_coins(amt, &mut dbtx, |output| async {
+            .receive_notes(amt, &mut dbtx, |output| async {
                 // Agree on output
                 let mut fed = block_on(fed.lock());
                 block_on(fed.consensus_round(&[], &[(out_point, MintOutput(output))]));
@@ -764,7 +764,7 @@ mod tests {
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
-        client.fetch_all_coins().await;
+        client.fetch_all_notes().await;
     }
 
     #[test_log::test(tokio::test)]
@@ -807,8 +807,8 @@ mod tests {
         let secp = &client.context.secp;
         let _tbs_pks = &client.config.tbs_pks;
         let rng = rand::rngs::OsRng;
-        let coins = client.select_notes(SPEND_AMOUNT).await.unwrap();
-        let (spend_keys, ecash_input) = MintClient::ecash_input(coins.clone()).unwrap();
+        let notes = client.select_notes(SPEND_AMOUNT).await.unwrap();
+        let (spend_keys, ecash_input) = MintClient::ecash_input(notes.clone()).unwrap();
 
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
         let client = &client;
@@ -843,9 +843,9 @@ mod tests {
         // We can exactly spend the remainder
         let dbtx = client.context.db.begin_transaction().await;
         let mut builder = TransactionBuilder::default();
-        let coins = client.select_notes(SPEND_AMOUNT).await.unwrap();
+        let notes = client.select_notes(SPEND_AMOUNT).await.unwrap();
         let rng = rand::rngs::OsRng;
-        let (spend_keys, ecash_input) = MintClient::ecash_input(coins).unwrap();
+        let (spend_keys, ecash_input) = MintClient::ecash_input(notes).unwrap();
 
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
         builder
