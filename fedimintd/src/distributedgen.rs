@@ -2,12 +2,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use anyhow::ensure;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
-use fedimint_api::task::{sleep, TaskGroup};
+use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, PeerId};
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
@@ -101,12 +100,6 @@ pub async fn run_dkg(
         task_group,
     )
     .await?;
-
-    // When testing on localhost, it's possible to get
-    // one peer that finished dkg, while other didn't.
-    // TODO: We should flush the outgoing peer buffers instead
-    // to make sure other peers received our messages.
-    sleep(Duration::from_millis(1000)).await;
 
     drop(connections);
 
