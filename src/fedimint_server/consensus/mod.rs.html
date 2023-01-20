@@ -693,6 +693,27 @@
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -870,7 +891,12 @@
             <span class="kw">let </span>cache = module.build_verification_cache(<span class="kw-2">&amp;</span>[input.clone()]);
             <span class="kw">let </span>interconnect = <span class="self">self</span>.build_interconnect();
             <span class="kw">let </span>meta = module
-                .validate_input(<span class="kw-2">&amp;</span>interconnect, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>cache, input)
+                .validate_input(
+                    <span class="kw-2">&amp;</span>interconnect,
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(input.module_instance_id()),
+                    <span class="kw-2">&amp;</span>cache,
+                    input,
+                )
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
 
@@ -883,7 +909,10 @@
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
                 .get_expect(output.module_instance_id())
-                .validate_output(<span class="kw-2">&amp;mut </span>dbtx, output)
+                .validate_output(
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
+                    output,
+                )
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
             funding_verifier.add_output(amount);
@@ -995,7 +1024,7 @@
         <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
             <span class="self">self</span>.modules
                 .get_expect(module_key)
-                .begin_consensus_epoch(dbtx, module_cis)
+                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_key), module_cis)
                 .<span class="kw">await</span>;
         }
     }
@@ -1075,8 +1104,10 @@
             </span>.save_epoch_history(outcome.clone(), dbtx, <span class="kw-2">&amp;mut </span>drop_peers, rejected_txs)
             .<span class="kw">await</span>;
 
-        <span class="kw">for </span>(<span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
-            <span class="kw">let </span>module_drop_peers = module.end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, dbtx).<span class="kw">await</span>;
+        <span class="kw">for </span>(module_key, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+            <span class="kw">let </span>module_drop_peers = module
+                .end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_key))
+                .<span class="kw">await</span>;
             drop_peers.extend(module_drop_peers);
         }
 
@@ -1163,10 +1194,11 @@
         <span class="kw">let </span>proposal_futures = <span class="self">self
             </span>.modules
             .iter_modules()
-            .map(|(<span class="kw">_</span>, module)| {
-                Box::pin(<span class="kw">async </span>{
+            .map(|(module_instance_id, module)| {
+                Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
-                    module.await_consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await
+                    <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(module_instance_id);
+                    module.await_consensus_proposal(<span class="kw-2">&amp;mut </span>module_dbtx).<span class="kw">await
                 </span>})
             })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -1198,7 +1230,7 @@
         <span class="kw">for </span>(instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             items.extend(
                 module
-                    .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx, instance_id)
+                    .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance_id), instance_id)
                     .<span class="kw">await
                     </span>.into_iter()
                     .map(ConsensusItem::Module),
@@ -1232,7 +1264,7 @@
                 .get_expect(input.module_instance_id())
                 .apply_input(
                     <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
-                    dbtx,
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(input.module_instance_id()),
                     input,
                     caches.get_cache(input.module_instance_id()),
                 )
@@ -1251,7 +1283,11 @@
             <span class="kw">let </span>amount = <span class="self">self
                 </span>.modules
                 .get_expect(output.module_instance_id())
-                .apply_output(dbtx, <span class="kw-2">&amp;</span>output, out_point)
+                .apply_output(
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
+                    <span class="kw-2">&amp;</span>output,
+                    out_point,
+                )
                 .<span class="kw">await
                 </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
             funding_verifier.add_output(amount);
@@ -1283,7 +1319,11 @@
                 <span class="kw">let </span>outcome = <span class="self">self
                     </span>.modules
                     .get_expect(output.module_instance_id())
-                    .output_status(<span class="kw-2">&amp;mut </span>dbtx, outpoint, output.module_instance_id())
+                    .output_status(
+                        <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
+                        outpoint,
+                        output.module_instance_id(),
+                    )
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
                 outputs.push((<span class="kw-2">&amp;</span>outcome).into())
@@ -1334,8 +1374,10 @@
     <span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
-        <span class="kw">for </span>(<span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
-            module.audit(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>audit).<span class="kw">await
+        <span class="kw">for </span>(module_instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+            module
+                .audit(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id), <span class="kw-2">&amp;mut </span>audit)
+                .<span class="kw">await
         </span>}
         audit
     }

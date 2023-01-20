@@ -1346,7 +1346,6 @@
 <a href="#1346" id="1346">1346</a>
 <a href="#1347" id="1347">1347</a>
 <a href="#1348" id="1348">1348</a>
-<a href="#1349" id="1349">1349</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -2067,8 +2066,7 @@
                 <span class="string">&quot;/backup&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, dbtx, request: SignedBackupRequest| -&gt; () {
                     module
-                        .handle_backup_request(<span class="kw-2">&amp;mut </span>dbtx, request).<span class="kw">await</span><span class="question-mark">?</span>;
-                    dbtx.commit_tx().<span class="kw">await</span>.map_err(|e| ApiError::new(<span class="number">1000</span>, <span class="macro">format!</span>(<span class="string">&quot;Transaction error: {}&quot;</span>, e)))<span class="question-mark">?</span>;
+                        .handle_backup_request(dbtx, request).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(())
                 }
             },
@@ -2076,7 +2074,7 @@
                 <span class="string">&quot;/recover&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
                     <span class="prelude-val">Ok</span>(module
-                        .handle_recover_request(<span class="kw-2">&amp;mut </span>dbtx, id).<span class="kw">await</span>)
+                        .handle_recover_request(dbtx, id).<span class="kw">await</span>)
                 }
             },
         ]

@@ -693,12 +693,16 @@
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>docopt::Docopt;
 <span class="kw">use </span>erased_serde::Serialize;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::Encodable;
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_ln::{db <span class="kw">as </span>LightningRange, LightningGen};
 <span class="kw">use </span>fedimint_mint::{db <span class="kw">as </span>MintRange, MintGen};
@@ -890,6 +894,8 @@
                         consensus.insert(<span class="string">&quot;LastEpoch&quot;</span>.to_string(), Box::new(last_epoch));
                     }
                 }
+                <span class="comment">// Module is a global prefix for all module data
+                </span>ConsensusRange::DbKeyPrefix::Module =&gt; {}
             }
         }
 
@@ -1375,12 +1381,12 @@ Options:
         DynModuleGen::from(LightningGen),
     ]);
 
-    <span class="kw">let </span>decoders = Default::default(); <span class="comment">// TODO: read config and use it to create decoders
+    <span class="kw">let </span>decoders: ModuleDecoderRegistry = Default::default(); <span class="comment">// TODO: read config and use it to create decoders
 
     </span><span class="kw">let </span>serialized: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
     <span class="kw">let </span><span class="kw-2">mut </span>dbdump = DatabaseDump {
         serialized,
-        read_only: DatabaseTransaction::new(Box::new(read_only), <span class="kw-2">&amp;</span>decoders),
+        read_only: DatabaseTransaction::new(Box::new(read_only), decoders),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == <span class="string">&quot;All&quot;</span>,

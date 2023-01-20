@@ -227,6 +227,7 @@
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -338,7 +339,7 @@
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                </span>AssertUnwindSafe((handler)(fedimint, dbtx, params))
+                </span>AssertUnwindSafe((handler)(fedimint, dbtx, params, module_instance_id))
                     .catch_unwind()
                     .<span class="kw">await
                     </span>.map_err(|<span class="kw">_</span>| {
@@ -387,6 +388,7 @@
                     fedimint.modules.get_expect(module_instance),
                     dbtx,
                     params,
+                    <span class="prelude-val">Some</span>(module_instance),
                 ))
                 .catch_unwind()
                 .<span class="kw">await

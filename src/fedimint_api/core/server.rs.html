@@ -407,6 +407,7 @@
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -804,12 +805,13 @@
                 handler: Box::new(
                     <span class="kw">move </span>|module: <span class="kw-2">&amp;</span>DynServerModule,
                           dbtx: fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-                          value: serde_json::Value| {
+                          value: serde_json::Value,
+                          module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;| {
                         <span class="kw">let </span>typed_module = module
                             .as_any()
                             .downcast_ref::&lt;T&gt;()
                             .expect(<span class="string">&quot;the dispatcher should always call with the right module&quot;</span>);
-                        Box::pin(handler(typed_module, dbtx, value))
+                        Box::pin(handler(typed_module, dbtx, value, module_instance_id))
                     },
                 ),
             })

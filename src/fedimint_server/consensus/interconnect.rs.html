@@ -37,6 +37,7 @@
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
 <a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -69,6 +70,7 @@
                     module,
                     <span class="self">self</span>.fedimint.database_transaction().<span class="kw">await</span>,
                     data,
+                    <span class="prelude-val">Some</span>(module_id),
                 )
                 .<span class="kw">await</span>;
             }

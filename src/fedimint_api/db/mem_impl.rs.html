@@ -231,6 +231,11 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
@@ -462,6 +467,11 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_by_prefix() {
         fedimint_api::db::verify_remove_by_prefix(database()).<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>test_module_dbtx() {
+        fedimint_api::db::verify_module_prefix(database()).<span class="kw">await</span>;
     }
 }
 </code></pre></div>

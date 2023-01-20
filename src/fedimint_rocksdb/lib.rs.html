@@ -260,6 +260,12 @@
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
@@ -520,6 +526,12 @@
             <span class="string">&quot;fcb-rocksdb-test-remove-by-prefix&quot;</span>,
         ))
         .<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>test_module_dbtx() {
+        fedimint_api::db::verify_module_prefix(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-module-prefix&quot;</span>))
+            .<span class="kw">await</span>;
     }
 }
 </code></pre></div>

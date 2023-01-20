@@ -125,9 +125,10 @@
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
-<span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
+<span class="kw">use </span>fedimint_api::db::{DatabaseKeyPrefixConst, MODULE_GLOBAL_PREFIX};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
@@ -146,6 +147,7 @@
     RejectedTransaction = <span class="number">0x04</span>,
     EpochHistory = <span class="number">0x05</span>,
     LastEpoch = <span class="number">0x06</span>,
+    Module = MODULE_GLOBAL_PREFIX,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {

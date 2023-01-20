@@ -1628,7 +1628,7 @@
             .<span class="kw">await
             </span>.members
             .iter()
-            .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
+            .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
             .collect();
         FederationApiFaker::new(fed, members).with(
             <span class="string">&quot;/fetch_transaction&quot;</span>,

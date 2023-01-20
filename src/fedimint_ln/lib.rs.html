@@ -1015,7 +1015,6 @@
 <a href="#1015" id="1015">1015</a>
 <a href="#1016" id="1016">1016</a>
 <a href="#1017" id="1017">1017</a>
-<a href="#1018" id="1018">1018</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1876,7 +1875,7 @@
                 <span class="string">&quot;/account&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, dbtx, contract_id: ContractId| -&gt; ContractAccount {
                     module
-                        .get_contract_account(<span class="kw-2">&amp;mut </span>dbtx, contract_id)
+                        .get_contract_account(dbtx, contract_id)
                         .<span class="kw">await
                         </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
                 }
@@ -1884,14 +1883,14 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/offers&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, dbtx, _params: ()| -&gt; Vec&lt;IncomingContractOffer&gt; {
-                    <span class="prelude-val">Ok</span>(module.get_offers(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>)
+                    <span class="prelude-val">Ok</span>(module.get_offers(dbtx).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/offer&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
                     <span class="kw">let </span>offer = module
-                        .get_offer(<span class="kw-2">&amp;mut </span>dbtx, payment_hash)
+                        .get_offer(dbtx, payment_hash)
                         .<span class="kw">await
                         </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
 
@@ -1902,14 +1901,13 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/list_gateways&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, dbtx, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
-                    <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>)
+                    <span class="prelude-val">Ok</span>(module.list_gateways(dbtx).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/register_gateway&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, dbtx, gateway: LightningGateway| -&gt; () {
-                    module.register_gateway(<span class="kw-2">&amp;mut </span>dbtx, gateway).<span class="kw">await</span>;
-                    dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                    module.register_gateway(dbtx, gateway).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())
                 }
             },

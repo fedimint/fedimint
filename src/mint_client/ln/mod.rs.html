@@ -538,6 +538,12 @@
 <a href="#538" id="538">538</a>
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -902,7 +908,7 @@
             .<span class="kw">await
             </span>.members
             .iter()
-            .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
+            .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
             .collect();
         FederationApiFaker::new(fed, members)
             <span class="comment">// TODO: is the output here is supposed to be a mint or wallet?
@@ -930,9 +936,15 @@
                     <span class="prelude-val">Ok</span>(mint
                         .lock()
                         .<span class="kw">await
-                        </span>.fetch_from_all(|m, db| <span class="kw">async </span>{
-                            m.get_contract_account(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, contract)
-                                .<span class="kw">await
+                        </span>.fetch_from_all(|m, db, module_instance_id| <span class="kw">async </span>{
+                            m.get_contract_account(
+                                <span class="kw-2">&amp;mut </span>db
+                                    .begin_transaction()
+                                    .<span class="kw">await
+                                    </span>.with_module_prefix(<span class="kw-2">*</span>module_instance_id),
+                                contract,
+                            )
+                            .<span class="kw">await
                         </span>})
                         .<span class="kw">await
                         </span>.unwrap())

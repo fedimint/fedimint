@@ -338,6 +338,26 @@
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -358,7 +378,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>FakeFed&lt;Module&gt; {
-    <span class="kw">pub </span>members: Vec&lt;(PeerId, Module, Database)&gt;,
+    <span class="kw">pub </span>members: Vec&lt;(PeerId, Module, Database, ModuleInstanceId)&gt;,
     client_cfg: ClientModuleConfig,
     block_height: Arc&lt;std::sync::atomic::AtomicU64&gt;,
 }
@@ -403,7 +423,7 @@
                 ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder().into())]),
             );
             <span class="kw">let </span>member = constructor(cfg, db.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-            members.push((peer, member, db));
+            members.push((peer, member, db, module_instance_id));
         }
 
         <span class="prelude-val">Ok</span>(FakeFed {
@@ -438,9 +458,17 @@
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
+        <span class="kw">for </span>(<span class="kw">_</span>, member, db, module_instance_id) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-            results.push(member_validate(member, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>fake_ic, input).<span class="kw">await</span>);
+            results.push(
+                member_validate(
+                    member,
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(<span class="kw-2">*</span>module_instance_id),
+                    <span class="kw-2">&amp;</span>fake_ic,
+                    input,
+                )
+                .<span class="kw">await</span>,
+            );
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB tx failed&quot;</span>);
         }
 
@@ -449,10 +477,16 @@
 
     <span class="kw">pub async fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>Module::Output) -&gt; bool {
         <span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
-        <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="self">self</span>.members.iter() {
+        <span class="kw">for </span>(<span class="kw">_</span>, member, db, module_instance_id) <span class="kw">in </span><span class="self">self</span>.members.iter() {
             results.push(
                 member
-                    .validate_output(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, output)
+                    .validate_output(
+                        <span class="kw-2">&amp;mut </span>db
+                            .begin_transaction()
+                            .<span class="kw">await
+                            </span>.with_module_prefix(<span class="kw-2">*</span>module_instance_id),
+                        output,
+                    )
                     .<span class="kw">await
                     </span>.is_err(),
             );
@@ -471,10 +505,15 @@
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
         <span class="comment">// TODO: only include some of the proposals for realism
         </span><span class="kw">let </span><span class="kw-2">mut </span>consensus = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>(id, member, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
+        <span class="kw">for </span>(id, member, db, module_instance_id) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             consensus.extend(
                 member
-                    .consensus_proposal(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>)
+                    .consensus_proposal(
+                        <span class="kw-2">&amp;mut </span>db
+                            .begin_transaction()
+                            .<span class="kw">await
+                            </span>.with_module_prefix(<span class="kw-2">*</span>module_instance_id),
+                    )
                     .<span class="kw">await
                     </span>.into_iter()
                     .map(|ci| (<span class="kw-2">*</span>id, ci)),
@@ -482,33 +521,33 @@
         }
 
         <span class="kw">let </span>peers: HashSet&lt;PeerId&gt; = <span class="self">self</span>.members.iter().map(|p| p.<span class="number">0</span>).collect();
-        <span class="kw">for </span>(_peer, member, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
+        <span class="kw">for </span>(_peer, member, db, module_instance_id) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             <span class="kw">let </span>database = db <span class="kw">as </span><span class="kw-2">&amp;mut </span>Database;
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction().<span class="kw">await</span>;
+            {
+                <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(<span class="kw-2">*</span>module_instance_id);
 
-            member
-                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, consensus.clone())
-                .<span class="kw">await</span>;
-
-            <span class="kw">let </span>cache = member.build_verification_cache(inputs.iter());
-            <span class="kw">for </span>input <span class="kw">in </span>inputs {
                 member
-                    .apply_input(<span class="kw-2">&amp;</span>fake_ic, <span class="kw-2">&amp;mut </span>dbtx, input, <span class="kw-2">&amp;</span>cache)
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Faulty input&quot;</span>);
+                    .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>module_dbtx, consensus.clone())
+                    .<span class="kw">await</span>;
+
+                <span class="kw">let </span>cache = member.build_verification_cache(inputs.iter());
+                <span class="kw">for </span>input <span class="kw">in </span>inputs {
+                    member
+                        .apply_input(<span class="kw-2">&amp;</span>fake_ic, <span class="kw-2">&amp;mut </span>module_dbtx, input, <span class="kw-2">&amp;</span>cache)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;Faulty input&quot;</span>);
+                }
+
+                <span class="kw">for </span>(out_point, output) <span class="kw">in </span>outputs {
+                    member
+                        .apply_output(<span class="kw-2">&amp;mut </span>module_dbtx, output, <span class="kw-2">*</span>out_point)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;Faulty output&quot;</span>);
+                }
+
+                member.end_consensus_epoch(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;mut </span>module_dbtx).<span class="kw">await</span>;
             }
-
-            <span class="kw">for </span>(out_point, output) <span class="kw">in </span>outputs {
-                member
-                    .apply_output(<span class="kw-2">&amp;mut </span>dbtx, output, <span class="kw-2">*</span>out_point)
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Faulty output&quot;</span>);
-            }
-
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction().<span class="kw">await</span>;
-            member.end_consensus_epoch(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
 
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
@@ -520,29 +559,24 @@
         // main consensus loop into another thread to optimize latency. This test will probably fail
         // then.
         </span><span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
-        <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="self">self</span>.members.iter() {
+        <span class="kw">for </span>(<span class="kw">_</span>, member, db, module_instance_id) <span class="kw">in </span><span class="self">self</span>.members.iter() {
             results.push(
                 member
-                    .output_status(<span class="kw-2">&amp;mut </span>db.begin_transaction().<span class="kw">await</span>, out_point)
+                    .output_status(
+                        <span class="kw-2">&amp;mut </span>db
+                            .begin_transaction()
+                            .<span class="kw">await
+                            </span>.with_module_prefix(<span class="kw-2">*</span>module_instance_id),
+                        out_point,
+                    )
                     .<span class="kw">await</span>,
             );
         }
         assert_all_equal(results.into_iter())
     }
 
-    <span class="kw">pub async fn </span>patch_dbs&lt;U&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, update: U)
-    <span class="kw">where
-        </span>U: Fn(<span class="kw-2">&amp;mut </span>DatabaseTransaction),
-    {
-        <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-            update(<span class="kw-2">&amp;mut </span>dbtx);
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-        }
-    }
-
     <span class="kw">pub async fn </span>generate_fake_utxo(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
+        <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, db, module_instance_id) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">let </span>out_point = bitcoin::OutPoint::default();
             <span class="kw">let </span>tweak = [<span class="number">42</span>; <span class="number">32</span>];
@@ -551,20 +585,26 @@
                 amount: bitcoin::Amount::from_sat(<span class="number">48000</span>),
             };
 
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>fedimint_wallet::db::UTXOKey(out_point), <span class="kw-2">&amp;</span>utxo)
-                .<span class="kw">await
-                </span>.unwrap();
+            {
+                <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(<span class="kw-2">*</span>module_instance_id);
+                module_dbtx
+                    .insert_entry(<span class="kw-2">&amp;</span>fedimint_wallet::db::UTXOKey(out_point), <span class="kw-2">&amp;</span>utxo)
+                    .<span class="kw">await
+                    </span>.unwrap();
 
-            dbtx.insert_entry(
-                <span class="kw-2">&amp;</span>fedimint_wallet::db::RoundConsensusKey,
-                <span class="kw-2">&amp;</span>fedimint_wallet::RoundConsensus {
-                    block_height: <span class="number">0</span>,
-                    fee_rate: fedimint_api::Feerate { sats_per_kvb: <span class="number">0 </span>},
-                    randomness_beacon: tweak,
-                },
-            )
-            .<span class="kw">await
-            </span>.unwrap();
+                module_dbtx
+                    .insert_entry(
+                        <span class="kw-2">&amp;</span>fedimint_wallet::db::RoundConsensusKey,
+                        <span class="kw-2">&amp;</span>fedimint_wallet::RoundConsensus {
+                            block_height: <span class="number">0</span>,
+                            fee_rate: fedimint_api::Feerate { sats_per_kvb: <span class="number">0 </span>},
+                            randomness_beacon: tweak,
+                        },
+                    )
+                    .<span class="kw">await
+                    </span>.unwrap();
+            }
+
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
     }
@@ -580,12 +620,12 @@
     <span class="kw">pub async fn </span>fetch_from_all&lt;<span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;b</span>, O, F, Fut&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="self">self</span>, fetch: F) -&gt; O
     <span class="kw">where
         </span>O: Debug + Eq + Send,
-        F: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="kw-2">mut </span>Module, <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="kw-2">mut </span>Database) -&gt; Fut,
+        F: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="kw-2">mut </span>Module, <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="kw-2">mut </span>Database, <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>ModuleInstanceId) -&gt; Fut,
         Fut: futures::Future&lt;Output = O&gt; + Send,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
-        <span class="kw">for </span>(<span class="kw">_</span>, member, db) <span class="kw">in </span><span class="self">self</span>.members.iter_mut() {
-            results.push(fetch(member, db).<span class="kw">await</span>);
+        <span class="kw">for </span>(<span class="kw">_</span>, member, db, module_instance_id) <span class="kw">in </span><span class="self">self</span>.members.iter_mut() {
+            results.push(fetch(member, db, module_instance_id).<span class="kw">await</span>);
         }
         assert_all_equal(results.into_iter())
     }

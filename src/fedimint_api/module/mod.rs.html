@@ -551,6 +551,21 @@
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
 <a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -637,7 +652,7 @@
 
     <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
-        dbtx: fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         params: <span class="self">Self</span>::Param,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Response, ApiError&gt;;
 }
@@ -677,7 +692,7 @@
 
             <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
                 <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
-                <span class="kw-2">mut </span><span class="macro-nonterminal">$dbtx</span>: fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+                <span class="macro-nonterminal">$dbtx</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
             ) -&gt; ::std::result::Result&lt;<span class="self">Self</span>::Response, <span class="macro-nonterminal">$crate::module::ApiError</span>&gt; {
                 <span class="macro-nonterminal">$body
@@ -699,6 +714,7 @@
             <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M,
             fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
             serde_json::Value,
+            <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
         ) -&gt; HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt;
         + Send
         + Sync,
@@ -720,7 +736,8 @@
 </span><span class="kw">impl </span>ApiEndpoint&lt;()&gt; {
     <span class="kw">pub fn </span>from_typed&lt;E: TypedApiEndpoint&gt;() -&gt; ApiEndpoint&lt;E::State&gt;
     <span class="kw">where
-        </span>E::Param: Debug,
+        </span>&lt;E <span class="kw">as </span>TypedApiEndpoint&gt;::Response: std::marker::Send,
+        E::Param: Debug,
         E::Response: Debug,
     {
         <span class="attr">#[instrument(
@@ -732,7 +749,7 @@
         )]
         </span><span class="kw">async fn </span>handle_request&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, E&gt;(
             state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>E::State,
-            dbtx: fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+            dbtx: <span class="kw-2">&amp;mut </span>fedimint_api::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
             param: E::Param,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;E::Response, ApiError&gt;
         <span class="kw">where
@@ -750,12 +767,25 @@
 
         ApiEndpoint {
             path: E::PATH,
-            handler: Box::new(|m, dbtx, param| {
+            handler: Box::new(|m, <span class="kw-2">mut </span>dbtx, param, module_instance_id| {
                 Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span>params = serde_json::from_value(param)
                         .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
-                    <span class="kw">let </span>ret = handle_request::&lt;E&gt;(m, dbtx, params).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>ret = <span class="kw">match </span>module_instance_id {
+                        <span class="prelude-val">Some</span>(module_instance_id) =&gt; {
+                            <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(module_instance_id);
+                            handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>module_dbtx, params).<span class="kw">await</span><span class="question-mark">?
+                        </span>}
+                        <span class="prelude-val">None </span>=&gt; handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>dbtx, params).<span class="kw">await</span><span class="question-mark">?</span>,
+                    };
+
+                    dbtx.commit_tx()
+                        .<span class="kw">await
+                        </span>.map_err(|_err| fedimint_api::module::ApiError {
+                            code: <span class="number">500</span>,
+                            message: <span class="string">&quot;Internal Server Error&quot;</span>.to_string(),
+                        })<span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(serde_json::to_value(ret).expect(<span class="string">&quot;encoding error&quot;</span>))
                 })
             }),

@@ -240,6 +240,11 @@
 <a href="#240" id="240">240</a>
 <a href="#241" id="241">241</a>
 <a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::Result;
@@ -478,8 +483,13 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(open_temp_db(<span class="string">&quot;verify-remove_by_prefix&quot;</span>).<span class="kw">await</span>)
+        fedimint_api::db::verify_remove_by_prefix(open_temp_db(<span class="string">&quot;verify-remove-by-prefix&quot;</span>).<span class="kw">await</span>)
             .<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>test_module_dbtx() {
+        fedimint_api::db::verify_module_prefix(open_temp_db(<span class="string">&quot;verify-module-prefix&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 }
 </code></pre></div>
