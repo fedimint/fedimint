@@ -390,11 +390,6 @@
 <a href="#390" id="390">390</a>
 <a href="#391" id="391">391</a>
 <a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -411,14 +406,10 @@
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
-<span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
-<span class="kw">use </span>fedimint_ln::LightningGen;
-<span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>fedimint_server::config::ModuleInitRegistry;
-<span class="kw">use </span>fedimint_wallet::WalletGen;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>mint_client::api::WsFederationConnect;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
@@ -535,11 +526,6 @@
     <span class="kw">let </span>pk_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, state.data_dir.join(TLS_PK))<span class="question-mark">?</span>;
     <span class="kw">let </span>max_denomination = Amount::from_msats(<span class="number">100000000000</span>);
     <span class="kw">let </span>(dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::&lt;UiMessage&gt;();
-    <span class="kw">let </span>module_config_gens = ModuleInitRegistry::from(<span class="macro">vec!</span>[
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ]);
     <span class="kw">let </span>dir_out_path = state.data_dir.clone();
     <span class="kw">let </span>fedimintd_sender = state.sender.clone();
 
@@ -554,6 +540,7 @@
 
     <span class="kw">let </span><span class="kw-2">mut </span>dkg_task_group = state.task_group.make_subgroup().<span class="kw">await</span>;
     state.dkg_task_group = <span class="prelude-val">Some</span>(dkg_task_group.clone());
+    <span class="kw">let </span>module_gens = state.module_gens.clone();
     state
         .task_group
         .spawn(<span class="string">&quot;admin UI running DKG&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
@@ -575,7 +562,7 @@
 
             <span class="kw">let </span>write_result = maybe_config.and_then(|server| {
                 encrypted_json_write(<span class="kw-2">&amp;</span>server.private, <span class="kw-2">&amp;</span>key, dir_out_path.join(PRIVATE_CONFIG))<span class="question-mark">?</span>;
-                write_nonprivate_configs(<span class="kw-2">&amp;</span>server, dir_out_path, <span class="kw-2">&amp;</span>module_config_gens)
+                write_nonprivate_configs(<span class="kw-2">&amp;</span>server, dir_out_path, <span class="kw-2">&amp;</span>module_gens)
             });
 
             <span class="kw">match </span>write_result {
@@ -752,6 +739,7 @@
     password: String,
     task_group: TaskGroup,
     dkg_task_group: <span class="prelude-ty">Option</span>&lt;TaskGroup&gt;,
+    module_gens: ModuleInitRegistry,
 }
 <span class="kw">type </span>MutableState = Arc&lt;Mutex&lt;State&gt;&gt;;
 
@@ -767,6 +755,7 @@
     bind_addr: SocketAddr,
     password: String,
     task_group: TaskGroup,
+    module_gens: ModuleInitRegistry,
 ) {
     <span class="kw">let </span>state = Arc::new(Mutex::new(State {
         params: <span class="prelude-val">None</span>,
@@ -775,6 +764,7 @@
         password,
         task_group,
         dkg_task_group: <span class="prelude-val">None</span>,
+        module_gens,
     }));
 
     <span class="kw">let </span>app = Router::new()
