@@ -259,4 +259,10 @@ mod fedimint_rocksdb_tests {
         ))
         .await;
     }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_dbtx() {
+        fedimint_api::db::verify_module_prefix(open_temp_db("fcb-rocksdb-test-module-prefix"))
+            .await;
+    }
 }

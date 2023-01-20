@@ -109,7 +109,7 @@ fn attach_endpoints(
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe((handler)(fedimint, dbtx, params))
+                AssertUnwindSafe((handler)(fedimint, dbtx, params, module_instance_id))
                     .catch_unwind()
                     .await
                     .map_err(|_| {
@@ -158,6 +158,7 @@ fn attach_endpoints_erased(
                     fedimint.modules.get_expect(module_instance),
                     dbtx,
                     params,
+                    Some(module_instance),
                 ))
                 .catch_unwind()
                 .await

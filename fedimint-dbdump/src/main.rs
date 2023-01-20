@@ -4,6 +4,7 @@ use docopt::Docopt;
 use erased_serde::Serialize;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::DynModuleGen;
 use fedimint_ln::{db as LightningRange, LightningGen};
 use fedimint_mint::{db as MintRange, MintGen};
@@ -195,6 +196,8 @@ impl<'a> DatabaseDump<'a> {
                         consensus.insert("LastEpoch".to_string(), Box::new(last_epoch));
                     }
                 }
+                // Module is a global prefix for all module data
+                ConsensusRange::DbKeyPrefix::Module => {}
             }
         }
 
@@ -680,12 +683,12 @@ async fn main() {
         DynModuleGen::from(LightningGen),
     ]);
 
-    let decoders = Default::default(); // TODO: read config and use it to create decoders
+    let decoders: ModuleDecoderRegistry = Default::default(); // TODO: read config and use it to create decoders
 
     let serialized: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
     let mut dbdump = DatabaseDump {
         serialized,
-        read_only: DatabaseTransaction::new(Box::new(read_only), &decoders),
+        read_only: DatabaseTransaction::new(Box::new(read_only), decoders),
         ranges,
         prefixes,
         include_all_prefixes: csv_prefix == "All",

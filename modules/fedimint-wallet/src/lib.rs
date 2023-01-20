@@ -28,7 +28,7 @@ use fedimint_api::config::{
     ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
-use fedimint_api::core::{ModuleInstanceId, ModuleKind};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
@@ -780,18 +780,18 @@ impl ServerModule for Wallet {
             api_endpoint! {
                 "/block_height",
                 async |module: &Wallet, dbtx, _params: ()| -> u32 {
-                    Ok(module.consensus_height(&mut dbtx).await.unwrap_or(0))
+                    Ok(module.consensus_height(dbtx).await.unwrap_or(0))
                 }
             },
             api_endpoint! {
                 "/peg_out_fees",
                 async |module: &Wallet, dbtx, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let consensus = module.current_round_consensus(&mut dbtx).await.unwrap();
+                    let consensus = module.current_round_consensus(dbtx).await.unwrap();
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
-                        module.available_utxos(&mut dbtx).await,
+                        module.available_utxos(dbtx).await,
                         consensus.fee_rate,
                         &consensus.randomness_beacon
                     );
@@ -1536,7 +1536,13 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 #[instrument(level = "debug", skip_all)]
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(db.begin_transaction().await, &rpc).await;
+        broadcast_pending_tx(
+            db.begin_transaction()
+                .await
+                .with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET),
+            &rpc,
+        )
+        .await;
         // FIXME: remove after modularization finishes
         #[cfg(not(target_family = "wasm"))]
         fedimint_api::task::sleep(Duration::from_secs(10)).await;

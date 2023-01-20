@@ -395,12 +395,13 @@ where
                 handler: Box::new(
                     move |module: &DynServerModule,
                           dbtx: fedimint_api::db::DatabaseTransaction<'_>,
-                          value: serde_json::Value| {
+                          value: serde_json::Value,
+                          module_instance_id: Option<ModuleInstanceId>| {
                         let typed_module = module
                             .as_any()
                             .downcast_ref::<T>()
                             .expect("the dispatcher should always call with the right module");
-                        Box::pin(handler(typed_module, dbtx, value))
+                        Box::pin(handler(typed_module, dbtx, value, module_instance_id))
                     },
                 ),
             })

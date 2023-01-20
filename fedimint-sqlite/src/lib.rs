@@ -236,7 +236,12 @@ mod fedimint_sqlite_tests {
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(open_temp_db("verify-remove_by_prefix").await)
+        fedimint_api::db::verify_remove_by_prefix(open_temp_db("verify-remove-by-prefix").await)
             .await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_dbtx() {
+        fedimint_api::db::verify_module_prefix(open_temp_db("verify-module-prefix").await).await;
     }
 }
