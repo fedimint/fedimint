@@ -14,14 +14,10 @@ use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_api::config::ClientConfig;
-use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_core::util::SanitizedUrl;
-use fedimint_ln::LightningGen;
-use fedimint_mint::MintGen;
 use fedimint_server::config::ModuleInitRegistry;
-use fedimint_wallet::WalletGen;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
@@ -138,11 +134,6 @@ async fn post_guardians(
     let pk_bytes = encrypted_read(&key, state.data_dir.join(TLS_PK))?;
     let max_denomination = Amount::from_msats(100000000000);
     let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
-    let module_config_gens = ModuleInitRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ]);
     let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();
 
@@ -157,6 +148,7 @@ async fn post_guardians(
 
     let mut dkg_task_group = state.task_group.make_subgroup().await;
     state.dkg_task_group = Some(dkg_task_group.clone());
+    let module_gens = state.module_gens.clone();
     state
         .task_group
         .spawn("admin UI running DKG", move |_| async move {
@@ -178,7 +170,7 @@ async fn post_guardians(
 
             let write_result = maybe_config.and_then(|server| {
                 encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
-                write_nonprivate_configs(&server, dir_out_path, &module_config_gens)
+                write_nonprivate_configs(&server, dir_out_path, &module_gens)
             });
 
             match write_result {
@@ -355,6 +347,7 @@ struct State {
     password: String,
     task_group: TaskGroup,
     dkg_task_group: Option<TaskGroup>,
+    module_gens: ModuleInitRegistry,
 }
 type MutableState = Arc<Mutex<State>>;
 
@@ -370,6 +363,7 @@ pub async fn run_ui(
     bind_addr: SocketAddr,
     password: String,
     task_group: TaskGroup,
+    module_gens: ModuleInitRegistry,
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,
@@ -378,6 +372,7 @@ pub async fn run_ui(
         password,
         task_group,
         dkg_task_group: None,
+        module_gens,
     }));
 
     let app = Router::new()

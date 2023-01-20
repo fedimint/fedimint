@@ -75,6 +75,12 @@ async fn main() -> anyhow::Result<()> {
     let mut task_group = TaskGroup::new();
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
+    let module_inits = ModuleInitRegistry::from(vec![
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
+    ]);
+
     // Run admin UI if a socket address was given for it
     if let Some(listen_ui) = opts.listen_ui {
         // Make sure password is set
@@ -89,9 +95,18 @@ async fn main() -> anyhow::Result<()> {
         // Spawn admin UI
         let data_dir = opts.data_dir.clone();
         let ui_task_group = task_group.make_subgroup().await;
+        let module_gens = module_inits.clone();
         task_group
             .spawn("admin-ui", move |_| async move {
-                run_ui(data_dir, ui_sender, listen_ui, password, ui_task_group).await;
+                run_ui(
+                    data_dir,
+                    ui_sender,
+                    listen_ui,
+                    password,
+                    ui_task_group,
+                    module_gens,
+                )
+                .await;
             })
             .await;
 
@@ -118,12 +133,6 @@ async fn main() -> anyhow::Result<()> {
     let _guard = local_task_set.enter();
 
     task_group.install_kill_handler();
-
-    let module_inits = ModuleInitRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ]);
 
     let decoders = module_inits.decoders(cfg.iter_module_instances())?;
 
