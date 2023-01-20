@@ -202,63 +202,49 @@ impl GatewayLightning for ClnRpcService {
             })
     }
 
-    type PayInvoiceStream =
-        Pin<Box<dyn Stream<Item = Result<PayInvoiceResponse, tonic::Status>> + Send + 'static>>;
-
     async fn pay_invoice(
         &self,
-        request: tonic::Request<tonic::Streaming<PayInvoiceRequest>>,
-    ) -> Result<tonic::Response<Self::PayInvoiceStream>, tonic::Status> {
-        let mut stream = request.into_inner();
-
-        // Since the cln_rpc client is not `Sync`, we cannot actually lazily pocess the requests into response stream
-        // The current approach will process all requests within the incoming stream, before returning a response stream
-        let mut results: Vec<Result<PayInvoiceResponse, tonic::Status>> = Vec::new();
-
-        while let Some(PayInvoiceRequest {
+        request: tonic::Request<PayInvoiceRequest>,
+    ) -> Result<tonic::Response<PayInvoiceResponse>, tonic::Status> {
+        let PayInvoiceRequest {
             invoice,
             max_delay,
             max_fee_percent,
-        }) = stream.message().await?
-        {
-            let outcome = self
-                .client
-                .lock()
-                .await
-                .call(cln_rpc::Request::Pay(model::PayRequest {
-                    bolt11: invoice,
-                    amount_msat: None,
-                    label: None,
-                    riskfactor: None,
-                    maxfeepercent: Some(max_fee_percent),
-                    retry_for: None,
-                    maxdelay: Some(max_delay as u16),
-                    exemptfee: None,
-                    localinvreqid: None,
-                    exclude: None,
-                    maxfee: None,
-                    description: None,
-                }))
-                .await
-                .map(|response| match response {
-                    cln_rpc::Response::Pay(model::PayResponse {
-                        payment_preimage, ..
-                    }) => PayInvoiceResponse {
-                        preimage: payment_preimage.to_vec(),
-                    },
-                    _ => panic!("Unexpected response from cln pay rpc"),
-                })
-                .map_err(|e| {
-                    error!("cln pay rpc returned error {:?}", e);
-                    tonic::Status::internal(e.to_string())
-                });
+        } = request.into_inner();
 
-            results.push(outcome);
-        }
+        let outcome = self
+            .client
+            .lock()
+            .await
+            .call(cln_rpc::Request::Pay(model::PayRequest {
+                bolt11: invoice,
+                amount_msat: None,
+                label: None,
+                riskfactor: None,
+                maxfeepercent: Some(max_fee_percent),
+                retry_for: None,
+                maxdelay: Some(max_delay as u16),
+                exemptfee: None,
+                localinvreqid: None,
+                exclude: None,
+                maxfee: None,
+                description: None,
+            }))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::Pay(model::PayResponse {
+                    payment_preimage, ..
+                }) => PayInvoiceResponse {
+                    preimage: payment_preimage.to_vec(),
+                },
+                _ => panic!("Unexpected response from cln pay rpc"),
+            })
+            .map_err(|e| {
+                error!("cln pay rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?;
 
-        Ok(tonic::Response::new(
-            Box::pin(tokio_stream::iter(results)) as Self::PayInvoiceStream
-        ))
+        Ok(tonic::Response::new(outcome))
     }
 
     type SubscribeInterceptHtlcsStream =
@@ -299,7 +285,6 @@ impl GatewayLightning for ClnRpcService {
                 }
             };
 
-            // TODO: Implement non-blocking access to the outcomes map sowe can multithread complete_htlcs
             if let Some(outcome) = self.interceptor.outcomes.lock().await.remove(&hash) {
                 // Translate action request into a cln rpc response for `htlc_accepted` event
                 let htlca_res = match action {
@@ -363,8 +348,8 @@ pub enum ClnExtensionError {
     Error(#[from] anyhow::Error),
 }
 
-/// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-/// 2002 error code reports general temporary failure of this processing node.
+// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+// 2002 error code reports general temporary failure of this processing node.
 fn temp_node_failure() -> serde_json::Value {
     serde_json::json!({
         "result": "fail",
