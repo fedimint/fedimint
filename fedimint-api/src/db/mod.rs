@@ -1,4 +1,6 @@
 use std::fmt::Debug;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::{error::Error, marker::PhantomData};
 
@@ -61,6 +63,29 @@ struct DatabaseInner<Db: IDatabase + ?Sized> {
     db: Db,
 }
 
+/// Error returned when the autocommit function fails
+#[derive(Debug, Error)]
+pub enum AutocommitError<E> {
+    /// Committing the transaction failed too many times, giving up
+    CommitFailed {
+        /// Number of retries
+        retries: usize,
+        /// Last error on commit
+        last_error: anyhow::Error,
+    },
+    /// Error returned by the closure provided to `autocommit`. If returned no commit was attempted
+    /// in that round
+    ClosureError {
+        /// Retry on which the closure returned an error
+        ///
+        /// Values other than 0 typically indicate a logic error since the closure given to
+        /// `autocommit` should not have side effects and thus keep succeeding if it succeeded once.
+        retries: usize,
+        /// Error returned by the closure
+        error: E,
+    },
+}
+
 impl Database {
     pub fn new(db: impl IDatabase + 'static, module_decoders: ModuleDecoderRegistry) -> Self {
         let inner = DatabaseInner {
@@ -76,6 +101,70 @@ impl Database {
             self.0.db.begin_transaction().await,
             self.0.module_decoders.clone(),
         )
+    }
+
+    /// Runs a closure with a reference to a database transaction and tries to commit the
+    /// transaction if the closure returns `Ok` and rolls it back otherwise. If committing fails the
+    /// closure is run again for up to `max_retries` times. If `max_retries` is `None` it will run
+    /// `usize::MAX` times which is close enough to infinite times.
+    ///
+    /// The closure `tx_fn` provided should not have side effects outside of the database
+    /// transaction provided, or if it does these should be idempotent, since the closure might be
+    /// run multiple times.
+    ///
+    /// # Lifetime Parameters
+    ///
+    /// The higher rank trait bound (HRTB) `'a` that is applied to the the mutable reference to the
+    /// database transaction ensures that the reference lives as least as long as the returned
+    /// future of the closure.
+    ///
+    /// Further, the reference to self (`'s`) must outlive the `DatabaseTransaction<'dt>`. In other
+    /// words, the `DatabaseTransaction` must live as least as long as `self` and that is true as
+    /// the `DatabaseTransaction` is only dropped at the end of the `loop{}`.
+    pub async fn autocommit<'s: 'dt, 'dt, F, T, E>(
+        &'s self,
+        tx_fn: F,
+        max_retries: Option<usize>,
+    ) -> Result<T, AutocommitError<E>>
+    where
+        for<'a> F: Fn(
+            &'a mut DatabaseTransaction<'dt>,
+        ) -> Pin<Box<dyn Future<Output = Result<T, E>> + 'a>>,
+    {
+        let mut retries: usize = 0;
+        loop {
+            let mut dbtx = self.begin_transaction().await;
+
+            match tx_fn(&mut dbtx).await {
+                Ok(val) => {
+                    match dbtx.commit_tx().await {
+                        Ok(()) => {
+                            return Ok(val);
+                        }
+                        Err(e) if max_retries.map(|mr| mr >= retries).unwrap_or(false) => {
+                            return Err(AutocommitError::CommitFailed {
+                                retries,
+                                last_error: e,
+                            });
+                        }
+                        Err(_) => {
+                            // try again
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(AutocommitError::ClosureError { retries, error: e });
+                }
+            };
+
+            // The `checked_add()` function is used to catch the `usize` overflow.
+            // With `usize=32bit` and an assumed time of 1ms per iteration, this would crash
+            // after ~50 days. But if that's the case, something else must be wrong.
+            // With `usize=64bit` it would take much longer, obviously.
+            retries = retries
+                .checked_add(1)
+                .expect("db autocommit retry counter overflowed");
+        } // end of loop
     }
 }
 

@@ -218,67 +218,69 @@ impl FedimintConsensus {
         Ok(())
     }
 
-    /// Calculate the result of the `consesnsus_outcome` and save it/them.
+    /// Calculate the result of the `consensus_outcome` and save it/them.
     ///
     /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is coming from a
     /// a reference (already signed) `OutcomeHistory`, that contains `rejected_txs`,
     /// so we can check it against our own `rejected_txs` we calculate in this function.
-    /// **Note**: `reference_rejecte_txs` **must** come from a validated/trustworthy
+    ///
+    /// **Note**: `reference_rejected_txs` **must** come from a validated/trustworthy
     /// source and be correct, or it can cause a panic.
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     pub async fn process_consensus_outcome(
         &self,
         consensus_outcome: HbbftConsensusOutcome,
-        reference_rejected_txs: &Option<BTreeSet<TransactionId>>,
+        reference_rejected_txs: Option<BTreeSet<TransactionId>>,
     ) -> SignedEpochOutcome {
-        let epoch = consensus_outcome.epoch;
-        let outcome = consensus_outcome.clone();
+        let epoch_history = self
+            .db
+            .autocommit(
+                |dbtx| {
+                    let consensus_outcome = consensus_outcome.clone();
+                    let reference_rejected_txs = reference_rejected_txs.clone();
 
-        let UnzipConsensusItem {
-            epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
-            transaction: transaction_cis,
-            module: module_cis,
-        } = consensus_outcome
-            .contributions
-            .into_iter()
-            .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
-            .unzip_consensus_item();
+                    Box::pin(async move {
+                        let epoch = consensus_outcome.epoch;
+                        let outcome = consensus_outcome.clone();
 
-        let epoch_history = loop {
-            let mut dbtx = self.db.begin_transaction().await;
+                        let UnzipConsensusItem {
+                            epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
+                            transaction: transaction_cis,
+                            module: module_cis,
+                        } = consensus_outcome
+                            .contributions
+                            .into_iter()
+                            .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
+                            .unzip_consensus_item();
 
-            self.process_module_consensus_items(&mut dbtx, &module_cis)
-                .await;
+                        self.process_module_consensus_items(dbtx, &module_cis).await;
 
-            let rejected_txs = self
-                .process_transactions(&mut dbtx, epoch, &transaction_cis)
-                .await;
+                        let rejected_txs = self
+                            .process_transactions(dbtx, epoch, &transaction_cis)
+                            .await;
 
-            if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
-                // Result of the consensus are supposed to be deterministic.
-                // If our result is not the same as what the (honest) majority of the federation
-                // signed over, it's a catastrophical bug/mismatch of Federation's fedimintd
-                // implementations.
-                assert_eq!(
-                    reference_rejected_txs, &rejected_txs,
-                    "rejected_txs mismatch: reference = {:?} != {:?}",
-                    reference_rejected_txs, rejected_txs
-                );
-            }
+                        if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
+                            // Result of the consensus are supposed to be deterministic.
+                            // If our result is not the same as what the (honest) majority of the federation
+                            // signed over, it's a catastrophical bug/mismatch of Federation's fedimintd
+                            // implementations.
+                            assert_eq!(
+                                reference_rejected_txs, &rejected_txs,
+                                "rejected_txs mismatch: reference = {:?} != {:?}",
+                                reference_rejected_txs, rejected_txs
+                            );
+                        }
 
-            let epoch_history = self
-                .finalize_process_epoch(&mut dbtx, outcome.clone(), rejected_txs)
-                .await;
-
-            match dbtx.commit_tx().await {
-                Ok(()) => {
-                    break epoch_history;
-                }
-                Err(error) => {
-                    error!(%error, "Committing DB transaction failed, retrying!");
-                }
-            }
-        };
+                        let epoch_history = self
+                            .finalize_process_epoch(dbtx, outcome.clone(), rejected_txs)
+                            .await;
+                        Result::<_, ()>::Ok(epoch_history)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .expect("Committing consensus epoch failed");
 
         let audit = self.audit().await;
         if audit.sum().milli_sat < 0 {
