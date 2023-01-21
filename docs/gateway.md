@@ -1,49 +1,54 @@
 # Fedimint Lightning Gateways
 
-Lightning Gateways provide routing services in and out of Fedimint Federations. In essence, a Gateway is a specialized Fedimint client, paired up with a running instance of lightning node like [CLN](https://github.com/ElementsProject/lightning) or [LND](https://github.com/lightningnetwork/lnd), so it can route payments on behalf of the Federation.
+Lightning Gateways provide routing services in and out of Fedimint Federations. In essence, a Gateway is a specialized Fedimint client, paired up with a running instance of lightning node like [Core Lightning (CLN)](https://github.com/ElementsProject/lightning) or [Lightning Network Daemon (LND)](https://github.com/lightningnetwork/lnd), so it can route payments on behalf of the Federation.
 
 A single Gateway can serve multiple Federations.
 
+---
+
 ## Components
 
-The Gateway consists of:
+A Fedimint lightning gateway consists of the following components:
 
-1. **Lightning RPC** - An RPC client for interacting with a lightning node that routes lightning payments on behalf of the gateway
+### Gatewayd
 
-2. **Gateway Actor** - An abstration over Federation clients. A Gateway actor contains one (and only one) client to a Federation which the gateway serves. A Gateway will have as many actors as the number of Federations it serves, coordinating these actors where necessary in order to route payments between the federations.
+A webserver daemon that runs all the business logic of a gateway. Think of this as "The Gateway".
 
-```mermaid
-C4Context
+- Given a single gateway can serve multiple Federations at the same time, gatewayd operates over an abstraction named gateway actor.
+- A **GatewayActor** contains one (and only one) client to a Federation which the gateway serves.
+- The gateway will have as many actors as the number of Federations it serves, coordinating these actors where necessary in order to route payments between such federations.
 
-  Container_Boundary(a, "Lightning Gateway") {
-    Component(ln, "Lightning RPC", "Lightning RPC", "Provides LN routing functionality to the gateway actors")
+> **Additional Notes:**
+>
+> Just like other Federation clients, the client within the gateway actor interfaces with the Federation through a well defined **FederationAPI**
+>
+> - To receive incoming lightning payments, the client within a gateway actor calls to **FederationAPI**s to complete certain incoming contract functions
+> - To make outgoing lightning payments, clients within a federation served by the gateway will use gatewayd `pay_invoice` API.
+>
+> Read [more about the gateway <-> federation interactions and contracts](../modules/fedimint-ln/src/contracts/mod.rs) here
 
-    Container_Boundary(b, "Actors - References to the Federations served by the Gateway") {
-      Component(a1, "Gateway Actor 1", "Serving Federation 1", "An actor component used by the gateway to serve Federation 1")
-      Component(an, "Gateway Actor N", "Serving Federation N", "An actor component used by the gateway to serve Federation N")
-    }
-  }
+### Gateway-lnrpc-extension
 
-  Container_Boundary(c, "Federations served by the Gateway") {
-    Container(f1, "Federation 1", "Fedeimint Federation", "Fedimint Federation providing custody to multiple users")
-    Container(fn, "Federation N", "Fedeimint Federation", "Fedimint Federation providing custody to multiple users")
-  }
+A Lightning extension / plugin service that provides all the necessary Lightning functionalities the gateway webserver daemon.
 
-  BiRel(a1, ln, "")
-  BiRel(an, ln, "")
-  BiRel(a1, f1, "ecash transaction")
-  BiRel(an, fn, "ecash transaction")
-
-  UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
-```
-
-## Deploying a Gateway for Local Testing
+- Specification for such an extension and how it interfaces with **gatewayd** is defined in [gatewaylnrpc.proto](../gateway/ln-gateway/proto/gatewaylnrpc.proto) gRPC spec. [Read more about gRPCs here](https://grpc.io/docs/what-is-grpc/introduction/).
+- The extension usually runs alongside a lightning node, or within the node as a plugin! It works specifically for that lightning node implementation
+  - We have implemented [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs) that works with for CLN nodes
+  - **TODO:** help us implement a similar extension for [LND](https://github.com/lightningnetwork/lnd) nodes
+  - **TODO:** help us implement a similar extension for [Eclair](https://github.com/ACINQ/eclair) nodes
+  - **TODO:** help us implement a similar extension for [LDK](https://github.com/lightningdevkit/ldk-node) nodes
+  - **TODO:** help us implement a similar extension for [Sensei](https://github.com/L2-Technology/sensei) nodes
+  - **TODO:** help us implement a similar extension for _your-favorite-variant_ lightning node
 
 ---
 
-As described in [Running Fedimint for dev testing](./dev-running.md#using-the-gateway), running `./scripts/tmuxinator.sh` starts a local development Federation instance with a running Gateway instance attached. You can interact with this Gateway via `gateway-cli`.
+## Interacting with the Gateway
 
-Run `gateway-cli help` to see some of the commands available in managing the gateway:
+When you have a running instance of Fedimint gateways, there are two options available for administering the gateway:
+
+### gateway-cli
+
+An intuitive CLI tool for interacting with **gatewayd**. Run `gateway-cli help` to see some of the commands available in managing the gateway:
 
 ```shell
 $ gateway-cli help
@@ -68,32 +73,43 @@ Options:
   -V, --version                    Print version information
 ```
 
+### mintgate
+
+A simple and delightful admin dashboard for everyday access and control of your Fedimint gateway. Currently [under development here](https://github.com/GETLN/mintgate)
+
+---
+
+## Developing the Gateway
+
+As described in [Running Fedimint for dev testing](./dev-running.md#using-the-gateway), running `./scripts/tmuxinator.sh` starts a local development Federation instance with a running Gateway instance attached. You can interact with this Gateway via `gateway-cli`.
+
+### Developing gateway-lnrpc-extension
+
+- See and contribute to [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs)
+- Help add support to other node implementations by building [gateway-lnrpc-extensions](#gateway-lnrpc-extension) for them. You can parent your brand-new extension in this directory, or in your own repository and we will link to it in this open documentation
+- Contributions are highly welcome!
+
+### Developing [gatewayd](../gateway/ln-gateway/src/bin/ln_gateway.rs), [gateway-cli](../gateway/cli/) and more towards [fedimint-ln](../modules/fedimint-ln/) module
+
+- Contributions are highly welcome!
+
+---
+
 ## Deploying a Gateway in Production
 
----
+### Deploy a gateway-lnrpc-extension
 
-- **TODO!** Add docs here
+- [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs): **TODO:** Add docs here
+- other _gateway-lnrpc-extension_:  **TODO:** Add docs here
 
-### Deploy with CLN
+### Configure and deploy gatewayd
 
-- **TODO!** Add docs here
+- **TODO:** Add docs here
 
-### Deploy with LND
+### Provisioning liquidity for a Lightning Gateway
 
-- **TODO!** Add docs here
+- **TODO:** Add docs here
 
-### Configuration Options
+### Register and Serve Federations
 
-- **TODO!** Add docs here
-
-## Liquidity for a Lightning Gateways
-
----
-
-- **TODO!** Add docs here
-
-## Register and Serve Federations
-
----
-
-- **TODO!** Add docs here
+- **TODO:** Add docs here
