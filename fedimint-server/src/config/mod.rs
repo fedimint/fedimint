@@ -103,6 +103,8 @@ pub struct ServerConfigConsensus {
     /// All configuration that needs to be the same for modules
     #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+    /// Additional config the federation wants to transmit to the clients
+    pub meta: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,6 +200,7 @@ impl ServerConfigConsensus {
             epoch_pk: self.epoch_pk_set.public_key(),
             nodes: self.api.values().cloned().collect(),
             modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
+            meta: self.meta.clone(),
         };
 
         Ok(ConfigResponse {
@@ -249,6 +252,7 @@ impl ServerConfig {
             epoch_pk_set: epoch_keys.public_key_set,
             api: params.api_nodes(),
             modules: Default::default(),
+            meta: Default::default(),
         };
         let mut cfg = Self {
             consensus,

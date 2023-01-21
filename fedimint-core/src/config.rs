@@ -116,6 +116,9 @@ pub struct ClientConfig {
     /// Configs from other client modules
     #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+    // TODO: make it a String -> serde_json::Value map?
+    /// Additional config the federation wants to transmit to the clients
+    pub meta: BTreeMap<String, String>,
 }
 
 /// The API response for configuration requests

@@ -83,6 +83,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
             nodes: [].into(),
             modules: [].into(),
+            meta: Default::default(),
         };
 
         let mut rng = rand::rngs::OsRng;
