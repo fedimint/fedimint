@@ -15,7 +15,20 @@ To get started with development have a look at the:
 * [Integration tests](../integrationtests/README.md) - instructions on how to write and run the integration tests
 * [Scripts](../scripts/README.md) - useful scripts for running the tests and federation
 
-PRs fixing TODOs or issues are always welcome, but please discuss more involved changes in an issue first. Smaller PRs to fix typos, broken links etc. are also very welcome. For commits, please use [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
+## Areas of Contribution
+
+Below are some broad and general areas of contribution to get you started
+
+* [Fedimint Modules](./architecture.md)
+* [Fedimint Database System](./database.md)
+* [The Lightning Gateway](./gateway.md)
+* [Fedimint Setup UI](./ui.md)
+* [Nix Build System](./nix-ci.md)
+
+PRs fixing TODOs or issues are always welcome, but please discuss more involved changes in an issue first. Smaller PRs to fix typos, broken links etc. are also very welcome.
+
+For commits, please use [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
+
 Happy hacking!
 
 ## Developer Certificate of Origin
