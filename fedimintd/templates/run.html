@@ -2,14 +2,19 @@
 
 {% block title %} Fedimint {% endblock %}
 {% block head %}
-{% if !has_connection_string %}
- <meta http-equiv="refresh" content="5" />
-{% endif %}
+  {% match state %}
+    {% when RunTemplateState::DkgInProgress %}
+      <meta http-equiv="refresh" content="5" />
+    {% when RunTemplateState::DkgNotStarted %}
+      <meta http-equiv="refresh" content="1; url = /" />
+    {% when _ %}
+  {% endmatch %}
 {% endblock %}
 
 {% block content %}
 <div class="container text-center mt-5 p-3">
-{% if has_connection_string %}
+{% match state %}
+  {% when RunTemplateState::DkgDone with (connection_string) %}
     <img src="/qr" alt="federation qr code" width="200" height="200" />
     <div class="input-group mb-3 mt-3">
         <input id="connection-string" type="text" class="form-control" value="{{ connection_string }}"
@@ -18,9 +23,16 @@
             <button class="btn btn-outline-primary" type="button" id="copy-button">Copy</button>
         </div>
     </div>
-{% else %}
-    <div>Starting ...</div>
-{% endif %}
+  {% when RunTemplateState::DkgInProgress%}
+    <div>Distributed key generation in progress...</div>
+  {% when RunTemplateState::DkgFailed with (e) %}
+    <div>Distributed key generation failed with: {{ e }}</div>
+    <a class="btn btn-primary" href="/" role="button">Try again</a>
+  {% when RunTemplateState::LocalIoError with (e) %}
+    <div>Local IO Error: {{ e }}</div>
+  {% when RunTemplateState::DkgNotStarted %}
+    <div>Not Running (redirecting)</div>
+{% endmatch %}
 </div>
 
 {% endblock %}

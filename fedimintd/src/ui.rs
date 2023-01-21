@@ -52,26 +52,43 @@ async fn home_page(axum::extract::State(_): axum::extract::State<MutableState>) 
 #[derive(Template)]
 #[template(path = "run.html")]
 struct RunTemplate {
-    connection_string: String,
-    has_connection_string: bool,
+    state: RunTemplateState,
+}
+
+enum RunTemplateState {
+    DkgNotStarted,
+    DkgInProgress,
+    DkgDone(String),   // connnection string
+    DkgFailed(String), // error
+    LocalIoError(String),
 }
 
 async fn run_page(axum::extract::State(state): axum::extract::State<MutableState>) -> RunTemplate {
     let state = state.lock().await;
-    let path = state.data_dir.join("client.json");
-    let connection_string: String = match std::fs::File::open(path) {
-        Ok(file) => {
-            let cfg: ClientConfig =
-                serde_json::from_reader(file).expect("Could not parse cfg file.");
-            let connect_info = WsFederationConnect::from(&cfg);
-            serde_json::to_string(&connect_info).expect("should deserialize")
-        }
-        Err(_) => "".into(),
-    };
 
     RunTemplate {
-        connection_string: connection_string.clone(),
-        has_connection_string: !connection_string.is_empty(),
+        state: match state.dkg_state {
+            Some(DkgState::Success) => {
+                let path = state.data_dir.join("client.json");
+                // TODO: refactor be a standalone function
+                match std::fs::File::open(path) {
+                    Ok(file) => match serde_json::from_reader(file) {
+                        Ok(cfg) => {
+                            let connect_info = WsFederationConnect::from(&cfg);
+
+                            RunTemplateState::DkgDone(
+                                serde_json::to_string(&connect_info).expect("should deserialize"),
+                            )
+                        }
+                        Err(e) => RunTemplateState::LocalIoError(e.to_string()),
+                    },
+                    Err(e) => RunTemplateState::LocalIoError(e.to_string()),
+                }
+            }
+            Some(DkgState::Failure(ref e)) => RunTemplateState::DkgFailed(e.to_owned()),
+            Some(DkgState::Running) => RunTemplateState::DkgInProgress,
+            None => RunTemplateState::DkgNotStarted,
+        },
     }
 }
 
@@ -104,6 +121,7 @@ async fn post_guardians(
     axum::extract::State(state): axum::extract::State<MutableState>,
     Form(form): Form<GuardiansForm>,
 ) -> Result<Redirect, UIError> {
+    let state_copy = state.clone();
     let mut state = state.lock().await;
     let params = state.params.clone().expect("invalid state");
     let mut connection_strings: Vec<String> =
@@ -133,7 +151,6 @@ async fn post_guardians(
     let key = get_key(Some(state.password.clone()), state.data_dir.join(SALT_FILE))?;
     let pk_bytes = encrypted_read(&key, state.data_dir.join(TLS_PK))?;
     let max_denomination = Amount::from_msats(100000000000);
-    let (dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::<UiMessage>();
     let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();
 
@@ -144,6 +161,7 @@ async fn post_guardians(
             .shutdown_join_all()
             .await
             .expect("couldn't shut down dkg task group");
+        state_copy.lock().await.dkg_state = None;
     }
 
     let mut dkg_task_group = state.task_group.make_subgroup().await;
@@ -154,6 +172,7 @@ async fn post_guardians(
         .spawn("admin UI running DKG", move |_| async move {
             tracing::info!("Running DKG");
 
+            state_copy.lock().await.dkg_state = Some(DkgState::Running);
             let maybe_config = run_dkg(
                 params.bind_p2p,
                 params.bind_api,
@@ -182,30 +201,22 @@ async fn post_guardians(
                         .await
                         .expect("couldn't shut down DKG task group");
                     // Tell this route that DKG succeeded
-                    dkg_sender
-                        .send(UiMessage::DKGSuccess)
-                        .expect("failed to send over channel");
-                    // Tell this fedimintd that DKG succeeded
+                    state_copy.lock().await.dkg_state = Some(DkgState::Success);
+                    // Tell fedimint that DKG succeeded
                     fedimintd_sender
-                        .send(UiMessage::DKGSuccess)
+                        .send(UiMessage::DkgSuccess)
                         .await
                         .expect("failed to send over channel");
                 }
                 Err(e) => {
                     tracing::info!("DKG failed {:?}", e);
-                    dkg_sender
-                        // TODO: include the error in the message
-                        .send(UiMessage::DKGFailure)
-                        .expect("failed to send over channel");
+                    state_copy.lock().await.dkg_state = Some(DkgState::Failure(e.to_string()));
                 }
             };
         })
         .await;
-    match dkg_receiver.await.expect("failed to read over channel") {
-        UiMessage::DKGSuccess => Ok(Redirect::to("/run")),
-        // TODO: flash a message that it failed
-        UiMessage::DKGFailure => Ok(Redirect::to("/add_guardians")),
-    }
+
+    Ok(Redirect::to("/run"))
 }
 
 #[derive(Template)]
@@ -348,13 +359,21 @@ struct State {
     task_group: TaskGroup,
     dkg_task_group: Option<TaskGroup>,
     module_gens: ModuleGenRegistry,
+    dkg_state: Option<DkgState>,
 }
 type MutableState = Arc<Mutex<State>>;
 
 #[derive(Debug)]
+pub enum DkgState {
+    Running,
+    Success,
+    Failure(String),
+}
+
+#[derive(Debug)]
 pub enum UiMessage {
-    DKGSuccess,
-    DKGFailure,
+    DkgSuccess,
+    DkgFailure(String),
 }
 
 pub async fn run_ui(
@@ -373,6 +392,7 @@ pub async fn run_ui(
         task_group,
         dkg_task_group: None,
         module_gens,
+        dkg_state: None,
     }));
 
     let app = Router::new()
