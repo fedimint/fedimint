@@ -13,7 +13,7 @@ name = "ln_gateway"
 path = "src/lib.rs"
 
 [[bin]]
-name = "ln_gateway"
+name = "ln-gateway"
 path = "src/bin/ln_gateway.rs"
 
 [[bin]]

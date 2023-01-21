@@ -817,7 +817,7 @@
                     rpc-file-mode=0660
                     log-timestamps=false
 
-                    plugin=${ln-gateway}/bin/ln_gateway
+                    plugin=${ln-gateway}/bin/ln-gateway
                     fedimint-cfg=/var/fedimint/fedimint-gw
 
                     announce-addr=104.244.73.68:9735
@@ -833,7 +833,7 @@
                   contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils gateway-cli ];
                   config = {
                     Cmd = [
-                      "${ln-gateway}/bin/ln_gateway"
+                      "${ln-gateway}/bin/ln-gateway"
                     ];
                     ExposedPorts = {
                       "${builtins.toString 9735}/tcp" = { };
