@@ -381,10 +381,14 @@ async fn main() {
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
             let api = Arc::new(WsFederationApi::new(connect_obj.members))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;
-            let cfg: ClientConfig = api.get_client_config().await.or_terminate(
-                CliErrorKind::NetworkError,
-                "couldn't download config from peer",
-            );
+            let cfg: ClientConfig = api
+                .download_client_config()
+                .await
+                .or_terminate(
+                    CliErrorKind::NetworkError,
+                    "couldn't download config from peer",
+                )
+                .client;
             let cfg_path = cli.workdir.join("client.json");
             std::fs::create_dir_all(&cli.workdir)
                 .or_terminate(CliErrorKind::IOError, "failed to create config directory");

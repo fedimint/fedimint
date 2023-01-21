@@ -24,6 +24,11 @@ start_gateway
 
 #### BEGIN TESTS ####
 
+# test the fetching of client configs
+CONNECT_STRING=$(cat $FM_CFG_DIR/client-connect.json)
+rm $FM_CFG_DIR/client.json
+$FM_MINT_CLIENT join-federation "$CONNECT_STRING"
+
 # reissue
 TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.token')
 [[ $($FM_MINT_CLIENT info | jq -e -r '.total_amount') = "9958000" ]]

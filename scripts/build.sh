@@ -65,7 +65,7 @@ done
 wait
 
 # Move the client config to root dir
-mv $FM_CFG_DIR/server-0/client.json $FM_CFG_DIR/
+mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 
 # Define clients
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"
