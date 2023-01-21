@@ -80,7 +80,7 @@ export FM_DISTRIBUTEDGEN="$FM_BIN_DIR/distributedgen"
 # Alias clients
 alias ln1="\$FM_LN1"
 alias ln2="\$FM_LN2"
-alias btc_client="\$FM_BTC_CLIENT"
+alias bitcoin-cli="\$FM_BTC_CLIENT"
 alias mint_client="\$FM_MINT_CLIENT"
 alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 alias gateway-cli="\$FM_GATEWAY_CLI"
