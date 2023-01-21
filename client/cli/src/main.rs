@@ -528,9 +528,24 @@ async fn handle_command(
                 .iter()
                 .map(|(amount, notes)| (amount.to_owned(), notes.len()))
                 .collect();
+
+            let federation_name = client
+                .config()
+                .as_ref()
+                .meta
+                .get("federation_name")
+                .ok_or_else(|| {
+                    CliError::from(
+                        CliErrorKind::GeneralFederationError,
+                        "Federation config did not contain federation name",
+                        None,
+                    )
+                })?
+                .clone();
+
             Ok(CliOutput::Info {
                 federation_id: client.config().as_ref().federation_id.to_string(),
-                federation_name: client.config().as_ref().federation_name.clone(),
+                federation_name,
                 network: client.wallet_client().config.network,
                 total_amount: (notes.total_amount()),
                 total_num_notes: (notes.count_items()),

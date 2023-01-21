@@ -105,8 +105,6 @@ pub struct ApiEndpoint {
 /// This includes global settings and client-side module configs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable)]
 pub struct ClientConfig {
-    /// name of the federation
-    pub federation_name: String,
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member

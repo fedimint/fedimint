@@ -87,8 +87,6 @@ pub struct ServerConfigPrivate {
 pub struct ServerConfigConsensus {
     /// The version of the binary code running
     pub code_version: String,
-    /// Configurable federation name
-    pub federation_name: String,
     /// Public keys authenticating members of the federation and the configs
     #[serde(with = "serde_binary_human_readable")]
     pub auth_pk_set: hbbft::crypto::PublicKeySet,
@@ -195,7 +193,6 @@ impl ServerConfigConsensus {
         let consensus_hash = sha256::Hash::from_engine(engine);
 
         let client = ClientConfig {
-            federation_name: self.federation_name.clone(),
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
             nodes: self.api.values().cloned().collect(),
@@ -246,13 +243,12 @@ impl ServerConfig {
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
-            federation_name: params.federation_name.clone(),
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
             api: params.api_nodes(),
             modules: Default::default(),
-            meta: Default::default(),
+            meta: BTreeMap::from([("federation_name".to_owned(), params.federation_name)]),
         };
         let mut cfg = Self {
             consensus,
