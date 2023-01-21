@@ -1346,6 +1346,13 @@
 <a href="#1346" id="1346">1346</a>
 <a href="#1347" id="1347">1347</a>
 <a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -1395,7 +1402,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::common::MintDecoder;
-<span class="kw">use </span><span class="kw">crate</span>::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
+<span class="kw">use </span><span class="kw">crate</span>::config::{MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
     ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
@@ -1636,6 +1643,13 @@
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config.to_typed::&lt;MintConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
+    }
+
+    <span class="kw">fn </span>hash_client_module(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        config: serde_json::Value,
+    ) -&gt; anyhow::Result&lt;bitcoin_hashes::sha256::Hash&gt; {
+        serde_json::from_value::&lt;MintClientConfig&gt;(config)<span class="question-mark">?</span>.consensus_hash()
     }
 }
 

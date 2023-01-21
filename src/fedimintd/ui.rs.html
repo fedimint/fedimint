@@ -409,7 +409,6 @@
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -425,11 +424,10 @@
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-<span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
-<span class="kw">use </span>fedimint_server::config::ModuleGenRegistry;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>mint_client::api::WsFederationConnect;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;

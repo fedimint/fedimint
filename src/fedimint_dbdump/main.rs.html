@@ -700,6 +700,7 @@
 
 <span class="kw">use </span>docopt::Docopt;
 <span class="kw">use </span>erased_serde::Serialize;
+<span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::Encodable;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -707,7 +708,6 @@
 <span class="kw">use </span>fedimint_ln::{db <span class="kw">as </span>LightningRange, LightningGen};
 <span class="kw">use </span>fedimint_mint::{db <span class="kw">as </span>MintRange, MintGen};
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
-<span class="kw">use </span>fedimint_server::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_server::db <span class="kw">as </span>ConsensusRange;
 <span class="kw">use </span>fedimint_wallet::{db <span class="kw">as </span>WalletRange, WalletGen};
 <span class="kw">use </span>mint_client::db <span class="kw">as </span>ClientRange;

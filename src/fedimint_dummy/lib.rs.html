@@ -307,11 +307,18 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>common::DummyDecoder;
 <span class="kw">use </span>fedimint_api::cancellable::Cancellable;
 <span class="kw">use </span>fedimint_api::config::{
@@ -334,7 +341,8 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
-<span class="kw">use </span><span class="kw">crate</span>::config::{DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+<span class="kw">use </span><span class="kw">crate</span>::config::{DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+<span class="kw">use </span><span class="kw">crate</span>::serde_json::Value;
 
 <span class="kw">pub mod </span>common;
 <span class="kw">pub mod </span>config;
@@ -441,6 +449,10 @@
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config.to_typed::&lt;DummyConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
+    }
+
+    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: Value) -&gt; anyhow::Result&lt;sha256::Hash&gt; {
+        serde_json::from_value::&lt;DummyClientConfig&gt;(config)<span class="question-mark">?</span>.consensus_hash()
     }
 }
 

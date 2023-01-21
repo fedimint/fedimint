@@ -219,6 +219,8 @@
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     fs::File,
@@ -227,7 +229,7 @@
 };
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::config::{ConfigResponse, FederationId};
+<span class="kw">use </span>fedimint_api::config::{ConfigResponse, FederationId, ModuleGenRegistry};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
@@ -299,6 +301,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt;;
 
     <span class="doccomment">/// Create a new gateway federation client config from connect info
@@ -344,6 +347,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt; {
         <span class="kw">let </span>federation_id = config.client_config.federation_id.clone();
 
@@ -354,7 +358,7 @@
         )<span class="question-mark">?</span>;
         <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
 
-        <span class="prelude-val">Ok</span>(Client::new(config, decoders, db, ctx).<span class="kw">await</span>)
+        <span class="prelude-val">Ok</span>(Client::new(config, decoders, module_gens, db, ctx).<span class="kw">await</span>)
     }
 
     <span class="kw">async fn </span>create_config(

@@ -75,10 +75,13 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
 <span class="kw">use </span>bitcoin_hashes::hex::FromHex;
+<span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -139,6 +142,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientContext {
     <span class="kw">pub </span>decoders: ModuleDecoderRegistry,
+    <span class="kw">pub </span>module_gens: ModuleGenRegistry,
     <span class="kw">pub </span>db: Database,
     <span class="kw">pub </span>api: DynFederationApi,
     <span class="kw">pub </span>secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,

@@ -1643,6 +1643,10 @@
 <a href="#1643" id="1643">1643</a>
 <a href="#1644" id="1644">1644</a>
 <a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1701,7 +1705,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::common::WalletDecoder;
-<span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
+<span class="kw">use </span><span class="kw">crate</span>::config::{WalletClientConfig, WalletConfig};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
     PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
@@ -1998,6 +2002,10 @@
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config.to_typed::&lt;WalletConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
+    }
+
+    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt; {
+        serde_json::from_value::&lt;WalletClientConfig&gt;(config)<span class="question-mark">?</span>.consensus_hash()
     }
 }
 

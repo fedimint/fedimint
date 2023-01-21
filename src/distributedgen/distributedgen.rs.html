@@ -233,12 +233,12 @@
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_ln::LightningGen;
 <span class="kw">use </span>fedimint_mint::MintGen;
-<span class="kw">use </span>fedimint_server::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_wallet::WalletGen;
 <span class="kw">use </span>fedimintd::distributedgen::{create_cert, run_dkg};
 <span class="kw">use </span>fedimintd::encrypt::<span class="kw-2">*</span>;

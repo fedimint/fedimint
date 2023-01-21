@@ -566,6 +566,16 @@
 <a href="#566" id="566">566</a>
 <a href="#567" id="567">567</a>
 <a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -577,6 +587,8 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>bitcoin_hashes::sha256::Hash;
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -864,6 +876,8 @@
     <span class="kw">fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value)
         -&gt; anyhow::Result&lt;ModuleConfigResponse&gt;;
 
+    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
+
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
 }
 
@@ -915,6 +929,8 @@
         -&gt; anyhow::Result&lt;ModuleConfigResponse&gt;;
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
+
+    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
 }
 
 <span class="attr">#[async_trait]
@@ -974,6 +990,10 @@
         config: serde_json::Value,
     ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::to_config_response(<span class="self">self</span>, config)
+    }
+
+    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;Hash&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::hash_client_module(<span class="self">self</span>, config)
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {

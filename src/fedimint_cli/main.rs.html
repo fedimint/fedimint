@@ -722,6 +722,16 @@
 <a href="#722" id="722">722</a>
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -732,21 +742,25 @@
 
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Network, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>fedimint_api::config::ClientConfig;
+<span class="kw">use </span>fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 <span class="kw">use </span>fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
 <span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
+<span class="kw">use </span>fedimint_core::modules::ln::LightningGen;
 <span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_core::modules::wallet::WalletGen;
 <span class="kw">use </span>fedimint_mint::common::MintDecoder;
+<span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>mint_client::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
 };
@@ -1134,7 +1148,13 @@
             (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
         ]);
 
-        <span class="kw">let </span>client = Client::new(cfg.clone(), decoders, db, Default::default()).<span class="kw">await</span>;
+        <span class="kw">let </span>module_gens = ModuleGenRegistry::from(<span class="macro">vec!</span>[
+            DynModuleGen::from(WalletGen),
+            DynModuleGen::from(MintGen),
+            DynModuleGen::from(LightningGen),
+        ]);
+
+        <span class="kw">let </span>client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).<span class="kw">await</span>;
 
         <span class="kw">let </span>cli_result = handle_command(cli, client, rng).<span class="kw">await</span>;
 
