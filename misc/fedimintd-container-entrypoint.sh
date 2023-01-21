@@ -22,7 +22,7 @@ fi
 
 mkdir -p "$FM_DATA_DIR"
 
-export FM_LISTEN_UI=0.0.0.0:8175
+export FM_LISTEN_UI=0.0.0.0:8176
 
 1>&2 echo 'Starting fedimintd'
 fedimintd "$FM_DATA_DIR/"
