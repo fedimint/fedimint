@@ -297,6 +297,7 @@ mod tests {
 
         let client = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(module_id, WalletDecoder.into())]),
+            module_gens: Default::default(),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),

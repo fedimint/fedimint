@@ -23,6 +23,7 @@ use std::{
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
 use fedimint_server::modules::ln::contracts::Preimage;
@@ -51,6 +52,7 @@ pub type Result<T> = std::result::Result<T, LnGatewayError>;
 pub struct LnGateway {
     config: GatewayConfig,
     decoders: ModuleDecoderRegistry,
+    module_gens: ModuleGenRegistry,
     actors: Mutex<HashMap<String, Arc<GatewayActor>>>,
     ln_rpc: Arc<dyn LnRpc>,
     sender: mpsc::Sender<GatewayRequest>,
@@ -61,9 +63,11 @@ pub struct LnGateway {
 }
 
 impl LnGateway {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         config: GatewayConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
         ln_rpc: Arc<dyn LnRpc>,
         client_builder: DynGatewayClientBuilder,
         // TODO: consider encapsulating message channel within LnGateway
@@ -71,7 +75,6 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
-        let decoders2 = decoders.clone();
         let ln_gw = Self {
             config,
             actors: Mutex::new(HashMap::new()),
@@ -81,22 +84,27 @@ impl LnGateway {
             client_builder,
             task_group,
             channel_id_generator: AtomicU64::new(0),
-            decoders,
+            decoders: decoders.clone(),
+            module_gens: module_gens.clone(),
         };
 
-        ln_gw.load_federation_actors(decoders2).await;
+        ln_gw.load_federation_actors(decoders, module_gens).await;
 
         ln_gw
     }
 
-    async fn load_federation_actors(&self, decoders: ModuleDecoderRegistry) {
+    async fn load_federation_actors(
+        &self,
+        decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
+    ) {
         if let Ok(configs) = self.client_builder.load_configs() {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
 
             for config in configs {
                 let client = self
                     .client_builder
-                    .build(config.clone(), decoders.clone())
+                    .build(config.clone(), decoders.clone(), module_gens.clone())
                     .await
                     .expect("Could not build federation client");
 
@@ -175,7 +183,11 @@ impl LnGateway {
 
         let client = Arc::new(
             self.client_builder
-                .build(gw_client_cfg.clone(), self.decoders.clone())
+                .build(
+                    gw_client_cfg.clone(),
+                    self.decoders.clone(),
+                    self.module_gens.clone(),
+                )
                 .await
                 .expect("Failed to build gateway client"),
         );

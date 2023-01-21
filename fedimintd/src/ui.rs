@@ -13,11 +13,10 @@ use axum::{
 use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_core::util::SanitizedUrl;
-use fedimint_server::config::ModuleGenRegistry;
 use http::StatusCode;
 use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;

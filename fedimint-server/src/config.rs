@@ -1,7 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
 use std::net::SocketAddr;
-use std::os::unix::prelude::OsStrExt;
 use std::time::Duration;
 
 use anyhow::{bail, format_err};
@@ -10,17 +8,10 @@ use bitcoin::hashes::sha256::HashEngine;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, DkgRunner,
-    FederationId, JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ThresholdKeys,
-    TypedServerModuleConfig,
+    FederationId, JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
+    ThresholdKeys, TypedServerModuleConfig,
 };
-use fedimint_api::core::{
-    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-    MODULE_INSTANCE_ID_GLOBAL,
-};
-use fedimint_api::db::Database;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_api::module::DynModuleGen;
+use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::{timeout, Elapsed, TaskGroup};
 use fedimint_api::{Amount, PeerId};
@@ -106,14 +97,6 @@ pub struct ServerConfigConsensus {
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
-impl ServerConfigConsensus {
-    pub fn iter_module_instances(
-        &self,
-    ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
-        self.modules.iter().map(|(k, v)| (*k, v.kind()))
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
     /// Network addresses and certs for all p2p connections
@@ -155,6 +138,12 @@ pub struct ServerConfigParams {
 }
 
 impl ServerConfigConsensus {
+    pub fn iter_module_instances(
+        &self,
+    ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
+        self.modules.iter().map(|(k, v)| (*k, v.kind()))
+    }
+
     /// encodes the fields into a sha256 hash for comparison
     /// TODO use the derive macro to automatically pick up new fields here
     fn try_to_config_response(
@@ -201,144 +190,6 @@ impl ServerConfigConsensus {
     pub fn to_config_response(&self, module_config_gens: &ModuleGenRegistry) -> ConfigResponse {
         self.try_to_config_response(module_config_gens)
             .expect("configuration mismatch")
-    }
-}
-
-#[derive(Clone)]
-pub struct ModuleGenRegistry(BTreeMap<ModuleKind, DynModuleGen>);
-
-impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
-    fn from(value: Vec<DynModuleGen>) -> Self {
-        Self(BTreeMap::from_iter(
-            value.into_iter().map(|i| (i.module_kind(), i)),
-        ))
-    }
-}
-
-impl ModuleGenRegistry {
-    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
-        self.0.get(k)
-    }
-
-    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
-    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
-        for hardcoded_module in ["mint", "ln", "wallet"] {
-            if !self
-                .0
-                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
-            {
-                panic!("Missing {hardcoded_module} module");
-            }
-        }
-
-        LegacyInitOrderIter {
-            next_id: 0,
-            rest: self.0.clone(),
-        }
-    }
-
-    pub fn decoders<'a>(
-        &self,
-        module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
-        let mut modules = BTreeMap::new();
-        for (id, kind) in module_kinds {
-            let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
-            };
-
-            modules.insert(id, init.decoder());
-        }
-        Ok(ModuleDecoderRegistry::from_iter(modules))
-    }
-
-    pub fn get_env_vars_map() -> BTreeMap<OsString, OsString> {
-        std::env::vars_os()
-            // We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
-            .collect()
-    }
-
-    pub async fn init_all(
-        &self,
-        cfg: &ServerConfig,
-        db: &Database,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::DynServerModule>> {
-        let mut modules = BTreeMap::new();
-
-        let env = ModuleGenRegistry::get_env_vars_map();
-
-        for (module_id, module_cfg) in &cfg.consensus.modules {
-            let kind = module_cfg.kind();
-
-            let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
-            };
-            info!(module_instance_id = *module_id, kind = %kind, "Init module");
-
-            let module = init
-                .init(
-                    cfg.get_module_config(*module_id)?,
-                    db.clone(),
-                    &env,
-                    task_group,
-                )
-                .await?;
-            modules.insert(*module_id, module);
-        }
-        Ok(ModuleRegistry::from(modules))
-    }
-}
-
-/// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
-/// Returning each `kind` exactly once, so that `LEGACY_HARDCODED_` constants
-/// correspond to correct module kind.
-///
-/// We would like to get rid of it eventually, but old client and test code assumes
-/// it in multiple places, and it will take work to fix it, while we want new code
-/// to not assume this 1:1 relationship.
-pub struct LegacyInitOrderIter {
-    /// Counter of what module id will this returned value get assigned
-    next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, DynModuleGen>,
-}
-
-impl Iterator for LegacyInitOrderIter {
-    type Item = (ModuleKind, DynModuleGen);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let ret = match self.next_id {
-            LEGACY_HARDCODED_INSTANCE_ID_LN => {
-                let kind = ModuleKind::from_static_str("ln");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
-                let kind = ModuleKind::from_static_str("mint");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
-                let kind = ModuleKind::from_static_str("wallet");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            _ => self.rest.pop_first(),
-        };
-
-        if ret.is_some() {
-            self.next_id += 1;
-        }
-        ret
     }
 }
 

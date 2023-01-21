@@ -9,6 +9,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256;
+use bitcoin_hashes::sha256::Hash;
 use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
@@ -296,6 +298,8 @@ pub trait IModuleGen: Debug {
     fn to_config_response(&self, config: serde_json::Value)
         -> anyhow::Result<ModuleConfigResponse>;
 
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 }
 
@@ -347,6 +351,8 @@ pub trait ModuleGen: Debug + Sized {
         -> anyhow::Result<ModuleConfigResponse>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
 }
 
 #[async_trait]
@@ -406,6 +412,10 @@ where
         config: serde_json::Value,
     ) -> anyhow::Result<ModuleConfigResponse> {
         <Self as ModuleGen>::to_config_response(self, config)
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<Hash> {
+        <Self as ModuleGen>::hash_client_module(self, config)
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {

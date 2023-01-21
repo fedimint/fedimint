@@ -20,7 +20,7 @@ use cln_rpc::ClnRpc;
 use fake::FakeLightningTest;
 use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::core;
 use fedimint_api::core::{
     DynModuleConsensusItem as PerModuleConsensusItem, ModuleConsensusItem,
@@ -40,8 +40,8 @@ use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::{MintGen, MintOutput};
+use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
-use fedimint_server::config::{ModuleGenRegistry, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
@@ -233,7 +233,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
-                module_inits,
+                module_inits.clone(),
                 |_cfg: ServerConfig, _db| Box::pin(async { BTreeMap::default() }),
                 &mut task_group,
             )
@@ -248,7 +248,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(Arc::new(
-                create_user_client(user_cfg, decoders.clone(), peers, user_db).await,
+                create_user_client(
+                    user_cfg,
+                    decoders.clone(),
+                    module_inits.clone(),
+                    peers,
+                    user_db,
+                )
+                .await,
             ));
             user.client.await_consensus_block_height(0).await?;
 
@@ -256,6 +263,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lightning_rpc_adapter,
                 client_config.clone(),
                 decoders,
+                module_inits,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -295,7 +303,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &bitcoin_rpc,
                 &connect_gen,
-                module_inits,
+                module_inits.clone(),
                 // the things dealing with async makes us do...
                 // if you know how to make it better, please do --dpc
                 |cfg: ServerConfig, db: Database| {
@@ -328,7 +336,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let user_db = Database::new(MemDatabase::new(), module_decode_stubs());
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(Arc::new(
-                create_user_client(user_cfg, decoders.clone(), peers, user_db).await,
+                create_user_client(
+                    user_cfg,
+                    decoders.clone(),
+                    module_inits.clone(),
+                    peers,
+                    user_db,
+                )
+                .await,
             ));
             user.client.await_consensus_block_height(0).await?;
 
@@ -336,6 +351,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 ln_rpc_adapter,
                 client_config.clone(),
                 decoders,
+                module_inits,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -372,6 +388,7 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
 pub async fn create_user_client(
     config: UserClientConfig,
     decoders: ModuleDecoderRegistry,
+    module_gens: ModuleGenRegistry,
     peers: Vec<PeerId>,
     db: Database,
 ) -> UserClient {
@@ -387,7 +404,7 @@ pub async fn create_user_client(
     )
     .into();
 
-    UserClient::new_with_api(config, decoders, db, api, Default::default()).await
+    UserClient::new_with_api(config, decoders, module_gens, db, api, Default::default()).await
 }
 
 async fn distributed_config(
@@ -481,6 +498,7 @@ impl GatewayTest {
         ln_client_adapter: LnRpcAdapter,
         client_config: ClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
     ) -> Self {
@@ -527,6 +545,7 @@ impl GatewayTest {
         let gateway = LnGateway::new(
             gw_cfg,
             decoders.clone(),
+            module_gens.clone(),
             ln_rpc,
             client_builder.clone(),
             sender,
@@ -537,7 +556,7 @@ impl GatewayTest {
 
         let client = Arc::new(
             client_builder
-                .build(gw_client_cfg.clone(), decoders)
+                .build(gw_client_cfg.clone(), decoders, module_gens)
                 .await
                 .expect("Could not build gateway client"),
         );
@@ -573,6 +592,7 @@ impl UserTest<UserClientConfig> {
         let user = create_user_client(
             self.config.clone(),
             self.client.decoders().clone(),
+            self.client.module_gens().clone(),
             peers,
             Database::new(MemDatabase::new(), module_decode_stubs()),
         )
@@ -1080,7 +1100,7 @@ impl FederationTest {
             let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
 
             let mut modules = BTreeMap::new();
-            let env_vars = ModuleGenRegistry::get_env_vars_map();
+            let env_vars = FedimintConsensus::get_env_vars_map();
 
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();

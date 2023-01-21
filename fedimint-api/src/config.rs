@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::io::Write;
@@ -13,7 +14,11 @@ use bitcoin_hashes::hex::{FromHex, ToHex};
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use fedimint_api::{BitcoinHash, Encodable};
+use fedimint_api::core::{
+    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
+    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
+use fedimint_api::{BitcoinHash, Encodable, ModuleDecoderRegistry};
 use hbbft::crypto::group::Curve;
 use hbbft::crypto::group::GroupEncoding;
 use hbbft::crypto::poly::Commitment;
@@ -30,7 +35,7 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use url::Url;
 
 use crate::cancellable::Cancellable;
-use crate::core::{ModuleInstanceId, ModuleKind};
+use crate::module::DynModuleGen;
 use crate::net::peers::MuxPeerConnections;
 use crate::PeerId;
 
@@ -108,7 +113,7 @@ pub struct ApiEndpoint {
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable)]
 pub struct ClientConfig {
     /// name of the federation
     pub federation_name: String,
@@ -119,6 +124,7 @@ pub struct ClientConfig {
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules
+    #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
@@ -135,7 +141,7 @@ pub struct ConfigResponse {
 ///
 /// Stable id so long as guardians membership does not change
 /// Unique id so long as guardians do not all collude
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable)]
 pub struct FederationId(pub threshold_crypto::PublicKey);
 
 /// Display as a hex encoding
@@ -170,6 +176,36 @@ impl FromStr for FederationId {
 }
 
 impl ClientConfig {
+    /// Returns the consensus hash for a given client config
+    pub fn consensus_hash(
+        &self,
+        module_config_gens: &ModuleGenRegistry,
+    ) -> anyhow::Result<sha256::Hash> {
+        let modules: BTreeMap<ModuleInstanceId, sha256::Hash> = self
+            .modules
+            .iter()
+            .map(|(module_instance_id, v)| {
+                let kind = v.kind();
+                Ok((
+                    *module_instance_id,
+                    module_config_gens
+                        .get(kind)
+                        .ok_or_else(|| format_err!("module config gen not found: {kind}"))?
+                        .hash_client_module(v.value().clone())?,
+                ))
+            })
+            .collect::<anyhow::Result<_>>()?;
+
+        let mut engine = HashEngine::default();
+        self.consensus_encode(&mut engine)?;
+        for (k, v) in modules.iter() {
+            k.consensus_encode(&mut engine)?;
+            v.consensus_encode(&mut engine)?;
+        }
+
+        Ok(sha256::Hash::from_engine(engine))
+    }
+
     pub fn get_module<T: DeserializeOwned>(&self, id: ModuleInstanceId) -> anyhow::Result<T> {
         if let Some(client_cfg) = self.modules.get(&id) {
             Ok(serde_json::from_value(client_cfg.0.value().clone())?)
@@ -229,6 +265,104 @@ impl ConfigGenParams {
             .ok_or_else(|| anyhow::anyhow!("No params found for module {}", P::MODULE_NAME))?;
         serde_json::from_value(value.clone())
             .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ModuleGenRegistry(BTreeMap<ModuleKind, DynModuleGen>);
+
+impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
+    fn from(value: Vec<DynModuleGen>) -> Self {
+        Self(BTreeMap::from_iter(
+            value.into_iter().map(|i| (i.module_kind(), i)),
+        ))
+    }
+}
+
+impl ModuleGenRegistry {
+    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
+        self.0.get(k)
+    }
+
+    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
+    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
+        for hardcoded_module in ["mint", "ln", "wallet"] {
+            if !self
+                .0
+                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
+            {
+                panic!("Missing {hardcoded_module} module");
+            }
+        }
+
+        LegacyInitOrderIter {
+            next_id: 0,
+            rest: self.0.clone(),
+        }
+    }
+
+    pub fn decoders<'a>(
+        &self,
+        module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+    ) -> anyhow::Result<ModuleDecoderRegistry> {
+        let mut modules = BTreeMap::new();
+        for (id, kind) in module_kinds {
+            let Some(init) = self.0.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
+            };
+
+            modules.insert(id, init.decoder());
+        }
+        Ok(ModuleDecoderRegistry::from_iter(modules))
+    }
+}
+
+/// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
+/// Returning each `kind` exactly once, so that `LEGACY_HARDCODED_` constants
+/// correspond to correct module kind.
+///
+/// We would like to get rid of it eventually, but old client and test code assumes
+/// it in multiple places, and it will take work to fix it, while we want new code
+/// to not assume this 1:1 relationship.
+pub struct LegacyInitOrderIter {
+    /// Counter of what module id will this returned value get assigned
+    next_id: ModuleInstanceId,
+    rest: BTreeMap<ModuleKind, DynModuleGen>,
+}
+
+impl Iterator for LegacyInitOrderIter {
+    type Item = (ModuleKind, DynModuleGen);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = match self.next_id {
+            LEGACY_HARDCODED_INSTANCE_ID_LN => {
+                let kind = ModuleKind::from_static_str("ln");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
+                let kind = ModuleKind::from_static_str("mint");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
+                let kind = ModuleKind::from_static_str("wallet");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            _ => self.rest.pop_first(),
+        };
+
+        if ret.is_some() {
+            self.next_id += 1;
+        }
+        ret
     }
 }
 

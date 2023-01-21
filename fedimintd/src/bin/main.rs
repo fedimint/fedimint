@@ -2,12 +2,12 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::db::Database;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
-use fedimint_server::config::ModuleGenRegistry;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::WalletGen;

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use docopt::Docopt;
 use erased_serde::Serialize;
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::Encodable;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -9,7 +10,6 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_ln::{db as LightningRange, LightningGen};
 use fedimint_mint::{db as MintRange, MintGen};
 use fedimint_rocksdb::RocksDbReadOnly;
-use fedimint_server::config::ModuleGenRegistry;
 use fedimint_server::db as ConsensusRange;
 use fedimint_wallet::{db as WalletRange, WalletGen};
 use mint_client::db as ClientRange;
