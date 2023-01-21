@@ -496,7 +496,7 @@
             drop(conn1);
             drop(conn2);
 
-            task_group.join_all().<span class="kw">await</span>.expect(<span class="string">&quot;no failures&quot;</span>);
+            task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span>.expect(<span class="string">&quot;no failures&quot;</span>);
         }
     }
 }

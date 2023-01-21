@@ -1369,7 +1369,7 @@
         }
 
         task_group.shutdown().<span class="kw">await</span>;
-        task_group.join_all().<span class="kw">await</span>.unwrap();
+        task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
     }
 }
 </code></pre></div>

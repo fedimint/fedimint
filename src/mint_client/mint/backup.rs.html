@@ -946,7 +946,7 @@
             <span class="prelude-val">Err</span>(Cancelled) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled)),
         };
 
-        task_group.join_all().<span class="kw">await</span><span class="question-mark">?</span>;
+        task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(<span class="string">&quot;Writting out the recovered state to the database&quot;</span>);
 
