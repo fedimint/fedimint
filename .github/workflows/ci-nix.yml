@@ -144,6 +144,10 @@ jobs:
     runs-on: buildjet-8vcpu-ubuntu-2004
     timeout-minutes: 30
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      - name: Prepare
+        uses: ./.github/actions/prepare
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v18
         with:
@@ -184,9 +188,9 @@ jobs:
       - name: Publish
         if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/kody-setup-rebase'
         run: |
-          nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.ln_gateway_clightning_container_tag }} && hub_tag="fedimint/ln-gateway-clightning:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.ln_gateway_clightning_container_tag }} && hub_tag="fedimint/ln-gateway-clightning:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish master tag
         if: github.ref == 'refs/heads/master'
