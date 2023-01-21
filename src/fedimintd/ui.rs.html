@@ -390,6 +390,26 @@
 <a href="#390" id="390">390</a>
 <a href="#391" id="391">391</a>
 <a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -444,26 +464,43 @@
 <span class="attr">#[derive(Template)]
 #[template(path = <span class="string">&quot;run.html&quot;</span>)]
 </span><span class="kw">struct </span>RunTemplate {
-    connection_string: String,
-    has_connection_string: bool,
+    state: RunTemplateState,
+}
+
+<span class="kw">enum </span>RunTemplateState {
+    DkgNotStarted,
+    DkgInProgress,
+    DkgDone(String),   <span class="comment">// connnection string
+    </span>DkgFailed(String), <span class="comment">// error
+    </span>LocalIoError(String),
 }
 
 <span class="kw">async fn </span>run_page(axum::extract::State(state): axum::extract::State&lt;MutableState&gt;) -&gt; RunTemplate {
     <span class="kw">let </span>state = state.lock().<span class="kw">await</span>;
-    <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
-    <span class="kw">let </span>connection_string: String = <span class="kw">match </span>std::fs::File::open(path) {
-        <span class="prelude-val">Ok</span>(file) =&gt; {
-            <span class="kw">let </span>cfg: ClientConfig =
-                serde_json::from_reader(file).expect(<span class="string">&quot;Could not parse cfg file.&quot;</span>);
-            <span class="kw">let </span>connect_info = WsFederationConnect::from(<span class="kw-2">&amp;</span>cfg);
-            serde_json::to_string(<span class="kw-2">&amp;</span>connect_info).expect(<span class="string">&quot;should deserialize&quot;</span>)
-        }
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="string">&quot;&quot;</span>.into(),
-    };
 
     RunTemplate {
-        connection_string: connection_string.clone(),
-        has_connection_string: !connection_string.is_empty(),
+        state: <span class="kw">match </span>state.dkg_state {
+            <span class="prelude-val">Some</span>(DkgState::Success) =&gt; {
+                <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
+                <span class="comment">// TODO: refactor be a standalone function
+                </span><span class="kw">match </span>std::fs::File::open(path) {
+                    <span class="prelude-val">Ok</span>(file) =&gt; <span class="kw">match </span>serde_json::from_reader(file) {
+                        <span class="prelude-val">Ok</span>(cfg) =&gt; {
+                            <span class="kw">let </span>connect_info = WsFederationConnect::from(<span class="kw-2">&amp;</span>cfg);
+
+                            RunTemplateState::DkgDone(
+                                serde_json::to_string(<span class="kw-2">&amp;</span>connect_info).expect(<span class="string">&quot;should deserialize&quot;</span>),
+                            )
+                        }
+                        <span class="prelude-val">Err</span>(e) =&gt; RunTemplateState::LocalIoError(e.to_string()),
+                    },
+                    <span class="prelude-val">Err</span>(e) =&gt; RunTemplateState::LocalIoError(e.to_string()),
+                }
+            }
+            <span class="prelude-val">Some</span>(DkgState::Failure(<span class="kw-2">ref </span>e)) =&gt; RunTemplateState::DkgFailed(e.to_owned()),
+            <span class="prelude-val">Some</span>(DkgState::Running) =&gt; RunTemplateState::DkgInProgress,
+            <span class="prelude-val">None </span>=&gt; RunTemplateState::DkgNotStarted,
+        },
     }
 }
 
@@ -496,6 +533,7 @@
     axum::extract::State(state): axum::extract::State&lt;MutableState&gt;,
     Form(form): Form&lt;GuardiansForm&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Redirect, UIError&gt; {
+    <span class="kw">let </span>state_copy = state.clone();
     <span class="kw">let </span><span class="kw-2">mut </span>state = state.lock().<span class="kw">await</span>;
     <span class="kw">let </span>params = state.params.clone().expect(<span class="string">&quot;invalid state&quot;</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>connection_strings: Vec&lt;String&gt; =
@@ -525,7 +563,6 @@
     </span><span class="kw">let </span>key = get_key(<span class="prelude-val">Some</span>(state.password.clone()), state.data_dir.join(SALT_FILE))<span class="question-mark">?</span>;
     <span class="kw">let </span>pk_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, state.data_dir.join(TLS_PK))<span class="question-mark">?</span>;
     <span class="kw">let </span>max_denomination = Amount::from_msats(<span class="number">100000000000</span>);
-    <span class="kw">let </span>(dkg_sender, dkg_receiver) = tokio::sync::oneshot::channel::&lt;UiMessage&gt;();
     <span class="kw">let </span>dir_out_path = state.data_dir.clone();
     <span class="kw">let </span>fedimintd_sender = state.sender.clone();
 
@@ -536,6 +573,7 @@
             .shutdown_join_all()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;couldn&#39;t shut down dkg task group&quot;</span>);
+        state_copy.lock().<span class="kw">await</span>.dkg_state = <span class="prelude-val">None</span>;
     }
 
     <span class="kw">let </span><span class="kw-2">mut </span>dkg_task_group = state.task_group.make_subgroup().<span class="kw">await</span>;
@@ -546,6 +584,7 @@
         .spawn(<span class="string">&quot;admin UI running DKG&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Running DKG&quot;</span>);
 
+            state_copy.lock().<span class="kw">await</span>.dkg_state = <span class="prelude-val">Some</span>(DkgState::Running);
             <span class="kw">let </span>maybe_config = run_dkg(
                 params.bind_p2p,
                 params.bind_api,
@@ -574,30 +613,22 @@
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;couldn&#39;t shut down DKG task group&quot;</span>);
                     <span class="comment">// Tell this route that DKG succeeded
-                    </span>dkg_sender
-                        .send(UiMessage::DKGSuccess)
-                        .expect(<span class="string">&quot;failed to send over channel&quot;</span>);
-                    <span class="comment">// Tell this fedimintd that DKG succeeded
+                    </span>state_copy.lock().<span class="kw">await</span>.dkg_state = <span class="prelude-val">Some</span>(DkgState::Success);
+                    <span class="comment">// Tell fedimint that DKG succeeded
                     </span>fedimintd_sender
-                        .send(UiMessage::DKGSuccess)
+                        .send(UiMessage::DkgSuccess)
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;failed to send over channel&quot;</span>);
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">tracing::info!</span>(<span class="string">&quot;DKG failed {:?}&quot;</span>, e);
-                    dkg_sender
-                        <span class="comment">// TODO: include the error in the message
-                        </span>.send(UiMessage::DKGFailure)
-                        .expect(<span class="string">&quot;failed to send over channel&quot;</span>);
+                    state_copy.lock().<span class="kw">await</span>.dkg_state = <span class="prelude-val">Some</span>(DkgState::Failure(e.to_string()));
                 }
             };
         })
         .<span class="kw">await</span>;
-    <span class="kw">match </span>dkg_receiver.<span class="kw">await</span>.expect(<span class="string">&quot;failed to read over channel&quot;</span>) {
-        UiMessage::DKGSuccess =&gt; <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/run&quot;</span>)),
-        <span class="comment">// TODO: flash a message that it failed
-        </span>UiMessage::DKGFailure =&gt; <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/add_guardians&quot;</span>)),
-    }
+
+    <span class="prelude-val">Ok</span>(Redirect::to(<span class="string">&quot;/run&quot;</span>))
 }
 
 <span class="attr">#[derive(Template)]
@@ -740,13 +771,21 @@
     task_group: TaskGroup,
     dkg_task_group: <span class="prelude-ty">Option</span>&lt;TaskGroup&gt;,
     module_gens: ModuleGenRegistry,
+    dkg_state: <span class="prelude-ty">Option</span>&lt;DkgState&gt;,
 }
 <span class="kw">type </span>MutableState = Arc&lt;Mutex&lt;State&gt;&gt;;
 
 <span class="attr">#[derive(Debug)]
+</span><span class="kw">pub enum </span>DkgState {
+    Running,
+    Success,
+    Failure(String),
+}
+
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub enum </span>UiMessage {
-    DKGSuccess,
-    DKGFailure,
+    DkgSuccess,
+    DkgFailure(String),
 }
 
 <span class="kw">pub async fn </span>run_ui(
@@ -765,6 +804,7 @@
         task_group,
         dkg_task_group: <span class="prelude-val">None</span>,
         module_gens,
+        dkg_state: <span class="prelude-val">None</span>,
     }));
 
     <span class="kw">let </span>app = Router::new()
