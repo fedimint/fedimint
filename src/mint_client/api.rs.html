@@ -1129,13 +1129,6 @@
 <a href="#1129" id="1129">1129</a>
 <a href="#1130" id="1130">1130</a>
 <a href="#1131" id="1131">1131</a>
-<a href="#1132" id="1132">1132</a>
-<a href="#1133" id="1133">1133</a>
-<a href="#1134" id="1134">1134</a>
-<a href="#1135" id="1135">1135</a>
-<a href="#1136" id="1136">1136</a>
-<a href="#1137" id="1137">1137</a>
-<a href="#1138" id="1138">1138</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::pin::Pin;
@@ -1491,8 +1484,6 @@
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">pub trait </span>GlobalFederationApi {
-    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ClientConfig&gt;;
-
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FederationResult&lt;TransactionId&gt;;
     <span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt;;
 
@@ -1530,11 +1521,6 @@
 <span class="kw">where
     </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>get_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ClientConfig&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/config&quot;</span>.to_owned(), erased_no_param())
-            .<span class="kw">await
-    </span>}
-
     <span class="doccomment">/// Submit a transaction for inclusion
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: LegacyTransaction) -&gt; FederationResult&lt;TransactionId&gt; {
         <span class="self">self</span>.request_current_consensus(
