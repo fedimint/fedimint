@@ -353,8 +353,6 @@ dyn_newtype_define! {
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait GlobalFederationApi {
-    async fn get_client_config(&self) -> FederationResult<ClientConfig>;
-
     async fn submit_transaction(&self, tx: LegacyTransaction) -> FederationResult<TransactionId>;
     async fn fetch_tx_outcome(&self, txid: &TransactionId) -> FederationResult<TransactionStatus>;
 
@@ -392,11 +390,6 @@ impl<T: ?Sized> GlobalFederationApi for T
 where
     T: IFederationApi + Send + Sync + 'static,
 {
-    async fn get_client_config(&self) -> FederationResult<ClientConfig> {
-        self.request_current_consensus("/config".to_owned(), erased_no_param())
-            .await
-    }
-
     /// Submit a transaction for inclusion
     async fn submit_transaction(&self, tx: LegacyTransaction) -> FederationResult<TransactionId> {
         self.request_current_consensus(
