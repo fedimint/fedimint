@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"opaque":[["",""]],"static":[["CALLSITE",""],["META",""]],"struct":[["SqliteDb",""],["SqliteDbTransaction",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["SqliteDb",""],["SqliteDbTransaction",""]]};

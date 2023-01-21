@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"static":[["CALLSITE",""],["META",""]],"struct":[["RocksDb",""],["RocksDbReadOnly",""],["RocksDbTransaction",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["RocksDb",""],["RocksDbReadOnly",""],["RocksDbTransaction",""]]};

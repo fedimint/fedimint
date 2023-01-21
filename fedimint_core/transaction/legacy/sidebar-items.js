@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["VARIANTS",""]],"enum":[["Input","An Input consumed by a Transaction is defined within a Fedimint Module."],["Output",""],["__Field",""]],"macro":[["try",""]],"struct":[["Transaction","An atomic value transfer operation within the Fedimint system and consensus"],["__FieldVisitor",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["Input","An Input consumed by a Transaction is defined within a Fedimint Module."],["Output",""]],"struct":[["Transaction","An atomic value transfer operation within the Fedimint system and consensus"]]};

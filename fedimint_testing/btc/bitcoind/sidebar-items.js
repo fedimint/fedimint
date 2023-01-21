@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["height_hash",""]],"opaque":[["",""]],"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["height_hash",""]],"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""]]};

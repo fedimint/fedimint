@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":[["try",""]],"opaque":[["",""]],"struct":[["InvalidAmountTierError",""],["Tiered",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["InvalidAmountTierError",""],["Tiered",""]]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["RUST_LOG_FULL",""]],"fn":[["__getit",""],["__init",""],["rust_log_full_enabled",""]],"static":[["__KEY",""]],"struct":[["AbbreviateHexBytes","Use for displaying bytes in the logs"]]};
+window.SIDEBAR_ITEMS = {"fn":[["rust_log_full_enabled",""]],"struct":[["AbbreviateHexBytes","Use for displaying bytes in the logs"]]};

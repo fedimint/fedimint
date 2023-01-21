@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"macro":[["try",""]],"struct":[["FeeConsensus",""],["WalletClientConfig",""],["WalletConfig",""],["WalletConfigConsensus",""],["WalletConfigLocal",""],["WalletConfigPrivate",""],["__FieldVisitor",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["WalletClientConfig",""],["WalletConfig",""],["WalletConfigConsensus",""],["WalletConfigLocal",""],["WalletConfigPrivate",""]]};

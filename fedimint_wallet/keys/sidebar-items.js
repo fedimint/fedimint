@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"macro":[["try",""]],"struct":[["CompressedPublicKey",""],["__FieldVisitor",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["CompressedPublicKey",""]]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"opaque":[["",""]],"static":[["CALLSITE",""],["META",""]],"struct":[["GatewayActor",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["GatewayActor",""]]};

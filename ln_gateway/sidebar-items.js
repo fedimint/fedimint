@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["LnGatewayError",""]],"mod":[["actor",""],["client",""],["cln",""],["config",""],["gatewaylnrpc",""],["ln",""],["rpc",""],["utils",""]],"opaque":[["",""]],"static":[["CALLSITE",""],["META",""]],"struct":[["LnGateway",""]],"type":[["Result",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["LnGatewayError",""]],"mod":[["actor",""],["client",""],["cln",""],["config",""],["gatewaylnrpc",""],["ln",""],["rpc",""],["utils",""]],"struct":[["LnGateway",""]],"type":[["Result",""]]};
