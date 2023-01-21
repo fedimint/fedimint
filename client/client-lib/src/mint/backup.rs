@@ -67,7 +67,7 @@ impl MintClient {
             Err(Cancelled) => return Ok(Err(Cancelled)),
         };
 
-        task_group.join_all().await?;
+        task_group.join_all(None).await?;
 
         info!("Writting out the recovered state to the database");
 

@@ -682,6 +682,6 @@ mod tests {
         }
 
         task_group.shutdown().await;
-        task_group.join_all().await.unwrap();
+        task_group.join_all(None).await.unwrap();
     }
 }

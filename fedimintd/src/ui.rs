@@ -21,9 +21,11 @@ use http::StatusCode;
 use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
+use tokio::select;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
+use tracing::{debug, error};
 use url::Url;
 
 use crate::distributedgen::{create_cert, parse_peer_params, run_dkg};
@@ -157,7 +159,7 @@ async fn post_guardians(
     if let Some(dkg_task_group) = state.dkg_task_group.clone() {
         tracing::info!("killing dkg task group");
         dkg_task_group
-            .shutdown_join_all()
+            .shutdown_join_all(None)
             .await
             .expect("couldn't shut down dkg task group");
         state_copy.lock().await.dkg_state = None;
@@ -196,7 +198,7 @@ async fn post_guardians(
                     tracing::info!("DKG succeeded");
                     // Shut down DKG to prevent port collisions
                     dkg_task_group
-                        .shutdown_join_all()
+                        .shutdown_join_all(None)
                         .await
                         .expect("couldn't shut down DKG task group");
                     // Tell this route that DKG succeeded
@@ -388,7 +390,7 @@ pub async fn run_ui(
         data_dir,
         sender,
         password,
-        task_group,
+        task_group: task_group.clone(),
         dkg_task_group: None,
         module_gens,
         dkg_state: None,
@@ -404,8 +406,17 @@ pub async fn run_ui(
         .route("/qr", get(qr))
         .with_state(state);
 
-    axum::Server::bind(&bind_addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let shutdown_future = task_group.make_handle().make_shutdown_rx().await;
+    let server_future = axum::Server::bind(&bind_addr).serve(app.into_make_service());
+
+    debug!("Starting setup UI server");
+    select! {
+        _ = shutdown_future => {
+            debug!("Setup UI server shutting down");
+        },
+        Err(err) = server_future => {
+            error!(?err, "Setup UI server encountered an error");
+            panic!("Setup UI server crashed");
+        }
+    }
 }
