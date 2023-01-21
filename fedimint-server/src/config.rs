@@ -774,6 +774,7 @@ pub fn gen_cert_and_key(
 mod serde_tls_cert {
     use std::borrow::Cow;
 
+    use bitcoin_hashes::hex::{FromHex, ToHex};
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use tokio_rustls::rustls;
@@ -782,7 +783,7 @@ mod serde_tls_cert {
     where
         S: Serializer,
     {
-        let hex_str = hex::encode(&cert.0);
+        let hex_str = cert.0.to_hex();
         Serialize::serialize(&hex_str, serializer)
     }
 
@@ -791,7 +792,7 @@ mod serde_tls_cert {
         D: Deserializer<'de>,
     {
         let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-        let bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom("Invalid hex"))?;
+        let bytes = Vec::from_hex(&hex_str).map_err(D::Error::custom)?;
         Ok(rustls::Certificate(bytes))
     }
 }
@@ -799,7 +800,7 @@ mod serde_tls_cert {
 mod serde_tls_key {
     use std::borrow::Cow;
 
-    use serde::de::Error;
+    use bitcoin_hashes::hex::{FromHex, ToHex};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use tokio_rustls::rustls;
 
@@ -807,7 +808,7 @@ mod serde_tls_key {
     where
         S: Serializer,
     {
-        let hex_str = hex::encode(&key.0);
+        let hex_str = key.0.to_hex();
         Serialize::serialize(&hex_str, serializer)
     }
 
@@ -816,7 +817,7 @@ mod serde_tls_key {
         D: Deserializer<'de>,
     {
         let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-        let bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom("Invalid hex"))?;
+        let bytes = Vec::from_hex(&hex_str).map_err(serde::de::Error::custom)?;
         Ok(rustls::PrivateKey(bytes))
     }
 }

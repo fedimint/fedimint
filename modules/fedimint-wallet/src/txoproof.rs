@@ -3,6 +3,7 @@ use std::convert::Infallible;
 use std::hash::Hash;
 use std::io::Cursor;
 
+use bitcoin::hashes::hex::{FromHex, ToHex};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
@@ -214,7 +215,7 @@ impl Serialize for TxOutProof {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(&bytes))
+            serializer.serialize_str(&bytes.to_hex())
         } else {
             serializer.serialize_bytes(&bytes)
         }
@@ -222,25 +223,23 @@ impl Serialize for TxOutProof {
 }
 
 impl<'de> Deserialize<'de> for TxOutProof {
-    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let empty_module_registry = ModuleDecoderRegistry::default();
         if deserializer.is_human_readable() {
-            // TODO: Try Cow
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-            let bytes =
-                hex::decode(hex_str.as_ref()).map_err(<D as Deserializer<'de>>::Error::custom)?;
+            let bytes = Vec::from_hex(&hex_str).map_err(D::Error::custom)?;
             Ok(
                 TxOutProof::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
-                    .map_err(<D as Deserializer<'de>>::Error::custom)?,
+                    .map_err(D::Error::custom)?,
             )
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
             Ok(
                 TxOutProof::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
-                    .map_err(<D as Deserializer<'de>>::Error::custom)?,
+                    .map_err(D::Error::custom)?,
             )
         }
     }
@@ -323,6 +322,7 @@ pub enum PegInProofError {
 mod tests {
     use std::io::Cursor;
 
+    use bitcoin::hashes::hex::FromHex;
     use fedimint_api::encoding::Decodable;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
 
@@ -345,7 +345,7 @@ mod tests {
 
         let empty_module_registry = ModuleDecoderRegistry::default();
         let txoutproof = TxOutProof::consensus_decode(
-            &mut Cursor::new(hex::decode(txoutproof_hex).unwrap()),
+            &mut Cursor::new(Vec::from_hex(txoutproof_hex).unwrap()),
             &empty_module_registry,
         )
         .unwrap();

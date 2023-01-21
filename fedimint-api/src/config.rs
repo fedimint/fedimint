@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap};
-
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::io::Write;
