@@ -125,6 +125,8 @@ The implicit per key type derivation (ChaCha20-Poly1305 vs secp256k1) makes the 
 
 [^1]: See BSI [TR-03111] section 4.1.1 and [TR-02102] section B.4 for details.
 
+<!-- markdown-link-check-disable -->
+
 [BIP39]: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
 [SLIP39]: https://github.com/satoshilabs/slips/blob/master/slip-0039.md
 [CODEX32]: https://github.com/roconnor-blockstream/SSS32/blob/ms32/MasterSeed32.md 
