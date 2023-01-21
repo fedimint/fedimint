@@ -780,6 +780,28 @@
                 };
               };
 
+              ln-gateway =
+                let
+                  entrypointScript =
+                    pkgs.writeShellScriptBin "entrypoint" ''
+                      exec bash "${./misc/ln-gateway-container-entrypoint.sh}" "$@"
+                    '';
+                in
+                pkgs.dockerTools.buildLayeredImage {
+                  name = "ln-gateway";
+                  contents = [ ln-gateway gateway-cli pkgs.bash pkgs.coreutils ];
+                  config = {
+                    Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
+                    Entrypoint = [
+                      "${entrypointScript}/bin/entrypoint"
+                    ];
+                    ExposedPorts = {
+                      "${builtins.toString 8175}/tcp" = { };
+                    };
+                  };
+                  enableFakechroot = true;
+                };
+
               ln-gateway-clightning =
                 let
                   # Will be placed in `/config-example.cfg` by `fakeRootCommands` below
