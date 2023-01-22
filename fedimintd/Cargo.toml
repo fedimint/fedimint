@@ -30,7 +30,6 @@ bytes = "1.3.0"
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
 clap = { version = "4.1.1", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 futures = "0.3.24"
-hex = "0.4.2"
 itertools = "0.10.5"
 jsonrpsee = { version = "0.16.2", features = ["server"] }
 mint-client = { path = "../client/client-lib" }

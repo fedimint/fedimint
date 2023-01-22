@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use anyhow::ensure;
+use bitcoin::hashes::hex::{FromHex, ToHex};
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
@@ -30,7 +31,7 @@ pub fn create_cert(
     password: Option<String>,
 ) -> anyhow::Result<String> {
     let salt: [u8; 16] = rand::random();
-    fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt))?;
+    fs::write(dir_out_path.join(SALT_FILE), salt.to_hex())?;
     let key = get_key(password, dir_out_path.join(SALT_FILE))?;
     gen_tls(&dir_out_path, p2p_url, api_url, guardian_name, &key)
 }
@@ -112,7 +113,7 @@ pub fn parse_peer_params(url: String) -> anyhow::Result<PeerServerParams> {
     ensure!(split.len() == 4, "Cert string has wrong number of fields");
     let p2p_url = split[0].parse()?;
     let api_url = split[1].parse()?;
-    let hex_cert = hex::decode(split[3])?;
+    let hex_cert = Vec::from_hex(split[3])?;
     Ok(PeerServerParams {
         cert: rustls::Certificate(hex_cert),
         p2p_url,
@@ -133,7 +134,7 @@ fn gen_tls(
 
     rustls::ServerName::try_from(name.as_str())?;
     // TODO Base64 encode name, hash fingerprint cert_string
-    let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, hex::encode(cert.0));
+    let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, cert.0.to_hex());
     fs::write(dir_out_path.join(TLS_CERT), &cert_url)?;
     Ok(cert_url)
 }

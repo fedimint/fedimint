@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_trait::async_trait;
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
 use bitcoin::util::psbt::raw::ProprietaryKey;
@@ -153,7 +154,7 @@ impl Serialize for PendingTransaction {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(&bytes))
+            serializer.serialize_str(&bytes.to_hex())
         } else {
             serializer.serialize_bytes(&bytes)
         }
@@ -178,7 +179,7 @@ impl Serialize for UnsignedTransaction {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(&bytes))
+            serializer.serialize_str(&bytes.to_hex())
         } else {
             serializer.serialize_bytes(&bytes)
         }
