@@ -30,10 +30,12 @@ where
 }
 
 // TODO: upstream these structs to cln-plugin
+// See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Htlc {
+    pub short_channel_id: String,
     #[serde(deserialize_with = "as_fedimint_amount")]
-    pub amount: Amount,
+    pub amount_msat: Amount,
     pub cltv_expiry: u32,
     pub cltv_expiry_relative: u32,
     pub payment_hash: bitcoin_hashes::sha256::Hash,
@@ -42,11 +44,9 @@ pub struct Htlc {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Onion {
     pub payload: String,
-    #[serde(rename = "type")]
-    pub type_: String,
     pub short_channel_id: String,
     #[serde(deserialize_with = "as_fedimint_amount")]
-    pub forward_amount: Amount,
+    pub forward_msat: Amount,
     pub outgoing_cltv_value: u32,
     pub shared_secret: bitcoin_hashes::sha256::Hash,
     pub next_onion: String,
