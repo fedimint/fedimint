@@ -657,7 +657,7 @@
     </span><span class="kw">async fn </span>handle_receive_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ReceivePaymentPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">let </span>ReceivePaymentPayload { htlc_accepted } = payload;
 
-        <span class="kw">let </span>invoice_amount = htlc_accepted.htlc.amount;
+        <span class="kw">let </span>invoice_amount = htlc_accepted.htlc.amount_msat;
         <span class="kw">let </span>payment_hash = htlc_accepted.htlc.payment_hash;
         <span class="macro">debug!</span>(<span class="string">&quot;Incoming htlc for payment hash {}&quot;</span>, payment_hash);
 

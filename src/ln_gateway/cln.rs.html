@@ -266,10 +266,12 @@
 }
 
 <span class="comment">// TODO: upstream these structs to cln-plugin
+// See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 </span><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Htlc {
+    <span class="kw">pub </span>short_channel_id: String,
     <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
-    </span><span class="kw">pub </span>amount: Amount,
+    </span><span class="kw">pub </span>amount_msat: Amount,
     <span class="kw">pub </span>cltv_expiry: u32,
     <span class="kw">pub </span>cltv_expiry_relative: u32,
     <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
@@ -278,11 +280,9 @@
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Onion {
     <span class="kw">pub </span>payload: String,
-    <span class="attr">#[serde(rename = <span class="string">&quot;type&quot;</span>)]
-    </span><span class="kw">pub </span>type_: String,
     <span class="kw">pub </span>short_channel_id: String,
     <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
-    </span><span class="kw">pub </span>forward_amount: Amount,
+    </span><span class="kw">pub </span>forward_msat: Amount,
     <span class="kw">pub </span>outgoing_cltv_value: u32,
     <span class="kw">pub </span>shared_secret: bitcoin_hashes::sha256::Hash,
     <span class="kw">pub </span>next_onion: String,
