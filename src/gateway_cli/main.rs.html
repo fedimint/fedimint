@@ -212,6 +212,32 @@
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::SocketAddr, path::PathBuf};
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
@@ -221,8 +247,8 @@
 <span class="kw">use </span>ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, WithdrawPayload,
+        rpc_client::RpcClient, BackupPayload, BalancePayload, ConnectFedPayload,
+        DepositAddressPayload, DepositPayload, RestorePayload, WithdrawPayload,
     },
 };
 <span class="kw">use </span>mint_client::utils::from_hex;
@@ -283,6 +309,10 @@
         <span class="doccomment">/// ConnectInfo code to connect to the federation
         </span>connect: String,
     },
+    <span class="doccomment">/// Make a backup of snapshot of all ecash
+    </span>Backup { federation_id: FederationId },
+    <span class="doccomment">/// Restore ecash from last available snapshot or from scratch
+    </span>Restore { federation_id: FederationId },
 }
 
 <span class="attr">#[tokio::main]
@@ -393,6 +423,28 @@
                 )
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Failed to connect federation&quot;</span>);
+
+            print_response(response).<span class="kw">await</span>;
+        }
+        Commands::Backup { federation_id } =&gt; {
+            <span class="kw">let </span>response = client
+                .backup(
+                    source_password(cli.rpcpassword),
+                    BackupPayload { federation_id },
+                )
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Failed to withdraw&quot;</span>);
+
+            print_response(response).<span class="kw">await</span>;
+        }
+        Commands::Restore { federation_id } =&gt; {
+            <span class="kw">let </span>response = client
+                .restore(
+                    source_password(cli.rpcpassword),
+                    RestorePayload { federation_id },
+                )
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Failed to withdraw&quot;</span>);
 
             print_response(response).<span class="kw">await</span>;
         }
