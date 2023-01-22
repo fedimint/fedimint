@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
-use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
 use fedimint_server::modules::{
     ln::contracts::{ContractId, Preimage},
     wallet::txoproof::TxOutProof,
@@ -227,6 +227,35 @@ impl GatewayActor {
             .await
             .map_err(LnGatewayError::ClientError)
             .map(|out_point| out_point.txid)
+    }
+
+    pub async fn backup(&self) -> Result<()> {
+        self.client
+            .mint_client()
+            .back_up_ecash_to_federation()
+            .await
+            .map_err(LnGatewayError::Other)?;
+
+        Ok(())
+    }
+
+    pub async fn restore(&self) -> Result<()> {
+        // TODO: get the task group from `self`
+        let mut task_group = TaskGroup::new();
+
+        self.client
+            .mint_client()
+            .restore_ecash_from_federation(10, &mut task_group)
+            .await
+            .map_err(LnGatewayError::Other)?
+            .map_err(|e| LnGatewayError::Other(e.into()))?;
+
+        task_group
+            .join_all(None)
+            .await
+            .map_err(LnGatewayError::Other)?;
+
+        Ok(())
     }
 
     pub async fn get_balance(&self) -> Result<Amount> {

@@ -5,7 +5,8 @@ use serde::Serialize;
 use url::Url;
 
 use super::{
-    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
+    RestorePayload, WithdrawPayload,
 };
 
 pub struct RpcClient {
@@ -70,6 +71,24 @@ impl RpcClient {
         payload: ConnectFedPayload,
     ) -> Result<Response, Error> {
         let url = self.base_url.join("/connect").expect("invalid base url");
+        self.call(url, password, payload).await
+    }
+
+    pub async fn backup(
+        &self,
+        password: String,
+        payload: BackupPayload,
+    ) -> Result<Response, Error> {
+        let url = self.base_url.join("/backup").expect("invalid base url");
+        self.call(url, password, payload).await
+    }
+
+    pub async fn restore(
+        &self,
+        password: String,
+        payload: RestorePayload,
+    ) -> Result<Response, Error> {
+        let url = self.base_url.join("/restore").expect("invalid base url");
         self.call(url, password, payload).await
     }
 

@@ -68,6 +68,16 @@ pub struct ReceivePaymentPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfoPayload;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BackupPayload {
+    pub federation_id: FederationId,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RestorePayload {
+    pub federation_id: FederationId,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
@@ -119,6 +129,8 @@ pub enum GatewayRequest {
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
     Deposit(GatewayRequestInner<DepositPayload>),
     Withdraw(GatewayRequestInner<WithdrawPayload>),
+    Backup(GatewayRequestInner<BackupPayload>),
+    Restore(GatewayRequestInner<RestorePayload>),
 }
 
 #[derive(Debug)]
@@ -163,6 +175,8 @@ impl_gateway_request_trait!(
 );
 impl_gateway_request_trait!(DepositPayload, TransactionId, GatewayRequest::Deposit);
 impl_gateway_request_trait!(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
+impl_gateway_request_trait!(BackupPayload, (), GatewayRequest::Backup);
+impl_gateway_request_trait!(RestorePayload, (), GatewayRequest::Restore);
 
 impl<T> GatewayRequestInner<T>
 where

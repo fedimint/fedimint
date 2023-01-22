@@ -7,8 +7,8 @@ use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
-        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, WithdrawPayload,
+        rpc_client::RpcClient, BackupPayload, BalancePayload, ConnectFedPayload,
+        DepositAddressPayload, DepositPayload, RestorePayload, WithdrawPayload,
     },
 };
 use mint_client::utils::from_hex;
@@ -69,6 +69,10 @@ pub enum Commands {
         /// ConnectInfo code to connect to the federation
         connect: String,
     },
+    /// Make a backup of snapshot of all ecash
+    Backup { federation_id: FederationId },
+    /// Restore ecash from last available snapshot or from scratch
+    Restore { federation_id: FederationId },
 }
 
 #[tokio::main]
@@ -179,6 +183,28 @@ async fn main() {
                 )
                 .await
                 .expect("Failed to connect federation");
+
+            print_response(response).await;
+        }
+        Commands::Backup { federation_id } => {
+            let response = client
+                .backup(
+                    source_password(cli.rpcpassword),
+                    BackupPayload { federation_id },
+                )
+                .await
+                .expect("Failed to withdraw");
+
+            print_response(response).await;
+        }
+        Commands::Restore { federation_id } => {
+            let response = client
+                .restore(
+                    source_password(cli.rpcpassword),
+                    RestorePayload { federation_id },
+                )
+                .await
+                .expect("Failed to withdraw");
 
             print_response(response).await;
         }
