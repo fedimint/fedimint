@@ -227,7 +227,7 @@ impl LnGateway {
     async fn handle_receive_payment(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
         let ReceivePaymentPayload { htlc_accepted } = payload;
 
-        let invoice_amount = htlc_accepted.htlc.amount;
+        let invoice_amount = htlc_accepted.htlc.amount_msat;
         let payment_hash = htlc_accepted.htlc.payment_hash;
         debug!("Incoming htlc for payment hash {}", payment_hash);
 
