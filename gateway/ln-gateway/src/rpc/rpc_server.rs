@@ -8,8 +8,8 @@ use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
 use tracing::instrument;
 
 use super::{
-    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayRpcSender,
-    InfoPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
+    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
 };
 use crate::LnGatewayError;
 
@@ -29,6 +29,8 @@ pub async fn run_webserver(
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
         .route("/connect", post(connect))
+        .route("/backup", post(backup))
+        .route("/restore", post(restore))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -114,6 +116,26 @@ async fn pay_invoice(
 async fn connect(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<ConnectFedPayload>,
+) -> Result<impl IntoResponse, LnGatewayError> {
+    rpc.send(payload).await?;
+    Ok(())
+}
+
+/// Backup a gateway actor state
+#[instrument(skip_all, err)]
+async fn backup(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<BackupPayload>,
+) -> Result<impl IntoResponse, LnGatewayError> {
+    rpc.send(payload).await?;
+    Ok(())
+}
+
+// Restore a gateway actor state
+#[instrument(skip_all, err)]
+async fn restore(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<RestorePayload>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     rpc.send(payload).await?;
     Ok(())

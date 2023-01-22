@@ -31,6 +31,7 @@ use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     GatewayClient,
 };
+use rpc::{BackupPayload, RestorePayload};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
@@ -295,6 +296,20 @@ impl LnGateway {
             .await
     }
 
+    async fn handle_backup_msg(
+        &self,
+        BackupPayload { federation_id }: BackupPayload,
+    ) -> Result<()> {
+        self.select_actor(federation_id).await?.backup().await
+    }
+
+    async fn handle_restore_msg(
+        &self,
+        RestorePayload { federation_id }: RestorePayload,
+    ) -> Result<()> {
+        self.select_actor(federation_id).await?.restore().await
+    }
+
     pub async fn run(mut self) -> Result<()> {
         let mut tg = self.task_group.clone();
 
@@ -365,6 +380,16 @@ impl LnGateway {
                     GatewayRequest::Withdraw(inner) => {
                         inner
                             .handle(|payload| self.handle_withdraw_msg(payload))
+                            .await;
+                    }
+                    GatewayRequest::Backup(inner) => {
+                        inner
+                            .handle(|payload| self.handle_backup_msg(payload))
+                            .await;
+                    }
+                    GatewayRequest::Restore(inner) => {
+                        inner
+                            .handle(|payload| self.handle_restore_msg(payload))
                             .await;
                     }
                 }
