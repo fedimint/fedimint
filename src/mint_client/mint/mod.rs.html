@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-52c5db6f6f352e54.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-3367e395607fafc1.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-93196c7a1c3542a8.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-4743e13df3dfe8c4.css"><link rel="stylesheet" disabled href="../../../static.files/dark-0e1b889528bd466b.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-65289d5d067c7c66.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-3367e395607fafc1.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -954,7 +954,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
+<span class="kw">use </span>db::{NoteKey, NoteKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::core::client::ClientModule;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -975,7 +975,7 @@
 <span class="kw">use </span>tracing::{debug, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
-<span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingCoinsKey};
+<span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use crate</span>::{ChildId, DerivableSecret, MintDecoder};
 
@@ -1042,15 +1042,15 @@
         <span class="self">self</span>.<span class="number">0</span>.fmt(f)
     }
 }
-<span class="doccomment">/// Single [`Note`] issuance request to the mint.
+<span class="doccomment">/// Single [`Note`] issuance request to the mint.f
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
 /// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
 </span><span class="attr">#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequest {
-    <span class="doccomment">/// Spend key from which the coin nonce (corresponding public key) is derived
+    <span class="doccomment">/// Spend key from which the note nonce (corresponding public key) is derived
     </span>spend_key: KeyPair,
-    <span class="doccomment">/// Key to unblind the blind signature supplied by the mint for this coin
+    <span class="doccomment">/// Key to unblind the blind signature supplied by the mint for this note
     </span>blinding_key: BlindingKey,
 }
 
@@ -1064,7 +1064,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         bsig: BlindedSignature,
         mint_pub_key: AggregatePublicKey,
-    ) -&gt; std::result::Result&lt;SpendableNote, CoinFinalizationError&gt; {
+    ) -&gt; std::result::Result&lt;SpendableNote, NoteFinalizationError&gt; {
         <span class="kw">let </span>sig = unblind_signature(<span class="self">self</span>.blinding_key, bsig);
         <span class="kw">let </span>note = Note(<span class="self">self</span>.nonce(), sig);
         <span class="kw">if </span>note.verify(mint_pub_key) {
@@ -1075,7 +1075,7 @@
 
             <span class="prelude-val">Ok</span>(spendable_note)
         } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(CoinFinalizationError::InvalidSignature)
+            <span class="prelude-val">Err</span>(NoteFinalizationError::InvalidSignature)
         }
     }
 }
@@ -1085,8 +1085,8 @@
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
 </span><span class="attr">#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequests {
-    <span class="doccomment">/// Finalization data for all coin outputs in this request
-    </span>coins: TieredMulti&lt;NoteIssuanceRequest&gt;,
+    <span class="doccomment">/// Finalization data for all note outputs in this request
+    </span>notes: TieredMulti&lt;NoteIssuanceRequest&gt;,
 }
 
 <span class="doccomment">/// A [`Note`] with associated secret key that allows to proof ownership (spend it)
@@ -1138,7 +1138,7 @@
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.inputs {
             <span class="kw">if let </span>Input::Mint(MintInput(notes)) = input {
                 <span class="kw">for </span>(amount, note) <span class="kw">in </span>notes.clone() {
-                    <span class="kw">let </span>key = CoinKey {
+                    <span class="kw">let </span>key = NoteKey {
                         amount,
                         nonce: note.<span class="number">0</span>,
                     };
@@ -1171,19 +1171,19 @@
         <span class="comment">// move ecash to pending state, awaiting a transaction
         </span><span class="kw">if </span>!input_ecash.is_empty() {
             <span class="kw">let </span>pending = TieredMulti::from_iter(input_ecash.into_iter());
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>PendingCoinsKey(txid), <span class="kw-2">&amp;</span>pending)
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>PendingNotesKey(txid), <span class="kw-2">&amp;</span>pending)
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
 
         <span class="comment">// write ecash outputs to db to await for tx success to be fetched later
-        </span><span class="kw">for </span>(out_idx, coins) <span class="kw">in </span>change_outputs.iter() {
+        </span><span class="kw">for </span>(out_idx, notes) <span class="kw">in </span>change_outputs.iter() {
             dbtx.insert_new_entry(
                 <span class="kw-2">&amp;</span>OutputFinalizationKey(OutPoint {
                     txid,
                     out_idx: <span class="kw-2">*</span>out_idx <span class="kw">as </span>u64,
                 }),
-                <span class="kw-2">&amp;</span>coins.clone(),
+                <span class="kw-2">&amp;</span>notes.clone(),
             )
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -1229,17 +1229,17 @@
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
         }
-        <span class="kw">let </span>(coin_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
+        <span class="kw">let </span>(note_finalization_data, sig_req): (NoteIssuanceRequests, MintOutput) =
             amount_requests.into_iter().unzip();
 
         <span class="macro">debug!</span>(
             %amount,
-            coins = %sig_req.<span class="number">0</span>.count_items(),
+            notes = %sig_req.<span class="number">0</span>.count_items(),
             tiers = <span class="question-mark">?</span>sig_req.<span class="number">0</span>.iter_tiers().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
             <span class="string">&quot;Generated issuance request&quot;
         </span>);
 
-        (coin_finalization_data, sig_req.<span class="number">0</span>)
+        (note_finalization_data, sig_req.<span class="number">0</span>)
     }
 
     <span class="kw">pub async fn </span>select_input(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, Input)&gt; {
@@ -1256,7 +1256,7 @@
                 <span class="kw">if </span><span class="kw-2">&amp;</span>spend_pub_key == note.note.spend_key() {
                     <span class="prelude-val">Ok</span>((note.spend_key, (amt, note.note)))
                 } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(MintClientError::ReceivedUspendableCoin)
+                    <span class="prelude-val">Err</span>(MintClientError::ReceivedUspendableNote)
                 }
             })
             .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
@@ -1267,11 +1267,11 @@
     <span class="kw">pub async fn </span>notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.start_dbtx()
             .<span class="kw">await
-            </span>.find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
             </span>.map(|res| {
-                <span class="kw">let </span>(key, spendable_coin) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                (key.amount, spendable_coin)
+                <span class="kw">let </span>(key, spendable_note) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                (key.amount, spendable_note)
             })
             .collect()
     }
@@ -1281,11 +1281,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; TieredMulti&lt;SpendableNote&gt; {
-        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
+        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
             </span>.map(|res| {
-                <span class="kw">let </span>(key, spendable_coin) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                (key.amount, spendable_coin)
+                <span class="kw">let </span>(key, spendable_note) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                (key.amount, spendable_note)
             })
             .collect()
     }
@@ -1351,7 +1351,7 @@
         <span class="prelude-val">Ok</span>(selected_notes)
     }
 
-    <span class="kw">pub async fn </span>receive_coins&lt;<span class="lifetime">&#39;a</span>, F, Fut&gt;(
+    <span class="kw">pub async fn </span>receive_notes&lt;<span class="lifetime">&#39;a</span>, F, Fut&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -1361,16 +1361,16 @@
         Fut: futures::Future&lt;Output = OutPoint&gt;,
     {
         <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(dbtx).<span class="kw">await</span>;
-        <span class="kw">let </span>(finalization, coins) = <span class="self">self
+        <span class="kw">let </span>(finalization, notes) = <span class="self">self
             </span>.create_ecash(amount, notes_per_denomination, dbtx)
             .<span class="kw">await</span>;
-        <span class="kw">let </span>out_point = create_tx(coins).<span class="kw">await</span>;
+        <span class="kw">let </span>out_point = create_tx(notes).<span class="kw">await</span>;
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
-    <span class="kw">pub async fn </span>fetch_coins&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">pub async fn </span>fetch_notes&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         outpoint: OutPoint,
@@ -1384,7 +1384,7 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>)
             .ok_or(MintClientError::FinalizationError(
-                CoinFinalizationError::UnknownIssuance,
+                NoteFinalizationError::UnknownIssuance,
             ))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>bsig = <span class="self">self
@@ -1396,14 +1396,14 @@
             .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>coins = issuance.finalize(bsig, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks)<span class="question-mark">?</span>;
+        <span class="kw">let </span>notes = issuance.finalize(bsig, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks)<span class="question-mark">?</span>;
 
-        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>coins.into_iter() {
-            <span class="kw">let </span>key = CoinKey {
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>notes.into_iter() {
+            <span class="kw">let </span>key = NoteKey {
                 amount,
-                nonce: coin.note.<span class="number">0</span>,
+                nonce: note.note.<span class="number">0</span>,
             };
-            <span class="kw">let </span>value = coin;
+            <span class="kw">let </span>value = note;
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(outpoint))
@@ -1427,7 +1427,7 @@
             .collect()
     }
 
-    <span class="kw">pub async fn </span>fetch_all_coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="prelude-ty">Result</span>&lt;OutPoint&gt;&gt; {
+    <span class="kw">pub async fn </span>fetch_all_notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="prelude-ty">Result</span>&lt;OutPoint&gt;&gt; {
         <span class="kw">let </span>active_issuances = <span class="self">self</span>.list_active_issuances().<span class="kw">await</span>;
         <span class="kw">if </span>active_issuances.is_empty() {
             <span class="kw">return </span>Vec::new();
@@ -1437,7 +1437,7 @@
         <span class="kw">for </span>(out_point, <span class="kw">_</span>) <span class="kw">in </span>active_issuances.into_iter() {
             <span class="kw">loop </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-                <span class="kw">match </span><span class="self">self</span>.fetch_coins(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
+                <span class="kw">match </span><span class="self">self</span>.fetch_notes(<span class="kw-2">&amp;mut </span>dbtx, out_point).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                         results.push(<span class="prelude-val">Ok</span>(out_point));
@@ -1463,33 +1463,33 @@
 
 <span class="kw">impl </span>Extend&lt;(Amount, NoteIssuanceRequest)&gt; <span class="kw">for </span>NoteIssuanceRequests {
     <span class="kw">fn </span>extend&lt;T: IntoIterator&lt;Item = (Amount, NoteIssuanceRequest)&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: T) {
-        <span class="self">self</span>.coins.extend(iter)
+        <span class="self">self</span>.notes.extend(iter)
     }
 }
 
 <span class="kw">impl </span>NoteIssuanceRequests {
     <span class="doccomment">/// Finalize the issuance request using a [`MintOutputBlindSignatures`] from the mint containing the blind
-    /// signatures for all coins in this `IssuanceRequest`. It also takes the mint&#39;s
+    /// signatures for all notes in this `IssuanceRequest`. It also takes the mint&#39;s
     /// [`AggregatePublicKey`] to validate the supplied blind signatures.
     </span><span class="kw">pub fn </span>finalize(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         bsigs: MintOutputBlindSignatures,
         mint_pub_key: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-    ) -&gt; std::result::Result&lt;TieredMulti&lt;SpendableNote&gt;, CoinFinalizationError&gt; {
-        <span class="kw">if </span>!<span class="self">self</span>.coins.structural_eq(<span class="kw-2">&amp;</span>bsigs.<span class="number">0</span>) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(CoinFinalizationError::WrongMintAnswer);
+    ) -&gt; std::result::Result&lt;TieredMulti&lt;SpendableNote&gt;, NoteFinalizationError&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.notes.structural_eq(<span class="kw-2">&amp;</span>bsigs.<span class="number">0</span>) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(NoteFinalizationError::WrongMintAnswer);
         }
 
-        <span class="self">self</span>.coins
+        <span class="self">self</span>.notes
             .iter_items()
             .zip(bsigs.<span class="number">0</span>)
             .enumerate()
-            .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
+            .map(|(idx, ((amt, note_req), (_amt, bsig)))| {
                 <span class="prelude-val">Ok</span>((
                     amt,
-                    <span class="kw">match </span>coin_req.finalize(bsig, <span class="kw-2">*</span>mint_pub_key.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>) {
-                        <span class="prelude-val">Err</span>(CoinFinalizationError::InvalidSignature) =&gt; {
-                            <span class="prelude-val">Err</span>(CoinFinalizationError::InvalidSignatureAtIdx(idx))
+                    <span class="kw">match </span>note_req.finalize(bsig, <span class="kw-2">*</span>mint_pub_key.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>) {
+                        <span class="prelude-val">Err</span>(NoteFinalizationError::InvalidSignature) =&gt; {
+                            <span class="prelude-val">Err</span>(NoteFinalizationError::InvalidSignatureAtIdx(idx))
                         }
                         other =&gt; other,
                     }<span class="question-mark">?</span>,
@@ -1498,17 +1498,17 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>coin_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.coins.count_items()
+    <span class="kw">pub fn </span>note_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.notes.count_items()
     }
 
-    <span class="kw">pub fn </span>coin_amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        <span class="self">self</span>.coins.total_amount()
+    <span class="kw">pub fn </span>note_amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+        <span class="self">self</span>.notes.total_amount()
     }
 }
 
 <span class="kw">impl </span>NoteIssuanceRequest {
-    <span class="doccomment">/// Generate a request session for a single coin and returns it plus the corresponding blinded
+    <span class="doccomment">/// Generate a request session for a single note and returns it plus the corresponding blinded
     /// message
     </span><span class="kw">fn </span>new&lt;C&gt;(ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;, secret: DerivableSecret) -&gt; (NoteIssuanceRequest, BlindNonce)
     <span class="kw">where
@@ -1535,7 +1535,7 @@
 <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, MintClientError&gt;;
 
 <span class="attr">#[derive(Error, Debug)]
-</span><span class="kw">pub enum </span>CoinFinalizationError {
+</span><span class="kw">pub enum </span>NoteFinalizationError {
     <span class="attr">#[error(<span class="string">&quot;The returned answer does not fit the request&quot;</span>)]
     </span>WrongMintAnswer,
     <span class="attr">#[error(<span class="string">&quot;The blind signature&quot;</span>)]
@@ -1555,7 +1555,7 @@
     <span class="attr">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
     </span>ApiError(<span class="attr">#[from] </span>MemberError),
     <span class="attr">#[error(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]
-    </span>FinalizationError(<span class="attr">#[from] </span>CoinFinalizationError),
+    </span>FinalizationError(<span class="attr">#[from] </span>NoteFinalizationError),
     <span class="attr">#[error(<span class="string">&quot;Insufficient balance. Amount requested={0} Mint balance={1}&quot;</span>)]
     </span>InsufficientBalance(Amount, Amount),
     <span class="attr">#[error(<span class="string">&quot;The transaction outcome received from the mint did not contain a result for output {0} yet&quot;</span>)]
@@ -1566,8 +1566,8 @@
     </span>InvalidOutcomeWrongStructure(OutPoint),
     <span class="attr">#[error(<span class="string">&quot;The transaction outcome returned by the mint has an invalid type (output {0})&quot;</span>)]
     </span>InvalidOutcomeType(OutPoint),
-    <span class="attr">#[error(<span class="string">&quot;One of the coins meant to be spent is unspendable&quot;</span>)]
-    </span>ReceivedUspendableCoin,
+    <span class="attr">#[error(<span class="string">&quot;One of the notes meant to be spent is unspendable&quot;</span>)]
+    </span>ReceivedUspendableNote,
 }
 
 <span class="kw">impl </span>MintClientError {
@@ -1581,9 +1581,9 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>CoinFinalizationError {
+<span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>NoteFinalizationError {
     <span class="kw">fn </span>from(e: InvalidAmountTierError) -&gt; <span class="self">Self </span>{
-        CoinFinalizationError::InvalidAmountTier(e.<span class="number">0</span>)
+        NoteFinalizationError::InvalidAmountTier(e.<span class="number">0</span>)
     }
 }
 
@@ -1702,7 +1702,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction().<span class="kw">await</span>;
         client
-            .receive_coins(amt, <span class="kw-2">&amp;mut </span>dbtx, |output| <span class="kw">async </span>{
+            .receive_notes(amt, <span class="kw-2">&amp;mut </span>dbtx, |output| <span class="kw">async </span>{
                 <span class="comment">// Agree on output
                 </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
                 block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, MintOutput(output))]));
@@ -1714,7 +1714,7 @@
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        client.fetch_all_coins().<span class="kw">await</span>;
+        client.fetch_all_notes().<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
@@ -1757,8 +1757,8 @@
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
         <span class="kw">let </span>_tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
         <span class="kw">let </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>coins = client.select_notes(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
-        <span class="kw">let </span>(spend_keys, ecash_input) = MintClient::ecash_input(coins.clone()).unwrap();
+        <span class="kw">let </span>notes = client.select_notes(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>(spend_keys, ecash_input) = MintClient::ecash_input(notes.clone()).unwrap();
 
         builder.input(<span class="kw-2">&amp;mut </span>spend_keys.clone(), ecash_input.clone());
         <span class="kw">let </span>client = <span class="kw-2">&amp;</span>client;
@@ -1793,9 +1793,9 @@
         <span class="comment">// We can exactly spend the remainder
         </span><span class="kw">let </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
-        <span class="kw">let </span>coins = client.select_notes(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>notes = client.select_notes(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>(spend_keys, ecash_input) = MintClient::ecash_input(coins).unwrap();
+        <span class="kw">let </span>(spend_keys, ecash_input) = MintClient::ecash_input(notes).unwrap();
 
         builder.input(<span class="kw-2">&amp;mut </span>spend_keys.clone(), ecash_input.clone());
         builder
@@ -1899,4 +1899,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (5ce39f42b 2023-01-20)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-c3c521c753752a1a.js" data-settings-css="settings-ab1d4ae2ec52020e.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.68.0-nightly (52372f9c7 2023-01-21)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-c3c521c753752a1a.js" data-settings-css="settings-08ddfdda51b8ee2e.css" ></div></body></html>
