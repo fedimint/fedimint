@@ -137,12 +137,14 @@
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>anyhow::ensure;
+<span class="kw">use </span>bitcoin::hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::net::peers::IMuxPeerConnections;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
@@ -169,7 +171,7 @@
     password: <span class="prelude-ty">Option</span>&lt;String&gt;,
 ) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>salt: [u8; <span class="number">16</span>] = rand::random();
-    fs::write(dir_out_path.join(SALT_FILE), hex::encode(salt))<span class="question-mark">?</span>;
+    fs::write(dir_out_path.join(SALT_FILE), salt.to_hex())<span class="question-mark">?</span>;
     <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
     gen_tls(<span class="kw-2">&amp;</span>dir_out_path, p2p_url, api_url, guardian_name, <span class="kw-2">&amp;</span>key)
 }
@@ -251,7 +253,7 @@
     <span class="macro">ensure!</span>(split.len() == <span class="number">4</span>, <span class="string">&quot;Cert string has wrong number of fields&quot;</span>);
     <span class="kw">let </span>p2p_url = split[<span class="number">0</span>].parse()<span class="question-mark">?</span>;
     <span class="kw">let </span>api_url = split[<span class="number">1</span>].parse()<span class="question-mark">?</span>;
-    <span class="kw">let </span>hex_cert = hex::decode(split[<span class="number">3</span>])<span class="question-mark">?</span>;
+    <span class="kw">let </span>hex_cert = Vec::from_hex(split[<span class="number">3</span>])<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(PeerServerParams {
         cert: rustls::Certificate(hex_cert),
         p2p_url,
@@ -272,7 +274,7 @@
 
     rustls::ServerName::try_from(name.as_str())<span class="question-mark">?</span>;
     <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string
-    </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}@{}@{}@{}&quot;</span>, p2p_url, api_url, name, hex::encode(cert.<span class="number">0</span>));
+    </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}@{}@{}@{}&quot;</span>, p2p_url, api_url, name, cert.<span class="number">0</span>.to_hex());
     fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(cert_url)
 }

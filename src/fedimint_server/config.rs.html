@@ -820,6 +820,7 @@
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
@@ -1596,6 +1597,7 @@
 <span class="kw">mod </span>serde_tls_cert {
     <span class="kw">use </span>std::borrow::Cow;
 
+    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
     <span class="kw">use </span>serde::de::Error;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
     <span class="kw">use </span>tokio_rustls::rustls;
@@ -1604,7 +1606,7 @@
     <span class="kw">where
         </span>S: Serializer,
     {
-        <span class="kw">let </span>hex_str = hex::encode(<span class="kw-2">&amp;</span>cert.<span class="number">0</span>);
+        <span class="kw">let </span>hex_str = cert.<span class="number">0</span>.to_hex();
         Serialize::serialize(<span class="kw-2">&amp;</span>hex_str, serializer)
     }
 
@@ -1613,7 +1615,7 @@
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
         <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom(<span class="string">&quot;Invalid hex&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(D::Error::custom)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(rustls::Certificate(bytes))
     }
 }
@@ -1621,7 +1623,7 @@
 <span class="kw">mod </span>serde_tls_key {
     <span class="kw">use </span>std::borrow::Cow;
 
-    <span class="kw">use </span>serde::de::Error;
+    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
     <span class="kw">use </span>tokio_rustls::rustls;
 
@@ -1629,7 +1631,7 @@
     <span class="kw">where
         </span>S: Serializer,
     {
-        <span class="kw">let </span>hex_str = hex::encode(<span class="kw-2">&amp;</span>key.<span class="number">0</span>);
+        <span class="kw">let </span>hex_str = key.<span class="number">0</span>.to_hex();
         Serialize::serialize(<span class="kw-2">&amp;</span>hex_str, serializer)
     }
 
@@ -1638,7 +1640,7 @@
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
         <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom(<span class="string">&quot;Invalid hex&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(rustls::PrivateKey(bytes))
     }
 }

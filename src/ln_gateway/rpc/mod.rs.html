@@ -212,10 +212,12 @@
 </pre><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
+<span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>anyhow::{anyhow, Error};
 <span class="kw">use </span>bitcoin::{Address, Transaction, XOnlyPublicKey};
+<span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>fedimint_api::config::FederationId;
 <span class="kw">use </span>fedimint_api::{Amount, TransactionId};
 <span class="kw">use </span>fedimint_server::{modules::ln::contracts::Preimage, modules::wallet::txoproof::TxOutProof};
@@ -396,14 +398,12 @@
     d: D,
 ) -&gt; std::result::Result&lt;T, D::Error&gt; {
     <span class="kw">if </span>d.is_human_readable() {
-        <span class="kw">let </span>bytes = hex::decode::&lt;String&gt;(Deserialize::deserialize(d)<span class="question-mark">?</span>)
-            .map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
-        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw-2">&amp;</span>bytes))
-            .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))
+        <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw-2">&amp;</span>bytes)).map_err(serde::de::Error::custom)
     } <span class="kw">else </span>{
         <span class="kw">let </span>bytes: Vec&lt;u8&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw-2">&amp;</span>bytes))
-            .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw-2">&amp;</span>bytes)).map_err(serde::de::Error::custom)
     }
 }
 
@@ -415,7 +415,7 @@
     T::consensus_encode(t, <span class="kw-2">&amp;mut </span>bytes).map_err(serde::ser::Error::custom)<span class="question-mark">?</span>;
 
     <span class="kw">if </span>s.is_human_readable() {
-        s.serialize_str(<span class="kw-2">&amp;</span>hex::encode(bytes))
+        s.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
     } <span class="kw">else </span>{
         s.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
     }

@@ -1647,6 +1647,7 @@
 <a href="#1647" id="1647">1647</a>
 <a href="#1648" id="1648">1648</a>
 <a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1657,6 +1658,7 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
 <span class="kw">use </span>bitcoin::util::psbt::raw::ProprietaryKey;
@@ -1802,7 +1804,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
 
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>hex::encode(<span class="kw-2">&amp;</span>bytes))
+            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
         } <span class="kw">else </span>{
             serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
         }
@@ -1827,7 +1829,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
 
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>hex::encode(<span class="kw-2">&amp;</span>bytes))
+            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
         } <span class="kw">else </span>{
             serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
         }

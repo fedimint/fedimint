@@ -369,6 +369,7 @@
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Cursor;
 
+<span class="kw">use </span>bitcoin::hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
@@ -580,7 +581,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
 
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>hex::encode(<span class="kw-2">&amp;</span>bytes))
+            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
         } <span class="kw">else </span>{
             serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
         }
@@ -588,25 +589,23 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>TxOutProof {
-    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, &lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error&gt;
+    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
     <span class="kw">where
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
         <span class="kw">let </span>empty_module_registry = ModuleDecoderRegistry::default();
         <span class="kw">if </span>deserializer.is_human_readable() {
-            <span class="comment">// TODO: Try Cow
-            </span><span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-            <span class="kw">let </span>bytes =
-                hex::decode(hex_str.as_ref()).map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>;
+            <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
+            <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(D::Error::custom)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(
                 TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
-                    .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>,
+                    .map_err(D::Error::custom)<span class="question-mark">?</span>,
             )
         } <span class="kw">else </span>{
             <span class="kw">let </span>bytes: <span class="kw-2">&amp;</span>[u8] = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(
                 TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
-                    .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>,
+                    .map_err(D::Error::custom)<span class="question-mark">?</span>,
             )
         }
     }
@@ -689,6 +688,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::io::Cursor;
 
+    <span class="kw">use </span>bitcoin::hashes::hex::FromHex;
     <span class="kw">use </span>fedimint_api::encoding::Decodable;
     <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 
@@ -711,7 +711,7 @@
 
         <span class="kw">let </span>empty_module_registry = ModuleDecoderRegistry::default();
         <span class="kw">let </span>txoutproof = TxOutProof::consensus_decode(
-            <span class="kw-2">&amp;mut </span>Cursor::new(hex::decode(txoutproof_hex).unwrap()),
+            <span class="kw-2">&amp;mut </span>Cursor::new(Vec::from_hex(txoutproof_hex).unwrap()),
             <span class="kw-2">&amp;</span>empty_module_registry,
         )
         .unwrap();

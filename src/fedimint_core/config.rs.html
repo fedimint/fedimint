@@ -31,6 +31,9 @@
 <a href="#31" id="31">31</a>
 <a href="#32" id="32">32</a>
 <a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -41,6 +44,9 @@
 }
 
 <span class="kw">pub mod </span>serde_binary_human_readable {
+    <span class="kw">use </span>std::borrow::Cow;
+
+    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
     <span class="kw">use </span>serde::de::DeserializeOwned;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -48,7 +54,7 @@
         <span class="kw">if </span>s.is_human_readable() {
             <span class="kw">let </span>bytes =
                 bincode::serialize(x).map_err(|e| serde::ser::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))<span class="question-mark">?</span>;
-            s.serialize_str(<span class="kw-2">&amp;</span>hex::encode(bytes))
+            s.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
         } <span class="kw">else </span>{
             Serialize::serialize(x, s)
         }
@@ -56,8 +62,8 @@
 
     <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;d</span>, T: DeserializeOwned, D: Deserializer&lt;<span class="lifetime">&#39;d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;T, D::Error&gt; {
         <span class="kw">if </span>d.is_human_readable() {
-            <span class="kw">let </span>bytes = hex::decode::&lt;String&gt;(Deserialize::deserialize(d)<span class="question-mark">?</span>)
-                .map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
+            <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
+            <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
             bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))
         } <span class="kw">else </span>{
             Deserialize::deserialize(d)

@@ -67,6 +67,7 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Encrypt and authenticate data stored on the filesystem with a user-supplied password.
 ///
 /// We encrypt the configs to prevent attackers from learning the private keys if they gain
@@ -87,6 +88,7 @@
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::format_err;
+<span class="kw">use </span>bitcoin::hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>ring::aead::{LessSafeKey, UnboundKey};
 <span class="kw">use </span>ring::{digest, pbkdf2};
 
@@ -96,7 +98,7 @@
 <span class="doccomment">/// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
 </span><span class="kw">pub fn </span>encrypted_write(data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>bytes = aead::encrypt(data, key)<span class="question-mark">?</span>;
-    fs::write(file.clone(), hex::encode(bytes))
+    fs::write(file.clone(), bytes.to_hex())
         .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to write file {:?}&quot;</span>, file))<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
@@ -105,7 +107,7 @@
 </span><span class="kw">pub fn </span>encrypted_read(key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; anyhow::Result&lt;Vec&lt;u8&gt;&gt; {
     <span class="macro">tracing::warn!</span>(<span class="string">&quot;READ {:?}&quot;</span>, file);
     <span class="kw">let </span>hex = fs::read_to_string(file)<span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>bytes = hex::decode(hex)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(aead::decrypt(<span class="kw-2">&amp;mut </span>bytes, key)<span class="question-mark">?</span>.to_vec())
 }
@@ -118,7 +120,7 @@
     };
 
     <span class="kw">let </span>salt_str = fs::read_to_string(salt_path)<span class="question-mark">?</span>;
-    <span class="kw">let </span>salt = hex::decode(salt_str)<span class="question-mark">?</span>;
+    <span class="kw">let </span>salt = Vec::from_hex(<span class="kw-2">&amp;</span>salt_str)<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>key = [<span class="number">0u8</span>; digest::SHA256_OUTPUT_LEN];
     <span class="kw">let </span>algo = pbkdf2::PBKDF2_HMAC_SHA256;
     pbkdf2::derive(
