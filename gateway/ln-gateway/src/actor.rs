@@ -40,10 +40,10 @@ impl GatewayActor {
         Ok(Self { client })
     }
 
-    async fn fetch_all_coins(&self) {
-        for fetch_result in self.client.fetch_all_coins().await {
+    async fn fetch_all_notes(&self) {
+        for fetch_result in self.client.fetch_all_notes().await {
             if let Err(e) = fetch_result {
-                debug!(error = %e, "Fetching coins failed")
+                debug!(error = %e, "Fetching notes failed")
             };
         }
     }
@@ -130,7 +130,7 @@ impl GatewayActor {
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
     ) -> Result<Preimage> {
-        self.fetch_all_coins().await;
+        self.fetch_all_notes().await;
 
         let mut rng = rand::rngs::OsRng;
         let (out_point, contract_id) = self
@@ -213,7 +213,7 @@ impl GatewayActor {
         amount: bitcoin::Amount,
         address: Address,
     ) -> Result<TransactionId> {
-        self.fetch_all_coins().await;
+        self.fetch_all_notes().await;
 
         let rng = rand::rngs::OsRng;
 
@@ -230,7 +230,7 @@ impl GatewayActor {
     }
 
     pub async fn get_balance(&self) -> Result<Amount> {
-        self.fetch_all_coins().await;
+        self.fetch_all_notes().await;
 
         Ok(self.client.notes().await.total_amount())
     }

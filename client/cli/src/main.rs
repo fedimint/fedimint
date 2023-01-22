@@ -242,7 +242,7 @@ enum Command {
     /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     Validate {
         #[clap(value_parser = parse_ecash)]
-        coins: TieredMulti<SpendableNote>,
+        notes: TieredMulti<SpendableNote>,
     },
 
     /// Prepare notes to send to a third party as a payment
@@ -348,7 +348,7 @@ type CliResult = Result<CliOutput, CliError>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
-    coins: TieredMulti<SpendableNote>,
+    notes: TieredMulti<SpendableNote>,
     invoice: lightning_invoice::Invoice,
 }
 
@@ -490,11 +490,11 @@ async fn handle_command(
                 "could not reissue notes (no further information)",
             )
         }
-        Command::Validate { coins } => {
-            let validate_result = client.validate_note_signatures(&coins).await;
-            let details_vec = coins
+        Command::Validate { notes } => {
+            let validate_result = client.validate_note_signatures(&notes).await;
+            let details_vec = notes
                 .iter()
-                .map(|(amount, coins)| (amount.to_owned(), coins.len()))
+                .map(|(amount, notes)| (amount.to_owned(), notes.len()))
                 .collect();
 
             match validate_result {
@@ -518,7 +518,7 @@ async fn handle_command(
         Command::Fetch => {
             let mut result = Vec::<OutPoint>::new();
             let mut has_error = false;
-            for fetch_result in client.fetch_all_coins().await {
+            for fetch_result in client.fetch_all_notes().await {
                 match fetch_result {
                     Ok(v) => result.push(v),
                     Err(_) => {
@@ -537,17 +537,17 @@ async fn handle_command(
             }
         }
         Command::Info => {
-            let coins = client.notes().await;
-            let details_vec = coins
+            let notes = client.notes().await;
+            let details_vec = notes
                 .iter()
-                .map(|(amount, coins)| (amount.to_owned(), coins.len()))
+                .map(|(amount, notes)| (amount.to_owned(), notes.len()))
                 .collect();
             Ok(CliOutput::Info {
                 federation_id: client.config().as_ref().federation_id.to_string(),
                 federation_name: client.config().as_ref().federation_name.clone(),
                 network: client.wallet_client().config.network,
-                total_amount: (coins.total_amount()),
-                total_num_notes: (coins.count_items()),
+                total_amount: (notes.total_amount()),
+                total_num_notes: (notes.count_items()),
                 details: (details_vec),
             })
         }

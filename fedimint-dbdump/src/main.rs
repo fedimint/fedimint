@@ -213,13 +213,13 @@ impl<'a> DatabaseDump<'a> {
             filter_prefixes!(table, self);
 
             match table {
-                MintRange::DbKeyPrefix::CoinNonce => {
+                MintRange::DbKeyPrefix::NoteNonce => {
                     push_db_key_items!(
                         self,
                         MintRange::NonceKeyPrefix,
                         MintRange::NonceKey,
                         mint,
-                        "Used Coins"
+                        "Used Notes"
                     );
                 }
                 MintRange::DbKeyPrefix::MintAuditItem => {
@@ -509,14 +509,14 @@ impl<'a> DatabaseDump<'a> {
             filter_prefixes!(table, self);
 
             match table {
-                ClientMintRange::DbKeyPrefix::Coin => {
+                ClientMintRange::DbKeyPrefix::Note => {
                     push_db_pair_items!(
                         self,
-                        ClientMintRange::CoinKeyPrefix,
-                        ClientMintRange::CoinKey,
+                        ClientMintRange::NoteKeyPrefix,
+                        ClientMintRange::NoteKey,
                         mint_client::mint::SpendableNote,
                         mint_client,
-                        "Coins"
+                        "Notess"
                     );
                 }
                 ClientMintRange::DbKeyPrefix::OutputFinalizationData => {
@@ -529,14 +529,14 @@ impl<'a> DatabaseDump<'a> {
                         "Output Finalization"
                     );
                 }
-                ClientMintRange::DbKeyPrefix::PendingCoins => {
+                ClientMintRange::DbKeyPrefix::PendingNotes => {
                     push_db_pair_items!(
                         self,
-                        ClientMintRange::PendingCoinsKeyPrefix,
-                        ClientMintRange::PendingCoinsKey,
+                        ClientMintRange::PendingNotesKeyPrefix,
+                        ClientMintRange::PendingNotesKey,
                         fedimint_api::TieredMulti<mint_client::mint::SpendableNote>,
                         mint_client,
-                        "Pending Coins"
+                        "Pending Notes"
                     );
                 }
                 ClientMintRange::DbKeyPrefix::NextECashNoteIndex => {

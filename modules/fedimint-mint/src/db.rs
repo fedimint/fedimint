@@ -11,7 +11,7 @@ use crate::{MintOutputBlindSignatures, MintOutputSignatureShare, Nonce};
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    CoinNonce = 0x10,
+    NoteNonce = 0x10,
     ProposedPartialSig = 0x11,
     ReceivedPartialSig = 0x12,
     OutputOutcome = 0x13,
@@ -29,7 +29,7 @@ impl std::fmt::Display for DbKeyPrefix {
 pub struct NonceKey(pub Nonce);
 
 impl DatabaseKeyPrefixConst for NonceKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::CoinNonce as u8;
+    const DB_PREFIX: u8 = DbKeyPrefix::NoteNonce as u8;
     type Key = Self;
     type Value = ();
 }
@@ -38,7 +38,7 @@ impl DatabaseKeyPrefixConst for NonceKey {
 pub struct NonceKeyPrefix;
 
 impl DatabaseKeyPrefixConst for NonceKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::CoinNonce as u8;
+    const DB_PREFIX: u8 = DbKeyPrefix::NoteNonce as u8;
     type Key = NonceKey;
     type Value = ();
 }
