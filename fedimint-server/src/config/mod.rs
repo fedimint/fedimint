@@ -149,8 +149,10 @@ pub struct ServerConfigParams {
     pub fed_network: NetworkConfig,
     /// Endpoints for client API communication
     pub api_network: NetworkConfig,
-    /// Name of our federation
-    pub federation_name: String,
+    /// Guardian-defined key-value pairs that will be passed to the client.
+    /// These should be the same for all guardians since they become part of
+    /// the consensus config.
+    pub meta: BTreeMap<String, String>,
     /// Params for the modules we wish to configure, can contain custom
     /// parameters
     pub modules: ConfigGenParams,
@@ -248,7 +250,7 @@ impl ServerConfig {
             epoch_pk_set: epoch_keys.public_key_set,
             api: params.api_nodes(),
             modules: Default::default(),
-            meta: BTreeMap::from([("federation_name".to_owned(), params.federation_name)]),
+            meta: params.meta,
         };
         let mut cfg = Self {
             consensus,
@@ -685,7 +687,7 @@ impl ServerConfigParams {
             tls,
             fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
-            federation_name,
+            meta: BTreeMap::from([("federation_name".to_owned(), federation_name)]),
             modules,
         }
     }
