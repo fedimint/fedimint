@@ -44,7 +44,8 @@ pub struct Htlc {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Onion {
     pub payload: String,
-    pub short_channel_id: String,
+    #[serde(default)]
+    pub short_channel_id: Option<String>,
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub forward_msat: Amount,
     pub outgoing_cltv_value: u32,
@@ -156,7 +157,7 @@ async fn htlc_accepted_hook(
     // After https://github.com/fedimint/fedimint/pull/1180,
     // all HTLCs to Fedimint clients should have route hint with `short_channel_id = 0u64`,
     // unless the gateway is serving multiple federations.
-    if htlc_accepted.onion.short_channel_id == "0x0x0" {
+    if htlc_accepted.onion.short_channel_id.as_deref() == Some("0x0x0") {
         let preimage = match plugin
             .state()
             .send(ReceivePaymentPayload { htlc_accepted })
