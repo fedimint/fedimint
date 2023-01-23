@@ -81,13 +81,10 @@ pub struct Htlc {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Onion {
-    pub payload: String,
-    pub short_channel_id: u64,
+    #[serde(default)]
+    pub short_channel_id: Option<u64>,
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub forward_msat: Amount,
-    pub outgoing_cltv_value: u32,
-    pub shared_secret: bitcoin_hashes::sha256::Hash,
-    pub next_onion: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -392,8 +389,15 @@ impl ClnHtlcInterceptor {
     }
 
     async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
-        let short_channel_id = payload.onion.short_channel_id;
         let htlc_expiry = payload.htlc.cltv_expiry;
+
+        let short_channel_id = match payload.onion.short_channel_id {
+            Some(scid) => scid,
+            None => {
+                // This is a HTLC terminating at the gateway node. DO NOT intercept
+                return serde_json::json!({ "result": "continue" });
+            }
+        };
 
         if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
             let payment_hash = payload.htlc.payment_hash.to_vec();
