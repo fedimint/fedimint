@@ -1,6 +1,7 @@
 pub mod db;
 
 use std::fmt;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,21 +19,23 @@ use fedimint_core::modules::mint::{
     Note,
 };
 use fedimint_core::transaction::legacy::{Input, Output, Transaction};
+use futures::{Future, StreamExt};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 use thiserror::Error;
-use tracing::{debug, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
 use crate::utils::ClientContext;
-use crate::{ChildId, DerivableSecret, MintDecoder};
+use crate::{ChildId, DerivableSecret, FuturesUnordered, MintDecoder};
 
 pub mod backup;
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 const MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(1);
+const MINT_FETCH_MAX_RETRIES: usize = 10;
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -478,33 +481,41 @@ impl MintClient {
     }
 
     pub async fn fetch_all_notes(&self) -> Vec<Result<OutPoint>> {
-        let active_issuances = self.list_active_issuances().await;
-        if active_issuances.is_empty() {
-            return Vec::new();
-        }
+        let active_issuances = &self.list_active_issuances().await;
+        let mut results = vec![];
 
-        let mut results: Vec<Result<_>> = Vec::new();
-        for (out_point, _) in active_issuances.into_iter() {
-            loop {
+        #[cfg(not(target_family = "wasm"))]
+        let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
+        #[cfg(target_family = "wasm")]
+        let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _>>>>::new();
+        for (out_point, _) in active_issuances {
+            futures.push(Box::pin(async {
                 let mut dbtx = self.context.db.begin_transaction().await;
-                match self.fetch_notes(&mut dbtx, out_point).await {
-                    Ok(_) => {
-                        dbtx.commit_tx().await.expect("DB Error");
-                        results.push(Ok(out_point));
-                        break;
-                    }
-                    // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                    Err(e) if e.is_retryable() => {
-                        trace!("Mint returned retryable error: {:?}", e);
-                        fedimint_api::task::sleep(Duration::from_secs(1)).await
-                    }
-                    Err(e) => {
-                        warn!("Mint returned error: {:?}", e);
-                        results.push(Err(e));
-                        break;
+                let mut retries = 0;
+
+                loop {
+                    retries += 1;
+                    match self.fetch_notes(&mut dbtx, *out_point).await {
+                        Ok(_) => {
+                            dbtx.commit_tx().await.expect("DB Error");
+                            break Ok(*out_point);
+                        }
+                        // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                        Err(e) if e.is_retryable() && retries < MINT_FETCH_MAX_RETRIES => {
+                            trace!("Mint returned retryable error: {:?}", e);
+                            fedimint_api::task::sleep(Duration::from_millis(200)).await
+                        }
+                        Err(e) => {
+                            warn!("Mint returned error: {:?}", e);
+                            break Err(e);
+                        }
                     }
                 }
-            }
+            }))
+        }
+
+        while let Some(result) = futures.next().await {
+            results.push(result);
         }
 
         results
@@ -624,6 +635,9 @@ impl MintClientError {
     /// Returns `true` if queried outpoint isn't ready yet but may become ready later
     pub fn is_retryable(&self) -> bool {
         match self {
+            MintClientError::OutputOutcomeError(OutputOutcomeError::Federation(e)) => {
+                e.is_retryable()
+            }
             MintClientError::ApiError(e) => e.is_retryable(),
             MintClientError::OutputNotReadyYet(_) => true,
             _ => false,
