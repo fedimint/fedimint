@@ -229,11 +229,6 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -269,23 +264,18 @@
 // See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 </span><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Htlc {
-    <span class="kw">pub </span>short_channel_id: String,
     <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
     </span><span class="kw">pub </span>amount_msat: Amount,
-    <span class="kw">pub </span>cltv_expiry: u32,
+    <span class="comment">// TODO: use these to validate we can actually redeem the HTLC in time
+    </span><span class="kw">pub </span>cltv_expiry: u32,
     <span class="kw">pub </span>cltv_expiry_relative: u32,
     <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
 }
 
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Onion {
-    <span class="kw">pub </span>payload: String,
-    <span class="kw">pub </span>short_channel_id: String,
-    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
-    </span><span class="kw">pub </span>forward_msat: Amount,
-    <span class="kw">pub </span>outgoing_cltv_value: u32,
-    <span class="kw">pub </span>shared_secret: bitcoin_hashes::sha256::Hash,
-    <span class="kw">pub </span>next_onion: String,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
@@ -392,7 +382,7 @@
     // After https://github.com/fedimint/fedimint/pull/1180,
     // all HTLCs to Fedimint clients should have route hint with `short_channel_id = 0u64`,
     // unless the gateway is serving multiple federations.
-    </span><span class="kw">if </span>htlc_accepted.onion.short_channel_id == <span class="string">&quot;0x0x0&quot; </span>{
+    </span><span class="kw">if </span>htlc_accepted.onion.short_channel_id.as_deref() == <span class="prelude-val">Some</span>(<span class="string">&quot;0x0x0&quot;</span>) {
         <span class="kw">let </span>preimage = <span class="kw">match </span>plugin
             .state()
             .send(ReceivePaymentPayload { htlc_accepted })
