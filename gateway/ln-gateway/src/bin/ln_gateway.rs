@@ -27,6 +27,7 @@ use ln_gateway::{
 };
 use tokio::sync::mpsc;
 use tracing::error;
+use tracing_subscriber::EnvFilter;
 
 /// Fedimint gateway packaged as a CLN plugin
 #[tokio::main]
@@ -40,6 +41,12 @@ async fn main() -> Result<(), Error> {
             return Ok(());
         }
     }
+
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
 
     // Create message channels
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);

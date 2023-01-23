@@ -27,6 +27,7 @@ use tokio::{
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Status};
 use tracing::{debug, error};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
@@ -38,6 +39,12 @@ pub struct ClnExtensionOpts {
 // Note: Once this binary is stable, we should be able to remove current 'ln_gateway'
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
+
     let (service, listen) = ClnRpcService::new()
         .await
         .expect("Failed to create cln rpc service");

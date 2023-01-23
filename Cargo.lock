@@ -2299,6 +2299,7 @@ dependencies = [
  "tonic-build",
  "tower-http",
  "tracing",
+ "tracing-subscriber",
  "url",
 ]
 
