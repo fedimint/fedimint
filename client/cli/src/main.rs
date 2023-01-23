@@ -517,20 +517,20 @@ async fn handle_command(
         ),
         Command::Fetch => {
             let mut result = Vec::<OutPoint>::new();
-            let mut has_error = false;
+            let mut last_error = None;
             for fetch_result in client.fetch_all_notes().await {
                 match fetch_result {
                     Ok(v) => result.push(v),
-                    Err(_) => {
-                        has_error = true;
+                    Err(e) => {
+                        last_error = Some(e);
                     }
                 }
             }
-            if has_error {
+            if let Some(error) = last_error {
                 Err(CliError::from(
                     CliErrorKind::GeneralFederationError,
                     "failed to fetch notes",
-                    None,
+                    Some(Box::new(error)),
                 ))
             } else {
                 Ok(CliOutput::Fetch { issuance: (result) })

@@ -104,7 +104,7 @@ impl fmt::Display for FederationError {
 }
 
 impl FederationError {
-    fn is_retryable(&self) -> bool {
+    pub fn is_retryable(&self) -> bool {
         self.0.iter().any(|(_, e)| e.is_retryable())
     }
 }
@@ -401,12 +401,8 @@ where
 
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
-        self.request_with_strategy(
-            Retry404::new(self.all_members().one_honest()),
-            "/fetch_transaction".to_owned(),
-            erased_single_param(&tx),
-        )
-        .await
+        self.request_current_consensus("/fetch_transaction".to_owned(), erased_single_param(&tx))
+            .await
     }
 
     async fn fetch_epoch_history(
