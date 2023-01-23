@@ -143,6 +143,21 @@ async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
+    test(2, |_fed, user, bitcoin, _, _| async move {
+        let peg_in_address = user.client.get_new_pegin_address(rng()).await;
+        let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(10000));
+        let result = user.client.peg_in(proof, tx, rng()).await;
+
+        // TODO make return error more useful
+        assert!(result.is_err());
+        // confirm that the issuance was saved, even if the tx is rejected
+        assert!(!user.client.list_active_issuances().await.is_empty());
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_must_wait_for_available_utxos() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         let address1 = bitcoin.get_new_address();
@@ -932,7 +947,6 @@ async fn unbalanced_transactions_get_rejected() -> Result<()> {
             .await;
         let response = fed.submit_transaction(tx.into_type_erased()).await;
 
-        assert_eq!(user.client.list_active_issuances().await, vec![]);
         assert_matches!(
             response,
             Err(TransactionError(UnbalancedTransaction { .. }))
