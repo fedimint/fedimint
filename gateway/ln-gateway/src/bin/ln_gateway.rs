@@ -29,8 +29,8 @@ use tokio::sync::mpsc;
 use tracing::error;
 
 /// Fedimint gateway packaged as a CLN plugin
+// Use CLN_PLUGIN_LOG=<log-level> to enable debug logging from within cln-plugin
 #[tokio::main]
-#[deprecated(note = "Prefer to use `gateway-cln-extension` binary instead")]
 async fn main() -> Result<(), Error> {
     let mut args = std::env::args();
 
