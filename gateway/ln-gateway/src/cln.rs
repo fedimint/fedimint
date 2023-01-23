@@ -33,9 +33,9 @@ where
 // See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Htlc {
-    pub short_channel_id: String,
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub amount_msat: Amount,
+    // TODO: use these to validate we can actually redeem the HTLC in time
     pub cltv_expiry: u32,
     pub cltv_expiry_relative: u32,
     pub payment_hash: bitcoin_hashes::sha256::Hash,
@@ -43,13 +43,8 @@ pub struct Htlc {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Onion {
-    pub payload: String,
-    pub short_channel_id: String,
-    #[serde(deserialize_with = "as_fedimint_amount")]
-    pub forward_msat: Amount,
-    pub outgoing_cltv_value: u32,
-    pub shared_secret: bitcoin_hashes::sha256::Hash,
-    pub next_onion: String,
+    #[serde(default)]
+    pub short_channel_id: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -156,7 +151,7 @@ async fn htlc_accepted_hook(
     // After https://github.com/fedimint/fedimint/pull/1180,
     // all HTLCs to Fedimint clients should have route hint with `short_channel_id = 0u64`,
     // unless the gateway is serving multiple federations.
-    if htlc_accepted.onion.short_channel_id == "0x0x0" {
+    if htlc_accepted.onion.short_channel_id.as_deref() == Some("0x0x0") {
         let preimage = match plugin
             .state()
             .send(ReceivePaymentPayload { htlc_accepted })

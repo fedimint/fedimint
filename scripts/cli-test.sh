@@ -61,6 +61,12 @@ INVOICE_RESULT="$($FM_LN2 waitinvoice test)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
+# test that LN1 can still receive directly even though running the plugin
+INVOICE="$($FM_LN1 invoice 42000 test test 1m | jq -e -r '.bolt11')"
+$FM_LN2 pay "$INVOICE"
+INVOICE_STATUS="$($FM_LN1 waitinvoice test | jq -e -r '.status')"
+[[ "$INVOICE_STATUS" = "paid" ]]
+
 # incoming lightning
 INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
 INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
