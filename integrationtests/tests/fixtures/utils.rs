@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::Error;
 use async_trait::async_trait;
 use bitcoin::secp256k1::PublicKey;
 use fedimint_ln::contracts::Preimage;
+use fedimint_ln::route_hints::RouteHint;
 use ln_gateway::ln::{LightningError, LnRpc};
 use tokio::sync::Mutex;
 
@@ -58,5 +60,9 @@ impl LnRpc for LnRpcAdapter {
         }
         self.fail_invoices.lock().await.remove(&invoice);
         self.client.pay(invoice, max_delay, max_fee_percent).await
+    }
+
+    async fn route_hints(&self) -> Result<Vec<RouteHint>, Error> {
+        Ok(vec![])
     }
 }

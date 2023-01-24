@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_ln::contracts::Preimage;
+use fedimint_ln::route_hints::RouteHint;
 use lightning_invoice::Invoice;
 use ln_gateway::ln::{LightningError, LnRpc};
 use rand::rngs::OsRng;
@@ -43,5 +44,9 @@ impl LnRpc for MockLnRpc {
         *self.amount_sent.lock().await += invoice.amount_milli_satoshis().unwrap();
 
         Ok(self.preimage.clone())
+    }
+
+    async fn route_hints(&self) -> std::result::Result<Vec<RouteHint>, Error> {
+        Ok(vec![])
     }
 }
