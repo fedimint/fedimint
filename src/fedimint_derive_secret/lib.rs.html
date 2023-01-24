@@ -100,6 +100,12 @@
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Scheme for deriving deterministic secret keys
 
 </span><span class="kw">use </span>std::fmt::Formatter;
@@ -115,6 +121,7 @@
 <span class="kw">const </span>SECP256K1_TAG: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>] = <span class="string">b&quot;secp256k&quot;</span>;
 <span class="kw">const </span>BLS12_381_TAG: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>] = <span class="string">b&quot;bls12381&quot;</span>;
 <span class="kw">const </span>CHACHA20_POLY1305: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>] = <span class="string">b&quot;c20p1305&quot;</span>;
+<span class="kw">const </span>RAW_BYTES: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>] = <span class="string">b&quot;rawbytes&quot;</span>;
 
 <span class="doccomment">/// Describes a child key of a [`DerivableSecret`]
 </span><span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable)]
@@ -181,6 +188,11 @@
                 .derive::&lt;<span class="number">32</span>&gt;(<span class="kw-2">&amp;</span>tagged_derive(CHACHA20_POLY1305, ChildId(<span class="number">0</span>))),
         )
         .expect(<span class="string">&quot;created key&quot;</span>)
+    }
+
+    <span class="doccomment">/// Generate a pseudo-random byte array from the derivable secret.
+    </span><span class="kw">pub fn </span>to_random_bytes&lt;<span class="kw">const </span>LEN: usize&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; [u8; LEN] {
+        <span class="self">self</span>.kdf.derive(<span class="kw-2">&amp;</span>tagged_derive(RAW_BYTES, ChildId(<span class="number">0</span>)))
     }
 }
 
