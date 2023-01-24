@@ -13,6 +13,7 @@ const CHILD_TAG: &[u8; 8] = b"childkey";
 const SECP256K1_TAG: &[u8; 8] = b"secp256k";
 const BLS12_381_TAG: &[u8; 8] = b"bls12381";
 const CHACHA20_POLY1305: &[u8; 8] = b"c20p1305";
+const RAW_BYTES: &[u8; 8] = b"rawbytes";
 
 /// Describes a child key of a [`DerivableSecret`]
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
@@ -79,6 +80,11 @@ impl DerivableSecret {
                 .derive::<32>(&tagged_derive(CHACHA20_POLY1305, ChildId(0))),
         )
         .expect("created key")
+    }
+
+    /// Generate a pseudo-random byte array from the derivable secret.
+    pub fn to_random_bytes<const LEN: usize>(&self) -> [u8; LEN] {
+        self.kdf.derive(&tagged_derive(RAW_BYTES, ChildId(0)))
     }
 }
 
