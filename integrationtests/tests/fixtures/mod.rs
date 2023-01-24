@@ -514,6 +514,7 @@ impl GatewayTest {
             node_pub_key,
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+            route_hints: vec![],
         };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
@@ -562,7 +563,7 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .connect_federation(client.clone())
+            .connect_federation(client.clone(), vec![])
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios

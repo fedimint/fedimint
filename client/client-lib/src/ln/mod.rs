@@ -474,6 +474,7 @@ mod tests {
                 node_pub_key,
                 api: Url::parse("http://example.com")
                     .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+                route_hints: vec![],
             }
         };
         let timelock = 42;

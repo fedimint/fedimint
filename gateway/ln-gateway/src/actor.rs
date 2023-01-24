@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
+use fedimint_server::modules::ln::route_hints::RouteHint;
 use fedimint_server::modules::{
     ln::contracts::{ContractId, Preimage},
     wallet::txoproof::TxOutProof,
@@ -18,14 +19,15 @@ pub struct GatewayActor {
 }
 
 impl GatewayActor {
-    pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
+    pub async fn new(client: Arc<GatewayClient>, route_hints: Vec<RouteHint>) -> Result<Self> {
         // Retry gateway registration
+        let gateway_registration = client.config().to_gateway_registration_info(route_hints);
         match retry(
             String::from("Register With Federation"),
             #[allow(clippy::unit_arg)]
             || async {
                 Ok(client
-                    .register_with_federation(client.config().into())
+                    .register_with_federation(gateway_registration.clone())
                     .await?)
             },
             Duration::from_secs(1),

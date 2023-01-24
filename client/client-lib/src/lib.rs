@@ -132,13 +132,17 @@ pub struct GatewayClientConfig {
     pub mint_channel_id: u64,
 }
 
-impl From<GatewayClientConfig> for LightningGateway {
-    fn from(config: GatewayClientConfig) -> Self {
+impl GatewayClientConfig {
+    pub fn to_gateway_registration_info(
+        &self,
+        route_hints: Vec<fedimint_core::modules::ln::route_hints::RouteHint>,
+    ) -> LightningGateway {
         LightningGateway {
-            mint_channel_id: config.mint_channel_id,
-            mint_pub_key: config.redeem_key.x_only_public_key().0,
-            node_pub_key: config.node_pub_key,
-            api: config.api,
+            mint_channel_id: self.mint_channel_id,
+            mint_pub_key: self.redeem_key.x_only_public_key().0,
+            node_pub_key: self.node_pub_key,
+            api: self.api.clone(),
+            route_hints,
         }
     }
 }
