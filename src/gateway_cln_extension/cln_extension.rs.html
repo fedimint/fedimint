@@ -435,6 +435,11 @@
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     array::TryFromSliceError, collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr,
     sync::Arc, time::Duration,
@@ -471,6 +476,7 @@
 }
 
 <span class="comment">// Note: Once this binary is stable, we should be able to remove current &#39;ln_gateway&#39;
+// Use CLN_PLUGIN_LOG=&lt;log-level&gt; to enable debug logging from within cln-plugin
 </span><span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span>(service, listen) = ClnRpcService::new()
@@ -516,13 +522,10 @@
 
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Onion {
-    <span class="kw">pub </span>payload: String,
-    <span class="kw">pub </span>short_channel_id: u64,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
     </span><span class="kw">pub </span>forward_msat: Amount,
-    <span class="kw">pub </span>outgoing_cltv_value: u32,
-    <span class="kw">pub </span>shared_secret: bitcoin_hashes::sha256::Hash,
-    <span class="kw">pub </span>next_onion: String,
 }
 
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
@@ -802,8 +805,15 @@
     }
 
     <span class="kw">async fn </span>intercept_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: HtlcAccepted) -&gt; serde_json::Value {
-        <span class="kw">let </span>short_channel_id = payload.onion.short_channel_id;
         <span class="kw">let </span>htlc_expiry = payload.htlc.cltv_expiry;
+
+        <span class="kw">let </span>short_channel_id = <span class="kw">match </span>payload.onion.short_channel_id {
+            <span class="prelude-val">Some</span>(scid) =&gt; scid,
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="comment">// This is a HTLC terminating at the gateway node. DO NOT intercept
+                </span><span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>});
+            }
+        };
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(subscription) = <span class="self">self</span>.subscriptions.lock().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>short_channel_id) {
             <span class="kw">let </span>payment_hash = payload.htlc.payment_hash.to_vec();
