@@ -1,6 +1,7 @@
 use bitcoin::KeyPair;
 use fedimint_api::config::ClientConfig;
 use fedimint_api::core::client::ClientModule;
+use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::Amount;
 use fedimint_core::modules::ln::contracts::ContractOutcome;
@@ -92,12 +93,14 @@ impl TransactionBuilder {
     pub async fn build<C: AsRef<ClientConfig> + Clone, R: RngCore + CryptoRng>(
         self,
         client: &Client<C>,
+        dbtx: &mut DatabaseTransaction<'_>,
         rng: R,
     ) -> Transaction {
         let change =
             self.input_amount(client) - self.output_amount(client) - self.fee_amount(client);
         self.build_with_change(
             client.mint_client(),
+            dbtx,
             rng,
             vec![change],
             &client.context.secp,
@@ -110,11 +113,14 @@ impl TransactionBuilder {
     pub async fn build_with_change<R: RngCore + CryptoRng>(
         mut self,
         change_module: MintClient,
+        dbtx: &mut DatabaseTransaction<'_>,
         mut rng: R,
         change: Vec<Amount>,
         secp: &Secp256k1<secp256k1_zkp::All>,
     ) -> Transaction {
-        change_module.finalize_change(&mut self.tx, change).await;
+        change_module
+            .finalize_change(&mut self.tx, dbtx, change)
+            .await;
 
         let txid = self.tx.tx_hash();
         if !self.keys.is_empty() {

@@ -183,9 +183,12 @@ impl MintClient {
 
     /// Adds the final amounts of `change` to the tx before submitting it
     /// Allows for multiple `change` outputs
-    pub async fn finalize_change(&self, tx: &mut Transaction, change: Vec<Amount>) {
-        let mut dbtx = self.start_dbtx().await;
-
+    pub async fn finalize_change(
+        &self,
+        tx: &mut Transaction,
+        dbtx: &mut DatabaseTransaction<'_>,
+        change: Vec<Amount>,
+    ) {
         // remove the spent ecash from the DB
         let mut input_ecash: Vec<(Amount, SpendableNote)> = vec![];
         for input in &tx.inputs {
@@ -207,13 +210,13 @@ impl MintClient {
         }
 
         let mut change_outputs: Vec<(usize, NoteIssuanceRequests)> = vec![];
-        let notes_per_denomination = self.notes_per_denomination(&mut dbtx).await;
+        let notes_per_denomination = self.notes_per_denomination(dbtx).await;
         for amount in change.clone() {
             if amount == Amount::ZERO {
                 continue;
             }
             let (issuances, nonces) = self
-                .create_ecash(amount, notes_per_denomination, &mut dbtx)
+                .create_ecash(amount, notes_per_denomination, dbtx)
                 .await;
             let out_idx = tx.outputs.len();
             tx.outputs.push(Output::Mint(MintOutput(nonces)));
@@ -241,8 +244,6 @@ impl MintClient {
             .await
             .expect("DB Error");
         }
-
-        dbtx.commit_tx().await.expect("DB Error");
     }
 
     pub async fn set_notes_per_denomination(&self, notes: u16) {
@@ -816,7 +817,7 @@ mod tests {
         issue_tokens(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
 
         // Spending works
-        let dbtx = client.context.db.begin_transaction().await;
+        let mut dbtx = client.context.db.begin_transaction().await;
         let mut builder = TransactionBuilder::default();
         let secp = &client.context.secp;
         let _tbs_pks = &client.config.tbs_pks;
@@ -827,7 +828,13 @@ mod tests {
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
         let client = &client;
         builder
-            .build_with_change(client.clone(), rng, vec![Amount::from_sats(0)], secp)
+            .build_with_change(
+                client.clone(),
+                &mut dbtx,
+                rng,
+                vec![Amount::from_sats(0)],
+                secp,
+            )
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 
@@ -855,7 +862,7 @@ mod tests {
         }
 
         // We can exactly spend the remainder
-        let dbtx = client.context.db.begin_transaction().await;
+        let mut dbtx = client.context.db.begin_transaction().await;
         let mut builder = TransactionBuilder::default();
         let notes = client.select_notes(SPEND_AMOUNT).await.unwrap();
         let rng = rand::rngs::OsRng;
@@ -863,7 +870,13 @@ mod tests {
 
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
         builder
-            .build_with_change(client.clone(), rng, vec![Amount::from_sats(0)], secp)
+            .build_with_change(
+                client.clone(),
+                &mut dbtx,
+                rng,
+                vec![Amount::from_sats(0)],
+                secp,
+            )
             .await;
         dbtx.commit_tx().await.expect("DB Error");
 

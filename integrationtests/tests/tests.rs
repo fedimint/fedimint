@@ -23,7 +23,7 @@ use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
-use mint_client::mint::MintClient;
+
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
 use threshold_crypto::{SecretKey, SecretKeyShare};
@@ -721,8 +721,8 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         );
         let mut builder = TransactionBuilder::default();
         builder.output(Output::LN(offer_output));
-        let final_tx = builder.build(&user.client, rng()).await;
-        fed.submit_transaction(final_tx.into_type_erased())
+        user.client
+            .submit_tx_with_change(builder, rng())
             .await
             .unwrap();
         fed.run_consensus_epochs(1).await; // process offer
@@ -916,19 +916,24 @@ async fn audit_negative_balance_sheet_panics() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unbalanced_transactions_get_rejected() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
+    test(2, |fed, user, _, _, _| async move {
         // cannot make change for this invoice (results in unbalanced tx)
-        fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
-        let mut builder = TransactionBuilder::default();
-        let ecash = user.client.mint_client().notes().await;
-        let (mut keys, input) = MintClient::ecash_input(ecash).unwrap();
-        builder.input(&mut keys, input);
+        let builder = TransactionBuilder::default();
+        let mint = user.client.mint_client();
 
+        let mut dbtx = mint.start_dbtx().await;
         let tx = builder
-            .build_with_change(user.client.mint_client(), rng(), vec![sats(0)], &secp())
+            .build_with_change(
+                user.client.mint_client(),
+                &mut dbtx,
+                rng(),
+                vec![sats(1000)],
+                &secp(),
+            )
             .await;
         let response = fed.submit_transaction(tx.into_type_erased()).await;
 
+        assert_eq!(user.client.list_active_issuances().await, vec![]);
         assert_matches!(
             response,
             Err(TransactionError(UnbalancedTransaction { .. }))

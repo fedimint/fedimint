@@ -341,13 +341,19 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.submit_tx_with_change(tx, &mut rng).await
     }
 
-    async fn submit_tx_with_change<R: RngCore + CryptoRng>(
+    /// Submits a transaction to the fed, making change using our change module
+    ///
+    /// If the submission fails, no changes to the DB will occur.
+    pub async fn submit_tx_with_change<R: RngCore + CryptoRng>(
         &self,
         tx: TransactionBuilder,
         rng: R,
     ) -> Result<TransactionId> {
-        let final_tx = tx.build(self, rng).await;
-        Ok(self.context.api.submit_transaction(final_tx).await?)
+        let mut dbtx = self.context.db.begin_transaction().await;
+        let final_tx = tx.build(self, &mut dbtx, rng).await;
+        let result = self.context.api.submit_transaction(final_tx).await?;
+        dbtx.commit_tx().await.expect("DB Error");
+        Ok(result)
     }
 
     /// Spent some [`SpendableNote`]s to receive a freshly minted ones
@@ -522,15 +528,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             notes
         } else {
             let mut tx = TransactionBuilder::default();
-            let change = vec![amount, notes.total_amount() - amount];
 
             let (mut keys, input) = MintClient::ecash_input(notes)?;
             tx.input(&mut keys, input);
-            let tx = tx
-                .build_with_change(self.mint_client(), rng, change, &self.context.secp)
-                .await;
-
-            self.context.api.submit_transaction(tx).await?;
+            self.submit_tx_with_change(tx, rng).await?;
             self.fetch_all_notes().await;
             self.mint_client().select_notes(amount).await?
         };
@@ -770,8 +771,7 @@ impl Client<UserClientConfig> {
             .ln_client()
             .create_refund_outgoing_contract_input(&contract_data);
         tx.input(&mut vec![*refund_key], Input::LN(refund_input));
-        let final_tx = tx.build(self, rng).await;
-        let txid = self.context.api.submit_transaction(final_tx).await?;
+        let txid = self.submit_tx_with_change(tx, rng).await?;
 
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
