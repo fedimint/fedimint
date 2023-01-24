@@ -997,6 +997,58 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     serde_json::from_value(body).expect("Malformed block height response from wallet module!")
 }
 
+// TODO: upstream serde support to LDK
+/// Hack to get a route hint that implements serde traits.
+pub mod route_hints {
+    use fedimint_api::encoding::{Decodable, Encodable};
+    use secp256k1::PublicKey;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    pub struct RouteHintHop {
+        /// The node_id of the non-target end of the route
+        pub src_node_id: PublicKey,
+        /// The short_channel_id of this channel
+        pub short_channel_id: u64,
+        /// Flat routing fee in satoshis
+        pub base_msat: u32,
+        /// Liquidity-based routing fee in millionths of a routed amount.
+        /// In other words, 10000 is 1%.
+        pub proportional_millionths: u32,
+        /// The difference in CLTV values between this node and the next node.
+        pub cltv_expiry_delta: u16,
+        /// The minimum value, in msat, which must be relayed to the next hop.
+        pub htlc_minimum_msat: Option<u64>,
+        /// The maximum value in msat available for routing with a single HTLC.
+        pub htlc_maximum_msat: Option<u64>,
+    }
+
+    /// A list of hops along a payment path terminating with a channel to the recipient.
+    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    pub struct RouteHint(pub Vec<RouteHintHop>);
+
+    impl RouteHint {
+        pub fn to_ldk_route_hint(&self) -> lightning::routing::router::RouteHint {
+            lightning::routing::router::RouteHint(
+                self.0
+                    .iter()
+                    .map(|hop| lightning::routing::router::RouteHintHop {
+                        src_node_id: hop.src_node_id,
+                        short_channel_id: hop.short_channel_id,
+                        fees: lightning::routing::gossip::RoutingFees {
+                            base_msat: hop.base_msat,
+                            proportional_millionths: hop.proportional_millionths,
+                        },
+                        cltv_expiry_delta: hop.cltv_expiry_delta,
+                        htlc_minimum_msat: hop.htlc_minimum_msat,
+                        htlc_maximum_msat: hop.htlc_maximum_msat,
+                    })
+                    .collect(),
+            )
+        }
+    }
+}
+
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum LightningError {
     #[error("The the input contract {0} does not exist")]
