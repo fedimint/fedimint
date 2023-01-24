@@ -196,6 +196,16 @@ impl<'a> DatabaseDump<'a> {
                         consensus.insert("LastEpoch".to_string(), Box::new(last_epoch));
                     }
                 }
+                ConsensusRange::DbKeyPrefix::ClientConfigSignature => {
+                    let signature = self
+                        .read_only
+                        .get_value(&ConsensusRange::ClientConfigSignatureKey)
+                        .await
+                        .unwrap();
+                    if let Some(signature) = signature {
+                        consensus.insert("Client Signature".to_string(), Box::new(signature));
+                    }
+                }
                 // Module is a global prefix for all module data
                 ConsensusRange::DbKeyPrefix::Module => {}
             }

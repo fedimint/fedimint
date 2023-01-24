@@ -21,6 +21,7 @@ pub fn epoch_message(consensus: &HbbftConsensusOutcome) -> String {
 fn item_message(item: &ConsensusItem) -> String {
     match item {
         ConsensusItem::EpochOutcomeSignatureShare(_) => "Outcome Signature".to_string(),
+        ConsensusItem::ClientConfigSignatureShare(_) => "Client Config Signature".to_string(),
         // TODO: make this nice again
         ConsensusItem::Module(mci) => {
             format!("Module CI: module={} ci={}", mci.module_instance_id(), mci)

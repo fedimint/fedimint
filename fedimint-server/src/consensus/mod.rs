@@ -31,8 +31,9 @@ use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
-    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
-    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
+    AcceptedTransactionKey, ClientConfigSignatureKey, DropPeerKey, DropPeerKeyPrefix,
+    EpochHistoryKey, LastEpochKey, ProposedTransactionKey, ProposedTransactionKeyPrefix,
+    RejectedTransactionKey,
 };
 use crate::transaction::{Transaction, TransactionError};
 
@@ -280,6 +281,7 @@ impl FedimintConsensus {
 
                         let UnzipConsensusItem {
                             epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
+                            client_config_signature_share: _client_config_signature_share_cis,
                             transaction: transaction_cis,
                             module: module_cis,
                         } = consensus_outcome
@@ -561,10 +563,10 @@ impl FedimintConsensus {
         if let Some(epoch) = dbtx.get_value(&LastEpochKey).await.unwrap() {
             let last_epoch = dbtx.get_value(&epoch).await.unwrap().unwrap();
             let sig = self.cfg.private.epoch_sks.0.sign(last_epoch.hash);
-            let item = ConsensusItem::EpochOutcomeSignatureShare(EpochOutcomeSignatureShare(sig));
+            let item = ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig));
             items.push(item);
         };
-
+        
         ConsensusProposal { items, drop_peers }
     }
 
