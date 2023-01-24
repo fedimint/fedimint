@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-a6e10e60fb712b0f.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-5f7299aa2b503fb1.css"><link rel="stylesheet" disabled href="../../../static.files/dark-dfb18ef8114bb428.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-4047a6aaddd3789d.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-3367e395607fafc1.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6d262342be62306e.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-5f7299aa2b503fb1.css"><link rel="stylesheet" disabled href="../../../static.files/dark-dfb18ef8114bb428.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-4047a6aaddd3789d.css"><script id="default-settings" ></script><script src="../../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-3367e395607fafc1.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -962,6 +962,19 @@
 <a href="#962" id="962">962</a>
 <a href="#963" id="963">963</a>
 <a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -1147,9 +1160,12 @@
 
     <span class="doccomment">/// Adds the final amounts of `change` to the tx before submitting it
     /// Allows for multiple `change` outputs
-    </span><span class="kw">pub async fn </span>finalize_change(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;mut </span>Transaction, change: Vec&lt;Amount&gt;) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
-
+    </span><span class="kw">pub async fn </span>finalize_change(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tx: <span class="kw-2">&amp;mut </span>Transaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        change: Vec&lt;Amount&gt;,
+    ) {
         <span class="comment">// remove the spent ecash from the DB
         </span><span class="kw">let </span><span class="kw-2">mut </span>input_ecash: Vec&lt;(Amount, SpendableNote)&gt; = <span class="macro">vec!</span>[];
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.inputs {
@@ -1171,13 +1187,13 @@
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>change_outputs: Vec&lt;(usize, NoteIssuanceRequests)&gt; = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(dbtx).<span class="kw">await</span>;
         <span class="kw">for </span>amount <span class="kw">in </span>change.clone() {
             <span class="kw">if </span>amount == Amount::ZERO {
                 <span class="kw">continue</span>;
             }
             <span class="kw">let </span>(issuances, nonces) = <span class="self">self
-                </span>.create_ecash(amount, notes_per_denomination, <span class="kw-2">&amp;mut </span>dbtx)
+                </span>.create_ecash(amount, notes_per_denomination, dbtx)
                 .<span class="kw">await</span>;
             <span class="kw">let </span>out_idx = tx.outputs.len();
             tx.outputs.push(Output::Mint(MintOutput(nonces)));
@@ -1205,8 +1221,6 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
-
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
     <span class="kw">pub async fn </span>set_notes_per_denomination(<span class="kw-2">&amp;</span><span class="self">self</span>, notes: u16) {
@@ -1780,7 +1794,7 @@
         issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
 
         <span class="comment">// Spending works
-        </span><span class="kw">let </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
         <span class="kw">let </span>_tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
@@ -1791,7 +1805,13 @@
         builder.input(<span class="kw-2">&amp;mut </span>spend_keys.clone(), ecash_input.clone());
         <span class="kw">let </span>client = <span class="kw-2">&amp;</span>client;
         builder
-            .build_with_change(client.clone(), rng, <span class="macro">vec!</span>[Amount::from_sats(<span class="number">0</span>)], secp)
+            .build_with_change(
+                client.clone(),
+                <span class="kw-2">&amp;mut </span>dbtx,
+                rng,
+                <span class="macro">vec!</span>[Amount::from_sats(<span class="number">0</span>)],
+                secp,
+            )
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
@@ -1819,7 +1839,7 @@
         }
 
         <span class="comment">// We can exactly spend the remainder
-        </span><span class="kw">let </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>notes = client.select_notes(SPEND_AMOUNT).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>rng = rand::rngs::OsRng;
@@ -1827,7 +1847,13 @@
 
         builder.input(<span class="kw-2">&amp;mut </span>spend_keys.clone(), ecash_input.clone());
         builder
-            .build_with_change(client.clone(), rng, <span class="macro">vec!</span>[Amount::from_sats(<span class="number">0</span>)], secp)
+            .build_with_change(
+                client.clone(),
+                <span class="kw-2">&amp;mut </span>dbtx,
+                rng,
+                <span class="macro">vec!</span>[Amount::from_sats(<span class="number">0</span>)],
+                secp,
+            )
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
@@ -1927,4 +1953,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5e37043d6 2023-01-22)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-c3c521c753752a1a.js" data-settings-css="settings-08ddfdda51b8ee2e.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c8e6a9e8b 2023-01-23)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-c3c521c753752a1a.js" data-settings-css="settings-08ddfdda51b8ee2e.css" ></div></body></html>
