@@ -435,46 +435,17 @@
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a>
-<a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
-<a href="#464" id="464">464</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
-    collections::HashMap, net::SocketAddr, path::PathBuf, pin::Pin, str::FromStr, sync::Arc,
-    time::Duration,
+    array::TryFromSliceError, collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr,
+    sync::Arc, time::Duration,
 };
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin::XOnlyPublicKey;
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin_hashes::{hex::ToHex, sha256, Hash};
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::{model, ClnRpc};
 <span class="kw">use </span>fedimint_api::{task::TaskGroup, Amount};
-<span class="kw">use </span>futures::Stream;
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
     complete_htlcs_request::{Action, Cancel, Settle},
     gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
@@ -666,63 +637,49 @@
             })
     }
 
-    <span class="kw">type </span>PayInvoiceStream =
-        Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, tonic::Status&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;;
-
     <span class="kw">async fn </span>pay_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: tonic::Request&lt;tonic::Streaming&lt;PayInvoiceRequest&gt;&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::PayInvoiceStream&gt;, tonic::Status&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = request.into_inner();
-
-        <span class="comment">// Since the cln_rpc client is not `Sync`, we cannot actually lazily pocess the requests into response stream
-        // The current approach will process all requests within the incoming stream, before returning a response stream
-        </span><span class="kw">let </span><span class="kw-2">mut </span>results: Vec&lt;<span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, tonic::Status&gt;&gt; = Vec::new();
-
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(PayInvoiceRequest {
+        request: tonic::Request&lt;PayInvoiceRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;PayInvoiceResponse&gt;, tonic::Status&gt; {
+        <span class="kw">let </span>PayInvoiceRequest {
             invoice,
             max_delay,
             max_fee_percent,
-        }) = stream.message().<span class="kw">await</span><span class="question-mark">?
-        </span>{
-            <span class="kw">let </span>outcome = <span class="self">self
-                </span>.client
-                .lock()
-                .<span class="kw">await
-                </span>.call(cln_rpc::Request::Pay(model::PayRequest {
-                    bolt11: invoice,
-                    amount_msat: <span class="prelude-val">None</span>,
-                    label: <span class="prelude-val">None</span>,
-                    riskfactor: <span class="prelude-val">None</span>,
-                    maxfeepercent: <span class="prelude-val">Some</span>(max_fee_percent),
-                    retry_for: <span class="prelude-val">None</span>,
-                    maxdelay: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u16),
-                    exemptfee: <span class="prelude-val">None</span>,
-                    localinvreqid: <span class="prelude-val">None</span>,
-                    exclude: <span class="prelude-val">None</span>,
-                    maxfee: <span class="prelude-val">None</span>,
-                    description: <span class="prelude-val">None</span>,
-                }))
-                .<span class="kw">await
-                </span>.map(|response| <span class="kw">match </span>response {
-                    cln_rpc::Response::Pay(model::PayResponse {
-                        payment_preimage, ..
-                    }) =&gt; PayInvoiceResponse {
-                        preimage: payment_preimage.to_vec(),
-                    },
-                    <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unexpected response from cln pay rpc&quot;</span>),
-                })
-                .map_err(|e| {
-                    <span class="macro">error!</span>(<span class="string">&quot;cln pay rpc returned error {:?}&quot;</span>, e);
-                    tonic::Status::internal(e.to_string())
-                });
+        } = request.into_inner();
 
-            results.push(outcome);
-        }
+        <span class="kw">let </span>outcome = <span class="self">self
+            </span>.client
+            .lock()
+            .<span class="kw">await
+            </span>.call(cln_rpc::Request::Pay(model::PayRequest {
+                bolt11: invoice,
+                amount_msat: <span class="prelude-val">None</span>,
+                label: <span class="prelude-val">None</span>,
+                riskfactor: <span class="prelude-val">None</span>,
+                maxfeepercent: <span class="prelude-val">Some</span>(max_fee_percent),
+                retry_for: <span class="prelude-val">None</span>,
+                maxdelay: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u16),
+                exemptfee: <span class="prelude-val">None</span>,
+                localinvreqid: <span class="prelude-val">None</span>,
+                exclude: <span class="prelude-val">None</span>,
+                maxfee: <span class="prelude-val">None</span>,
+                description: <span class="prelude-val">None</span>,
+            }))
+            .<span class="kw">await
+            </span>.map(|response| <span class="kw">match </span>response {
+                cln_rpc::Response::Pay(model::PayResponse {
+                    payment_preimage, ..
+                }) =&gt; PayInvoiceResponse {
+                    preimage: payment_preimage.to_vec(),
+                },
+                <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unexpected response from cln pay rpc&quot;</span>),
+            })
+            .map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">&quot;cln pay rpc returned error {:?}&quot;</span>, e);
+                tonic::Status::internal(e.to_string())
+            })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(tonic::Response::new(
-            Box::pin(tokio_stream::iter(results)) <span class="kw">as </span><span class="self">Self</span>::PayInvoiceStream
-        ))
+        <span class="prelude-val">Ok</span>(tonic::Response::new(outcome))
     }
 
     <span class="kw">type </span>SubscribeInterceptHtlcsStream =
@@ -738,86 +695,73 @@
         <span class="prelude-val">Ok</span>(tonic::Response::new(ReceiverStream::new(receiver)))
     }
 
-    <span class="kw">type </span>CompleteHtlcsStream =
-        Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;CompleteHtlcsResponse, tonic::Status&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;;
-
-    <span class="kw">async fn </span>complete_htlcs(
+    <span class="kw">async fn </span>complete_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: tonic::Request&lt;tonic::Streaming&lt;CompleteHtlcsRequest&gt;&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::CompleteHtlcsStream&gt;, Status&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>requests = request.into_inner();
-
-        <span class="kw">let </span><span class="kw-2">mut </span>results: Vec&lt;<span class="prelude-ty">Result</span>&lt;CompleteHtlcsResponse, tonic::Status&gt;&gt; = Vec::new();
-
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(CompleteHtlcsRequest {
+        request: tonic::Request&lt;CompleteHtlcsRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;CompleteHtlcsResponse&gt;, Status&gt; {
+        <span class="kw">let </span>CompleteHtlcsRequest {
             action,
             intercepted_htlc_id,
-        }) = requests.message().<span class="kw">await</span><span class="question-mark">?
-        </span>{
-            <span class="kw">let </span>hash = <span class="kw">match </span>sha256::Hash::from_slice(<span class="kw-2">&amp;</span>intercepted_htlc_id) {
-                <span class="prelude-val">Ok</span>(hash) =&gt; hash,
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;Invalid intercepted_htlc_id: {:?}&quot;</span>, e);
-                    results.push(<span class="prelude-val">Err</span>(Status::invalid_argument(e.to_string())));
-                    <span class="kw">continue</span>;
+        } = request.into_inner();
+
+        <span class="kw">let </span>hash = <span class="kw">match </span>sha256::Hash::from_slice(<span class="kw-2">&amp;</span>intercepted_htlc_id) {
+            <span class="prelude-val">Ok</span>(hash) =&gt; hash,
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">error!</span>(<span class="string">&quot;Invalid intercepted_htlc_id: {:?}&quot;</span>, e);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(Status::invalid_argument(e.to_string()));
+            }
+        };
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(outcome) = <span class="self">self</span>.interceptor.outcomes.lock().<span class="kw">await</span>.remove(<span class="kw-2">&amp;</span>hash) {
+            <span class="comment">// Translate action request into a cln rpc response for `htlc_accepted` event
+            </span><span class="kw">let </span>htlca_res = <span class="kw">match </span>action {
+                <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
+                    <span class="kw">let </span>assert_pk: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], TryFromSliceError&gt; =
+                        preimage.as_slice().try_into();
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(pk) = assert_pk {
+                        <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>, <span class="string">&quot;payment_key&quot;</span>: pk.to_hex() })
+                    } <span class="kw">else </span>{
+                        htlc_processing_failure()
+                    }
+                }
+                <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
+                    <span class="comment">// TODO: Translate the reason into a BOLT 4 failure message
+                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                    </span>htlc_processing_failure()
+                }
+                <span class="prelude-val">None </span>=&gt; {
+                    <span class="macro">error!</span>(<span class="string">&quot;No action specified for intercepted htlc id: {:?}&quot;</span>, hash);
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
+                        <span class="string">&quot;No action specified on this intercepted htlc&quot;</span>,
+                    ));
                 }
             };
 
-            <span class="comment">// TODO: Implement non-blocking access to the outcomes map sowe can multithread complete_htlcs
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(outcome) = <span class="self">self</span>.interceptor.outcomes.lock().<span class="kw">await</span>.remove(<span class="kw-2">&amp;</span>hash) {
-                <span class="comment">// Translate action request into a cln rpc response for `htlc_accepted` event
-                </span><span class="kw">let </span>htlca_res = <span class="kw">match </span>action {
-                    <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(pk) = XOnlyPublicKey::from_slice(<span class="kw-2">&amp;</span>preimage) {
-                            <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>, <span class="string">&quot;payment_key&quot;</span>: pk.to_string() })
-                        } <span class="kw">else </span>{
-                            temp_node_failure()
-                        }
-                    }
-                    <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
-                        <span class="comment">// TODO: Translate the reason into a BOLT 4 failure message
-                        // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                        </span>temp_node_failure()
-                    }
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;No action specified for intercepted htlc id: {:?}&quot;</span>, hash);
-                        results.push(<span class="prelude-val">Err</span>(Status::internal(
-                            <span class="string">&quot;No action specified on this intercepted htlc&quot;</span>,
-                        )));
-                        <span class="kw">continue</span>;
-                    }
-                };
-
-                <span class="comment">// Send translated response to the HTLC interceptor for submission to the cln rpc
-                </span><span class="kw">match </span>outcome.send(htlca_res) {
-                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                        results.push(<span class="prelude-val">Ok</span>(CompleteHtlcsResponse {}));
-                    }
-                    <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(
-                            <span class="string">&quot;Failed to send htlc_accepted response to interceptor: {:?}&quot;</span>,
-                            e
-                        );
-                        results.push(<span class="prelude-val">Err</span>(Status::internal(
-                            <span class="string">&quot;Failed to send htlc_accepted outcome to interceptor&quot;</span>,
-                        )));
-                    }
-                };
-                <span class="kw">continue</span>;
-            }
-
+            <span class="comment">// Send translated response to the HTLC interceptor for submission to the cln rpc
+            </span><span class="kw">match </span>outcome.send(htlca_res) {
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(tonic::Response::new(CompleteHtlcsResponse {}));
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">error!</span>(
+                        <span class="string">&quot;Failed to send htlc_accepted response to interceptor: {:?}&quot;</span>,
+                        e
+                    );
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
+                        <span class="string">&quot;Failed to send htlc_accepted outcome to interceptor&quot;</span>,
+                    ));
+                }
+            };
+        } <span class="kw">else </span>{
             <span class="macro">error!</span>(
-                <span class="string">&quot;No reference found for this intercepted and processed htlc id: {:?}&quot;</span>,
+                <span class="string">&quot;No interceptor reference found for this processed htlc with id: {:?}&quot;</span>,
                 intercepted_htlc_id
             );
-            results.push(<span class="prelude-val">Err</span>(Status::internal(
-                <span class="string">&quot;No reference found for this intercepted and processed htlc&quot;</span>,
-            )))
+            <span class="comment">// TODO: Use error codes to signal the gateway to take reactionary actions
+            </span><span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
+                <span class="string">&quot;No interceptor reference found for this processed htlc. Potential loss of funds&quot;</span>,
+            ));
         }
-
-        <span class="prelude-val">Ok</span>(tonic::Response::new(
-            Box::pin(tokio_stream::iter(results)) <span class="kw">as </span><span class="self">Self</span>::CompleteHtlcsStream
-        ))
     }
 }
 
@@ -827,12 +771,14 @@
     </span>Error(<span class="attr">#[from] </span>anyhow::Error),
 }
 
-<span class="doccomment">/// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-/// 2002 error code reports general temporary failure of this processing node.
-</span><span class="kw">fn </span>temp_node_failure() -&gt; serde_json::Value {
+<span class="comment">// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+// 16399 error code reports unknown payment details.
+//
+// TODO: We should probably use a more specific error code based on htlc processing fail reason
+</span><span class="kw">fn </span>htlc_processing_failure() -&gt; serde_json::Value {
     <span class="macro">serde_json::json!</span>({
         <span class="string">&quot;result&quot;</span>: <span class="string">&quot;fail&quot;</span>,
-        <span class="string">&quot;failure_message&quot;</span>: <span class="string">&quot;2002&quot;
+        <span class="string">&quot;failure_message&quot;</span>: <span class="string">&quot;1639&quot;
     </span>})
 }
 
@@ -890,18 +836,18 @@
                     </span><span class="kw">return </span>tokio::time::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
                         receiver.<span class="kw">await</span>.unwrap_or_else(|e| {
                             <span class="macro">error!</span>(<span class="string">&quot;Failed to receive outcome of intercepted htlc: {:?}&quot;</span>, e);
-                            temp_node_failure()
+                            htlc_processing_failure()
                         })
                     })
                     .<span class="kw">await
                     </span>.unwrap_or_else(|e| {
                         <span class="macro">error!</span>(<span class="string">&quot;await_htlc_processing error {:?}&quot;</span>, e);
-                        temp_node_failure()
+                        htlc_processing_failure()
                     });
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(<span class="string">&quot;Failed to send htlc to subscription: {:?}&quot;</span>, e);
-                    <span class="kw">return </span>temp_node_failure();
+                    <span class="kw">return </span>htlc_processing_failure();
                 }
             }
         }
