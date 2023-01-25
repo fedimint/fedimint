@@ -14,6 +14,9 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
 
+/// How long a gateway announcement stays valid
+const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
+
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
 }
@@ -21,7 +24,9 @@ pub struct GatewayActor {
 impl GatewayActor {
     pub async fn new(client: Arc<GatewayClient>, route_hints: Vec<RouteHint>) -> Result<Self> {
         // Retry gateway registration
-        let gateway_registration = client.config().to_gateway_registration_info(route_hints);
+        let gateway_registration = client
+            .config()
+            .to_gateway_registration_info(route_hints, GW_ANNOUNCEMENT_TTL);
         match retry(
             String::from("Register With Federation"),
             #[allow(clippy::unit_arg)]

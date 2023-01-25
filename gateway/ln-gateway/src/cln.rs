@@ -166,9 +166,13 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
                 };
 
                 Some((peer_id, scid))
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
-        debug!("Found {} active channels to use as route hints", active_peer_channels.len());
+        debug!(
+            "Found {} active channels to use as route hints",
+            active_peer_channels.len()
+        );
 
         let mut route_hints = vec![];
         for (peer_id, scid) in active_peer_channels {

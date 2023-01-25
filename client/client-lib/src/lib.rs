@@ -137,6 +137,7 @@ impl GatewayClientConfig {
     pub fn to_gateway_registration_info(
         &self,
         route_hints: Vec<fedimint_core::modules::ln::route_hints::RouteHint>,
+        time_to_live: Duration,
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
@@ -144,6 +145,7 @@ impl GatewayClientConfig {
             node_pub_key: self.node_pub_key,
             api: self.api.clone(),
             route_hints,
+            valid_until: SystemTime::now() + time_to_live,
         }
     }
 }

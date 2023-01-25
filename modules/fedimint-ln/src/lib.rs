@@ -17,6 +17,7 @@ pub mod db;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::ops::Sub;
+use std::time::SystemTime;
 
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
@@ -218,6 +219,8 @@ pub struct LightningGateway {
     /// These will be appended with the route hint of the recipient's virtual channel. To keeps
     /// invoices small these should be used sparingly.
     pub route_hints: Vec<route_hints::RouteHint>,
+    /// Limits the validity of the announcement to allow updates
+    pub valid_until: SystemTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
