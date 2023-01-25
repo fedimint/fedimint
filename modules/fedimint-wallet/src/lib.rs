@@ -29,7 +29,7 @@ use fedimint_api::config::{
     ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
-use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
@@ -1541,13 +1541,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 #[instrument(level = "debug", skip_all)]
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(
-            db.begin_transaction()
-                .await
-                .with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET),
-            &rpc,
-        )
-        .await;
+        broadcast_pending_tx(db.begin_transaction().await, &rpc).await;
         // FIXME: remove after modularization finishes
         #[cfg(not(target_family = "wasm"))]
         fedimint_api::task::sleep(Duration::from_secs(10)).await;

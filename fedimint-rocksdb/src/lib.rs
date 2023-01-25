@@ -265,4 +265,35 @@ mod fedimint_rocksdb_tests {
         fedimint_api::db::verify_module_prefix(open_temp_db("fcb-rocksdb-test-module-prefix"))
             .await;
     }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_db() {
+        let module_instance_id = 1;
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-module-db-prefix")
+            .tempdir()
+            .unwrap();
+
+        let module_db = Database::new(
+            RocksDb::open(path).unwrap(),
+            ModuleDecoderRegistry::default(),
+        );
+
+        fedimint_api::db::verify_module_db(
+            open_temp_db("fcb-rocksdb-test-module-db"),
+            module_db.new_isolated(module_instance_id),
+        )
+        .await;
+    }
+
+    #[test_log::test()]
+    #[should_panic(expected = "Cannot isolate and already isolated database.")]
+    fn test_cannot_isolate_already_isolated_db() {
+        let module_instance_id = 1;
+        let db = open_temp_db("rocksdb-test-already-isolated").new_isolated(module_instance_id);
+
+        // try to isolate the database again
+        let module_instance_id = 2;
+        db.new_isolated(module_instance_id);
+    }
 }

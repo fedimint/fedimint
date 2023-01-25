@@ -170,10 +170,15 @@ impl Iterator for MemDbIter {
 #[cfg(test)]
 mod tests {
     use super::MemDatabase;
-    use crate::{db::Database, module::registry::ModuleDecoderRegistry};
+    use crate::{core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry};
 
     fn database() -> Database {
         Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())
+    }
+
+    fn module_database(module_instance_id: ModuleInstanceId) -> Database {
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        db.new_isolated(module_instance_id)
     }
 
     #[test_log::test(tokio::test)]
@@ -234,5 +239,10 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_module_dbtx() {
         fedimint_api::db::verify_module_prefix(database()).await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_db() {
+        fedimint_api::db::verify_module_db(database(), module_database(1)).await;
     }
 }

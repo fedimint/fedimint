@@ -154,7 +154,9 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
 mod fedimint_sqlite_tests {
     use std::fs;
 
-    use fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+    use fedimint_api::{
+        core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry,
+    };
     use rand::{rngs::OsRng, RngCore};
 
     use crate::SqliteDb;
@@ -167,6 +169,17 @@ mod fedimint_sqlite_tests {
             SqliteDb::open(connection_string.as_str()).await.unwrap(),
             ModuleDecoderRegistry::default(),
         )
+    }
+
+    async fn open_temp_module_db(db_name: &str, module_instance_id: ModuleInstanceId) -> Database {
+        let dir = format!("/tmp/sqlite-{}/{}", db_name, OsRng.next_u64());
+        fs::create_dir_all(&dir).expect("Error creating temporary directory for SQLite");
+        let connection_string = format!("sqlite://{}/sqlite-{}.db", dir.as_str(), db_name);
+        Database::new(
+            SqliteDb::open(connection_string.as_str()).await.unwrap(),
+            ModuleDecoderRegistry::default(),
+        )
+        .new_isolated(module_instance_id)
     }
 
     #[test_log::test(tokio::test)]
@@ -243,5 +256,14 @@ mod fedimint_sqlite_tests {
     #[test_log::test(tokio::test)]
     async fn test_module_dbtx() {
         fedimint_api::db::verify_module_prefix(open_temp_db("verify-module-prefix").await).await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_db() {
+        fedimint_api::db::verify_module_db(
+            open_temp_db("verify-module-db1").await,
+            open_temp_module_db("verify-module-db2", 1).await,
+        )
+        .await;
     }
 }

@@ -1112,7 +1112,7 @@ impl FederationTest {
                     let module = gen
                         .init(
                             cfg.get_module_config(id).unwrap(),
-                            db.clone(),
+                            db.new_isolated(id),
                             &env_vars,
                             &mut task_group,
                         )

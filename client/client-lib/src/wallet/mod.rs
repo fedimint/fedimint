@@ -274,7 +274,7 @@ mod tests {
                     async move {
                         Ok(Wallet::new_with_bitcoind(
                             cfg.to_typed().unwrap(),
-                            db,
+                            db.new_isolated(module_id),
                             btc_rpc_clone.clone().into(),
                             &mut task_group,
                         )
