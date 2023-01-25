@@ -12,21 +12,26 @@ struct Options {
     command: DbCommand,
 }
 
+/// Tool to inspect and manipulate rocksdb databases. All binary arguments (keys, values) have to be
+/// hex encoded.
 #[derive(Debug, Clone, Subcommand)]
 enum DbCommand {
+    /// List all key-value pairs where the key begins with `prefix`
     List {
         #[arg(value_parser = hex_parser)]
         prefix: Bytes,
     },
+    /// Write a key-value pair to the database, overwriting the previous value if present
     Write {
         #[arg(value_parser = hex_parser)]
         key: Bytes,
         #[arg(value_parser = hex_parser)]
         value: Bytes,
     },
+    /// Delete a single entry from the database identified by `key`
     Delete {
         #[arg(value_parser = hex_parser)]
-        prefix: Bytes,
+        key: Bytes,
     },
 }
 
@@ -64,7 +69,7 @@ async fn main() {
                 .await
                 .expect("DB error");
         }
-        DbCommand::Delete { prefix: key } => {
+        DbCommand::Delete { key } => {
             dbtx.raw_remove_entry(&key).await.expect("DB error");
         }
     }
