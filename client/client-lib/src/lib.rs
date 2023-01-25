@@ -1005,6 +1005,10 @@ impl Client<GatewayClientConfig> {
     ) -> Result<PaymentParameters> {
         let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key).0;
 
+        if account.contract.cancelled {
+            return Err(ClientError::CancelledContract);
+        }
+
         if account.contract.gateway_key != our_pub_key {
             return Err(ClientError::NotOurKey);
         }
@@ -1079,6 +1083,7 @@ impl Client<GatewayClientConfig> {
 
     /// Abort payment if our node can't route it and give money back to user
     pub async fn abort_outgoing_payment(&self, contract_id: ContractId) -> Result<()> {
+        // FIXME: needs outbox pattern
         let mut dbtx = self.context.db.begin_transaction().await;
         let contract_account = dbtx
             .remove_entry(&OutgoingContractAccountKey(contract_id))
@@ -1087,13 +1092,22 @@ impl Client<GatewayClientConfig> {
             .ok_or(ClientError::CancelUnknownOutgoingContract)?;
         dbtx.commit_tx().await.expect("DB Error");
 
+        self.cancel_outgoing_contract(contract_account).await
+    }
+
+    /// Cancel an outgoing contract we haven't accepted yet, possibly because it was underfunded
+    pub async fn cancel_outgoing_contract(
+        &self,
+        contract_account: OutgoingContractAccount,
+    ) -> Result<()> {
         let cancel_signature = self.context.secp.sign_schnorr(
             &contract_account.contract.cancellation_message().into(),
             &self.config.redeem_key,
         );
-        let cancel_output = self
-            .ln_client()
-            .create_cancel_outgoing_output(contract_id, cancel_signature);
+        let cancel_output = self.ln_client().create_cancel_outgoing_output(
+            contract_account.contract.contract_id(),
+            cancel_signature,
+        );
         let cancel_tx = LegacyTransaction {
             inputs: vec![],
             outputs: vec![Output::LN(cancel_output)],
@@ -1420,6 +1434,8 @@ pub enum ClientError {
     Timeout,
     #[error("Failed to spend ecash, all spend attempts re-used an ecash note")]
     SpendReusedNote,
+    #[error("The contract is already cancelled and can't be processed by the gateway")]
+    CancelledContract,
 }
 
 impl From<InvalidAmountTierError> for ClientError {
