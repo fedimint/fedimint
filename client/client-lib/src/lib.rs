@@ -8,6 +8,7 @@ pub mod utils;
 pub mod wallet;
 
 use std::fmt::{Debug, Formatter};
+use std::iter::once;
 use std::sync::Arc;
 use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
@@ -846,7 +847,7 @@ impl Client<UserClientConfig> {
         let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
 
         // Route hint instructing payer how to route to gateway
-        let gateway_route_hint = RouteHint(vec![RouteHintHop {
+        let route_hint_last_hop = RouteHintHop {
             src_node_id: gateway.node_pub_key,
             short_channel_id: gateway.mint_channel_id,
             fees: RoutingFees {
@@ -856,7 +857,25 @@ impl Client<UserClientConfig> {
             cltv_expiry_delta: 30,
             htlc_minimum_msat: None,
             htlc_maximum_msat: None,
-        }]);
+        };
+        let route_hints = if gateway.route_hints.is_empty() {
+            vec![RouteHint(vec![route_hint_last_hop])]
+        } else {
+            gateway
+                .route_hints
+                .iter()
+                .map(|rh| {
+                    RouteHint(
+                        rh.to_ldk_route_hint()
+                            .0
+                            .iter()
+                            .cloned()
+                            .chain(once(route_hint_last_hop.clone()))
+                            .collect(),
+                    )
+                })
+                .collect()
+        };
 
         #[cfg(not(target_family = "wasm"))]
         let duration_since_epoch = SystemTime::now()
@@ -867,7 +886,7 @@ impl Client<UserClientConfig> {
         let duration_since_epoch =
             Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
 
-        let invoice = InvoiceBuilder::new(network_to_currency(
+        let mut invoice_builder = InvoiceBuilder::new(network_to_currency(
             self.config
                 .0
                 .get_first_module_by_kind::<WalletClientConfig>("wallet")
@@ -882,11 +901,15 @@ impl Client<UserClientConfig> {
         .duration_since_epoch(duration_since_epoch)
         .min_final_cltv_expiry(18)
         .payee_pub_key(node_public_key)
-        .private_route(gateway_route_hint)
         .expiry_time(Duration::from_secs(
             expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
-        ))
-        .build_signed(|hash| {
+        ));
+
+        for rh in route_hints {
+            invoice_builder = invoice_builder.private_route(rh);
+        }
+
+        let invoice = invoice_builder.build_signed(|hash| {
             self.context
                 .secp
                 .sign_ecdsa_recoverable(hash, &node_secret_key)
@@ -1045,7 +1068,7 @@ impl Client<GatewayClientConfig> {
         let maybe_route_hint_first_id = invoice
             .route_hints()
             .first()
-            .and_then(|rh| rh.0.first())
+            .and_then(|rh| rh.0.last())
             .map(|hop| hop.src_node_id);
 
         Some(self.config().node_pub_key) == maybe_route_hint_first_id
