@@ -103,6 +103,10 @@ impl Database {
     }
 
     pub fn new_isolated(&self, module_instance_id: ModuleInstanceId) -> Self {
+        if self.module_instance_id.is_some() {
+            panic!("Cannot isolate and already isolated database.");
+        }
+
         let db = self.inner_db.clone();
         Self {
             inner_db: db,
@@ -267,10 +271,14 @@ impl Drop for CommitTracker {
     }
 }
 
-/// ModuleDatabaseTransaction is a wrapper around IsolatedDatabaseTransaction that
-/// consumes an existing DatabaseTransaction. This allows entire Databases to be
-/// isolated and calling begin_transaction will always produce a ModuleDatabaseTransaction,
-/// which is isolated from other modules by prepending a prefix to each key.
+/// `ModuleDatabaseTransaction` is an isolated database transaction that
+/// consumes an existing `DatabaseTransaction`. Unlike `IsolatedDatabaseTransaction`,
+/// `ModuleDatabaseTransaction` can be owned by the module as long as it has a handle
+/// to the isolated `Database`. This allows the module to make changes only affecting
+/// it's own portion of the database and also being able to commit those changes.
+/// From the module's perspective, the `Database` is isolated and calling `begin_transaction`
+/// will always produce a `ModuleDatabaseTransaction`, which is isolated from other
+/// modules by prepending a prefix to each key.
 struct ModuleDatabaseTransaction<'a> {
     dbtx: DatabaseTransaction<'a>,
     prefix: ModuleInstanceId,
@@ -320,7 +328,7 @@ impl<'a> IDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     }
 
     async fn commit_tx(self: Box<Self>) -> Result<()> {
-        panic!("DatabaseTransaction inside modules cannot be committed");
+        self.dbtx.commit_tx().await
     }
 
     async fn rollback_tx_to_savepoint(&mut self) {
@@ -1237,6 +1245,8 @@ mod tests {
             .await
             .is_ok());
 
+        module_dbtx.commit_tx().await.expect("DB Error");
+
         let mut returned_keys = 0;
         let expected_keys = 2;
         let mut dbtx = db.begin_transaction().await;
@@ -1263,6 +1273,7 @@ mod tests {
         assert_eq!(removed.unwrap(), Some(TestVal(101)));
         assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
 
+        let mut module_dbtx = module_db.begin_transaction().await;
         assert_eq!(
             module_dbtx.get_value(&TestKey(100)).await.unwrap(),
             Some(TestVal(103))

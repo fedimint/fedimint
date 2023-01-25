@@ -285,4 +285,15 @@ mod fedimint_rocksdb_tests {
         )
         .await;
     }
+
+    #[test_log::test()]
+    #[should_panic(expected = "Cannot isolate and already isolated database.")]
+    fn test_cannot_isolate_already_isolated_db() {
+        let module_instance_id = 1;
+        let db = open_temp_db("rocksdb-test-already-isolated").new_isolated(module_instance_id);
+
+        // try to isolate the database again
+        let module_instance_id = 2;
+        db.new_isolated(module_instance_id);
+    }
 }
