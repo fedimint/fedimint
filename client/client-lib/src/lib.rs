@@ -343,7 +343,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Submits a transaction to the fed, making change using our change module
     ///
-    /// If the submission fails, no changes to the DB will occur.
+    /// TODO: For safety, if the submission fails, the DB write still occurs.  We should instead ensure the state of the client and consensus are always the same.
     pub async fn submit_tx_with_change<R: RngCore + CryptoRng>(
         &self,
         tx: TransactionBuilder,
@@ -351,8 +351,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<TransactionId> {
         let mut dbtx = self.context.db.begin_transaction().await;
         let final_tx = tx.build(self, &mut dbtx, rng).await;
-        let result = self.context.api.submit_transaction(final_tx).await?;
         dbtx.commit_tx().await.expect("DB Error");
+        let result = self.context.api.submit_transaction(final_tx).await?;
+
         Ok(result)
     }
 
