@@ -7,7 +7,7 @@ use std::{error::Error, marker::PhantomData};
 use anyhow::Result;
 use async_trait::async_trait;
 use thiserror::Error;
-use tracing::{trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use crate::{
     core::ModuleInstanceId,
@@ -25,8 +25,8 @@ pub const MODULE_GLOBAL_PREFIX: u8 = 0xff;
 
 pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
-    type Key: DatabaseKey;
-    type Value: DatabaseValue;
+    type Key: DatabaseKey + Debug;
+    type Value: DatabaseValue + Debug;
 }
 
 pub trait DatabaseKeyPrefix: Debug {
@@ -357,6 +357,18 @@ impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
     }
 }
 
+#[instrument(level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
+fn decode_value<V: DatabaseValue>(
+    value_bytes: &[u8],
+    decoders: &ModuleDecoderRegistry,
+) -> Result<V, DecodingError> {
+    trace!(
+        bytes = %AbbreviateHexBytes(value_bytes),
+        "decoding value",
+    );
+    V::from_bytes(value_bytes, decoders)
+}
+
 impl<'parent> DatabaseTransaction<'parent> {
     pub fn new(
         dbtx: Box<dyn IDatabaseTransaction<'parent> + Send + 'parent>,
@@ -397,6 +409,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         return self.tx.commit_tx().await;
     }
 
+    #[instrument(level = "debug", skip_all, fields(?key), ret)]
     pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
@@ -407,14 +420,13 @@ impl<'parent> DatabaseTransaction<'parent> {
             None => return Ok(None),
         };
 
-        trace!(
-            "get_value: Decoding {} from bytes {}",
-            std::any::type_name::<K::Value>(),
-            AbbreviateHexBytes(&value_bytes)
-        );
-        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
+        Ok(Some(decode_value::<K::Value>(
+            &value_bytes,
+            &self.decoders,
+        )?))
     }
 
+    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
     pub async fn find_by_prefix<KP>(
         &mut self,
         key_prefix: &KP,
@@ -422,6 +434,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
+        debug!("find by prefix");
         let decoders = self.decoders.clone();
         let prefix_bytes = key_prefix.to_bytes();
         self.tx
@@ -430,17 +443,13 @@ impl<'parent> DatabaseTransaction<'parent> {
             .map(move |res| {
                 res.and_then(|(key_bytes, value_bytes)| {
                     let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
-                    trace!(
-                        "find by prefix: Decoding {} from bytes {}",
-                        std::any::type_name::<KP::Value>(),
-                        AbbreviateHexBytes(&value_bytes)
-                    );
-                    let value = KP::Value::from_bytes(&value_bytes, &decoders)?;
+                    let value = decode_value(&value_bytes, &decoders)?;
                     Ok((key, value))
                 })
             })
     }
 
+    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
     pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
@@ -450,18 +459,12 @@ impl<'parent> DatabaseTransaction<'parent> {
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
         {
-            Some(old_val_bytes) => {
-                trace!(
-                    "insert_entry: Decoding {} from bytes {}",
-                    std::any::type_name::<K::Value>(),
-                    AbbreviateHexBytes(&old_val_bytes)
-                );
-                Ok(Some(K::Value::from_bytes(&old_val_bytes, &self.decoders)?))
-            }
+            Some(old_val_bytes) => Ok(Some(decode_value(&old_val_bytes, &self.decoders)?)),
             None => Ok(None),
         }
     }
 
+    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
     pub async fn insert_new_entry<K>(
         &mut self,
         key: &K,
@@ -486,6 +489,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
     }
 
+    #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
     pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
@@ -500,6 +504,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
     }
 
+    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix), ret)]
     pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
