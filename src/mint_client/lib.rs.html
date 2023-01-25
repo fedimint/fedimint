@@ -1426,6 +1426,7 @@
 <a href="#1426" id="1426">1426</a>
 <a href="#1427" id="1427">1427</a>
 <a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1771,7 +1772,7 @@
 
     <span class="doccomment">/// Submits a transaction to the fed, making change using our change module
     ///
-    /// If the submission fails, no changes to the DB will occur.
+    /// TODO: For safety, if the submission fails, the DB write still occurs.  We should instead ensure the state of the client and consensus are always the same.
     </span><span class="kw">pub async fn </span>submit_tx_with_change&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: TransactionBuilder,
@@ -1779,8 +1780,9 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>final_tx = tx.build(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>dbtx, rng).<span class="kw">await</span>;
-        <span class="kw">let </span>result = <span class="self">self</span>.context.api.submit_transaction(final_tx).<span class="kw">await</span><span class="question-mark">?</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        <span class="kw">let </span>result = <span class="self">self</span>.context.api.submit_transaction(final_tx).<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(result)
     }
 
