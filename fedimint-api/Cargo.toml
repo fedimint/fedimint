@@ -40,6 +40,7 @@ async-lock = "2.6"
 getrandom = { version = "0.2.8", features = [ "js" ] }
 gloo-timers = { version = "0.2.5", features = ["futures"] }
 wasm-bindgen-futures = "0.4.33"
+js-sys = "0.3.59"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
 tokio = { version = "1.24.2", features = ["full"] }

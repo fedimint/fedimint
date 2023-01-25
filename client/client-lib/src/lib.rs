@@ -11,8 +11,6 @@ use std::fmt::{Debug, Formatter};
 use std::iter::once;
 use std::sync::Arc;
 use std::time::Duration;
-#[cfg(not(target_family = "wasm"))]
-use std::time::SystemTime;
 
 use anyhow::ensure;
 use api::{
@@ -32,6 +30,7 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::time::SystemTime;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_api::{ServerModule, TieredMulti};
 use fedimint_core::epoch::SignedEpochOutcome;
@@ -882,14 +881,9 @@ impl Client<UserClientConfig> {
                 .collect()
         };
 
-        #[cfg(not(target_family = "wasm"))]
         let duration_since_epoch = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
-
-        #[cfg(target_family = "wasm")]
-        let duration_since_epoch =
-            Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
 
         let mut invoice_builder = InvoiceBuilder::new(network_to_currency(
             self.config

@@ -17,7 +17,6 @@ pub mod db;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::ops::Sub;
-use std::time::SystemTime;
 
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
@@ -40,6 +39,7 @@ use fedimint_api::module::{
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
+use fedimint_api::time::SystemTime;
 use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
 use fedimint_api::{OutPoint, ServerModule};
 use itertools::Itertools;
