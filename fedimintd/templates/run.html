@@ -4,7 +4,7 @@
 {% block head %}
   {% match state %}
     {% when RunTemplateState::DkgInProgress %}
-      <meta http-equiv="refresh" content="5" />
+      <meta http-equiv="refresh" content="1" />
     {% when RunTemplateState::DkgNotStarted %}
       <meta http-equiv="refresh" content="1; url = /" />
     {% when _ %}
