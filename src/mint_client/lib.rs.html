@@ -1427,6 +1427,22 @@
 <a href="#1427" id="1427">1427</a>
 <a href="#1428" id="1428">1428</a>
 <a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -2434,6 +2450,10 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters&gt; {
         <span class="kw">let </span>our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key).<span class="number">0</span>;
 
+        <span class="kw">if </span>account.contract.cancelled {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::CancelledContract);
+        }
+
         <span class="kw">if </span>account.contract.gateway_key != our_pub_key {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NotOurKey);
         }
@@ -2508,7 +2528,8 @@
 
     <span class="doccomment">/// Abort payment if our node can&#39;t route it and give money back to user
     </span><span class="kw">pub async fn </span>abort_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
+        <span class="comment">// FIXME: needs outbox pattern
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>contract_account = dbtx
             .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract_id))
             .<span class="kw">await
@@ -2516,13 +2537,22 @@
             .ok_or(ClientError::CancelUnknownOutgoingContract)<span class="question-mark">?</span>;
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
+        <span class="self">self</span>.cancel_outgoing_contract(contract_account).<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Cancel an outgoing contract we haven&#39;t accepted yet, possibly because it was underfunded
+    </span><span class="kw">pub async fn </span>cancel_outgoing_contract(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        contract_account: OutgoingContractAccount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>cancel_signature = <span class="self">self</span>.context.secp.sign_schnorr(
             <span class="kw-2">&amp;</span>contract_account.contract.cancellation_message().into(),
             <span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key,
         );
-        <span class="kw">let </span>cancel_output = <span class="self">self
-            </span>.ln_client()
-            .create_cancel_outgoing_output(contract_id, cancel_signature);
+        <span class="kw">let </span>cancel_output = <span class="self">self</span>.ln_client().create_cancel_outgoing_output(
+            contract_account.contract.contract_id(),
+            cancel_signature,
+        );
         <span class="kw">let </span>cancel_tx = LegacyTransaction {
             inputs: <span class="macro">vec!</span>[],
             outputs: <span class="macro">vec!</span>[Output::LN(cancel_output)],
@@ -2849,6 +2879,8 @@
     </span>Timeout,
     <span class="attr">#[error(<span class="string">&quot;Failed to spend ecash, all spend attempts re-used an ecash note&quot;</span>)]
     </span>SpendReusedNote,
+    <span class="attr">#[error(<span class="string">&quot;The contract is already cancelled and can&#39;t be processed by the gateway&quot;</span>)]
+    </span>CancelledContract,
 }
 
 <span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>ClientError {

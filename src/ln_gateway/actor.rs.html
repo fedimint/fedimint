@@ -272,6 +272,15 @@
 <a href="#272" id="272">272</a>
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
@@ -351,10 +360,19 @@
         <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>contract_account = <span class="self">self</span>.client.fetch_outgoing_contract(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>payment_params = <span class="self">self
+        <span class="kw">let </span>payment_params = <span class="kw">match </span><span class="self">self
             </span>.client
             .validate_outgoing_account(<span class="kw-2">&amp;</span>contract_account)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            .<span class="kw">await
+        </span>{
+            <span class="prelude-val">Ok</span>(payment_params) =&gt; payment_params,
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="self">self</span>.client
+                    .cancel_outgoing_contract(contract_account)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
+            }
+        };
 
         <span class="macro">debug!</span>(
             account = <span class="question-mark">?</span>contract_account,
