@@ -269,7 +269,7 @@ pub struct ParamsForm {
     network: Network,
     /// The number of confirmations a deposit transaction requires before accepted by the
     /// federation
-    finality_delay: u32,
+    block_confirmations: u32,
 }
 
 #[debug_handler]
@@ -301,7 +301,8 @@ async fn post_federation_params(
             name: form.guardian_name,
             tls_connect_string,
         },
-        finality_delay: form.finality_delay,
+        // finality delay is always one less than required block confirmations
+        finality_delay: form.block_confirmations.saturating_sub(1),
         network: form.network,
     });
 
