@@ -966,7 +966,15 @@ impl Lightning {
     pub async fn list_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<LightningGateway> {
         dbtx.find_by_prefix(&LightningGatewayKeyPrefix)
             .await
-            .map(|res| res.expect("DB error").1)
+            .filter_map(|res| {
+                let gw = res.expect("DB error").1;
+                // FIXME: actually remove from DB
+                if gw.valid_until > SystemTime::now() {
+                    Some(gw)
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
