@@ -266,6 +266,37 @@
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
@@ -532,6 +563,37 @@
     </span><span class="kw">async fn </span>test_module_dbtx() {
         fedimint_api::db::verify_module_prefix(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-module-prefix&quot;</span>))
             .<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>test_module_db() {
+        <span class="kw">let </span>module_instance_id = <span class="number">1</span>;
+        <span class="kw">let </span>path = tempfile::Builder::new()
+            .prefix(<span class="string">&quot;fcb-rocksdb-test-module-db-prefix&quot;</span>)
+            .tempdir()
+            .unwrap();
+
+        <span class="kw">let </span>module_db = Database::new(
+            RocksDb::open(path).unwrap(),
+            ModuleDecoderRegistry::default(),
+        );
+
+        fedimint_api::db::verify_module_db(
+            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-module-db&quot;</span>),
+            module_db.new_isolated(module_instance_id),
+        )
+        .<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[test_log::test()]
+    #[should_panic(expected = <span class="string">&quot;Cannot isolate and already isolated database.&quot;</span>)]
+    </span><span class="kw">fn </span>test_cannot_isolate_already_isolated_db() {
+        <span class="kw">let </span>module_instance_id = <span class="number">1</span>;
+        <span class="kw">let </span>db = open_temp_db(<span class="string">&quot;rocksdb-test-already-isolated&quot;</span>).new_isolated(module_instance_id);
+
+        <span class="comment">// try to isolate the database again
+        </span><span class="kw">let </span>module_instance_id = <span class="number">2</span>;
+        db.new_isolated(module_instance_id);
     }
 }
 </code></pre></div>

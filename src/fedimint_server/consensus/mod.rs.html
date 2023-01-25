@@ -883,7 +883,7 @@
             <span class="kw">let </span>module = init
                 .init(
                     cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
-                    db.clone(),
+                    db.new_isolated(<span class="kw-2">*</span>module_id),
                     <span class="kw-2">&amp;</span>env,
                     task_group,
                 )

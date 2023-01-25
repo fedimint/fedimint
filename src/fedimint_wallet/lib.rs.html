@@ -1642,12 +1642,6 @@
 <a href="#1642" id="1642">1642</a>
 <a href="#1643" id="1643">1643</a>
 <a href="#1644" id="1644">1644</a>
-<a href="#1645" id="1645">1645</a>
-<a href="#1646" id="1646">1646</a>
-<a href="#1647" id="1647">1647</a>
-<a href="#1648" id="1648">1648</a>
-<a href="#1649" id="1649">1649</a>
-<a href="#1650" id="1650">1650</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1679,7 +1673,7 @@
     ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
-<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
@@ -3191,13 +3185,7 @@
 <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all)]
 </span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: <span class="kw-2">&amp;</span>TaskHandle) {
     <span class="kw">while </span>!tg_handle.is_shutting_down() {
-        broadcast_pending_tx(
-            db.begin_transaction()
-                .<span class="kw">await
-                </span>.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET),
-            <span class="kw-2">&amp;</span>rpc,
-        )
-        .<span class="kw">await</span>;
+        broadcast_pending_tx(db.begin_transaction().<span class="kw">await</span>, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
         <span class="comment">// FIXME: remove after modularization finishes
         </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span>fedimint_api::task::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
