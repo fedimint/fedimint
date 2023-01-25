@@ -38,7 +38,7 @@ async-lock = "2.6"
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { version = "0.2.8", features = [ "js" ] }
-gloo-timers = { version = "0.2.5", features = ["futures"] }
+gloo-timers = { version = "0.2.6", features = ["futures"] }
 wasm-bindgen-futures = "0.4.33"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
