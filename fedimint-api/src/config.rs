@@ -31,6 +31,7 @@ use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
 use threshold_crypto::serde_impl::SerdeSecret;
+use threshold_crypto::Signature;
 use url::Url;
 
 use crate::cancellable::Cancellable;
@@ -134,6 +135,8 @@ pub struct ConfigResponse {
     pub client: ClientConfig,
     /// Hash of the consensus config (for validating against peers)
     pub consensus_hash: sha256::Hash,
+    /// Auth key signature of the client config hash if it exists
+    pub client_hash_signature: Option<Signature>,
 }
 
 /// The federation id is a copy of the authentication threshold public key of the federation

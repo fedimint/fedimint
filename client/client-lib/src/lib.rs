@@ -13,7 +13,6 @@ use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
-use anyhow::ensure;
 use api::{
     DynFederationApi, FederationError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
     WalletFederationApi,
@@ -21,7 +20,7 @@ use api::{
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_api::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_api::core::{
     DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -248,20 +247,36 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     }
 
     /// Verifies the config using the federation id
-    //TODO needs to return the signed config hash
-    pub async fn verify_config(&self) -> anyhow::Result<()> {
+    pub async fn verify_config(&self, id: &FederationId) -> Result<()> {
         let config = self.context.api.download_client_config().await?;
-        let api_hash = config.client.consensus_hash(&self.context.module_gens)?;
+        let api_hash = config
+            .client
+            .consensus_hash(&self.context.module_gens)
+            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
         let self_hash = self
             .config
             .as_ref()
-            .consensus_hash(&self.context.module_gens)?;
+            .consensus_hash(&self.context.module_gens)
+            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
 
-        ensure!(
-            api_hash == self_hash,
-            "Our config hash doesn't match federations"
-        );
-        Ok(())
+        if api_hash != self_hash {
+            return Err(ClientError::ConfigVerify(
+                ConfigVerifyError::MismatchingConfigs,
+            ));
+        }
+
+        match config.client_hash_signature {
+            None => Err(ClientError::ConfigVerify(ConfigVerifyError::Unsigned)),
+            Some(sig) => {
+                if id.0.verify(&sig, api_hash) {
+                    Ok(())
+                } else {
+                    Err(ClientError::ConfigVerify(
+                        ConfigVerifyError::InvalidSignature,
+                    ))
+                }
+            }
+        }
     }
 
     pub async fn new(
@@ -1436,6 +1451,20 @@ pub enum ClientError {
     SpendReusedNote,
     #[error("The contract is already cancelled and can't be processed by the gateway")]
     CancelledContract,
+    #[error("The client config cannot be verified because {0:?}")]
+    ConfigVerify(ConfigVerifyError),
+}
+
+#[derive(Debug, Error)]
+pub enum ConfigVerifyError {
+    #[error("Our hash doesn't match the federation")]
+    MismatchingConfigs,
+    #[error("Is unsigned")]
+    Unsigned,
+    #[error("Invalid signature")]
+    InvalidSignature,
+    #[error("Cannot hash configs")]
+    CannotHash,
 }
 
 impl From<InvalidAmountTierError> for ClientError {

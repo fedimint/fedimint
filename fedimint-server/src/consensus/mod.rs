@@ -9,7 +9,7 @@ use std::iter::FromIterator;
 use std::os::unix::prelude::OsStrExt;
 use std::sync::Arc;
 
-use fedimint_api::config::ModuleGenRegistry;
+use fedimint_api::config::{ConfigResponse, ModuleGenRegistry};
 use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -72,6 +72,9 @@ pub struct ConsensusProposal {
 pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
+
+    /// Cached client config response to be returned with `Self::get_config_with_sig`
+    client_cfg: ConfigResponse,
 
     pub module_inits: ModuleGenRegistry,
 
@@ -139,12 +142,14 @@ impl FedimintConsensus {
             modules.insert(*module_id, module);
         }
 
+        let client_cfg = cfg.consensus.to_config_response(&module_inits);
         Ok(Self {
             modules: ModuleRegistry::from(modules),
             cfg,
-            module_inits,
+            client_cfg,
             db,
             transaction_notify: Arc::new(Notify::new()),
+            module_inits,
         })
     }
 
@@ -155,9 +160,11 @@ impl FedimintConsensus {
         module_inits: ModuleGenRegistry,
         modules: ModuleRegistry<DynServerModule>,
     ) -> Self {
+        let client_cfg = cfg.consensus.to_config_response(&module_inits);
         Self {
             modules,
             cfg,
+            client_cfg,
             module_inits,
             db,
             transaction_notify: Arc::new(Notify::new()),
@@ -423,6 +430,9 @@ impl FedimintConsensus {
 
         let mut drop_peers = Vec::<PeerId>::new();
 
+        self.save_client_config_sig(dbtx, &outcome, &mut drop_peers)
+            .await;
+
         let epoch_history = self
             .save_epoch_history(outcome.clone(), dbtx, &mut drop_peers, rejected_txs)
             .await;
@@ -441,6 +451,69 @@ impl FedimintConsensus {
         }
 
         epoch_history
+    }
+
+    /// If the client config hash isn't already signed, aggregate signature shares from peers
+    /// dropping those that don't contribute.
+    async fn save_client_config_sig(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        outcome: &HbbftConsensusOutcome,
+        drop_peers: &mut Vec<PeerId>,
+    ) {
+        let config = self.get_config_with_sig(dbtx).await;
+
+        if config.client_hash_signature.is_none() {
+            let maybe_client_hash = config.client.consensus_hash(&self.module_inits);
+            let client_hash = maybe_client_hash.expect("hashes");
+            let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
+            let mut contributing_peers = HashSet::new();
+            let pks = self.cfg.consensus.auth_pk_set.clone();
+
+            let shares: BTreeMap<_, _> = outcome
+                .contributions
+                .iter()
+                .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
+                .filter_map(|(peer, item)| match item {
+                    ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig)) => {
+                        Some((peer, sig))
+                    }
+                    _ => None,
+                })
+                .filter(|(peer, sig)| {
+                    let pub_key = pks.public_key_share(peer.to_usize());
+                    pub_key.verify(sig, client_hash)
+                })
+                .map(|(peer, sig)| {
+                    contributing_peers.insert(peer);
+                    (peer.to_usize(), sig)
+                })
+                .collect();
+
+            if let Ok(final_sig) = pks.combine_signatures(shares) {
+                assert!(pks.public_key().verify(&final_sig, client_hash));
+                let serde_sig = SerdeSignature(final_sig);
+                let tx = dbtx.insert_entry(&ClientConfigSignatureKey, &serde_sig);
+                tx.await.expect("DB Error");
+            } else {
+                warn!("Did not receive enough valid client config sig shares")
+            }
+
+            for peer in peers {
+                if !contributing_peers.contains(&peer) {
+                    drop_peers.push(peer);
+                }
+            }
+        }
+    }
+
+    pub async fn get_config_with_sig(&self, dbtx: &mut DatabaseTransaction<'_>) -> ConfigResponse {
+        let mut client = self.client_cfg.clone();
+        let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
+        if let Ok(Some(SerdeSignature(sig))) = maybe_sig {
+            client.client_hash_signature = Some(sig);
+        }
+        client
     }
 
     pub async fn get_last_epoch(&self) -> Option<u64> {
@@ -566,7 +639,17 @@ impl FedimintConsensus {
             let item = ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig));
             items.push(item);
         };
-        
+
+        // Add a signature share for the client config hash if we don't have it signed yet
+        let client = self.get_config_with_sig(&mut dbtx).await;
+        if client.client_hash_signature.is_none() {
+            let maybe_client_hash = client.client.consensus_hash(&self.module_inits);
+            let client_hash = maybe_client_hash.expect("Client config hashes");
+            let sig = self.cfg.private.auth_sks.0.sign(client_hash);
+            let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig));
+            items.push(item);
+        }
+
         ConsensusProposal { items, drop_peers }
     }
 

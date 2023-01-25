@@ -222,8 +222,8 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/config",
-            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> ConfigResponse {
-                Ok(fedimint.cfg.consensus.to_config_response(&fedimint.module_inits))
+            async |fedimint: &FedimintConsensus, dbtx, _v: ()| -> ConfigResponse {
+                Ok(fedimint.get_config_with_sig(dbtx).await)
             }
         },
     ]

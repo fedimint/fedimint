@@ -184,6 +184,7 @@ impl ServerConfigConsensus {
         Ok(ConfigResponse {
             client,
             consensus_hash,
+            client_hash_signature: None,
         })
     }
 

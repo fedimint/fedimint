@@ -212,7 +212,7 @@ mod tests {
     use threshold_crypto::{SecretKey, SecretKeySet};
 
     use crate::epoch::{ConsensusItem, SerdeSignatureShare, Sha256};
-    use crate::epoch::{EpochOutcome, SerdeSignature, EpochVerifyError, SignedEpochOutcome};
+    use crate::epoch::{EpochOutcome, EpochVerifyError, SerdeSignature, SignedEpochOutcome};
 
     fn signed_history(
         epoch: u16,
