@@ -23,26 +23,37 @@ pub struct GatewayActor {
 
 impl GatewayActor {
     pub async fn new(client: Arc<GatewayClient>, route_hints: Vec<RouteHint>) -> Result<Self> {
-        // Retry gateway registration
-        let gateway_registration = client
-            .config()
-            .to_gateway_registration_info(route_hints, GW_ANNOUNCEMENT_TTL);
-        match retry(
-            String::from("Register With Federation"),
-            #[allow(clippy::unit_arg)]
-            || async {
-                Ok(client
-                    .register_with_federation(gateway_registration.clone())
-                    .await?)
-            },
-            Duration::from_secs(1),
-            5,
-        )
-        .await
-        {
-            Ok(_) => info!("Connected with federation"),
-            Err(e) => warn!("Failed to connect with federation: {}", e),
-        }
+        let register_client = client.clone();
+        tokio::spawn(async move {
+            loop {
+                // Retry gateway registration
+                match retry(
+                    String::from("Register With Federation"),
+                    #[allow(clippy::unit_arg)]
+                    || async {
+                        let gateway_registration = register_client
+                            .config()
+                            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
+                        Ok(register_client
+                            .register_with_federation(gateway_registration.clone())
+                            .await?)
+                    },
+                    Duration::from_secs(1),
+                    5,
+                )
+                .await
+                {
+                    Ok(_) => {
+                        info!("Connected with federation");
+                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
+                    }
+                    Err(e) => {
+                        warn!("Failed to connect with federation: {}", e);
+                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
+                    }
+                }
+            }
+        });
 
         Ok(Self { client })
     }
