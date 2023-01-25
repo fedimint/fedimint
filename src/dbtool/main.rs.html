@@ -71,6 +71,11 @@
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>bytes::Bytes;
@@ -85,21 +90,26 @@
     </span>command: DbCommand,
 }
 
-<span class="attr">#[derive(Debug, Clone, Subcommand)]
+<span class="doccomment">/// Tool to inspect and manipulate rocksdb databases. All binary arguments (keys, values) have to be
+/// hex encoded.
+</span><span class="attr">#[derive(Debug, Clone, Subcommand)]
 </span><span class="kw">enum </span>DbCommand {
-    List {
+    <span class="doccomment">/// List all key-value pairs where the key begins with `prefix`
+    </span>List {
         <span class="attr">#[arg(value_parser = hex_parser)]
         </span>prefix: Bytes,
     },
-    Write {
+    <span class="doccomment">/// Write a key-value pair to the database, overwriting the previous value if present
+    </span>Write {
         <span class="attr">#[arg(value_parser = hex_parser)]
         </span>key: Bytes,
         <span class="attr">#[arg(value_parser = hex_parser)]
         </span>value: Bytes,
     },
-    Delete {
+    <span class="doccomment">/// Delete a single entry from the database identified by `key`
+    </span>Delete {
         <span class="attr">#[arg(value_parser = hex_parser)]
-        </span>prefix: Bytes,
+        </span>key: Bytes,
     },
 }
 
@@ -137,7 +147,7 @@
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>);
         }
-        DbCommand::Delete { prefix: key } =&gt; {
+        DbCommand::Delete { key } =&gt; {
             dbtx.raw_remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
         }
     }
