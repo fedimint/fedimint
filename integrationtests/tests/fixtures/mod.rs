@@ -926,16 +926,19 @@ impl FederationTest {
 
     /// Has every federation node send new consensus proposals then process the outcome.
     /// If the epoch has empty proposals (no new information) then panic
+    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
-            if self
-                .servers
-                .iter()
-                .all(|s| Self::empty_proposal(&s.borrow().fedimint))
-            {
-                panic!("Empty proposals, fed might wait forever");
+            let mut nonempty_proposals = 0;
+            for server in &self.servers {
+                if !Self::empty_proposal(&mut server.borrow_mut().fedimint).await {
+                    nonempty_proposals += 1;
+                }
             }
 
+            if nonempty_proposals == 0 {
+                panic!("Empty proposals, fed might wait forever");
+            }
             self.await_consensus_epochs(1).await.unwrap();
         }
     }
@@ -943,7 +946,7 @@ impl FederationTest {
     /// Runs a consensus epoch
     /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
     /// it will wait forever
-    pub async fn await_consensus_epochs(&self, epochs: usize) -> Cancellable<()> {
+    pub async fn await_consensus_epochs(&self, epochs: usize) -> anyhow::Result<()> {
         for _ in 0..(epochs) {
             for maybe_cancelled in join_all(
                 self.servers
@@ -960,7 +963,13 @@ impl FederationTest {
     }
 
     /// Returns true if the fed would produce an empty epoch proposal (no new information)
-    fn empty_proposal(server: &FedimintServer) -> bool {
+    async fn empty_proposal(server: &mut FedimintServer) -> bool {
+        // Hack to avoid saying the proposal is empty if there are tx in the channel
+        if let Ok(tx) = server.tx_receiver.try_recv() {
+            server.consensus.tx_sender.send(tx).await.expect("Can send");
+            return false;
+        }
+
         let wallet = server
             .consensus
             .modules
@@ -998,7 +1007,7 @@ impl FederationTest {
 
     /// Runs consensus, but delay peers and only wait for one to complete.
     /// Useful for testing if a peer has become disconnected.
-    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) -> Cancellable<()> {
+    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) -> anyhow::Result<()> {
         assert_eq!(durations.len(), self.servers.len());
         // must drop `res` before calling `update_last_consensus`
         {
@@ -1037,7 +1046,10 @@ impl FederationTest {
     // Necessary to allow servers to progress concurrently, should be fine since the same server
     // will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
-    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) -> Cancellable<()> {
+    async fn consensus_epoch(
+        server: Rc<RefCell<ServerTest>>,
+        delay: Duration,
+    ) -> anyhow::Result<()> {
         tokio::time::sleep(delay).await;
         let mut s = server.borrow_mut();
         let consensus = s.fedimint.consensus.clone();
@@ -1122,7 +1134,7 @@ impl FederationTest {
                 }
             }
 
-            let consensus = FedimintConsensus::new_with_modules(
+            let (consensus, tx_receiver) = FedimintConsensus::new_with_modules(
                 cfg.clone(),
                 db.clone(),
                 module_inits.clone(),
@@ -1133,6 +1145,7 @@ impl FederationTest {
             let fedimint = FedimintServer::new_with(
                 cfg.clone(),
                 consensus,
+                tx_receiver,
                 connect_gen(cfg),
                 decoders,
                 &mut task_group,

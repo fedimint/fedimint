@@ -5,7 +5,6 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
-use fedimint_api::cancellable::Cancellable;
 use fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -285,7 +284,7 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     .await
 }
 
-async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Cancellable<()> {
+async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Result<()> {
     // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad proposal
     fed.subset_peers(&[1, 2, 3]).run_consensus_epochs(1).await;
     fed.subset_peers(&[0]).run_consensus_epochs(1).await;

@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::os::unix::prelude::OsStrExt;
-use std::sync::Arc;
 
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::core::ModuleInstanceId;
@@ -25,7 +24,8 @@ use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use thiserror::Error;
-use tokio::sync::Notify;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
 use crate::config::ServerConfig;
@@ -39,6 +39,9 @@ use crate::transaction::{Transaction, TransactionError};
 pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
 pub type HbbftConsensusOutcome = hbbft::honey_badger::Batch<Vec<ConsensusItem>, PeerId>;
 pub type HbbftMessage = hbbft::honey_badger::Message<PeerId>;
+
+/// How many txs can be stored in memory before blocking the API
+const TRANSACTION_BUFFER_SIZE: usize = 1000;
 
 // TODO remove HBBFT `Batch` from `ConsensusOutcome`
 #[derive(Debug, Clone)]
@@ -78,8 +81,8 @@ pub struct FedimintConsensus {
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
 
-    /// Notifies tasks when there is a new transaction
-    pub transaction_notify: Arc<Notify>,
+    /// For sending new transactions to consensus
+    pub tx_sender: Sender<Transaction>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -109,12 +112,13 @@ impl FedimintConsensus {
             .collect()
     }
 
+    /// Returns a new consensus with a receiver for handling submitted transactions
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
         module_inits: ModuleGenRegistry,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<(Self, Receiver<Transaction>)> {
         let mut modules = BTreeMap::new();
 
         let env = Self::get_env_vars_map();
@@ -138,13 +142,18 @@ impl FedimintConsensus {
             modules.insert(*module_id, module);
         }
 
-        Ok(Self {
-            modules: ModuleRegistry::from(modules),
-            cfg,
-            module_inits,
-            db,
-            transaction_notify: Arc::new(Notify::new()),
-        })
+        let (tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+
+        Ok((
+            Self {
+                modules: ModuleRegistry::from(modules),
+                cfg,
+                module_inits,
+                db,
+                tx_sender,
+            },
+            tx_receiver,
+        ))
     }
 
     /// Like [`Self::new`], but when you want to initialize modules separately.
@@ -153,14 +162,19 @@ impl FedimintConsensus {
         db: Database,
         module_inits: ModuleGenRegistry,
         modules: ModuleRegistry<DynServerModule>,
-    ) -> Self {
-        Self {
-            modules,
-            cfg,
-            module_inits,
-            db,
-            transaction_notify: Arc::new(Notify::new()),
-        }
+    ) -> (Self, Receiver<Transaction>) {
+        let (tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+
+        (
+            Self {
+                modules,
+                cfg,
+                module_inits,
+                db,
+                tx_sender,
+            },
+            tx_receiver,
+        )
     }
 }
 
@@ -239,8 +253,19 @@ impl FedimintConsensus {
 
         funding_verifier.verify_funding()?;
 
+        self.tx_sender
+            .send(transaction)
+            .await
+            .map_err(|_e| TransactionSubmissionError::TxChannelError)?;
+        Ok(())
+    }
+
+    /// For saving a tx, should be done prior to making a consensus proposal
+    pub async fn save_transaction_to_db(&self, transaction: Transaction) {
+        let mut dbtx = self.db.begin_transaction().await;
+
         let new = dbtx
-            .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
+            .insert_entry(&ProposedTransactionKey(transaction.tx_hash()), &transaction)
             .await
             .expect("DB error");
         dbtx.commit_tx().await.expect("DB Error");
@@ -248,9 +273,6 @@ impl FedimintConsensus {
         if new.is_some() {
             warn!("Added consensus item was already in consensus queue");
         }
-
-        self.transaction_notify.notify_one();
-        Ok(())
     }
 
     /// Calculate the result of the `consensus_outcome` and save it/them.
@@ -750,4 +772,6 @@ pub enum TransactionSubmissionError {
     ModuleError(TransactionId, ModuleError),
     #[error("Transaction conflict error")]
     TransactionConflictError,
+    #[error("Transaction channel was closed")]
+    TxChannelError,
 }
