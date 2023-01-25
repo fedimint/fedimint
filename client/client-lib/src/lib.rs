@@ -1004,6 +1004,10 @@ impl Client<GatewayClientConfig> {
     ) -> Result<PaymentParameters> {
         let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key).0;
 
+        if account.contract.cancelled {
+            return Err(ClientError::CancelledContract);
+        }
+
         if account.contract.gateway_key != our_pub_key {
             return Err(ClientError::NotOurKey);
         }
