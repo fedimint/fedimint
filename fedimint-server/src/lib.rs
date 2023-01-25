@@ -17,7 +17,11 @@ use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
+use fedimint_core::transaction::Transaction;
 pub use fedimint_core::*;
+use futures::stream::Peekable;
+use futures::FutureExt;
+use futures::StreamExt;
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
 use itertools::Itertools;
@@ -26,6 +30,8 @@ use mint_client::api::{DynFederationApi, GlobalFederationApi};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::Receiver;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 
 use crate::consensus::{
@@ -67,8 +73,20 @@ pub enum EpochMessage {
 
 type EpochStep = Step<Vec<SerdeConsensusItem>, PeerId>;
 
+enum EpochTriggerEvent {
+    /// A user has sent us a new transaction
+    NewTransaction,
+    /// A peer has sent us a consensus message
+    NewMessage(PeerMessage),
+    /// One of our modules triggered an event (e.g. new bitcoin block)
+    ModuleProposalEvent,
+    /// A rejoining peer wants us to run an empty epoch
+    RunEpochRequest,
+}
+
 pub struct FedimintServer {
     pub consensus: Arc<FedimintConsensus>,
+    pub tx_receiver: Peekable<ReceiverStream<Transaction>>,
     pub connections: PeerConnections<EpochMessage>,
     pub cfg: ServerConfig,
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
@@ -85,10 +103,12 @@ impl FedimintServer {
     pub async fn run(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        tx_receiver: Receiver<Transaction>,
         decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<()> {
-        let server = FedimintServer::new(cfg.clone(), consensus, decoders, task_group).await;
+        let server =
+            FedimintServer::new(cfg.clone(), consensus, tx_receiver, decoders, task_group).await;
         let server_consensus = server.consensus.clone();
         let consensus = server
             .cfg
@@ -122,18 +142,28 @@ impl FedimintServer {
     pub async fn new(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        tx_receiver: Receiver<Transaction>,
         decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
     ) -> Self {
         let connector: PeerConnector<EpochMessage> =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
-        Self::new_with(cfg.clone(), consensus, connector, decoders, task_group).await
+        Self::new_with(
+            cfg.clone(),
+            consensus,
+            tx_receiver,
+            connector,
+            decoders,
+            task_group,
+        )
+        .await
     }
 
     pub async fn new_with(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        tx_receiver: Receiver<Transaction>,
         connector: PeerConnector<EpochMessage>,
         decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
@@ -168,6 +198,7 @@ impl FedimintServer {
             connections,
             hbbft,
             consensus: Arc::new(consensus),
+            tx_receiver: ReceiverStream::new(tx_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
             peers: cfg.local.p2p.keys().cloned().collect(),
@@ -315,13 +346,14 @@ impl FedimintServer {
         &mut self,
         proposal: impl Future<Output = ConsensusProposal>,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) -> Cancellable<Vec<HbbftConsensusOutcome>> {
+    ) -> anyhow::Result<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
         if self.cfg.local.p2p.len() == 1 {
             tokio::select! {
-              () = self.consensus.transaction_notify.notified() => (),
+              _ = Pin::new(&mut self.tx_receiver).peek() => (),
               () = self.consensus.await_consensus_proposal() => (),
             }
+            self.save_new_txs().await;
             let proposal = proposal.await;
             let epoch = self.hbbft.epoch();
             self.hbbft.skip_to_epoch(epoch + 1);
@@ -334,11 +366,14 @@ impl FedimintServer {
         // process messages until new epoch or we have a proposal
         let mut outcomes: Vec<HbbftConsensusOutcome> = loop {
             match self.await_next_epoch().await? {
-                Some(msg) if self.start_next_epoch(&msg) => break self.handle_message(msg).await?,
-                Some(msg) => self.handle_message(msg).await?,
-                None => break vec![],
+                EpochTriggerEvent::NewMessage(msg) if self.start_next_epoch(&msg) => {
+                    break self.handle_message(msg).await?
+                }
+                EpochTriggerEvent::NewMessage(msg) => self.handle_message(msg).await?,
+                _ => break vec![],
             };
         };
+        self.save_new_txs().await;
 
         let proposal = proposal.await;
         for peer in proposal.drop_peers.iter() {
@@ -352,6 +387,13 @@ impl FedimintServer {
             outcomes = self.handle_message(msg).await?;
         }
         Ok(outcomes)
+    }
+
+    // save any transactions we have in the channel
+    async fn save_new_txs(&mut self) {
+        while let Some(Some(tx)) = self.tx_receiver.next().now_or_never() {
+            self.consensus.save_transaction_to_db(tx).await;
+        }
     }
 
     /// Handles one step of the HBBFT algorithm, sending messages to peers and parsing any
@@ -397,16 +439,16 @@ impl FedimintServer {
             .expect("HBBFT propose failed"))
     }
 
-    async fn await_next_epoch(&mut self) -> Cancellable<Option<PeerMessage>> {
+    async fn await_next_epoch(&mut self) -> anyhow::Result<EpochTriggerEvent> {
         if self.run_empty_epochs > 0 {
             self.run_empty_epochs = self.run_empty_epochs.saturating_sub(1);
-            return Ok(None);
+            return Ok(EpochTriggerEvent::RunEpochRequest);
         }
 
         tokio::select! {
-            () = self.consensus.transaction_notify.notified() => Ok(None),
-            () = self.consensus.await_consensus_proposal() => Ok(None),
-            msg = self.connections.receive() => msg.map(Some)
+            _peek = Pin::new(&mut self.tx_receiver).peek() => Ok(EpochTriggerEvent::NewTransaction),
+            () = self.consensus.await_consensus_proposal() => Ok(EpochTriggerEvent::ModuleProposalEvent),
+            msg = self.connections.receive() => Ok(EpochTriggerEvent::NewMessage(msg?))
         }
     }
 
