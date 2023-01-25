@@ -77,10 +77,19 @@ impl GatewayActor {
         let rng = rand::rngs::OsRng;
         let contract_account = self.client.fetch_outgoing_contract(contract_id).await?;
 
-        let payment_params = self
+        let payment_params = match self
             .client
             .validate_outgoing_account(&contract_account)
-            .await?;
+            .await
+        {
+            Ok(payment_params) => payment_params,
+            Err(e) => {
+                self.client
+                    .cancel_outgoing_contract(contract_account)
+                    .await?;
+                return Err(e.into());
+            }
+        };
 
         debug!(
             account = ?contract_account,
