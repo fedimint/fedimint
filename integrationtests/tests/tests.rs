@@ -23,7 +23,6 @@ use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
-
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
 use threshold_crypto::{SecretKey, SecretKeyShare};

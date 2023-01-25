@@ -36,3 +36,12 @@
 </div>
 
 {% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelector("#copy-button").addEventListener("click", function (e) {
+        const config = document.getElementById("connection-string");
+        navigator.clipboard.writeText(config.value);
+    });
+</script>
+{% endblock %}
