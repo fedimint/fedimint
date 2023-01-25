@@ -53,7 +53,10 @@ pub trait IDatabase: Debug + Send + Sync {
 }
 
 #[derive(Clone, Debug)]
-pub struct Database(Arc<DatabaseInner<dyn IDatabase>>);
+pub struct Database {
+    inner_db: Arc<DatabaseInner<dyn IDatabase>>,
+    module_instance_id: Option<ModuleInstanceId>,
+}
 
 // NOTE: `Db` is used instead of just `dyn IDatabase`
 // because it will impossible to construct otherwise
@@ -93,14 +96,30 @@ impl Database {
             module_decoders,
         };
 
-        Self(Arc::new(inner))
+        Self {
+            inner_db: Arc::new(inner),
+            module_instance_id: None,
+        }
+    }
+
+    pub fn new_isolated(&self, module_instance_id: ModuleInstanceId) -> Self {
+        let db = self.inner_db.clone();
+        Self {
+            inner_db: db,
+            module_instance_id: Some(module_instance_id),
+        }
     }
 
     pub async fn begin_transaction(&self) -> DatabaseTransaction {
-        DatabaseTransaction::new(
-            self.0.db.begin_transaction().await,
-            self.0.module_decoders.clone(),
-        )
+        let dbtx = DatabaseTransaction::new(
+            self.inner_db.db.begin_transaction().await,
+            self.inner_db.module_decoders.clone(),
+        );
+
+        match self.module_instance_id {
+            Some(module_instance_id) => dbtx.new_module_tx(module_instance_id),
+            None => dbtx,
+        }
     }
 
     /// Runs a closure with a reference to a database transaction and tries to commit the
@@ -234,6 +253,7 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
 // TODO: use macro again
 #[doc = " A handle to a type-erased database implementation"]
+#[derive(Clone)]
 pub struct CommitTracker {
     is_committed: bool,
     has_writes: bool,
@@ -244,6 +264,77 @@ impl Drop for CommitTracker {
         if self.has_writes && !self.is_committed {
             warn!("DatabaseTransaction has writes and has not called commit.");
         }
+    }
+}
+
+/// ModuleDatabaseTransaction is a wrapper around IsolatedDatabaseTransaction that
+/// consumes an existing DatabaseTransaction. This allows entire Databases to be
+/// isolated and calling begin_transaction will always produce a ModuleDatabaseTransaction,
+/// which is isolated from other modules by prepending a prefix to each key.
+struct ModuleDatabaseTransaction<'a> {
+    dbtx: DatabaseTransaction<'a>,
+    prefix: ModuleInstanceId,
+}
+
+impl<'a> ModuleDatabaseTransaction<'a> {
+    pub fn new(
+        dbtx: DatabaseTransaction<'a>,
+        prefix: ModuleInstanceId,
+    ) -> ModuleDatabaseTransaction<'a> {
+        ModuleDatabaseTransaction { dbtx, prefix }
+    }
+}
+
+#[async_trait]
+impl<'a> IDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        self.dbtx
+            .with_module_prefix(self.prefix)
+            .raw_insert_bytes(key, value)
+            .await
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.dbtx
+            .with_module_prefix(self.prefix)
+            .raw_get_bytes(key)
+            .await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.dbtx
+            .with_module_prefix(self.prefix)
+            .raw_remove_entry(key)
+            .await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+        Box::new(
+            self.dbtx
+                .with_module_prefix(self.prefix)
+                .raw_find_by_prefix(key_prefix)
+                .await
+                .collect::<Vec<_>>()
+                .into_iter(),
+        )
+    }
+
+    async fn commit_tx(self: Box<Self>) -> Result<()> {
+        panic!("DatabaseTransaction inside modules cannot be committed");
+    }
+
+    async fn rollback_tx_to_savepoint(&mut self) {
+        self.dbtx
+            .with_module_prefix(self.prefix)
+            .rollback_tx_to_savepoint()
+            .await
+    }
+
+    async fn set_tx_savepoint(&mut self) {
+        self.dbtx
+            .with_module_prefix(self.prefix)
+            .set_tx_savepoint()
+            .await
     }
 }
 
@@ -389,6 +480,20 @@ impl<'parent> DatabaseTransaction<'parent> {
                 is_committed: true,
                 has_writes: true,
             },
+        }
+    }
+
+    pub fn new_module_tx(
+        self,
+        module_instance_id: ModuleInstanceId,
+    ) -> DatabaseTransaction<'parent> {
+        let decoders = self.decoders.clone();
+        let commit_tracker = self.commit_tracker.clone();
+        let wrapped = ModuleDatabaseTransaction::new(self, module_instance_id);
+        DatabaseTransaction {
+            tx: Box::new(wrapped),
+            decoders,
+            commit_tracker,
         }
     }
 
@@ -1085,6 +1190,83 @@ mod tests {
         }
 
         assert_eq!(returned_keys, expected_keys);
+    }
+
+    pub async fn verify_module_db(db: Database, module_db: Database) {
+        let mut dbtx = db.begin_transaction().await;
+
+        assert!(dbtx
+            .insert_entry(&TestKey(100), &TestVal(101))
+            .await
+            .is_ok());
+
+        assert!(dbtx
+            .insert_entry(&TestKey(101), &TestVal(102))
+            .await
+            .is_ok());
+
+        dbtx.commit_tx().await.expect("DB Error");
+
+        // verify module_dbtx can only read key/value pairs from its own module
+        let mut module_dbtx = module_db.begin_transaction().await;
+        assert_eq!(module_dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+
+        assert_eq!(module_dbtx.get_value(&TestKey(101)).await.unwrap(), None);
+
+        // verify module_dbtx can read key/value pairs that it wrote
+        let mut dbtx = db.begin_transaction().await;
+        assert_eq!(
+            dbtx.get_value(&TestKey(100)).await.unwrap(),
+            Some(TestVal(101))
+        );
+
+        assert_eq!(
+            dbtx.get_value(&TestKey(101)).await.unwrap(),
+            Some(TestVal(102))
+        );
+
+        let mut module_dbtx = module_db.begin_transaction().await;
+
+        assert!(module_dbtx
+            .insert_entry(&TestKey(100), &TestVal(103))
+            .await
+            .is_ok());
+
+        assert!(module_dbtx
+            .insert_entry(&TestKey(101), &TestVal(104))
+            .await
+            .is_ok());
+
+        let mut returned_keys = 0;
+        let expected_keys = 2;
+        let mut dbtx = db.begin_transaction().await;
+        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
+            match res.as_ref().unwrap().0 {
+                TestKey(100) => {
+                    assert!(res.unwrap().1.eq(&TestVal(101)));
+                    returned_keys += 1;
+                }
+                TestKey(101) => {
+                    assert!(res.unwrap().1.eq(&TestVal(102)));
+                    returned_keys += 1;
+                }
+                _ => {
+                    returned_keys += 1;
+                }
+            }
+        }
+
+        assert_eq!(returned_keys, expected_keys);
+
+        let removed = dbtx.remove_entry(&TestKey(100)).await;
+        assert!(removed.is_ok());
+        assert_eq!(removed.unwrap(), Some(TestVal(101)));
+        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+
+        assert_eq!(
+            module_dbtx.get_value(&TestKey(100)).await.unwrap(),
+            Some(TestVal(103))
+        );
     }
 
     pub async fn verify_module_prefix(db: Database) {

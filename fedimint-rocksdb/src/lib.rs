@@ -265,4 +265,24 @@ mod fedimint_rocksdb_tests {
         fedimint_api::db::verify_module_prefix(open_temp_db("fcb-rocksdb-test-module-prefix"))
             .await;
     }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_db() {
+        let module_instance_id = 1;
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-module-db-prefix")
+            .tempdir()
+            .unwrap();
+
+        let module_db = Database::new(
+            RocksDb::open(path).unwrap(),
+            ModuleDecoderRegistry::default(),
+        );
+
+        fedimint_api::db::verify_module_db(
+            open_temp_db("fcb-rocksdb-test-module-db"),
+            module_db.new_isolated(module_instance_id),
+        )
+        .await;
+    }
 }

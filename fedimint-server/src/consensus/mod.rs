@@ -130,7 +130,7 @@ impl FedimintConsensus {
             let module = init
                 .init(
                     cfg.get_module_config(*module_id)?,
-                    db.clone(),
+                    db.new_isolated(*module_id),
                     &env,
                     task_group,
                 )
