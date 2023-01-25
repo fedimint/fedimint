@@ -658,7 +658,9 @@ impl Client<UserClientConfig> {
     pub async fn fetch_registered_gateways(&self) -> Result<Vec<LightningGateway>> {
         Ok(self.context.api.fetch_gateways().await?)
     }
+
     pub async fn fetch_active_gateway(&self) -> Result<LightningGateway> {
+        // FIXME: forgetting about old gws might not always be ideal. We assume that the gateway stays the same except for route hints for now.
         if let Some(gateway) = self
             .context
             .db
@@ -667,11 +669,12 @@ impl Client<UserClientConfig> {
             .get_value(&LightningGatewayKey)
             .await
             .expect("DB error")
+            .filter(|gw| gw.valid_until > SystemTime::now())
         {
-            Ok(gateway)
-        } else {
-            Ok(self.switch_active_gateway(None).await?)
+            return Ok(gateway);
         }
+
+        self.switch_active_gateway(None).await
     }
     /// Switches the clients active gateway to a registered gateway with the given node pubkey.
     /// If no pubkey is given (node_pub_key == None) the first available registered gateway is activated.
