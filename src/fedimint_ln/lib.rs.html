@@ -1018,12 +1018,6 @@
 <a href="#1018" id="1018">1018</a>
 <a href="#1019" id="1019">1019</a>
 <a href="#1020" id="1020">1020</a>
-<a href="#1021" id="1021">1021</a>
-<a href="#1022" id="1022">1022</a>
-<a href="#1023" id="1023">1023</a>
-<a href="#1024" id="1024">1024</a>
-<a href="#1025" id="1025">1025</a>
-<a href="#1026" id="1026">1026</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1896,12 +1890,6 @@
                         .get_contract_account(dbtx, contract_id)
                         .<span class="kw">await
                         </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
-                }
-            },
-            <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/offers&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, dbtx, _params: ()| -&gt; Vec&lt;IncomingContractOffer&gt; {
-                    <span class="prelude-val">Ok</span>(module.get_offers(dbtx).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
