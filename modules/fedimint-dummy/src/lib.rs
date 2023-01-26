@@ -201,7 +201,9 @@ impl ServerModule for Dummy {
         DummyDecoder
     }
 
-    async fn await_consensus_proposal(&self, _dbtx: &mut DatabaseTransaction<'_>) {}
+    async fn await_consensus_proposal(&self, _dbtx: &mut DatabaseTransaction<'_>) {
+        std::future::pending().await
+    }
 
     async fn consensus_proposal(
         &self,
