@@ -357,6 +357,7 @@
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
@@ -374,7 +375,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>ConsensusItem {
-    EpochOutcomeSignatureShare(EpochOutcomeSignatureShare),
+    ClientConfigSignatureShare(SerdeSignatureShare),
+    EpochOutcomeSignatureShare(SerdeSignatureShare),
     Transaction(Transaction),
     Module(ModuleConsensusItem),
 }
@@ -382,16 +384,16 @@
 <span class="kw">pub type </span>SerdeConsensusItem = SerdeModuleEncoding&lt;ConsensusItem&gt;;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>EpochOutcomeSignatureShare(<span class="kw">pub </span>SignatureShare);
+</span><span class="kw">pub struct </span>SerdeSignatureShare(<span class="kw">pub </span>SignatureShare);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>EpochOutcomeSignature(<span class="kw">pub </span>Signature);
+</span><span class="kw">pub struct </span>SerdeSignature(<span class="kw">pub </span>Signature);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SignedEpochOutcome {
     <span class="kw">pub </span>outcome: EpochOutcome,
     <span class="kw">pub </span>hash: Sha256,
-    <span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;EpochOutcomeSignature&gt;,
+    <span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;SerdeSignature&gt;,
 }
 
 <span class="kw">pub type </span>SerdeEpochHistory = SerdeModuleEncoding&lt;SignedEpochOutcome&gt;;
@@ -451,7 +453,7 @@
             .iter()
             .flat_map(|(peer, items)| items.iter().map(|i| (<span class="kw-2">*</span>peer, i)))
             .filter_map(|(peer, item)| <span class="kw">match </span>item {
-                ConsensusItem::EpochOutcomeSignatureShare(EpochOutcomeSignatureShare(sig)) =&gt; {
+                ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig)) =&gt; {
                     <span class="prelude-val">Some</span>((peer, sig))
                 }
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
@@ -469,7 +471,7 @@
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(final_sig) = pks.combine_signatures(sigs) {
             <span class="macro">assert!</span>(pks.public_key().verify(<span class="kw-2">&amp;</span>final_sig, prev_epoch.hash));
 
-            prev_epoch.signature = <span class="prelude-val">Some</span>(EpochOutcomeSignature(final_sig));
+            prev_epoch.signature = <span class="prelude-val">Some</span>(SerdeSignature(final_sig));
             <span class="prelude-val">Ok</span>(prev_epoch)
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(EpochVerifyError::NotEnoughValidSigShares(
@@ -523,37 +525,37 @@
     NotEnoughValidSigShares(HashSet&lt;PeerId&gt;),
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>EpochOutcomeSignature {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>SerdeSignature {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="self">self</span>.<span class="number">0</span>.to_bytes().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>EpochOutcomeSignature {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>SerdeSignature {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">96</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(EpochOutcomeSignature(Signature::from_bytes(bytes).unwrap()))
+        <span class="prelude-val">Ok</span>(SerdeSignature(Signature::from_bytes(bytes).unwrap()))
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>EpochOutcomeSignatureShare {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>SerdeSignatureShare {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="self">self</span>.<span class="number">0</span>.to_bytes().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>EpochOutcomeSignatureShare {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>SerdeSignatureShare {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">96</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(EpochOutcomeSignatureShare(
+        <span class="prelude-val">Ok</span>(SerdeSignatureShare(
             SignatureShare::from_bytes(bytes).unwrap(),
         ))
     }
@@ -569,8 +571,8 @@
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>threshold_crypto::{SecretKey, SecretKeySet};
 
-    <span class="kw">use </span><span class="kw">crate</span>::epoch::{ConsensusItem, EpochOutcomeSignatureShare, Sha256};
-    <span class="kw">use </span><span class="kw">crate</span>::epoch::{EpochOutcome, EpochOutcomeSignature, EpochVerifyError, SignedEpochOutcome};
+    <span class="kw">use </span><span class="kw">crate</span>::epoch::{ConsensusItem, SerdeSignatureShare, Sha256};
+    <span class="kw">use </span><span class="kw">crate</span>::epoch::{EpochOutcome, EpochVerifyError, SerdeSignature, SignedEpochOutcome};
 
     <span class="kw">fn </span>signed_history(
         epoch: u16,
@@ -579,13 +581,13 @@
     ) -&gt; SignedEpochOutcome {
         <span class="kw">let </span>missing_sig = history(epoch, prev_epoch, <span class="prelude-val">None</span>);
         <span class="kw">let </span>signature = sk.sign(missing_sig.outcome.consensus_hash().expect(<span class="string">&quot;Hashes&quot;</span>));
-        history(epoch, prev_epoch, <span class="prelude-val">Some</span>(EpochOutcomeSignature(signature)))
+        history(epoch, prev_epoch, <span class="prelude-val">Some</span>(SerdeSignature(signature)))
     }
 
     <span class="kw">fn </span>history(
         epoch: u16,
         prev_epoch: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt;,
-        signature: <span class="prelude-ty">Option</span>&lt;EpochOutcomeSignature&gt;,
+        signature: <span class="prelude-ty">Option</span>&lt;SerdeSignature&gt;,
     ) -&gt; SignedEpochOutcome {
         <span class="kw">let </span>items = <span class="macro">vec!</span>[(PeerId::from(epoch), <span class="macro">vec!</span>[])];
         <span class="kw">let </span>outcome = EpochOutcome {
@@ -620,7 +622,7 @@
                 (
                     peer,
                     <span class="macro">vec!</span>[ConsensusItem::EpochOutcomeSignatureShare(
-                        EpochOutcomeSignatureShare(sig),
+                        SerdeSignatureShare(sig),
                     )],
                 )
             })
@@ -654,7 +656,7 @@
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>_pk = sk.public_key();
         <span class="kw">let </span>wrong_hash: Sha256 = Hash::hash(<span class="string">b&quot;wrong&quot;</span>);
-        <span class="kw">let </span>sig = EpochOutcomeSignature(sk.sign(wrong_hash));
+        <span class="kw">let </span>sig = SerdeSignature(sk.sign(wrong_hash));
 
         <span class="kw">let </span>epoch0 = history(<span class="number">0</span>, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(sig));
         <span class="kw">let </span>epoch = SignedEpochOutcome {

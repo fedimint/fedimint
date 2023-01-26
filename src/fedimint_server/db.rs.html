@@ -126,12 +126,22 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_api::db::{DatabaseKeyPrefixConst, MODULE_GLOBAL_PREFIX};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{PeerId, TransactionId};
-<span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
+<span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
@@ -147,6 +157,7 @@
     RejectedTransaction = <span class="number">0x04</span>,
     EpochHistory = <span class="number">0x05</span>,
     LastEpoch = <span class="number">0x06</span>,
+    ClientConfigSignature = <span class="number">0x07</span>,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -253,6 +264,15 @@
     <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LastEpoch <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = EpochHistoryKey;
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>ClientConfigSignatureKey;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ClientConfigSignatureKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ClientConfigSignature <span class="kw">as </span>u8;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = SerdeSignature;
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c18a5e8a5 2023-01-25)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-a43118d2dfb2799d.js" data-settings-css="settings-7c23ac01f615ce90.css" ></div></body></html>

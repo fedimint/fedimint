@@ -1072,6 +1072,9 @@
 <a href="#1072" id="1072">1072</a>
 <a href="#1073" id="1073">1073</a>
 <a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -1105,6 +1108,7 @@
 <span class="kw">use </span>tbs::serde_impl;
 <span class="kw">use </span>tbs::Scalar;
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
+<span class="kw">use </span>threshold_crypto::Signature;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
@@ -1208,6 +1212,8 @@
     </span><span class="kw">pub </span>client: ClientConfig,
     <span class="doccomment">/// Hash of the consensus config (for validating against peers)
     </span><span class="kw">pub </span>consensus_hash: sha256::Hash,
+    <span class="doccomment">/// Auth key signature of the client config hash if it exists
+    </span><span class="kw">pub </span>client_hash_signature: <span class="prelude-ty">Option</span>&lt;Signature&gt;,
 }
 
 <span class="doccomment">/// The federation id is a copy of the authentication threshold public key of the federation
