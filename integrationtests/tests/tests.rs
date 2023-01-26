@@ -24,7 +24,7 @@ use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
 use mint_client::transaction::TransactionBuilder;
-use mint_client::ClientError;
+use mint_client::{ClientError, ConfigVerifyError};
 use threshold_crypto::{SecretKey, SecretKeyShare};
 use tracing::debug;
 
@@ -1088,8 +1088,20 @@ async fn ecash_can_be_recovered() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn verifies_client_configs() -> Result<()> {
-    test(2, |_, user, _, _, _| async move {
-        user.client.verify_config().await.expect("verifies");
+    test(2, |fed, user, bitcoin, _, _| async move {
+        bitcoin.mine_blocks(100);
+
+        // fed needs to run an epoch to combine shares
+        let id = user.client.config().0.federation_id.clone();
+        let res = user.client.verify_config(&id).await;
+        assert_matches!(
+            res,
+            Err(ClientError::ConfigVerify(ConfigVerifyError::Unsigned))
+        );
+
+        fed.run_consensus_epochs(1).await;
+        let res = user.client.verify_config(&id).await;
+        assert!(res.is_ok());
     })
     .await
 }

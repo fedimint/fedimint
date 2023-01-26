@@ -784,6 +784,7 @@ impl EcashRecoveryTracker {
         rejected_txs: &BTreeSet<TransactionId>,
     ) {
         match item {
+            ConsensusItem::ClientConfigSignatureShare(_) => {}
             ConsensusItem::EpochOutcomeSignatureShare(_) => {}
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();

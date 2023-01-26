@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use fedimint_api::db::{DatabaseKeyPrefixConst, MODULE_GLOBAL_PREFIX};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{PeerId, TransactionId};
-use fedimint_core::epoch::SignedEpochOutcome;
+use fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -19,6 +19,7 @@ pub enum DbKeyPrefix {
     RejectedTransaction = 0x04,
     EpochHistory = 0x05,
     LastEpoch = 0x06,
+    ClientConfigSignature = 0x07,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -125,4 +126,13 @@ impl DatabaseKeyPrefixConst for LastEpochKey {
     const DB_PREFIX: u8 = DbKeyPrefix::LastEpoch as u8;
     type Key = Self;
     type Value = EpochHistoryKey;
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ClientConfigSignatureKey;
+
+impl DatabaseKeyPrefixConst for ClientConfigSignatureKey {
+    const DB_PREFIX: u8 = DbKeyPrefix::ClientConfigSignature as u8;
+    type Key = Self;
+    type Value = SerdeSignature;
 }
