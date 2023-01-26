@@ -81,6 +81,6 @@ impl LnRpc for FakeLightningTest {
     }
 
     async fn route_hints(&self) -> Result<Vec<RouteHint>, Error> {
-        Ok(vec![])
+        Ok(vec![RouteHint(vec![])])
     }
 }

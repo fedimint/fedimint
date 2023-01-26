@@ -47,6 +47,6 @@ impl LnRpc for MockLnRpc {
     }
 
     async fn route_hints(&self) -> std::result::Result<Vec<RouteHint>, Error> {
-        Ok(vec![])
+        Ok(vec![RouteHint(vec![])])
     }
 }

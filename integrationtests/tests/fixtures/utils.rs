@@ -63,6 +63,6 @@ impl LnRpc for LnRpcAdapter {
     }
 
     async fn route_hints(&self) -> Result<Vec<RouteHint>, Error> {
-        Ok(vec![])
+        Ok(vec![RouteHint(vec![])])
     }
 }

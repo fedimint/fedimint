@@ -35,7 +35,7 @@ use mint_client::{
 use rpc::{BackupPayload, RestorePayload};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     actor::GatewayActor,
@@ -48,6 +48,9 @@ use crate::{
         ReceivePaymentPayload, WithdrawPayload,
     },
 };
+
+const ROUTE_HINT_RETRIES: usize = 10;
+const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
@@ -77,10 +80,25 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
-        let route_hints = ln_rpc
-            .route_hints()
-            .await
-            .expect("Could not feth route hints");
+        let mut num_retries = 0;
+        let route_hints = loop {
+            let route_hints = ln_rpc
+                .route_hints()
+                .await
+                .expect("Could not feth route hints");
+
+            if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
+                break route_hints;
+            }
+
+            info!(
+                ?num_retries,
+                "LN node returned no route hints, trying again in {}s",
+                ROUTE_HINT_RETRY_SLEEP.as_secs()
+            );
+            num_retries += 1;
+            tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
+        };
 
         let ln_gw = Self {
             config,
