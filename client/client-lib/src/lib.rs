@@ -363,9 +363,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// directly to us by another user as a payment. By spending them we can make sure
     /// they can no longer be potentially double-spent.
     ///
-    /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
+    /// On success the out point of the newly issued e-cash notes is returned. It can be used to
     /// easily poll the transaction status using [`MintClient::fetch_notes`] until it returns
-    /// `Ok(())`, indicating we received our newly issued e-cash tokens.
+    /// `Ok(())`, indicating we received our newly issued e-cash notes.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
         notes: TieredMulti<SpendableNote>,
@@ -556,7 +556,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(final_notes)
     }
 
-    /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
+    /// Tries to fetch e-cash notes from a certain out point. An error may just mean having queried
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
     pub async fn fetch_notes<'a>(&self, outpoint: OutPoint) -> Result<()> {
@@ -938,7 +938,7 @@ impl Client<UserClientConfig> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
-    /// Notify gateway that we've escrowed tokens they can claim by routing our payment and wait
+    /// Notify gateway that we've escrowed notes they can claim by routing our payment and wait
     /// for them to do so
     pub async fn await_outgoing_contract_execution(
         &self,
@@ -1264,7 +1264,7 @@ impl Client<GatewayClientConfig> {
             .await?;
         // We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need
-        // to fetch the blind signatures for the newly issued tokens, but as long as the
+        // to fetch the blind signatures for the newly issued notes, but as long as the
         // federation is honest as a whole they will produce the signatures, so we don't
         // have to worry
         let mut dbtx = self.context.db.begin_transaction().await;

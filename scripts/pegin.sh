@@ -34,5 +34,5 @@ TRANSACTION=$(get_raw_transaction $TX_ID)
 if [ "$USE_GATEWAY" == 1 ]; then $FM_GATEWAY_CLI deposit "$FED_ID" "$TXOUT_PROOF" "$TRANSACTION" && echo "Pegged in to federation with id: $FED_ID"; else $FM_MINT_CLIENT peg-in "$TXOUT_PROOF" "$TRANSACTION"; fi
 
 # Since the process is asynchronous have to come back to fetch the result later. We choose to do this right away and
-# just block till we get our tokens.
+# just block till we get our notes.
 $FM_MINT_CLIENT fetch

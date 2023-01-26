@@ -47,7 +47,7 @@ pub async fn run_webserver(
     Ok(())
 }
 
-/// Display gateway ecash token balance
+/// Display gateway ecash note balance
 #[debug_handler]
 #[instrument(skip_all, err)]
 async fn info(
@@ -58,7 +58,7 @@ async fn info(
     Ok(Json(json!(info)))
 }
 
-/// Display gateway ecash token balance
+/// Display gateway ecash note balance
 #[debug_handler]
 #[instrument(skip_all, err)]
 async fn balance(

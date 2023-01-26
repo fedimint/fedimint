@@ -30,10 +30,10 @@ rm $FM_CFG_DIR/client.json
 $FM_MINT_CLIENT join-federation "$CONNECT_STRING"
 
 # reissue
-TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.token')
+NOTES=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.note')
 [[ $($FM_MINT_CLIENT info | jq -e -r '.total_amount') = "9958000" ]]
-$FM_MINT_CLIENT validate $TOKENS
-$FM_MINT_CLIENT reissue $TOKENS
+$FM_MINT_CLIENT validate $NOTES
+$FM_MINT_CLIENT reissue $NOTES
 $FM_MINT_CLIENT fetch
 
 # peg out

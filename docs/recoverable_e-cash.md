@@ -1,7 +1,7 @@
 # Recoverable E-Cash
 
 By deriving both nonces and blinding keys deterministically from a seed we can build a scheme that allows restoring
-e-cash tokens from said seed with help of the federation. In the following we describe the two components of the scheme:
+e-cash notes from said seed with help of the federation. In the following we describe the two components of the scheme:
 deterministic e-cash derivation and recovery of blind signatures from the federation to reconstruct the e-cash wallet.
 
 ## Deterministic Key Derivation
@@ -92,7 +92,7 @@ In the following we define how secrets should be derived for specific use cases.
 For deriving e-cash notes we define the following derivation path:
 
 * **module_id**: The mint module has id `0`
-* **mint_module_key_type**: The key type of e-cash tokens inside the mint module is `0`
+* **mint_module_key_type**: The key type of e-cash notes inside the mint module is `0`
 * **amount**: The value of the note (in msats)
 * **index**: Index of the e-cash note to be minted, automatically incremented
 * **key_type**: `0` for the secp256k1 spend key, `1` for the BLS12-381 blinding key

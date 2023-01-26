@@ -43,11 +43,11 @@ For instance, the consensus thread may receive a peg-out proposal, validate the 
 ## Modules
 There currently are three `FederationModule` used in `FedimintConsensus` that exist in the [crates](#Crate-organization) previously described:
 * [Wallet module](wallet_module.md) - handles bitcoin on-chain `PegInProof` inputs and `PegOut` outputs
-* `Mint` module - verifies `Note` input signatures and issues `BlindToken` outputs of different denominations
+* `Mint` module - verifies `Note` input signatures and issues `BlindNote` outputs of different denominations
 * `LightningModule` - creates `ContractInput` inputs and `ContractOrOfferOutput` outputs representing a payment sent or received by a gateway on behalf of a user
 
 Any module can contribute inputs and outputs in the same `Transaction`.
-For instance, if users wish to convert on-chain bitcoin to Fedimint tokens they can create a transaction with `PegInProof` inputs from `modules/fedimint-wallet`  and `BlindToken` outputs from `modules/fedimint-mint`.
+For instance, if users wish to convert on-chain bitcoin to Fedimint notes they can create a transaction with `PegInProof` inputs from `modules/fedimint-wallet`  and `BlindNote` outputs from `modules/fedimint-mint`.
 
 In the future other modules can be added, for instance to enable smart contracts or even a federated marketplace.
 Existing `ConsensusItem` representations are documented in the [database schema](database.md).
@@ -64,7 +64,7 @@ Requests are delegated to an underlying `LnClient`, `MintClient`, or `WalletClie
 A submitted `Transaction` often requires multiple epochs to become spendable, usually because they require signatures from a quorum of federation members.
 Clients query for the `TransactionStatus` by unique `OutPoint` that includes the `TransactionId`.
 
-After enough epochs have passed, the `TransactionStatus` contain either return an `Error` message or the `OutputOutcome` indicating how the inputs were spent and possibly returning data to the user such as blind-signed tokens.
+After enough epochs have passed, the `TransactionStatus` contain either return an `Error` message or the `OutputOutcome` indicating how the inputs were spent and possibly returning data to the user such as blind-signed notes.
 
 ## LN Gateway
 The `LnGateway` communicates with a local Lightning node in order to provide an API that can pay invoices.

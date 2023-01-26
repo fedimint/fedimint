@@ -479,7 +479,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
                 .actor
                 .pay_invoice(gateway.adapter.clone(), contract_id),
             async {
-                // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
+                // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the notes
                 fed.await_consensus_epochs(4).await.unwrap();
             }
         )
@@ -499,7 +499,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
             .claim_incoming_contract(incoming_contract_id, rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(2).await; // claim incoming contract and mint the tokens
+        fed.run_consensus_epochs(2).await; // claim incoming contract and mint the notes
 
         receiving_user
             .client
@@ -617,7 +617,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
                 .actor
                 .pay_invoice(gateway.adapter.clone(), contract_id),
             async {
-                // we should run 4 epocks to buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
+                // we should run 4 epocks to buy preimage from offer, decrypt preimage, claim outgoing contract, mint the notes
                 // but we only run 1 epoch to simulate timeout in preimage decryption
                 // This results in an error and the gateway reclaims funds used to buy preimage
                 fed.await_consensus_epochs(1).await.unwrap();
@@ -702,7 +702,7 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
             .unwrap();
         fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
-        // Ecash tokens have been transferred from gateway to user
+        // Ecash notes have been transferred from gateway to user
         gateway
             .user
             .assert_total_notes(starting_balance - preimage_price)
