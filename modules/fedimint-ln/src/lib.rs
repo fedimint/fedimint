@@ -873,12 +873,6 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                "/offers",
-                async |module: &Lightning, dbtx, _params: ()| -> Vec<IncomingContractOffer> {
-                    Ok(module.get_offers(dbtx).await)
-                }
-            },
-            api_endpoint! {
                 "/offer",
                 async |module: &Lightning, dbtx, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     let offer = module
