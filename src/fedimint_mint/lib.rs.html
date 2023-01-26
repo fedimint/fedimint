@@ -2546,7 +2546,7 @@
         <span class="kw">let </span>nonce = Message::from_bytes(<span class="kw-2">&amp;</span><span class="string">b&quot;test note&quot;</span>[..]);
         <span class="kw">let </span>bkey = BlindingKey::random();
         <span class="kw">let </span>bmsg = blind_message(nonce, bkey);
-        <span class="kw">let </span>blind_tokens = TieredMulti::new(
+        <span class="kw">let </span>blind_notes = TieredMulti::new(
             <span class="macro">vec!</span>[(
                 Amount::from_sats(<span class="number">1</span>),
                 <span class="macro">vec!</span>[BlindNonce(bmsg), BlindNonce(bmsg)],
@@ -2561,7 +2561,7 @@
             .map(<span class="kw">move </span>|(id, m)| {
                 (
                     PeerId::from(id <span class="kw">as </span>u16),
-                    m.blind_sign(blind_tokens.clone()).unwrap(),
+                    m.blind_sign(blind_notes.clone()).unwrap(),
                 )
             })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -2709,4 +2709,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c8e6a9e8b 2023-01-23)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-c3c521c753752a1a.js" data-settings-css="settings-08ddfdda51b8ee2e.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c18a5e8a5 2023-01-25)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-a43118d2dfb2799d.js" data-settings-css="settings-7c23ac01f615ce90.css" ></div></body></html>

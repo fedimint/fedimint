@@ -1808,9 +1808,9 @@
     /// directly to us by another user as a payment. By spending them we can make sure
     /// they can no longer be potentially double-spent.
     ///
-    /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
+    /// On success the out point of the newly issued e-cash notes is returned. It can be used to
     /// easily poll the transaction status using [`MintClient::fetch_notes`] until it returns
-    /// `Ok(())`, indicating we received our newly issued e-cash tokens.
+    /// `Ok(())`, indicating we received our newly issued e-cash notes.
     </span><span class="kw">pub async fn </span>reissue&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         notes: TieredMulti&lt;SpendableNote&gt;,
@@ -2001,7 +2001,7 @@
         <span class="prelude-val">Ok</span>(final_notes)
     }
 
-    <span class="doccomment">/// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
+    <span class="doccomment">/// Tries to fetch e-cash notes from a certain out point. An error may just mean having queried
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
     </span><span class="kw">pub async fn </span>fetch_notes&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -2383,7 +2383,7 @@
         </span><span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="doccomment">/// Notify gateway that we&#39;ve escrowed tokens they can claim by routing our payment and wait
+    <span class="doccomment">/// Notify gateway that we&#39;ve escrowed notes they can claim by routing our payment and wait
     /// for them to do so
     </span><span class="kw">pub async fn </span>await_outgoing_contract_execution(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2709,7 +2709,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need
-        // to fetch the blind signatures for the newly issued tokens, but as long as the
+        // to fetch the blind signatures for the newly issued notes, but as long as the
         // federation is honest as a whole they will produce the signatures, so we don&#39;t
         // have to worry
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
@@ -2889,4 +2889,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c8e6a9e8b 2023-01-23)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-c3c521c753752a1a.js" data-settings-css="settings-08ddfdda51b8ee2e.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c18a5e8a5 2023-01-25)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-a43118d2dfb2799d.js" data-settings-css="settings-7c23ac01f615ce90.css" ></div></body></html>

@@ -1733,7 +1733,7 @@
         (fed, client_config.cast().unwrap(), client_context)
     }
 
-    <span class="kw">async fn </span>issue_tokens&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">async fn </span>issue_notes&lt;<span class="lifetime">&#39;a</span>&gt;(
         fed: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>tokio::sync::Mutex&lt;Fed&gt;,
         client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintClient,
         client_db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
@@ -1772,7 +1772,7 @@
         };
 
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sats(<span class="number">12</span>);
-        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, ISSUE_AMOUNT).<span class="kw">await</span>;
+        issue_notes(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, ISSUE_AMOUNT).<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(client.notes().<span class="kw">await</span>.total_amount(), ISSUE_AMOUNT)
     }
@@ -1791,7 +1791,7 @@
             secret: DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).child_key(MINT_SECRET_CHILD_ID),
         };
 
-        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
+        issue_notes(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>context.db, SPEND_AMOUNT * <span class="number">2</span>).<span class="kw">await</span>;
 
         <span class="comment">// Spending works
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.context.db.begin_transaction().<span class="kw">await</span>;
@@ -1953,4 +1953,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c8e6a9e8b 2023-01-23)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-c3c521c753752a1a.js" data-settings-css="settings-08ddfdda51b8ee2e.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c18a5e8a5 2023-01-25)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-a43118d2dfb2799d.js" data-settings-css="settings-7c23ac01f615ce90.css" ></div></body></html>
