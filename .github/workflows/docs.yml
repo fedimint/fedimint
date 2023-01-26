@@ -19,9 +19,8 @@ jobs:
           sudo apt-get -y install mold
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
           profile: minimal
           override: true
 
