@@ -756,7 +756,7 @@ mod tests {
         (fed, client_config.cast().unwrap(), client_context)
     }
 
-    async fn issue_tokens<'a>(
+    async fn issue_notes<'a>(
         fed: &'a tokio::sync::Mutex<Fed>,
         client: &'a MintClient,
         client_db: &'a Database,
@@ -795,7 +795,7 @@ mod tests {
         };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sats(12);
-        issue_tokens(&fed, &client, &context.db, ISSUE_AMOUNT).await;
+        issue_notes(&fed, &client, &context.db, ISSUE_AMOUNT).await;
 
         assert_eq!(client.notes().await.total_amount(), ISSUE_AMOUNT)
     }
@@ -814,7 +814,7 @@ mod tests {
             secret: DerivableSecret::new_root(&[], &[]).child_key(MINT_SECRET_CHILD_ID),
         };
 
-        issue_tokens(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
+        issue_notes(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
 
         // Spending works
         let mut dbtx = client.context.db.begin_transaction().await;

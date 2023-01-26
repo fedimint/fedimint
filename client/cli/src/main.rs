@@ -71,7 +71,7 @@ enum CliOutput {
     },
 
     Spend {
-        token: String,
+        note: String,
     },
 
     PegOut {
@@ -225,7 +225,7 @@ enum Command {
         arg: String,
     },
 
-    /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
+    /// Issue notes in exchange for a peg-in proof
     PegIn {
         #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
@@ -233,13 +233,13 @@ enum Command {
         transaction: Transaction,
     },
 
-    /// Reissue tokens received from a third party to avoid double spends
+    /// Reissue notes received from a third party to avoid double spends
     Reissue {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
     },
 
-    /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
+    /// Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
     Validate {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
@@ -510,7 +510,7 @@ async fn handle_command(
         }
         Command::Spend { amount } => client.spend_ecash(amount, rng).await.transform(
             |v| CliOutput::Spend {
-                token: (serialize_ecash(&v)),
+                note: (serialize_ecash(&v)),
             },
             CliErrorKind::GeneralFederationError,
             "failed to execute spend (no further information)",

@@ -865,7 +865,7 @@ impl FederationTest {
         };
 
         user.client
-            .receive_notes(amount, |tokens| async move {
+            .receive_notes(amount, |notes| async move {
                 for server in &self.servers {
                     let svr = server.borrow_mut();
                     let mut dbtx = svr.database.begin_transaction().await;
@@ -873,7 +873,7 @@ impl FederationTest {
                         inputs: vec![],
                         outputs: vec![core::DynOutput::from_typed(
                             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                            MintOutput(tokens.clone()),
+                            MintOutput(notes.clone()),
                         )],
                         signature: None,
                     };
@@ -896,7 +896,7 @@ impl FederationTest {
                             &mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_MINT),
                             &core::DynOutput::from_typed(
                                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                                MintOutput(tokens.clone()),
+                                MintOutput(notes.clone()),
                             ),
                             out_point,
                         )

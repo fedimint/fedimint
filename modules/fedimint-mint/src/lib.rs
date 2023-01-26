@@ -1191,7 +1191,7 @@ mod test {
         let nonce = Message::from_bytes(&b"test note"[..]);
         let bkey = BlindingKey::random();
         let bmsg = blind_message(nonce, bkey);
-        let blind_tokens = TieredMulti::new(
+        let blind_notes = TieredMulti::new(
             vec![(
                 Amount::from_sats(1),
                 vec![BlindNonce(bmsg), BlindNonce(bmsg)],
@@ -1206,7 +1206,7 @@ mod test {
             .map(move |(id, m)| {
                 (
                     PeerId::from(id as u16),
-                    m.blind_sign(blind_tokens.clone()).unwrap(),
+                    m.blind_sign(blind_notes.clone()).unwrap(),
                 )
             })
             .collect::<Vec<_>>();
