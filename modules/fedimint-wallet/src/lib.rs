@@ -1191,6 +1191,10 @@ impl Wallet {
                 )
                 .await
                 .expect("DB Error");
+
+                dbtx.remove_entry(&PendingTransactionKey(pending_tx.tx.txid()))
+                    .await
+                    .expect("DB error");
             }
         }
     }
