@@ -164,7 +164,7 @@ impl Database {
                         Ok(()) => {
                             return Ok(val);
                         }
-                        Err(e) if max_retries.map(|mr| mr >= retries).unwrap_or(false) => {
+                        Err(e) if max_retries.map(|mr| mr <= retries).unwrap_or(false) => {
                             return Err(AutocommitError::CommitFailed {
                                 retries,
                                 last_error: e,
@@ -1366,5 +1366,79 @@ mod tests {
         assert_eq!(test_dbtx.get_value(&TestKey(101)).await.unwrap(), None);
 
         test_dbtx.commit_tx().await.expect("DB Error");
+    }
+
+    #[tokio::test]
+    async fn test_autocommit() {
+        use std::marker::PhantomData;
+
+        use anyhow::anyhow;
+        use async_trait::async_trait;
+
+        use crate::db::{AutocommitError, IDatabase, IDatabaseTransaction, PrefixIter};
+        use crate::ModuleDecoderRegistry;
+
+        #[derive(Debug)]
+        struct FakeDatabase;
+
+        #[async_trait]
+        impl IDatabase for FakeDatabase {
+            async fn begin_transaction<'a>(
+                &'a self,
+            ) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
+                Box::new(FakeTransaction(PhantomData))
+            }
+        }
+
+        #[derive(Debug)]
+        struct FakeTransaction<'a>(PhantomData<&'a ()>);
+
+        #[async_trait]
+        impl<'a> IDatabaseTransaction<'a> for FakeTransaction<'a> {
+            async fn raw_insert_bytes(
+                &mut self,
+                _key: &[u8],
+                _value: Vec<u8>,
+            ) -> anyhow::Result<Option<Vec<u8>>> {
+                unimplemented!()
+            }
+
+            async fn raw_get_bytes(&mut self, _key: &[u8]) -> anyhow::Result<Option<Vec<u8>>> {
+                unimplemented!()
+            }
+
+            async fn raw_remove_entry(&mut self, _key: &[u8]) -> anyhow::Result<Option<Vec<u8>>> {
+                unimplemented!()
+            }
+
+            async fn raw_find_by_prefix(&mut self, _key_prefix: &[u8]) -> PrefixIter<'_> {
+                unimplemented!()
+            }
+
+            async fn commit_tx(self: Box<Self>) -> anyhow::Result<()> {
+                Err(anyhow!("Can't commit!"))
+            }
+
+            async fn rollback_tx_to_savepoint(&mut self) {
+                unimplemented!()
+            }
+
+            async fn set_tx_savepoint(&mut self) {
+                unimplemented!()
+            }
+        }
+
+        let db = Database::new(FakeDatabase, ModuleDecoderRegistry::default());
+        let err = db
+            .autocommit::<_, _, ()>(|_dbtx| Box::pin(async { Ok(()) }), Some(5))
+            .await
+            .unwrap_err();
+
+        match err {
+            AutocommitError::CommitFailed { retries, .. } => {
+                assert_eq!(retries, 5)
+            }
+            AutocommitError::ClosureError { .. } => panic!("Closure did not return error"),
+        }
     }
 }
