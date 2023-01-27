@@ -451,9 +451,9 @@ pub trait ServerModule: Debug + Sized {
     ) -> Vec<Self::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The batch will be committed to the
-    /// database after all other modules ran `begin_consensus_epoch`, so the results are available
-    /// when processing transactions.
+    /// items of this round are supplied as `consensus_items`. The database transaction will be
+    /// committed to the database after all other modules ran `begin_consensus_epoch`,
+    /// so the results are available when processing transactions.
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
@@ -482,11 +482,11 @@ pub trait ServerModule: Debug + Sized {
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
-    /// take no effect.
+    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
+    /// the operation will take no effect.
     ///
     /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
+    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
@@ -507,8 +507,8 @@ pub trait ServerModule: Debug + Sized {
     ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
-    /// reset and the operation will take no effect.
+    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
+    /// database transaction is rolled back and the operation will take no effect.
     ///
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
     /// be used to retrieve its outcome later using `output_status`.
