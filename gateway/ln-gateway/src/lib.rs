@@ -31,7 +31,6 @@ use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     GatewayClient,
 };
-use rpc::{BackupPayload, RestorePayload};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, warn};
@@ -42,9 +41,10 @@ use crate::{
     config::GatewayConfig,
     ln::{LightningError, LnRpc},
     rpc::{
-        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
-        ReceivePaymentPayload, WithdrawPayload,
+        rpc_server::run_webserver, BackupPayload, BalancePayload, ConnectFedPayload,
+        DepositAddressPayload, DepositPayload, FederationInfo, GatewayInfo, GatewayRequest,
+        GatewayRequestInner, GatewayRpcSender, InfoPayload, ReceivePaymentPayload, RestorePayload,
+        WithdrawPayload,
     },
 };
 
@@ -207,19 +207,45 @@ impl LnGateway {
         Ok(())
     }
 
-    async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        let federations = self
+    // async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
+    //     let federations = self
+    //         .actors
+    //         .lock()
+    //         .await
+    //         .iter()
+    //         .map(|(_, actor)| actor.get_info().expect("Failed to get actor info"))
+    //         .collect();
+
+    //     Ok(GatewayInfo {
+    //         federations,
+    //         version_hash: env!("GIT_HASH").to_string(),
+    //     })
+    // }
+
+    async fn spawn_get_info(&mut self, handler: GatewayRequestInner<InfoPayload>) {
+        let actors: Vec<Arc<GatewayActor>> = self
             .actors
             .lock()
             .await
             .iter()
-            .map(|(_, actor)| actor.get_info().expect("Failed to get actor info"))
+            .map(|(_, actor)| actor.to_owned())
             .collect();
 
-        Ok(GatewayInfo {
-            federations,
-            version_hash: env!("GIT_HASH").to_string(),
-        })
+        self.task_group
+            .spawn("GetInfoThread", move |_| {
+                handler.handle(|_| async move {
+                    let federations: Vec<FederationInfo> = actors
+                        .into_iter()
+                        .map(|actor| actor.get_info().expect("Failed to get actor info"))
+                        .collect();
+
+                    Ok(GatewayInfo {
+                        federations,
+                        version_hash: env!("GIT_HASH").to_string(),
+                    })
+                })
+            })
+            .await;
     }
 
     /// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
@@ -344,8 +370,8 @@ impl LnGateway {
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
-                    GatewayRequest::Info(inner) => {
-                        inner.handle(|payload| self.handle_get_info(payload)).await;
+                    GatewayRequest::Info(handler) => {
+                        self.spawn_get_info(handler).await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
                         inner
