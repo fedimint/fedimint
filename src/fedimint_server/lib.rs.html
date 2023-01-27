@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-6d262342be62306e.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-5f7299aa2b503fb1.css"><link rel="stylesheet" disabled href="../../static.files/dark-dfb18ef8114bb428.css"><link rel="stylesheet" disabled href="../../static.files/ayu-4047a6aaddd3789d.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-3367e395607fafc1.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-1f7d512b176f0f72.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-124a1ca42af929b6.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-14bb2392d96a38da.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-5f7299aa2b503fb1.css"><link rel="stylesheet" disabled href="../../static.files/dark-dfb18ef8114bb428.css"><link rel="stylesheet" disabled href="../../static.files/ayu-4047a6aaddd3789d.css"><script id="default-settings" ></script><script src="../../static.files/storage-d43fa987303ecbbb.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-3367e395607fafc1.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -501,6 +501,48 @@
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
 <a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -520,7 +562,11 @@
 <span class="kw">use </span>fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
+<span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
+<span class="kw">use </span>futures::stream::Peekable;
+<span class="kw">use </span>futures::FutureExt;
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 <span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
 <span class="kw">use </span>itertools::Itertools;
@@ -529,6 +575,8 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>tokio::sync::mpsc::Receiver;
+<span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::{
@@ -570,8 +618,20 @@
 
 <span class="kw">type </span>EpochStep = Step&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;;
 
+<span class="kw">enum </span>EpochTriggerEvent {
+    <span class="doccomment">/// A user has sent us a new transaction
+    </span>NewTransaction,
+    <span class="doccomment">/// A peer has sent us a consensus message
+    </span>NewMessage(PeerMessage),
+    <span class="doccomment">/// One of our modules triggered an event (e.g. new bitcoin block)
+    </span>ModuleProposalEvent,
+    <span class="doccomment">/// A rejoining peer wants us to run an empty epoch
+    </span>RunEpochRequest,
+}
+
 <span class="kw">pub struct </span>FedimintServer {
     <span class="kw">pub </span>consensus: Arc&lt;FedimintConsensus&gt;,
+    <span class="kw">pub </span>tx_receiver: Peekable&lt;ReceiverStream&lt;Transaction&gt;&gt;,
     <span class="kw">pub </span>connections: PeerConnections&lt;EpochMessage&gt;,
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;,
@@ -588,10 +648,12 @@
     </span><span class="kw">pub async fn </span>run(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        tx_receiver: Receiver&lt;Transaction&gt;,
         decoders: ModuleDecoderRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>server = FedimintServer::new(cfg.clone(), consensus, decoders, task_group).<span class="kw">await</span>;
+        <span class="kw">let </span>server =
+            FedimintServer::new(cfg.clone(), consensus, tx_receiver, decoders, task_group).<span class="kw">await</span>;
         <span class="kw">let </span>server_consensus = server.consensus.clone();
         <span class="kw">let </span>consensus = server
             .cfg
@@ -625,18 +687,28 @@
     <span class="kw">pub async fn </span>new(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        tx_receiver: Receiver&lt;Transaction&gt;,
         decoders: ModuleDecoderRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>connector: PeerConnector&lt;EpochMessage&gt; =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
-        <span class="self">Self</span>::new_with(cfg.clone(), consensus, connector, decoders, task_group).<span class="kw">await
+        <span class="self">Self</span>::new_with(
+            cfg.clone(),
+            consensus,
+            tx_receiver,
+            connector,
+            decoders,
+            task_group,
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
+        tx_receiver: Receiver&lt;Transaction&gt;,
         connector: PeerConnector&lt;EpochMessage&gt;,
         decoders: ModuleDecoderRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
@@ -671,6 +743,7 @@
             connections,
             hbbft,
             consensus: Arc::new(consensus),
+            tx_receiver: ReceiverStream::new(tx_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
             peers: cfg.local.p2p.keys().cloned().collect(),
@@ -818,13 +891,14 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         proposal: <span class="kw">impl </span>Future&lt;Output = ConsensusProposal&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
-    ) -&gt; Cancellable&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
         <span class="comment">// for testing federations with one peer
         </span><span class="kw">if </span><span class="self">self</span>.cfg.local.p2p.len() == <span class="number">1 </span>{
             <span class="macro">tokio::select! </span>{
-              () = <span class="self">self</span>.consensus.transaction_notify.notified() =&gt; (),
+              <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.tx_receiver).peek() =&gt; (),
               () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
             }
+            <span class="self">self</span>.save_new_txs().<span class="kw">await</span>;
             <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
             <span class="kw">let </span>epoch = <span class="self">self</span>.hbbft.epoch();
             <span class="self">self</span>.hbbft.skip_to_epoch(epoch + <span class="number">1</span>);
@@ -837,11 +911,14 @@
         <span class="comment">// process messages until new epoch or we have a proposal
         </span><span class="kw">let </span><span class="kw-2">mut </span>outcomes: Vec&lt;HbbftConsensusOutcome&gt; = <span class="kw">loop </span>{
             <span class="kw">match </span><span class="self">self</span>.await_next_epoch().<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Some</span>(msg) <span class="kw">if </span><span class="self">self</span>.start_next_epoch(<span class="kw-2">&amp;</span>msg) =&gt; <span class="kw">break </span><span class="self">self</span>.handle_message(msg).<span class="kw">await</span><span class="question-mark">?</span>,
-                <span class="prelude-val">Some</span>(msg) =&gt; <span class="self">self</span>.handle_message(msg).<span class="kw">await</span><span class="question-mark">?</span>,
-                <span class="prelude-val">None </span>=&gt; <span class="kw">break </span><span class="macro">vec!</span>[],
+                EpochTriggerEvent::NewMessage(msg) <span class="kw">if </span><span class="self">self</span>.start_next_epoch(<span class="kw-2">&amp;</span>msg) =&gt; {
+                    <span class="kw">break </span><span class="self">self</span>.handle_message(msg).<span class="kw">await</span><span class="question-mark">?
+                </span>}
+                EpochTriggerEvent::NewMessage(msg) =&gt; <span class="self">self</span>.handle_message(msg).<span class="kw">await</span><span class="question-mark">?</span>,
+                <span class="kw">_ </span>=&gt; <span class="kw">break </span><span class="macro">vec!</span>[],
             };
         };
+        <span class="self">self</span>.save_new_txs().<span class="kw">await</span>;
 
         <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
         <span class="kw">for </span>peer <span class="kw">in </span>proposal.drop_peers.iter() {
@@ -855,6 +932,13 @@
             outcomes = <span class="self">self</span>.handle_message(msg).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(outcomes)
+    }
+
+    <span class="comment">// save any transactions we have in the channel
+    </span><span class="kw">async fn </span>save_new_txs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(tx)) = <span class="self">self</span>.tx_receiver.next().now_or_never() {
+            <span class="self">self</span>.consensus.save_transaction_to_db(tx).<span class="kw">await</span>;
+        }
     }
 
     <span class="doccomment">/// Handles one step of the HBBFT algorithm, sending messages to peers and parsing any
@@ -900,16 +984,16 @@
             .expect(<span class="string">&quot;HBBFT propose failed&quot;</span>))
     }
 
-    <span class="kw">async fn </span>await_next_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;<span class="prelude-ty">Option</span>&lt;PeerMessage&gt;&gt; {
+    <span class="kw">async fn </span>await_next_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;EpochTriggerEvent&gt; {
         <span class="kw">if </span><span class="self">self</span>.run_empty_epochs &gt; <span class="number">0 </span>{
             <span class="self">self</span>.run_empty_epochs = <span class="self">self</span>.run_empty_epochs.saturating_sub(<span class="number">1</span>);
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(EpochTriggerEvent::RunEpochRequest);
         }
 
         <span class="macro">tokio::select! </span>{
-            () = <span class="self">self</span>.consensus.transaction_notify.notified() =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-            () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-            msg = <span class="self">self</span>.connections.receive() =&gt; msg.map(<span class="prelude-val">Some</span>)
+            _peek = Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.tx_receiver).peek() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewTransaction),
+            () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::ModuleProposalEvent),
+            msg = <span class="self">self</span>.connections.receive() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewMessage(msg<span class="question-mark">?</span>))
         }
     }
 
@@ -1005,4 +1089,4 @@
     (outcome, ban_peers)
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (c18a5e8a5 2023-01-25)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-a43118d2dfb2799d.js" data-settings-css="settings-7c23ac01f615ce90.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (d7948c843 2023-01-26)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-a43118d2dfb2799d.js" data-settings-css="settings-7c23ac01f615ce90.css" ></div></body></html>
