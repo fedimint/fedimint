@@ -1368,6 +1368,7 @@ mod tests {
         test_dbtx.commit_tx().await.expect("DB Error");
     }
 
+    #[cfg(test)]
     #[tokio::test]
     async fn test_autocommit() {
         use std::marker::PhantomData;
