@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["SystemTime","A measurement of the system clock, useful for talking to external entities like the file system or other processes."]]};

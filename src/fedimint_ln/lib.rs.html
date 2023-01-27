@@ -1018,6 +1018,74 @@
 <a href="#1018" id="1018">1018</a>
 <a href="#1019" id="1019">1019</a>
 <a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1059,6 +1127,7 @@
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
+<span class="kw">use </span>fedimint_api::time::SystemTime;
 <span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
 <span class="kw">use </span>fedimint_api::{OutPoint, ServerModule};
 <span class="kw">use </span>itertools::Itertools;
@@ -1233,6 +1302,13 @@
     <span class="kw">pub </span>mint_pub_key: secp256k1::XOnlyPublicKey,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
     <span class="kw">pub </span>api: Url,
+    <span class="doccomment">/// Route hints to reach the LN node of the gateway.
+    ///
+    /// These will be appended with the route hint of the recipient&#39;s virtual channel. To keeps
+    /// invoices small these should be used sparingly.
+    </span><span class="kw">pub </span>route_hints: Vec&lt;route_hints::RouteHint&gt;,
+    <span class="doccomment">/// Limits the validity of the announcement to allow updates
+    </span><span class="kw">pub </span>valid_until: SystemTime,
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
@@ -1972,7 +2048,15 @@
     <span class="kw">pub async fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Vec&lt;LightningGateway&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
             .<span class="kw">await
-            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            </span>.filter_map(|res| {
+                <span class="kw">let </span>gw = res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>;
+                <span class="comment">// FIXME: actually remove from DB
+                </span><span class="kw">if </span>gw.valid_until &gt; SystemTime::now() {
+                    <span class="prelude-val">Some</span>(gw)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>}
+            })
             .collect()
     }
 
@@ -2009,6 +2093,58 @@
         </span>.expect(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);
 
     serde_json::from_value(body).expect(<span class="string">&quot;Malformed block height response from wallet module!&quot;</span>)
+}
+
+<span class="comment">// TODO: upstream serde support to LDK
+</span><span class="doccomment">/// Hack to get a route hint that implements serde traits.
+</span><span class="kw">pub mod </span>route_hints {
+    <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+    <span class="kw">use </span>secp256k1::PublicKey;
+    <span class="kw">use </span>serde::{Deserialize, Serialize};
+
+    <span class="attr">#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    </span><span class="kw">pub struct </span>RouteHintHop {
+        <span class="doccomment">/// The node_id of the non-target end of the route
+        </span><span class="kw">pub </span>src_node_id: PublicKey,
+        <span class="doccomment">/// The short_channel_id of this channel
+        </span><span class="kw">pub </span>short_channel_id: u64,
+        <span class="doccomment">/// Flat routing fee in satoshis
+        </span><span class="kw">pub </span>base_msat: u32,
+        <span class="doccomment">/// Liquidity-based routing fee in millionths of a routed amount.
+        /// In other words, 10000 is 1%.
+        </span><span class="kw">pub </span>proportional_millionths: u32,
+        <span class="doccomment">/// The difference in CLTV values between this node and the next node.
+        </span><span class="kw">pub </span>cltv_expiry_delta: u16,
+        <span class="doccomment">/// The minimum value, in msat, which must be relayed to the next hop.
+        </span><span class="kw">pub </span>htlc_minimum_msat: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+        <span class="doccomment">/// The maximum value in msat available for routing with a single HTLC.
+        </span><span class="kw">pub </span>htlc_maximum_msat: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    }
+
+    <span class="doccomment">/// A list of hops along a payment path terminating with a channel to the recipient.
+    </span><span class="attr">#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    </span><span class="kw">pub struct </span>RouteHint(<span class="kw">pub </span>Vec&lt;RouteHintHop&gt;);
+
+    <span class="kw">impl </span>RouteHint {
+        <span class="kw">pub fn </span>to_ldk_route_hint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; lightning::routing::router::RouteHint {
+            lightning::routing::router::RouteHint(
+                <span class="self">self</span>.<span class="number">0
+                    </span>.iter()
+                    .map(|hop| lightning::routing::router::RouteHintHop {
+                        src_node_id: hop.src_node_id,
+                        short_channel_id: hop.short_channel_id,
+                        fees: lightning::routing::gossip::RoutingFees {
+                            base_msat: hop.base_msat,
+                            proportional_millionths: hop.proportional_millionths,
+                        },
+                        cltv_expiry_delta: hop.cltv_expiry_delta,
+                        htlc_minimum_msat: hop.htlc_minimum_msat,
+                        htlc_maximum_msat: hop.htlc_maximum_msat,
+                    })
+                    .collect(),
+            )
+        }
+    }
 }
 
 <span class="attr">#[derive(Debug, Error, Eq, PartialEq)]

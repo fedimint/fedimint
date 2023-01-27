@@ -1472,6 +1472,32 @@
 <a href="#1472" id="1472">1472</a>
 <a href="#1473" id="1473">1473</a>
 <a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1482,10 +1508,9 @@
 <span class="kw">pub mod </span>wallet;
 
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
+<span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
-<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-</span><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>api::{
     DynFederationApi, FederationError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
@@ -1504,6 +1529,7 @@
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_api::time::SystemTime;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_api::{ServerModule, TieredMulti};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
@@ -1605,13 +1631,19 @@
     </span><span class="kw">pub </span>mint_channel_id: u64,
 }
 
-<span class="kw">impl </span>From&lt;GatewayClientConfig&gt; <span class="kw">for </span>LightningGateway {
-    <span class="kw">fn </span>from(config: GatewayClientConfig) -&gt; <span class="self">Self </span>{
+<span class="kw">impl </span>GatewayClientConfig {
+    <span class="kw">pub fn </span>to_gateway_registration_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        route_hints: Vec&lt;fedimint_core::modules::ln::route_hints::RouteHint&gt;,
+        time_to_live: Duration,
+    ) -&gt; LightningGateway {
         LightningGateway {
-            mint_channel_id: config.mint_channel_id,
-            mint_pub_key: config.redeem_key.x_only_public_key().<span class="number">0</span>,
-            node_pub_key: config.node_pub_key,
-            api: config.api,
+            mint_channel_id: <span class="self">self</span>.mint_channel_id,
+            mint_pub_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
+            node_pub_key: <span class="self">self</span>.node_pub_key,
+            api: <span class="self">self</span>.api.clone(),
+            route_hints,
+            valid_until: SystemTime::now() + time_to_live,
         }
     }
 }
@@ -2141,8 +2173,10 @@
     <span class="kw">pub async fn </span>fetch_registered_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.context.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>)
     }
+
     <span class="kw">pub async fn </span>fetch_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;LightningGateway&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
+        <span class="comment">// FIXME: forgetting about old gws might not always be ideal. We assume that the gateway stays the same except for route hints for now.
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
             </span>.context
             .db
             .begin_transaction()
@@ -2150,12 +2184,13 @@
             </span>.get_value(<span class="kw-2">&amp;</span>LightningGatewayKey)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;DB error&quot;</span>)
+            .filter(|gw| gw.valid_until &gt; SystemTime::now())
         {
-            <span class="prelude-val">Ok</span>(gateway)
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(<span class="self">self</span>.switch_active_gateway(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(gateway);
         }
-    }
+
+        <span class="self">self</span>.switch_active_gateway(<span class="prelude-val">None</span>).<span class="kw">await
+    </span>}
     <span class="doccomment">/// Switches the clients active gateway to a registered gateway with the given node pubkey.
     /// If no pubkey is given (node_pub_key == None) the first available registered gateway is activated.
     /// This behavior is useful for scenarios where we don&#39;t know any registered gateways in advance.
@@ -2332,7 +2367,7 @@
         </span><span class="kw">let </span>(node_secret_key, node_public_key) = <span class="self">self</span>.context.secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
 
         <span class="comment">// Route hint instructing payer how to route to gateway
-        </span><span class="kw">let </span>gateway_route_hint = RouteHint(<span class="macro">vec!</span>[RouteHintHop {
+        </span><span class="kw">let </span>route_hint_last_hop = RouteHintHop {
             src_node_id: gateway.node_pub_key,
             short_channel_id: gateway.mint_channel_id,
             fees: RoutingFees {
@@ -2342,18 +2377,31 @@
             cltv_expiry_delta: <span class="number">30</span>,
             htlc_minimum_msat: <span class="prelude-val">None</span>,
             htlc_maximum_msat: <span class="prelude-val">None</span>,
-        }]);
+        };
+        <span class="kw">let </span>route_hints = <span class="kw">if </span>gateway.route_hints.is_empty() {
+            <span class="macro">vec!</span>[RouteHint(<span class="macro">vec!</span>[route_hint_last_hop])]
+        } <span class="kw">else </span>{
+            gateway
+                .route_hints
+                .iter()
+                .map(|rh| {
+                    RouteHint(
+                        rh.to_ldk_route_hint()
+                            .<span class="number">0
+                            </span>.iter()
+                            .cloned()
+                            .chain(once(route_hint_last_hop.clone()))
+                            .collect(),
+                    )
+                })
+                .collect()
+        };
 
-        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-        </span><span class="kw">let </span>duration_since_epoch = SystemTime::now()
+        <span class="kw">let </span>duration_since_epoch = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
-        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
-        </span><span class="kw">let </span>duration_since_epoch =
-            Duration::from_secs_f64(js_sys::Date::new_0().get_time() / <span class="number">1000.</span>);
-
-        <span class="kw">let </span>invoice = InvoiceBuilder::new(network_to_currency(
+        <span class="kw">let </span><span class="kw-2">mut </span>invoice_builder = InvoiceBuilder::new(network_to_currency(
             <span class="self">self</span>.config
                 .<span class="number">0
                 </span>.get_first_module_by_kind::&lt;WalletClientConfig&gt;(<span class="string">&quot;wallet&quot;</span>)
@@ -2368,11 +2416,15 @@
         .duration_since_epoch(duration_since_epoch)
         .min_final_cltv_expiry(<span class="number">18</span>)
         .payee_pub_key(node_public_key)
-        .private_route(gateway_route_hint)
         .expiry_time(Duration::from_secs(
             expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
-        ))
-        .build_signed(|hash| {
+        ));
+
+        <span class="kw">for </span>rh <span class="kw">in </span>route_hints {
+            invoice_builder = invoice_builder.private_route(rh);
+        }
+
+        <span class="kw">let </span>invoice = invoice_builder.build_signed(|hash| {
             <span class="self">self</span>.context
                 .secp
                 .sign_ecdsa_recoverable(hash, <span class="kw-2">&amp;</span>node_secret_key)
@@ -2535,7 +2587,7 @@
         <span class="kw">let </span>maybe_route_hint_first_id = invoice
             .route_hints()
             .first()
-            .and_then(|rh| rh.<span class="number">0</span>.first())
+            .and_then(|rh| rh.<span class="number">0</span>.last())
             .map(|hop| hop.src_node_id);
 
         <span class="prelude-val">Some</span>(<span class="self">self</span>.config().node_pub_key) == maybe_route_hint_first_id

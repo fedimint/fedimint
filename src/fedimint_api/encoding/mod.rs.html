@@ -692,6 +692,21 @@
 <a href="#692" id="692">692</a>
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for consensus critical
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
@@ -1021,12 +1036,7 @@
 <span class="kw">impl </span>Encodable <span class="kw">for </span>SystemTime {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span>duration = <span class="self">self</span>.duration_since(UNIX_EPOCH).expect(<span class="string">&quot;valid duration&quot;</span>);
-
-        <span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
-        count += duration.as_secs().consensus_encode(writer)<span class="question-mark">?</span>;
-        count += duration.subsec_nanos().consensus_encode(writer)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(count)
+        duration.consensus_encode_dyn(writer)
     }
 }
 
@@ -1035,9 +1045,29 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>duration = Duration::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(UNIX_EPOCH + duration)
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>Duration {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
+        count += <span class="self">self</span>.as_secs().consensus_encode(writer)<span class="question-mark">?</span>;
+        count += <span class="self">self</span>.subsec_nanos().consensus_encode(writer)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(count)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>Duration {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>secs = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>nsecs = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(UNIX_EPOCH + Duration::new(secs, nsecs))
+        <span class="prelude-val">Ok</span>(Duration::new(secs, nsecs))
     }
 }
 

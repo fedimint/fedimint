@@ -545,6 +545,9 @@
 <a href="#545" id="545">545</a>
 <a href="#546" id="546">546</a>
 <a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -876,6 +879,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::sync::Arc;
+    <span class="kw">use </span>std::time::SystemTime;
 
     <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
     <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
@@ -1021,6 +1025,8 @@
                 node_pub_key,
                 api: Url::parse(<span class="string">&quot;http://example.com&quot;</span>)
                     .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
+                route_hints: <span class="macro">vec!</span>[],
+                valid_until: SystemTime::now(),
             }
         };
         <span class="kw">let </span>timelock = <span class="number">42</span>;
