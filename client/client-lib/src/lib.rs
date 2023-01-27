@@ -143,6 +143,7 @@ impl From<GatewayClientConfig> for LightningGateway {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Client<C> {
     config: C,
     context: Arc<ClientContext>,
