@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
@@ -514,6 +514,8 @@ impl GatewayTest {
             node_pub_key,
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+            route_hints: vec![],
+            valid_until: SystemTime::now(),
         };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
@@ -562,7 +564,7 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .connect_federation(client.clone())
+            .connect_federation(client.clone(), vec![])
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios

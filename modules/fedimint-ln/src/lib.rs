@@ -39,6 +39,7 @@ use fedimint_api::module::{
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
+use fedimint_api::time::SystemTime;
 use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
 use fedimint_api::{OutPoint, ServerModule};
 use itertools::Itertools;
@@ -213,6 +214,13 @@ pub struct LightningGateway {
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub api: Url,
+    /// Route hints to reach the LN node of the gateway.
+    ///
+    /// These will be appended with the route hint of the recipient's virtual channel. To keeps
+    /// invoices small these should be used sparingly.
+    pub route_hints: Vec<route_hints::RouteHint>,
+    /// Limits the validity of the announcement to allow updates
+    pub valid_until: SystemTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
@@ -952,7 +960,15 @@ impl Lightning {
     pub async fn list_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<LightningGateway> {
         dbtx.find_by_prefix(&LightningGatewayKeyPrefix)
             .await
-            .map(|res| res.expect("DB error").1)
+            .filter_map(|res| {
+                let gw = res.expect("DB error").1;
+                // FIXME: actually remove from DB
+                if gw.valid_until > SystemTime::now() {
+                    Some(gw)
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
@@ -989,6 +1005,58 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
         .expect("Wallet module not present or malfunctioning!");
 
     serde_json::from_value(body).expect("Malformed block height response from wallet module!")
+}
+
+// TODO: upstream serde support to LDK
+/// Hack to get a route hint that implements serde traits.
+pub mod route_hints {
+    use fedimint_api::encoding::{Decodable, Encodable};
+    use secp256k1::PublicKey;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    pub struct RouteHintHop {
+        /// The node_id of the non-target end of the route
+        pub src_node_id: PublicKey,
+        /// The short_channel_id of this channel
+        pub short_channel_id: u64,
+        /// Flat routing fee in satoshis
+        pub base_msat: u32,
+        /// Liquidity-based routing fee in millionths of a routed amount.
+        /// In other words, 10000 is 1%.
+        pub proportional_millionths: u32,
+        /// The difference in CLTV values between this node and the next node.
+        pub cltv_expiry_delta: u16,
+        /// The minimum value, in msat, which must be relayed to the next hop.
+        pub htlc_minimum_msat: Option<u64>,
+        /// The maximum value in msat available for routing with a single HTLC.
+        pub htlc_maximum_msat: Option<u64>,
+    }
+
+    /// A list of hops along a payment path terminating with a channel to the recipient.
+    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    pub struct RouteHint(pub Vec<RouteHintHop>);
+
+    impl RouteHint {
+        pub fn to_ldk_route_hint(&self) -> lightning::routing::router::RouteHint {
+            lightning::routing::router::RouteHint(
+                self.0
+                    .iter()
+                    .map(|hop| lightning::routing::router::RouteHintHop {
+                        src_node_id: hop.src_node_id,
+                        short_channel_id: hop.short_channel_id,
+                        fees: lightning::routing::gossip::RoutingFees {
+                            base_msat: hop.base_msat,
+                            proportional_millionths: hop.proportional_millionths,
+                        },
+                        cltv_expiry_delta: hop.cltv_expiry_delta,
+                        htlc_minimum_msat: hop.htlc_minimum_msat,
+                        htlc_maximum_msat: hop.htlc_maximum_msat,
+                    })
+                    .collect(),
+            )
+        }
+    }
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]

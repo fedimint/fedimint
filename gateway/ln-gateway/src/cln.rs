@@ -4,13 +4,16 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use cln_plugin::{anyhow, options, Builder, Error, Plugin};
+use cln_rpc::model::{ListchannelsRequest, ListpeersPeersChannelsState, ListpeersRequest};
+use cln_rpc::primitives::ShortChannelId;
 use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_api::Amount;
 use fedimint_server::modules::ln::contracts::Preimage;
+use fedimint_server::modules::ln::route_hints::{RouteHint, RouteHintHop};
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::io::{stdin, stdout};
 use tokio::sync::Mutex;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::ReceivePaymentPayload;
 use crate::{
@@ -125,6 +128,100 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
             }
         }
     }
+
+    #[instrument(name = "LnRpc::route_hints", skip(self))]
+    async fn route_hints(&self) -> Result<Vec<RouteHint>, anyhow::Error> {
+        let our_pub_key = self
+            .pubkey()
+            .await
+            .map_err(|err| anyhow!("Lightning error: {:?}", err))?;
+
+        let mut client_lock = self.lock().await;
+
+        let peers_response = client_lock
+            .call(Request::ListPeers(ListpeersRequest {
+                id: None,
+                level: None,
+            }))
+            .await?;
+        let peers = match peers_response {
+            Response::ListPeers(peers) => peers.peers,
+            _ => {
+                panic!("Unexpected response")
+            }
+        };
+
+        let active_peer_channels = peers
+            .into_iter()
+            .flat_map(|peer| peer.channels.into_iter().map(move |chan| (peer.id, chan)))
+            .filter_map(|(peer_id, chan)| {
+                // TODO: upstream eq derive
+                if !matches!(chan.state, ListpeersPeersChannelsState::CHANNELD_NORMAL) {
+                    return None;
+                }
+
+                let Some(scid) = chan.short_channel_id else {
+                    warn!("Encountered channel without short channel id");
+                    return None;
+                };
+
+                Some((peer_id, scid))
+            })
+            .collect::<Vec<_>>();
+
+        debug!(
+            "Found {} active channels to use as route hints",
+            active_peer_channels.len()
+        );
+
+        let mut route_hints = vec![];
+        for (peer_id, scid) in active_peer_channels {
+            let channels_response = client_lock
+                .call(Request::ListChannels(ListchannelsRequest {
+                    short_channel_id: Some(scid),
+                    source: None,
+                    destination: None,
+                }))
+                .await
+                .map_err(|err| anyhow!("Lightning error: {:?}", err))?;
+            let channel = match channels_response {
+                Response::ListChannels(channels) => {
+                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == our_pub_key) else {
+                        warn!("Channel {:?} not found in graph", scid);
+                        continue;
+                    };
+                    channel
+                }
+                _ => panic!("Unexpected response"),
+            };
+
+            let route_hint_hop = RouteHintHop {
+                src_node_id: peer_id,
+                short_channel_id: scid_to_u64(scid),
+                base_msat: channel.base_fee_millisatoshi,
+                proportional_millionths: channel.fee_per_millionth,
+                cltv_expiry_delta: channel
+                    .delay
+                    .try_into()
+                    .expect("CLN returned too big cltv expiry delta"),
+                htlc_minimum_msat: Some(channel.htlc_minimum_msat.msat()),
+                htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
+            };
+
+            trace!("Constructed route hint {:?}", route_hint_hop);
+            route_hints.push(RouteHint(vec![route_hint_hop]))
+        }
+
+        Ok(route_hints)
+    }
+}
+
+// TODO: upstream
+fn scid_to_u64(scid: ShortChannelId) -> u64 {
+    let mut scid_num = scid.outnum() as u64;
+    scid_num |= (scid.txindex() as u64) << 16;
+    scid_num |= (scid.block() as u64) << 40;
+    scid_num
 }
 
 /// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages

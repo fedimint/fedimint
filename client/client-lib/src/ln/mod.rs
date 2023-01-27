@@ -329,6 +329,7 @@ pub enum LnClientError {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::SystemTime;
 
     use bitcoin::hashes::{sha256, Hash};
     use fedimint_api::config::ConfigGenParams;
@@ -474,6 +475,8 @@ mod tests {
                 node_pub_key,
                 api: Url::parse("http://example.com")
                     .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+                route_hints: vec![],
+                valid_until: SystemTime::now(),
             }
         };
         let timelock = 42;

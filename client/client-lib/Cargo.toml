@@ -51,7 +51,6 @@ threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch
 jsonrpsee-ws-client = "0.16.2"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-js-sys = "0.3.59"
 jsonrpsee-wasm-client = "0.16.0"
 
 [dev-dependencies]

@@ -1,11 +1,13 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use anyhow::Error;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::Amount;
+use fedimint_ln::route_hints::RouteHint;
 use fedimint_server::modules::ln::contracts::Preimage;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
@@ -76,5 +78,9 @@ impl LnRpc for FakeLightningTest {
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         Ok(self.preimage.clone())
+    }
+
+    async fn route_hints(&self) -> Result<Vec<RouteHint>, Error> {
+        Ok(vec![RouteHint(vec![])])
     }
 }

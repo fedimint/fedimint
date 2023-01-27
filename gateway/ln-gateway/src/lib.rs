@@ -27,6 +27,7 @@ use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
 use fedimint_server::modules::ln::contracts::Preimage;
+use fedimint_server::modules::ln::route_hints::RouteHint;
 use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     GatewayClient,
@@ -34,7 +35,7 @@ use mint_client::{
 use rpc::{BackupPayload, RestorePayload};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     actor::GatewayActor,
@@ -47,6 +48,9 @@ use crate::{
         ReceivePaymentPayload, WithdrawPayload,
     },
 };
+
+const ROUTE_HINT_RETRIES: usize = 10;
+const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
@@ -76,6 +80,26 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
+        let mut num_retries = 0;
+        let route_hints = loop {
+            let route_hints = ln_rpc
+                .route_hints()
+                .await
+                .expect("Could not feth route hints");
+
+            if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
+                break route_hints;
+            }
+
+            info!(
+                ?num_retries,
+                "LN node returned no route hints, trying again in {}s",
+                ROUTE_HINT_RETRY_SLEEP.as_secs()
+            );
+            num_retries += 1;
+            tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
+        };
+
         let ln_gw = Self {
             config,
             actors: Mutex::new(HashMap::new()),
@@ -89,7 +113,9 @@ impl LnGateway {
             module_gens: module_gens.clone(),
         };
 
-        ln_gw.load_federation_actors(decoders, module_gens).await;
+        ln_gw
+            .load_federation_actors(decoders, module_gens, route_hints)
+            .await;
 
         ln_gw
     }
@@ -98,6 +124,7 @@ impl LnGateway {
         &self,
         decoders: ModuleDecoderRegistry,
         module_gens: ModuleGenRegistry,
+        route_hints: Vec<RouteHint>,
     ) {
         if let Ok(configs) = self.client_builder.load_configs() {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
@@ -109,7 +136,10 @@ impl LnGateway {
                     .await
                     .expect("Could not build federation client");
 
-                if let Err(e) = self.connect_federation(Arc::new(client)).await {
+                if let Err(e) = self
+                    .connect_federation(Arc::new(client), route_hints.clone())
+                    .await
+                {
                     error!("Failed to connect federation: {}", e);
                 }
 
@@ -141,9 +171,10 @@ impl LnGateway {
     pub async fn connect_federation(
         &self,
         client: Arc<GatewayClient>,
+        route_hints: Vec<RouteHint>,
     ) -> Result<Arc<GatewayActor>> {
         let actor = Arc::new(
-            GatewayActor::new(client.clone())
+            GatewayActor::new(client.clone(), route_hints)
                 .await
                 .expect("Failed to create actor"),
         );
@@ -156,7 +187,11 @@ impl LnGateway {
     }
 
     // Webserver handler for requests to register a federation
-    async fn handle_connect_federation(&self, payload: ConnectFedPayload) -> Result<()> {
+    async fn handle_connect_federation(
+        &self,
+        payload: ConnectFedPayload,
+        route_hints: Vec<RouteHint>,
+    ) -> Result<()> {
         let connect: WsFederationConnect = serde_json::from_str(&payload.connect).map_err(|e| {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
@@ -193,7 +228,7 @@ impl LnGateway {
                 .expect("Failed to build gateway client"),
         );
 
-        if let Err(e) = self.connect_federation(client.clone()).await {
+        if let Err(e) = self.connect_federation(client.clone(), route_hints).await {
             error!("Failed to connect federation: {}", e);
         }
 
@@ -348,8 +383,11 @@ impl LnGateway {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
+                        let route_hints = self.ln_rpc.route_hints().await?;
                         inner
-                            .handle(|payload| self.handle_connect_federation(payload))
+                            .handle(|payload| {
+                                self.handle_connect_federation(payload, route_hints.clone())
+                            })
                             .await;
                     }
                     GatewayRequest::ReceivePayment(inner) => {

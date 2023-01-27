@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
+use fedimint_server::modules::ln::route_hints::RouteHint;
 use fedimint_server::modules::{
     ln::contracts::{ContractId, Preimage},
     wallet::txoproof::TxOutProof,
@@ -13,29 +14,46 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, Result};
 
+/// How long a gateway announcement stays valid
+const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
+
 pub struct GatewayActor {
     client: Arc<GatewayClient>,
 }
 
 impl GatewayActor {
-    pub async fn new(client: Arc<GatewayClient>) -> Result<Self> {
-        // Retry gateway registration
-        match retry(
-            String::from("Register With Federation"),
-            #[allow(clippy::unit_arg)]
-            || async {
-                Ok(client
-                    .register_with_federation(client.config().into())
-                    .await?)
-            },
-            Duration::from_secs(1),
-            5,
-        )
-        .await
-        {
-            Ok(_) => info!("Connected with federation"),
-            Err(e) => warn!("Failed to connect with federation: {}", e),
-        }
+    pub async fn new(client: Arc<GatewayClient>, route_hints: Vec<RouteHint>) -> Result<Self> {
+        let register_client = client.clone();
+        tokio::spawn(async move {
+            loop {
+                // Retry gateway registration
+                match retry(
+                    String::from("Register With Federation"),
+                    #[allow(clippy::unit_arg)]
+                    || async {
+                        let gateway_registration = register_client
+                            .config()
+                            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
+                        Ok(register_client
+                            .register_with_federation(gateway_registration.clone())
+                            .await?)
+                    },
+                    Duration::from_secs(1),
+                    5,
+                )
+                .await
+                {
+                    Ok(_) => {
+                        info!("Connected with federation");
+                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
+                    }
+                    Err(e) => {
+                        warn!("Failed to connect with federation: {}", e);
+                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
+                    }
+                }
+            }
+        });
 
         Ok(Self { client })
     }
