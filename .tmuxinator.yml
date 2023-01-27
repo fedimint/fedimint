@@ -9,7 +9,7 @@ pre_window:
   - alias fedimint-cli="\$FM_MINT_CLIENT"
   - alias gateway-cli="\$FM_GATEWAY_CLI"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
-  - alias fedimint-dbdump="\$FM_DB_DUMP"
+  - alias dbtool="\$FM_DB_TOOL"
 tmux_detached: false
 windows:
   - main:

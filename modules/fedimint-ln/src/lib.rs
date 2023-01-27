@@ -21,7 +21,7 @@ use std::ops::Sub;
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
-use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
+use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig, TypedServerModuleConfig,
@@ -40,11 +40,14 @@ use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::time::SystemTime;
-use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
+use fedimint_api::{
+    filter_prefixes_by_name, plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId,
+};
 use fedimint_api::{OutPoint, ServerModule};
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
@@ -60,8 +63,8 @@ use crate::contracts::{
 };
 use crate::db::{
     AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
-    ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
-    ProposeDecryptionShareKeyPrefix,
+    ContractUpdateKey, ContractUpdateKeyPrefix, OfferKey, OfferKeyPrefix,
+    ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 
 const KIND: ModuleKind = ModuleKind::from_static_str("ln");
@@ -349,6 +352,83 @@ impl ModuleGen for LightningGen {
         config: serde_json::Value,
     ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
         serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash()
+    }
+
+    async fn dump_module_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut lightning: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        for table in DbKeyPrefix::iter() {
+            filter_prefixes_by_name!(table, prefix_names);
+
+            match table {
+                DbKeyPrefix::AgreedDecryptionShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        AgreedDecryptionShareKeyPrefix,
+                        AgreedDecryptionShareKey,
+                        PreimageDecryptionShare,
+                        lightning,
+                        "Accepted Decryption Shares"
+                    );
+                }
+                DbKeyPrefix::Contract => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ContractKeyPrefix,
+                        ContractKey,
+                        ContractAccount,
+                        lightning,
+                        "Contracts"
+                    );
+                }
+                DbKeyPrefix::ContractUpdate => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ContractUpdateKeyPrefix,
+                        ContractUpdateKey,
+                        LightningOutputOutcome,
+                        lightning,
+                        "Contract Updates"
+                    );
+                }
+                DbKeyPrefix::LightningGateway => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LightningGatewayKeyPrefix,
+                        LightningGatewayKey,
+                        LightningGateway,
+                        lightning,
+                        "Lightning Gateways"
+                    );
+                }
+                DbKeyPrefix::Offer => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OfferKeyPrefix,
+                        OfferKey,
+                        IncomingContractOffer,
+                        lightning,
+                        "Offers"
+                    );
+                }
+                DbKeyPrefix::ProposeDecryptionShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ProposeDecryptionShareKeyPrefix,
+                        ProposeDecryptionShareKey,
+                        PreimageDecryptionShare,
+                        lightning,
+                        "Proposed Decryption Shares"
+                    );
+                }
+            }
+        }
+
+        Box::new(lightning.into_iter())
     }
 }
 

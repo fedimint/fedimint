@@ -139,6 +139,14 @@ impl ModuleGen for DummyConfigGenerator {
     fn hash_client_module(&self, config: Value) -> anyhow::Result<sha256::Hash> {
         serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash()
     }
+
+    async fn dump_module_database(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        Box::new(BTreeMap::new().into_iter())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

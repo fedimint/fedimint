@@ -20,6 +20,7 @@ use bitcoin::{
 };
 use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
+use db::DbKeyPrefix;
 use fedimint_api::bitcoin_rpc::{
     select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
     FM_ELECTRUM_RPC_ENV,
@@ -44,7 +45,10 @@ use fedimint_api::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_api::task::sleep;
 use fedimint_api::task::{TaskGroup, TaskHandle};
-use fedimint_api::{plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModule};
+use fedimint_api::{
+    filter_prefixes_by_name, plugin_types_trait_impl, push_db_key_items, push_db_pair_items,
+    Feerate, NumPeers, OutPoint, PeerId, ServerModule,
+};
 use fedimint_bitcoind::DynBitcoindRpc;
 use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
@@ -53,15 +57,17 @@ use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::common::WalletDecoder;
 use crate::config::{WalletClientConfig, WalletConfig};
 use crate::db::{
-    BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
-    PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
-    UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+    BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
+    PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    UnsignedTransactionPrefixKey,
 };
 use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
@@ -358,6 +364,81 @@ impl ModuleGen for WalletGen {
 
     fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
         serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
+    }
+
+    async fn dump_module_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut wallet: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        for table in DbKeyPrefix::iter() {
+            filter_prefixes_by_name!(table, prefix_names);
+
+            match table {
+                DbKeyPrefix::BlockHash => {
+                    push_db_key_items!(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, "Blocks");
+                }
+                DbKeyPrefix::PegOutBitcoinOutPoint => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegOutBitcoinTransactionPrefix,
+                        PegOutBitcoinTransaction,
+                        WalletOutputOutcome,
+                        wallet,
+                        "Peg Out Bitcoin Transaction"
+                    );
+                }
+                DbKeyPrefix::PegOutTxSigCi => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegOutTxSignatureCIPrefix,
+                        PegOutTxSignatureCI,
+                        Vec<secp256k1::ecdsa::Signature>,
+                        wallet,
+                        "Peg Out Transaction Signatures"
+                    );
+                }
+                DbKeyPrefix::PendingTransaction => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PendingTransactionPrefixKey,
+                        PendingTransactionKey,
+                        PendingTransaction,
+                        wallet,
+                        "Pending Transactions"
+                    );
+                }
+                DbKeyPrefix::RoundConsensus => {
+                    let round_consensus = dbtx.get_value(&RoundConsensusKey).await.unwrap();
+                    if let Some(round_consensus) = round_consensus {
+                        wallet.insert("Round Consensus".to_string(), Box::new(round_consensus));
+                    }
+                }
+                DbKeyPrefix::UnsignedTransaction => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UnsignedTransactionPrefixKey,
+                        UnsignedTransactionKey,
+                        UnsignedTransaction,
+                        wallet,
+                        "Unsigned Transactions"
+                    );
+                }
+                DbKeyPrefix::Utxo => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UTXOPrefixKey,
+                        UTXOKey,
+                        SpendableUTXO,
+                        wallet,
+                        "UTXOs"
+                    );
+                }
+            }
+        }
+
+        Box::new(wallet.into_iter())
     }
 }
 

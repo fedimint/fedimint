@@ -136,3 +136,12 @@ impl DatabaseKeyPrefixConst for ClientConfigSignatureKey {
     type Key = Self;
     type Value = SerdeSignature;
 }
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ClientConfigSignatureKeyPrefix;
+
+impl DatabaseKeyPrefixConst for ClientConfigSignatureKeyPrefix {
+    const DB_PREFIX: u8 = DbKeyPrefix::ClientConfigSignature as u8;
+    type Key = ClientConfigSignatureKey;
+    type Value = SerdeSignature;
+}

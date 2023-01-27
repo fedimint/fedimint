@@ -708,6 +708,52 @@ impl DecodingError {
     }
 }
 
+#[macro_export]
+macro_rules! filter_prefixes_by_name {
+    ($prefix:ident, $prefixes:ident) => {
+        if !$prefixes.is_empty() && !$prefixes.contains(&$prefix.to_string().to_lowercase()) {
+            continue;
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! push_db_pair_items {
+    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
+        let db_items = $dbtx.find_by_prefix(&$prefix_type).await;
+        let mut items: Vec<($key_type, $value_type)> = Vec::new();
+        for item in db_items {
+            items.push(item.unwrap());
+        }
+        $map.insert($key_literal.to_string(), Box::new(items));
+    };
+}
+
+#[macro_export]
+macro_rules! push_db_pair_items_no_serde {
+    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
+        let db_items = $dbtx.find_by_prefix(&$prefix_type).await;
+        let mut items: Vec<($key_type, SerdeWrapper)> = Vec::new();
+        for item in db_items {
+            let (k, v) = item.unwrap();
+            items.push((k, SerdeWrapper::from_encodable(v)));
+        }
+        $map.insert($key_literal.to_string(), Box::new(items));
+    };
+}
+
+#[macro_export]
+macro_rules! push_db_key_items {
+    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $map:ident, $key_literal:literal) => {
+        let db_items = $dbtx.find_by_prefix(&$prefix_type).await;
+        let mut items: Vec<$key_type> = Vec::new();
+        for item in db_items {
+            items.push(item.unwrap().0);
+        }
+        $map.insert($key_literal.to_string(), Box::new(items));
+    };
+}
+
 mod tests {
     use super::Database;
     use crate::db::DatabaseKeyPrefixConst;
