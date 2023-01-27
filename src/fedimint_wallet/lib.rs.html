@@ -1642,6 +1642,10 @@
 <a href="#1642" id="1642">1642</a>
 <a href="#1643" id="1643">1643</a>
 <a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -2835,6 +2839,10 @@
                 )
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+
+                dbtx.remove_entry(<span class="kw-2">&amp;</span>PendingTransactionKey(pending_tx.tx.txid()))
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;DB error&quot;</span>);
             }
         }
     }
