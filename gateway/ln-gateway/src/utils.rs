@@ -9,29 +9,29 @@ pub async fn retry<F, R, T>(
     op_name: String,
     op_fn: F,
     wait: Duration,
-    max_retries: u32,
+    max_attempts: u32,
 ) -> Result<T, anyhow::Error>
 where
     F: Fn() -> R,
     R: Future<Output = Result<T, anyhow::Error>>,
 {
-    let mut att = 0;
+    assert_ne!(max_attempts, 0, "max_attempts must be greater than 0");
+    let mut attempts = 0;
     loop {
+        attempts += 1;
         match op_fn().await {
             Ok(result) => return Ok(result),
-            Err(e) => {
-                att += 1;
-                if att > max_retries {
-                    return Err(e);
-                }
+            Err(err) if attempts < max_attempts => {
+                // run closure op_fn again
                 info!(
                     "{} failed with error: {}. Retrying in {} seconds",
                     op_name,
-                    e,
+                    err,
                     wait.as_secs()
                 );
                 sleep(wait).await;
             }
+            Err(err) => return Err(err),
         }
     }
 }
