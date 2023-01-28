@@ -5,15 +5,15 @@ use tracing::info;
 
 /// Retry an operation util the operation succeeds, OR
 /// The maximum number of attempts are made without success
-pub async fn retry<F, R, T>(
+pub async fn retry<F, Fut, T>(
     op_name: String,
     op_fn: F,
     wait: Duration,
     max_attempts: u32,
 ) -> Result<T, anyhow::Error>
 where
-    F: Fn() -> R,
-    R: Future<Output = Result<T, anyhow::Error>>,
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<T, anyhow::Error>>,
 {
     assert_ne!(max_attempts, 0, "max_attempts must be greater than 0");
     let mut attempts = 0;
