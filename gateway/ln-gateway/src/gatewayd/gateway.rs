@@ -1,18 +1,4 @@
-pub mod actor;
-pub mod client;
-pub mod cln;
-pub mod config;
-pub mod gatewayd;
-pub mod ln;
-pub mod rpc;
-pub mod utils;
-
-pub mod gatewaylnrpc {
-    tonic::include_proto!("gatewaylnrpc");
-}
-
 use std::{
-    borrow::Cow,
     collections::HashMap,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -21,41 +7,35 @@ use std::{
     time::{Duration, Instant},
 };
 
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
-use fedimint_api::{task::TaskGroup, Amount, TransactionId};
-use fedimint_server::modules::ln::contracts::Preimage;
-use fedimint_server::modules::ln::route_hints::RouteHint;
-use mint_client::{
-    api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
-    GatewayClient,
+use fedimint_api::{
+    config::{FederationId, ModuleGenRegistry},
+    module::registry::ModuleDecoderRegistry,
+    task::TaskGroup,
+    Amount, TransactionId,
 };
-use rpc::{BackupPayload, RestorePayload};
-use thiserror::Error;
+use fedimint_server::modules::ln::{contracts::Preimage, route_hints::RouteHint};
+use mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient};
 use tokio::sync::{mpsc, Mutex};
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
+use super::actor::GatewayActor;
 use crate::{
-    actor::GatewayActor,
     client::DynGatewayClientBuilder,
     config::GatewayConfig,
-    ln::{LightningError, LnRpc},
+    ln::LnRpc,
     rpc::{
-        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
-        ReceivePaymentPayload, WithdrawPayload,
+        rpc_server::run_webserver, BackupPayload, BalancePayload, ConnectFedPayload,
+        DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender,
+        InfoPayload, ReceivePaymentPayload, RestorePayload, WithdrawPayload,
     },
+    LnGatewayError, Result,
 };
 
 const ROUTE_HINT_RETRIES: usize = 10;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 
-pub type Result<T> = std::result::Result<T, LnGatewayError>;
-
-pub struct LnGateway {
+pub struct Gateway {
     config: GatewayConfig,
     decoders: ModuleDecoderRegistry,
     module_gens: ModuleGenRegistry,
@@ -68,7 +48,7 @@ pub struct LnGateway {
     channel_id_generator: AtomicU64,
 }
 
-impl LnGateway {
+impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         config: GatewayConfig,
@@ -180,6 +160,8 @@ impl LnGateway {
                 .expect("Failed to create actor"),
         );
 
+        // TODO: Subscribe for HTLC intercept on behalf of this federation
+
         self.actors.lock().await.insert(
             client.config().client_config.federation_id.to_string(),
             actor.clone(),
@@ -260,22 +242,10 @@ impl LnGateway {
 
     /// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
     /// a federation user.
-    async fn handle_receive_payment(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
-        let ReceivePaymentPayload { htlc_accepted } = payload;
-
-        let invoice_amount = htlc_accepted.htlc.amount_msat;
-        let payment_hash = htlc_accepted.htlc.payment_hash;
-        debug!("Incoming htlc for payment hash {}", payment_hash);
-
-        // FIXME: Issue 664: We should avoid having a special reference to a federation
-        // all requests, including `ReceivePaymentPayload`, should contain the federation id
-        //
-        // We use a random federation as the default (works because we only have one federation registered)
-        //
-        // TODO: Use subscribe intercept htlc streams to avoid actor selection with every intercepted htlc!
-        self.actors.lock().await.values().collect::<Vec<_>>()[0]
-            .buy_preimage_internal(&payment_hash, &invoice_amount)
-            .await
+    async fn handle_receive_payment(&self, _payload: ReceivePaymentPayload) -> Result<Preimage> {
+        Err(LnGatewayError::Other(anyhow::anyhow!(
+            "Not implemented: handle_receive_payment"
+        )))
     }
 
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
@@ -440,30 +410,8 @@ impl LnGateway {
     }
 }
 
-impl Drop for LnGateway {
+impl Drop for Gateway {
     fn drop(&mut self) {
         futures::executor::block_on(self.task_group.shutdown());
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum LnGatewayError {
-    #[error("Federation client operation error: {0:?}")]
-    ClientError(#[from] ClientError),
-    #[error("Our LN node could not route the payment: {0:?}")]
-    CouldNotRoute(LightningError),
-    #[error("Mint client error: {0:?}")]
-    MintClientE(#[from] MintClientError),
-    #[error("Actor not found")]
-    UnknownFederation,
-    #[error("Other: {0:?}")]
-    Other(#[from] anyhow::Error),
-}
-
-impl IntoResponse for LnGatewayError {
-    fn into_response(self) -> Response {
-        let mut err = Cow::<'static, str>::Owned(format!("{:?}", self)).into_response();
-        *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        err
     }
 }
