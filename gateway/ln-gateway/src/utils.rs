@@ -8,7 +8,7 @@ use tracing::info;
 pub async fn retry<F, Fut, T>(
     op_name: String,
     op_fn: F,
-    wait: Duration,
+    interval: Duration,
     max_attempts: u32,
 ) -> Result<T, anyhow::Error>
 where
@@ -27,9 +27,9 @@ where
                     "{} failed with error: {}. Retrying in {} seconds",
                     op_name,
                     err,
-                    wait.as_secs()
+                    interval.as_secs()
                 );
-                sleep(wait).await;
+                sleep(interval).await;
             }
             Err(err) => return Err(err),
         }
