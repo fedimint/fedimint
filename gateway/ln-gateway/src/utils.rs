@@ -3,8 +3,14 @@ use std::{future::Future, result::Result, time::Duration};
 use tokio::time::sleep;
 use tracing::info;
 
-/// Retry an operation util the operation succeeds, OR
-/// The maximum number of attempts are made without success
+/// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the supplied `Duration`
+/// `interval` between attempts
+///
+/// # Returns
+///
+/// - If the closure runs successfully, the result is immediately returned
+/// - If the closure did not run successfully for `max_attempts` times, the error of the closure
+///   is returned
 pub async fn retry<F, Fut, T>(
     op_name: String,
     op_fn: F,
