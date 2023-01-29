@@ -828,7 +828,7 @@ pub struct PeerResponse<R> {
 }
 
 impl<C: JsonRpcClient> FederationMember<C> {
-    #[instrument(fields(peer = %self.peer_id), skip_all)]
+    #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
         let rclient = self.client.read().await;
         match &*rclient {
