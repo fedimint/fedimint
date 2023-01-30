@@ -32,7 +32,7 @@ pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
             #[cfg(feature = "diagnostics")]
             ident.span().unstable().error(e).emit();
             #[cfg(not(feature = "diagnostics"))]
-            panic!("Error: {}", e);
+            panic!("Error: {e}");
             return TokenStream::new();
         }
     };
