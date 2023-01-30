@@ -233,6 +233,10 @@ async fn params_page(
                 let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
                 ("electrum", url_str)
             }
+            Ok(BitcoindRpcBackend::Esplora(url)) => {
+                let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
+                ("esplora", url_str)
+            }
             Err(e) => ("error", e.to_string()),
         };
     UrlConnection {

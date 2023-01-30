@@ -26,4 +26,4 @@ fedimint-core  = { path = "../fedimint-core" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 tracing = "0.1.37"
-url = "2.3.1"                   
+url = "2.3.1"

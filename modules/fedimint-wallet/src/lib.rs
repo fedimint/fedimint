@@ -23,7 +23,7 @@ use db::DbKeyPrefix;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::bitcoin_rpc::{
     select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
-    FM_ELECTRUM_RPC_ENV,
+    FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
 };
 use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::config::{
@@ -927,6 +927,8 @@ impl Wallet {
                 .map(OsString::as_os_str),
             env.get(OsStr::new(FM_ELECTRUM_RPC_ENV))
                 .map(OsString::as_os_str),
+            env.get(OsStr::new(FM_ESPLORA_RPC_ENV))
+                .map(OsString::as_os_str),
         )?;
 
         let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoin_rpc_backend(
@@ -1260,6 +1262,9 @@ impl Wallet {
                             self.recognize_change_utxo(dbtx, transaction.1).await;
                         }
                     }
+                }
+                BitcoinRpcBackendType::Esplora => {
+                    todo!("Esplora backend currently does not have an implementation for IBitcoindRpc trait")
                 }
             }
 

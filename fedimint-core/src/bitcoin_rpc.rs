@@ -10,6 +10,10 @@ pub const FM_BITCOIND_RPC_ENV: &str = "FM_BITCOIND_RPC";
 /// it
 pub const FM_ELECTRUM_RPC_ENV: &str = "FM_ELECTRUM_RPC";
 
+/// Name of the env value used for passing esplora rpc url to modules that need
+/// it
+pub const FM_ESPLORA_RPC_ENV: &str = "FM_ESPLORA_RPC";
+
 /// Default url that will be used if [`FM_BITCOIND_RPC_ENV`] is not set
 pub const FM_BITCOIND_RPC_DEFAULT_FALLBACK: &str = "http://127.0.0.1:8332";
 
@@ -19,32 +23,43 @@ pub enum BitcoindRpcBackend {
     Bitcoind(Url),
     /// Electrum RPC
     Electrum(Url),
+    /// Esplora RPC
+    Esplora(Url),
 }
 
 pub enum BitcoinRpcBackendType {
     Bitcoind,
     Electrum,
+    Esplora,
 }
 
 /// Get the value of url the module would use by reading it from process
-/// environemnt
+/// environment
 ///
-/// Should be used in test code only to mimick prod code behavior
+/// Should be used in test code only to mimic prod code behavior
 pub fn read_bitcoin_backend_from_global_env() -> anyhow::Result<BitcoindRpcBackend> {
     select_bitcoin_backend_from_envs(
         std::env::var_os(FM_BITCOIND_RPC_ENV).as_deref(),
         std::env::var_os(FM_ELECTRUM_RPC_ENV).as_deref(),
+        std::env::var_os(FM_ESPLORA_RPC_ENV).as_deref(),
     )
 }
 
+/// Get the `BitcoinRpcBackend` variant to use by the given parameters
+///
+/// It uses in the first one available, in order (left-to-right), bitcoind,
+/// electrum and esplora, or fallback bitcoind.
 pub fn select_bitcoin_backend_from_envs(
     bitcoind_rpc: Option<&OsStr>,
     electrum_rpc: Option<&OsStr>,
+    esplora_rpc: Option<&OsStr>,
 ) -> anyhow::Result<BitcoindRpcBackend> {
     Ok(if let Some(val) = bitcoind_rpc {
         BitcoindRpcBackend::Bitcoind(fm_bitcoind_rpc_env_value_to_url(Some(val))?)
     } else if let Some(val) = electrum_rpc {
         BitcoindRpcBackend::Electrum(fm_electrum_rpc_env_value_to_url(val)?)
+    } else if let Some(val) = esplora_rpc {
+        BitcoindRpcBackend::Esplora(fm_esplora_rpc_env_value_to_url(val)?)
     } else {
         BitcoindRpcBackend::Bitcoind(fm_bitcoind_rpc_env_value_to_url(None)?)
     })
@@ -66,6 +81,14 @@ fn fm_bitcoind_rpc_env_value_to_url(value: Option<&OsStr>) -> anyhow::Result<Url
 }
 
 pub fn fm_electrum_rpc_env_value_to_url(value: &OsStr) -> anyhow::Result<Url> {
+    Ok(Url::parse(value.to_str().ok_or_else(|| {
+        anyhow::format_err!("Url not ascii text")
+    })?)?)
+}
+
+// TODO: Should we use a single fn instead of 3, such as:
+// `fm_backend_rpc_env_value_to_url` ? As they are pratically the same
+pub fn fm_esplora_rpc_env_value_to_url(value: &OsStr) -> anyhow::Result<Url> {
     Ok(Url::parse(value.to_str().ok_or_else(|| {
         anyhow::format_err!("Url not ascii text")
     })?)?)

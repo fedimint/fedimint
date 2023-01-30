@@ -56,6 +56,9 @@ pub fn make_bitcoin_rpc_backend(
             .context("bitcoind rpc backend initialization failed"),
         BitcoindRpcBackend::Electrum(url) => make_electrum_rpc(url, task_handle)
             .context("electrum rpc backend initialization failed"),
+        BitcoindRpcBackend::Esplora(_) => {
+            todo!("esplora rpc backend is currently not implemented yet")
+        }
     }
 }
 
