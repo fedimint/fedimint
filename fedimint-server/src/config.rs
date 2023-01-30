@@ -23,6 +23,7 @@ use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use stabilitypool::PoolConfigGenParams;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 use url::Url;
@@ -658,7 +659,9 @@ impl ServerConfigParams {
                 })
                 .attach(MintGenParams {
                     mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
-                }),
+                })
+                // TODO: Figure out if this is okay.
+                .attach(PoolConfigGenParams::default()),
         }
     }
 

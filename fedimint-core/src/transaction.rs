@@ -204,6 +204,7 @@ pub mod legacy {
         Mint(<fedimint_mint::Mint as ServerModule>::Input),
         Wallet(<fedimint_wallet::Wallet as ServerModule>::Input),
         LN(<fedimint_ln::Lightning as ServerModule>::Input),
+        Pool(stabilitypool::PoolInput),
     }
 
     // TODO: check if clippy is right
@@ -213,6 +214,7 @@ pub mod legacy {
         Mint(<fedimint_mint::Mint as ServerModule>::Output),
         Wallet(<fedimint_wallet::Wallet as ServerModule>::Output),
         LN(<fedimint_ln::Lightning as ServerModule>::Output),
+        Pool(stabilitypool::PoolOutput),
     }
 
     impl Transaction {
@@ -237,6 +239,7 @@ pub mod legacy {
                         core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
                     }
                     Input::LN(i) => core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
+                    Input::Pool(i) => core::DynInput::from_typed(3, i),
                 })
                 .collect::<Vec<fedimint_api::core::DynInput>>();
             let erased_outputs = outputs
@@ -251,6 +254,7 @@ pub mod legacy {
                     Output::LN(o) => {
                         core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o)
                     }
+                    Output::Pool(o) => core::DynOutput::from_typed(3, o),
                 })
                 .collect::<Vec<fedimint_api::core::DynOutput>>();
 
@@ -314,6 +318,7 @@ pub mod legacy {
                         Input::LN(input) => {
                             core::DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
                         }
+                        Input::Pool(i) => core::DynInput::from_typed(3, i),
                     })
                     .collect(),
                 outputs: self
@@ -329,6 +334,7 @@ pub mod legacy {
                         Output::LN(output) => {
                             core::DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
                         }
+                        Output::Pool(i) => core::DynOutput::from_typed(3, i),
                     })
                     .collect(),
                 signature: self.signature,

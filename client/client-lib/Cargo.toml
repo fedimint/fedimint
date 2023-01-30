@@ -44,6 +44,7 @@ tracing = "0.1.37"
 jsonrpsee-types = "0.16.0"
 jsonrpsee-core = { version = "0.16.2", features = [ "client" ] }
 serde_json = "1.0.91"
+stabilitypool = { path = "../../modules/stabilitypool" }
 url = { version = "2.3.1", features = ["serde"] }
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 

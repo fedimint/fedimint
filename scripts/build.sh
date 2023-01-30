@@ -67,11 +67,28 @@ wait
 # Move the client config to root dir
 mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 
+# Define our own clients
+mkdir $FM_CFG_DIR/seeker
+mkdir $FM_CFG_DIR/provider_a
+mkdir $FM_CFG_DIR/provider_b
+cp $FM_CFG_DIR/client.json $FM_CFG_DIR/seeker/client.json
+cp $FM_CFG_DIR/client.json $FM_CFG_DIR/provider_a/client.json
+cp $FM_CFG_DIR/client.json $FM_CFG_DIR/provider_b/client.json
+
 # Define clients
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"
 export FM_LN2="lightning-cli --network regtest --lightning-dir=$FM_LN2_DIR"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
+
+export FM_S_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR/seeker"
+export FM_A_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR/provider_a"
+export FM_B_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR/provider_b"
+
+# export FM_MINT_CLIENT
+# export FM_S_CLIENT
+# export FM_P_CLIENT
+
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
 export FM_GATEWAY_CLI="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
 export FM_DB_DUMP="$FM_BIN_DIR/fedimint-dbdump"

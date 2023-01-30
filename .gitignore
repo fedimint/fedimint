@@ -8,3 +8,4 @@ it
 .tmpenv
 .direnv
 .vscode
+misc/offline_oracle

@@ -17,6 +17,7 @@ use fedimint_wallet::WalletGen;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use ring::aead::LessSafeKey;
+use stabilitypool::PoolConfigGenerator;
 use tokio_rustls::rustls;
 use url::Url;
 
@@ -88,6 +89,7 @@ pub async fn run_dkg(
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),
+        DynModuleGen::from(PoolConfigGenerator),
     ]);
 
     let result = ServerConfig::distributed_gen(

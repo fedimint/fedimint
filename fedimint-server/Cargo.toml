@@ -28,6 +28,7 @@ mint-client = { path = "../client/client-lib" }
 fedimint-api = { path = "../fedimint-api" }
 fedimint-core = { path = "../fedimint-core" }
 fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native"] }
+stabilitypool = { path = "../modules/stabilitypool" }
 rand = "0.8"
 rayon = "1.6.1"
 rcgen = "=0.10.0"

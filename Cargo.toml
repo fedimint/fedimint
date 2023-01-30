@@ -25,6 +25,7 @@ members = [
     "modules/fedimint-mint",
     "modules/fedimint-ln",
     "modules/fedimint-wallet",
+    "modules/stabilitypool",
     "integrationtests",
     "fedimint-build",
 ]

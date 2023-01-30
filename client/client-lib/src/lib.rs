@@ -2,6 +2,7 @@ pub mod api;
 pub mod db;
 pub mod ln;
 pub mod mint;
+pub mod pool;
 pub mod query;
 pub mod transaction;
 pub mod utils;
@@ -72,6 +73,7 @@ use rand::prelude::*;
 use rand::{thread_rng, CryptoRng, Rng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
+use stabilitypool::config::PoolConfigClient;
 use thiserror::Error;
 use threshold_crypto::PublicKey;
 use tracing::debug;
@@ -244,6 +246,20 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .expect("needs wallet module client config")
                 .1,
 
+            context: self.context.clone(),
+        }
+    }
+
+    pub fn pool_client(&self) -> pool::PoolClient {
+        let config = self
+            .config
+            .as_ref()
+            .get_first_module_by_kind::<PoolConfigClient>("stabilitypool")
+            .expect("needs stabilitypool module client config")
+            .1;
+        pool::PoolClient {
+            secret: self.root_secret.child_key(ChildId(3)),
+            config,
             context: self.context.clone(),
         }
     }
@@ -670,6 +686,44 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 }
 
 impl Client<UserClientConfig> {
+    pub async fn pool_deposit(
+        &self,
+        amount: Amount,
+        rng: impl CryptoRng + RngCore + Clone,
+    ) -> Result<OutPoint> {
+        let mut tx = TransactionBuilder::default();
+
+        tx.output(Output::Pool(stabilitypool::AccountDeposit {
+            account: self.pool_client().account_key().x_only_public_key().0,
+            amount,
+        }));
+
+        let (mut keys, input) = self.mint_client().select_input(amount).await?;
+        tx.input(&mut keys, input);
+
+        let txid = self.submit_tx_with_change(tx, rng).await?;
+        Ok(OutPoint { txid, out_idx: 0 })
+    }
+
+    pub async fn pool_withdraw(
+        &self,
+        amount: Amount,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<TransactionId> {
+        let mut tx = TransactionBuilder::default();
+        let kp = self.pool_client().account_key();
+
+        tx.input(
+            &mut vec![kp],
+            Input::Pool(stabilitypool::AccountWithdrawal {
+                account: kp.x_only_public_key().0,
+                amount,
+            }),
+        );
+
+        self.submit_tx_with_change(tx, &mut rng).await
+    }
+
     pub async fn fetch_registered_gateways(&self) -> Result<Vec<LightningGateway>> {
         Ok(self.context.api.fetch_gateways().await?)
     }

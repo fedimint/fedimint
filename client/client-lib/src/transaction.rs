@@ -140,6 +140,7 @@ impl TransactionBuilder {
         C: AsRef<ClientConfig> + Clone,
     {
         self.tx.inputs.iter().map(|i| match i {
+            Input::Pool(input) => client.pool_client().input_amount(input),
             Input::Mint(input) => client.mint_client().input_amount(input),
             Input::Wallet(input) => client.wallet_client().input_amount(input),
             Input::LN(input) => client.ln_client().input_amount(input),
@@ -154,6 +155,7 @@ impl TransactionBuilder {
         C: AsRef<ClientConfig> + Clone + 'a,
     {
         self.tx.outputs.iter().map(|o| match o {
+            Output::Pool(output) => client.pool_client().output_amount(output),
             Output::Mint(output) => client.mint_client().output_amount(output),
             Output::Wallet(output) => client.wallet_client().output_amount(output),
             Output::LN(output) => client.ln_client().output_amount(output),

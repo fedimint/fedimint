@@ -148,6 +148,36 @@ pub trait IFederationApi: Debug {
     /// API call to the federation would be inconvenient.
     fn all_members(&self) -> &BTreeSet<PeerId>;
 
+    // async fn pool_account(
+    //     &self,
+    //     _request: secp256k1_zkp::XOnlyPublicKey,
+    // ) -> Result<BalanceResponse, crate::ClientError> {
+    //     unimplemented!()
+    // }
+
+    // async fn pool_staged(
+    //     &self,
+    //     _account_id: secp256k1_zkp::XOnlyPublicKey,
+    // ) -> Result<ActionStaged, crate::ClientError> {
+    //     unimplemented!()
+    // }
+
+    // async fn pool_state(&self) -> Result<stabilitypool::api::State, crate::ClientError> {
+    //     unimplemented!()
+    // }
+
+    // async fn pool_propose(&self, _action: ActionProposed) -> Result<(), crate::ClientError> {
+    //     unimplemented!()
+    // }
+
+    // async fn pool_epoch_outcome(&self, _epoch: u64) -> Result<EpochOutcome, crate::ClientError> {
+    //     unimplemented!()
+    // }
+
+    // async fn pool_staging_epoch(&self) -> Result<u64, crate::ClientError> {
+    //     unimplemented!()
+    // }
+
     /// Make request to a specific federation member by `peer_id`
     async fn request_raw(
         &self,

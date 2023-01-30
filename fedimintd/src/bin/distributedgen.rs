@@ -14,6 +14,7 @@ use fedimint_wallet::WalletGen;
 use fedimintd::distributedgen::{create_cert, run_dkg};
 use fedimintd::encrypt::*;
 use fedimintd::*;
+use stabilitypool::PoolConfigGenerator;
 use tokio_rustls::rustls;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -135,6 +136,7 @@ async fn main() -> anyhow::Result<()> {
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),
+        DynModuleGen::from(PoolConfigGenerator),
     ]);
 
     let mut task_group = TaskGroup::new();

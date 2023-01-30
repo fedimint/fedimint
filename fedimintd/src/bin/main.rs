@@ -17,6 +17,7 @@ use fedimintd::ui::run_ui;
 use fedimintd::ui::UiMessage;
 use fedimintd::*;
 use futures::FutureExt;
+use stabilitypool::PoolConfigGenerator;
 use tokio::select;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
@@ -192,6 +193,18 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
     let salt_path = opts.data_dir.join(SALT_FILE);
     let key = get_key(opts.password, salt_path)?;
     let cfg = read_server_configs(&key, opts.data_dir.clone())?;
+
+    let local_task_set = tokio::task::LocalSet::new();
+    let _guard = local_task_set.enter();
+
+    task_group.install_kill_handler();
+
+    let module_inits = ModuleGenRegistry::from(vec![
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
+        DynModuleGen::from(PoolConfigGenerator),
+    ]);
 
     let decoders = module_inits.decoders(cfg.iter_module_instances())?;
 

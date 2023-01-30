@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Calls the CLI to peg user client into the federation
-echo "Run with 'source ./scripts/pegin.sh [amount] [use_gateway]"
+echo "Run with 'source ./scripts/pegin.sh [amount] [use_gateway] [client]"
 
 set -euo pipefail
 source ./scripts/lib.sh
@@ -12,6 +12,7 @@ export POLL_INTERVAL
 
 PEG_IN_AMOUNT=${PEG_IN_AMOUNT:-$1}
 USE_GATEWAY=${2:-0}
+FM_MINT_CLIENT=${3:-$FM_MINT_CLIENT}
 
 FINALITY_DELAY=$(get_finality_delay)
 echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"

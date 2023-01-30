@@ -51,6 +51,7 @@ pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
 pub const LEGACY_HARDCODED_INSTANCE_ID_LN: ModuleInstanceId = 0;
 pub const LEGACY_HARDCODED_INSTANCE_ID_MINT: ModuleInstanceId = 1;
 pub const LEGACY_HARDCODED_INSTANCE_ID_WALLET: ModuleInstanceId = 2;
+pub const LEGACY_HARDCODED_INSTANCE_ID_POOL: ModuleInstanceId = 3;
 
 /// A type of a module
 ///
