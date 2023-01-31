@@ -614,6 +614,11 @@
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
 <a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple implementations
 
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -623,6 +628,7 @@
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>futures::Stream;
@@ -790,7 +796,7 @@
         <span class="kw">let </span>tls_conn = connector
             .connect(
                 fake_domain,
-                TcpStream::connect(parse_host_port(destination)).<span class="kw">await</span><span class="question-mark">?</span>,
+                TcpStream::connect(parse_host_port(destination)<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -839,11 +845,15 @@
 }
 
 <span class="doccomment">/// Parses the host and port from a url
-</span><span class="kw">pub fn </span>parse_host_port(url: Url) -&gt; String {
-    <span class="kw">let </span>host = url.host_str().expect(<span class="string">&quot;Expected host to exist&quot;</span>);
-    <span class="kw">let </span>port = url.port().expect(<span class="string">&quot;Expected port to exist&quot;</span>);
+</span><span class="kw">pub fn </span>parse_host_port(url: Url) -&gt; anyhow::Result&lt;String&gt; {
+    <span class="kw">let </span>host = url
+        .host_str()
+        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Missing host in {url}&quot;</span>))<span class="question-mark">?</span>;
+    <span class="kw">let </span>port = url
+        .port()
+        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Missing port in {url}&quot;</span>))<span class="question-mark">?</span>;
 
-    <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, host, port)
+    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, host, port))
 }
 
 <span class="doccomment">/// Fake network stack used in tests
@@ -902,7 +912,7 @@
     {
         <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: Url, _peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>clients_lock = <span class="self">self</span>.clients.lock().<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>parse_host_port(destination)) {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>parse_host_port(destination)<span class="question-mark">?</span>) {
                 <span class="kw">let </span>(<span class="kw-2">mut </span>stream_our, stream_theirs) = tokio::io::duplex(<span class="number">43_689</span>);
                 client.send(stream_theirs).<span class="kw">await</span>.unwrap();
                 <span class="kw">let </span>peer = do_handshake(<span class="self">self</span>.id, <span class="kw-2">&amp;mut </span>stream_our).<span class="kw">await</span>.unwrap();

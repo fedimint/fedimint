@@ -826,7 +826,7 @@
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{bail, format_err};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -1511,7 +1511,7 @@
         max_denomination: Amount,
         base_port: u16,
         federation_name: <span class="kw-2">&amp;</span>str,
-    ) -&gt; HashMap&lt;PeerId, ServerConfigParams&gt; {
+    ) -&gt; anyhow::Result&lt;HashMap&lt;PeerId, ServerConfigParams&gt;&gt; {
         <span class="kw">let </span>keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers
             .iter()
             .map(|peer| {
@@ -1540,12 +1540,12 @@
         peers
             .iter()
             .map(|peer| {
-                <span class="kw">let </span>bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url);
-                <span class="kw">let </span>bind_api = parse_host_port(peer_params[peer].clone().api_url);
+                <span class="kw">let </span>bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url)<span class="question-mark">?</span>;
+                <span class="kw">let </span>bind_api = parse_host_port(peer_params[peer].clone().api_url)<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>params: ServerConfigParams = <span class="self">Self</span>::gen_params(
-                    bind_p2p.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
-                    bind_api.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
+                    bind_p2p.parse().context(<span class="string">&quot;when parsing bind_p2p&quot;</span>)<span class="question-mark">?</span>,
+                    bind_api.parse().context(<span class="string">&quot;when parsing bind_api&quot;</span>)<span class="question-mark">?</span>,
                     keys[peer].<span class="number">1</span>.clone(),
                     <span class="kw-2">*</span>peer,
                     max_denomination,
@@ -1554,9 +1554,9 @@
                     bitcoin::network::constants::Network::Regtest,
                     <span class="number">10</span>,
                 );
-                (<span class="kw-2">*</span>peer, params)
+                <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))
             })
-            .collect()
+            .collect::&lt;anyhow::Result&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;&gt;()
     }
 }
 
