@@ -40,6 +40,11 @@ A Lightning extension / plugin service that provides all the necessary Lightning
   - **TODO:** help us implement a similar extension for [Sensei](https://github.com/L2-Technology/sensei) nodes
   - **TODO:** help us implement a similar extension for _your-favorite-variant_ lightning node
 
+> **Note**
+>
+> We are currenly transitioning from a monolith `ln_gateway` extension that runs all the gateway business logic inside of a cln extension.
+> `ln_gateway` is equivalent to `Gatewayd` and `gateway-cln-extension` packaged into the same binary to run inside a CLN node as a plugin.
+
 ---
 
 ## Interacting with the Gateway
