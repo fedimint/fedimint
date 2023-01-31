@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
@@ -687,7 +687,7 @@ impl ServerConfigParams {
         max_denomination: Amount,
         base_port: u16,
         federation_name: &str,
-    ) -> HashMap<PeerId, ServerConfigParams> {
+    ) -> anyhow::Result<HashMap<PeerId, ServerConfigParams>> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
             .map(|peer| {
@@ -716,12 +716,12 @@ impl ServerConfigParams {
         peers
             .iter()
             .map(|peer| {
-                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url);
-                let bind_api = parse_host_port(peer_params[peer].clone().api_url);
+                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url)?;
+                let bind_api = parse_host_port(peer_params[peer].clone().api_url)?;
 
                 let params: ServerConfigParams = Self::gen_params(
-                    bind_p2p.parse().expect("Should parse"),
-                    bind_api.parse().expect("Should parse"),
+                    bind_p2p.parse().context("when parsing bind_p2p")?,
+                    bind_api.parse().context("when parsing bind_api")?,
                     keys[peer].1.clone(),
                     *peer,
                     max_denomination,
@@ -730,9 +730,9 @@ impl ServerConfigParams {
                     bitcoin::network::constants::Network::Regtest,
                     10,
                 );
-                (*peer, params)
+                Ok((*peer, params))
             })
-            .collect()
+            .collect::<anyhow::Result<HashMap<_, _>>>()
     }
 }
 

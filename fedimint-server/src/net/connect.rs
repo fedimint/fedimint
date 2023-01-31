@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use anyhow::format_err;
 use async_trait::async_trait;
 use fedimint_api::PeerId;
 use futures::Stream;
@@ -174,7 +175,7 @@ where
         let tls_conn = connector
             .connect(
                 fake_domain,
-                TcpStream::connect(parse_host_port(destination)).await?,
+                TcpStream::connect(parse_host_port(destination)?).await?,
             )
             .await?;
 
@@ -223,11 +224,15 @@ where
 }
 
 /// Parses the host and port from a url
-pub fn parse_host_port(url: Url) -> String {
-    let host = url.host_str().expect("Expected host to exist");
-    let port = url.port().expect("Expected port to exist");
+pub fn parse_host_port(url: Url) -> anyhow::Result<String> {
+    let host = url
+        .host_str()
+        .ok_or_else(|| format_err!("Missing host in {url}"))?;
+    let port = url
+        .port()
+        .ok_or_else(|| format_err!("Missing port in {url}"))?;
 
-    format!("{}:{}", host, port)
+    Ok(format!("{}:{}", host, port))
 }
 
 /// Fake network stack used in tests
@@ -286,7 +291,7 @@ pub mod mock {
     {
         async fn connect_framed(&self, destination: Url, _peer: PeerId) -> ConnectResult<M> {
             let mut clients_lock = self.clients.lock().await;
-            if let Some(client) = clients_lock.get_mut(&parse_host_port(destination)) {
+            if let Some(client) = clients_lock.get_mut(&parse_host_port(destination)?) {
                 let (mut stream_our, stream_theirs) = tokio::io::duplex(43_689);
                 client.send(stream_theirs).await.unwrap();
                 let peer = do_handshake(self.id, &mut stream_our).await.unwrap();
