@@ -219,12 +219,18 @@ impl MintClient {
     async fn fetch_epochs(
         &self,
         epoch_range: RangeInclusive<u64>,
+        divisor: u64,
+        reminder: u64,
         sender: mpsc::Sender<api::FederationResult<SignedEpochOutcome>>,
         task_handle: &TaskHandle,
     ) {
-        for epoch in epoch_range {
+        for epoch in epoch_range.clone() {
             if task_handle.is_shutting_down() {
                 break;
+            }
+
+            if (epoch - *epoch_range.start()) % divisor != reminder {
+                continue;
             }
 
             info!(epoch, "Fetching epoch");
@@ -272,19 +278,28 @@ impl MintClient {
             end_epoch, "Recovering from snapshot"
         );
 
-        // Since fetching epochs will be slow, we start a dedicated task to do it
-        let (tx, mut rx) = mpsc::channel(10);
-        let self_clone = self.clone();
-        task_group
-            .spawn("fetch epochs", {
-                let epoch_range = epoch_range.clone();
-                |task_handle| async move {
-                    self_clone
-                        .fetch_epochs(epoch_range, tx, &task_handle)
-                        .await
-                }
-            })
-            .await;
+        // Since fetching epochs has high latency, we start a handful dedicated task to do it.
+        // Each will fetch epochs where `epoch - epoch_range.start % num_threads == task_i`,
+        // so task 0 returns epoch first, then 1, ... and so on.
+        let num_threads = 8;
+
+        let mut rx_channels = vec![];
+        for task_i in 0..num_threads {
+            let (tx, rx) = mpsc::channel(1);
+            let self_clone = self.clone();
+            task_group
+                .spawn("fetch epochs", {
+                    let epoch_range = epoch_range.clone();
+                    move |task_handle| async move {
+                        self_clone
+                            .fetch_epochs(epoch_range, num_threads, task_i, tx, &task_handle)
+                            .await
+                    }
+                })
+                .await;
+
+            rx_channels.push(rx);
+        }
 
         let mut tracker = EcashRecoveryTracker::from_backup(
             backup,
@@ -294,11 +309,14 @@ impl MintClient {
             self.config.peer_tbs_pks.clone(),
         );
 
+        let mut rx_channel_idx = 0;
         for epoch in epoch_range {
             // if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
             info!(epoch, "Awaiting epoch");
-            let epoch_history = match rx.recv().await {
+            let rx_idx = rx_channel_idx as usize;
+            rx_channel_idx = (rx_channel_idx + 1) % num_threads;
+            let epoch_history = match rx_channels[rx_idx].recv().await {
                 Some(Ok(o)) => o,
                 Some(Err(e)) => return Err(e.into()),
                 None => return Ok(Err(Cancelled)),

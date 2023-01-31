@@ -1080,6 +1080,24 @@ async fn ecash_can_be_recovered() -> Result<()> {
             .unwrap();
         assert_eq!(user_send.total_notes().await, sats(1500));
 
+        // Generate a lot of epochs, to test multi-threaded fetching
+        // and possibly other things that come with more epochs to
+        // process.
+        for _ in 0..10 {
+            let ecash = fed.spend_ecash(&user_send, sats(10)).await;
+            user_receive.client.reissue(ecash, rng()).await.unwrap();
+            fed.run_consensus_epochs(2).await; // process transaction + sign new notes
+        }
+
+        user_send
+            .client
+            .mint_client()
+            .restore_ecash_from_federation(2, &mut task_group)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(user_send.total_notes().await, sats(1400));
+
         task_group.join_all(None).await.unwrap();
     })
     .await
