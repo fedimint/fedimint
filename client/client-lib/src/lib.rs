@@ -74,7 +74,7 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
-use tracing::debug;
+use tracing::{debug, info, instrument};
 use url::Url;
 
 use crate::db::ClientSecretKey;
@@ -1201,12 +1201,15 @@ impl Client<GatewayClientConfig> {
     ///     It is included inside a bolt11 invoice and should match the offer hash
     /// * `htlc_amount` - amount from the htlc the gateway wants to pay.
     ///     Should be less than or equal to the offer amount depending on gateway fee policy
+    #[instrument(name = "Client::buy_preimage_offer", skip(self, rng))]
     pub async fn buy_preimage_offer(
         &self,
         payment_hash: &bitcoin_hashes::sha256::Hash,
         htlc_amount: &Amount,
         rng: impl RngCore + CryptoRng,
     ) -> Result<(OutPoint, ContractId)> {
+        // first span to show the span start
+        info!("buy_preimage_offer");
         // Fetch offer for this payment hash
         let offer: IncomingContractOffer = self.ln_client().get_offer(*payment_hash).await?;
 
@@ -1247,6 +1250,7 @@ impl Client<GatewayClientConfig> {
     }
 
     /// Claw back funds after incoming contract that had invalid preimage
+    #[instrument(name = "Client::refund_incoming_contract", skip(self, rng))]
     pub async fn refund_incoming_contract(
         &self,
         contract_id: ContractId,
