@@ -222,9 +222,9 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
             }
         },
         api_endpoint! {
-            "/epoch",
+            "/fetch_epoch_count",
             async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> u64 {
-                Ok(fedimint.get_last_epoch().await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?)
+                Ok(fedimint.get_epoch_count().await)
             }
         },
         api_endpoint! {

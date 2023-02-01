@@ -368,7 +368,7 @@ pub trait GlobalFederationApi {
         decoders: &ModuleDecoderRegistry,
     ) -> FederationResult<SignedEpochOutcome>;
 
-    async fn fetch_last_epoch(&self) -> FederationResult<u64>;
+    async fn fetch_epoch_count(&self) -> FederationResult<u64>;
 
     async fn fetch_output_outcome<R>(
         &self,
@@ -457,8 +457,8 @@ where
         .await
     }
 
-    async fn fetch_last_epoch(&self) -> FederationResult<u64> {
-        self.request_eventually_consistent("/epoch".to_owned(), erased_no_param())
+    async fn fetch_epoch_count(&self) -> FederationResult<u64> {
+        self.request_eventually_consistent("/fetch_epoch_count".to_owned(), erased_no_param())
             .await
     }
 

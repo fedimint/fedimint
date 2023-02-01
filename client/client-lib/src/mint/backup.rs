@@ -10,7 +10,7 @@
 use std::{
     cmp::{max, Reverse},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::RangeInclusive,
+    ops::Range,
 };
 
 use anyhow::Result;
@@ -138,7 +138,7 @@ impl MintClient {
             .collect();
 
         // Use the newest (highest epoch)
-        responses.sort_by_key(|backup| Reverse(backup.epoch));
+        responses.sort_by_key(|backup| Reverse(backup.epoch_count));
 
         Ok(responses.into_iter().next())
     }
@@ -170,7 +170,7 @@ impl MintClient {
 
     async fn prepare_plaintext_ecash_backup(&self) -> Result<PlaintextEcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning
-        let epoch = self.context.api.fetch_last_epoch().await?;
+        let epoch_count = self.context.api.fetch_epoch_count().await?;
 
         let mut dbtx = self.start_dbtx().await;
         let notes = self.get_available_notes(&mut dbtx).await;
@@ -191,7 +191,7 @@ impl MintClient {
             notes,
             pending_notes,
             next_note_idx,
-            epoch,
+            epoch_count,
         })
     }
 
@@ -217,7 +217,7 @@ impl MintClient {
     /// TODO: could be internal to recovery_loop?
     fn fetch_epochs_stream(
         &self,
-        epoch_range: RangeInclusive<u64>,
+        epoch_range: Range<u64>,
     ) -> impl futures::Stream<
         Item = (
             u64,
@@ -246,18 +246,17 @@ impl MintClient {
         backup: PlaintextEcashBackup,
         gap_limit: usize,
     ) -> Result<Cancellable<EcashRecoveryFinalState>> {
-        let end_epoch = match self.context.api.fetch_last_epoch().await {
+        let current_epoch_count = match self.context.api.fetch_epoch_count().await {
             Ok(v) => v,
             Err(e) => {
                 return Err(e.into());
             }
         };
-        let epoch_range = backup.epoch..=end_epoch;
+        // TODO: This -1 is probably not necessary, as it should be enough to start from the exact epoch the snapshot was taken, but it is harmless to start from any epoch in the past, and starting a bit earlier makes it more robust in face of some inconsistency that we've missed.
+        let start_epoch = backup.epoch_count.saturating_sub(1);
+        let epoch_range = start_epoch..current_epoch_count;
 
-        info!(
-            start_epoch = backup.epoch,
-            end_epoch, "Recovering from snapshot"
-        );
+        info!(start_epoch, current_epoch_count, "Recovering from snapshot");
 
         let mut tracker = EcashRecoveryTracker::from_backup(
             backup,
@@ -306,7 +305,7 @@ impl MintClient {
 pub struct PlaintextEcashBackup {
     notes: TieredMulti<SpendableNote>,
     pending_notes: Vec<(OutputFinalizationKey, NoteIssuanceRequests)>,
-    epoch: u64,
+    epoch_count: u64,
     next_note_idx: Tiered<NoteIndex>,
 }
 
@@ -316,7 +315,7 @@ impl PlaintextEcashBackup {
         Self {
             notes: TieredMulti::default(),
             pending_notes: vec![],
-            epoch: 0,
+            epoch_count: 0,
             next_note_idx: Tiered::default(),
         }
     }
