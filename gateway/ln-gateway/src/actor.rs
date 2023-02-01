@@ -66,6 +66,7 @@ impl GatewayActor {
         }
     }
 
+    #[instrument(skip_all, fields(?payment_hash, ?amount), ret, err)]
     pub async fn buy_preimage_offer(
         &self,
         payment_hash: &sha256::Hash,
@@ -85,13 +86,13 @@ impl GatewayActor {
         Ok(preimage)
     }
 
-    #[instrument(skip_all, fields(%contract_id))]
+    #[instrument(skip_all, fields(%contract_id), err)]
     pub async fn pay_invoice(
         &self,
         ln_rpc: Arc<dyn LnRpc>,
         contract_id: ContractId,
     ) -> Result<OutPoint> {
-        debug!("Fetching contract");
+        info!("Fetching contract");
         let rng = rand::rngs::OsRng;
         let contract_account = self.client.fetch_outgoing_contract(contract_id).await?;
 
@@ -109,7 +110,7 @@ impl GatewayActor {
             }
         };
 
-        debug!(
+        info!(
             account = ?contract_account,
             "Fetched and validated contract account"
         );
@@ -144,7 +145,7 @@ impl GatewayActor {
                 Ok(outpoint)
             }
             Err(e) => {
-                warn!("Invoice payment failed: {}. Aborting", e);
+                warn!("Invoice payment failed. Aborting");
                 // FIXME: combine both errors?
                 self.client.abort_outgoing_payment(contract_id).await?;
                 Err(e)
@@ -152,11 +153,13 @@ impl GatewayActor {
         }
     }
 
+    #[instrument(skip(self), ret, err)]
     pub async fn buy_preimage_internal(
         &self,
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
     ) -> Result<Preimage> {
+        info!("buy_preimage_internal");
         self.fetch_all_notes().await;
 
         let mut rng = rand::rngs::OsRng;
@@ -165,22 +168,20 @@ impl GatewayActor {
             .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
             .await?;
 
-        debug!("Awaiting decryption of preimage of hash {}", payment_hash);
+        info!("Awaiting decryption of preimage");
         match self.client.await_preimage_decryption(out_point).await {
-            Ok(preimage) => {
-                debug!("Decrypted preimage {:?}", preimage);
-                Ok(preimage)
-            }
-            Err(e) => {
-                warn!("Failed to decrypt preimage. Now requesting a refund: {}", e);
+            Ok(preimage) => Ok(preimage),
+            Err(error) => {
+                warn!(%error, "Failed to decrypt preimage. Now requesting a refund");
                 self.client
                     .refund_incoming_contract(contract_id, rng)
                     .await?;
-                Err(LnGatewayError::ClientError(e))
+                Err(LnGatewayError::ClientError(error))
             }
         }
     }
 
+    #[instrument(skip_all, fields(?invoice, ?payment_params), ret, err)]
     pub async fn buy_preimage_external(
         &self,
         ln_rpc: Arc<dyn LnRpc>,
@@ -195,10 +196,7 @@ impl GatewayActor {
             )
             .await
         {
-            Ok(preimage) => {
-                debug!(?preimage, "Successfully paid LN invoice");
-                Ok(preimage)
-            }
+            Ok(preimage) => Ok(preimage),
             Err(e) => {
                 warn!("LN payment failed, aborting");
                 Err(LnGatewayError::CouldNotRoute(e))
