@@ -1874,7 +1874,7 @@
     }
 
     <span class="attr">#[allow(clippy::needless_collect)]
-    #[tokio::test]
+    #[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_parallel_issuance() {
         <span class="kw">const </span>ITERATIONS: usize = <span class="number">10_000</span>;
 
