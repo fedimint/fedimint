@@ -46,8 +46,8 @@ use fedimint_api::server::DynServerModule;
 use fedimint_api::task::sleep;
 use fedimint_api::task::{TaskGroup, TaskHandle};
 use fedimint_api::{
-    filter_prefixes_by_name, plugin_types_trait_impl, push_db_key_items, push_db_pair_items,
-    Feerate, NumPeers, OutPoint, PeerId, ServerModule,
+    plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Feerate, NumPeers, OutPoint,
+    PeerId, ServerModule,
 };
 use fedimint_bitcoind::DynBitcoindRpc;
 use impl_tools::autoimpl;
@@ -366,15 +366,16 @@ impl ModuleGen for WalletGen {
         serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
     }
 
-    async fn dump_module_database(
+    async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut wallet: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
-        for table in DbKeyPrefix::iter() {
-            filter_prefixes_by_name!(table, prefix_names);
-
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
             match table {
                 DbKeyPrefix::BlockHash => {
                     push_db_key_items!(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, "Blocks");

@@ -709,15 +709,6 @@ impl DecodingError {
 }
 
 #[macro_export]
-macro_rules! filter_prefixes_by_name {
-    ($prefix:ident, $prefixes:ident) => {
-        if !$prefixes.is_empty() && !$prefixes.contains(&$prefix.to_string().to_lowercase()) {
-            continue;
-        }
-    };
-}
-
-#[macro_export]
 macro_rules! push_db_pair_items {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
         let db_items = $dbtx.find_by_prefix(&$prefix_type).await;

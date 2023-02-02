@@ -140,7 +140,7 @@ impl ModuleGen for DummyConfigGenerator {
         serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash()
     }
 
-    async fn dump_module_database(
+    async fn dump_database(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
         _prefix_names: Vec<String>,

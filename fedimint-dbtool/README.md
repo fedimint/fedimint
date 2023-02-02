@@ -17,7 +17,7 @@ Commands:
   list    List all key-value pairs where the key begins with `prefix`
   write   Write a key-value pair to the database, overwriting the previous value if present
   delete  Delete a single entry from the database identified by `key`
-  dump    Dump a the database (or a subset) to the console as a json serialized string
+  dump    Dump the database (or a subset) to the console as a json serialized string
   help    Print this message or the help of the given subcommand(s)
 
 Arguments:

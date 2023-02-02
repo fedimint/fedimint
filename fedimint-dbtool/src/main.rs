@@ -39,6 +39,10 @@ enum DbCommand {
         #[arg(value_parser = hex_parser)]
         key: Bytes,
     },
+    /// Dump a subset of the specified database and serialize the retrieved data to JSON.
+    /// Module and prefix are used to specify which subset of the database to dump.
+    /// Password is used to decrypt the server's configuration file. If dumping the client database,
+    /// the password can be an arbitrary string.
     Dump {
         cfg_dir: PathBuf,
         #[arg(env = "FM_PASSWORD")]
@@ -107,7 +111,7 @@ async fn main() {
                 None => Vec::new(),
             };
 
-            let prefixes = match prefixes {
+            let prefix_names = match prefixes {
                 Some(db_prefixes) => db_prefixes
                     .split(',')
                     .map(|s| s.to_string().to_lowercase())
@@ -116,7 +120,7 @@ async fn main() {
             };
 
             let mut dbdump =
-                DatabaseDump::new(cfg_dir, options.database, password, modules, prefixes);
+                DatabaseDump::new(cfg_dir, options.database, password, modules, prefix_names);
             dbdump.dump_database().await;
         }
     }

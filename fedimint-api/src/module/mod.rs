@@ -302,7 +302,7 @@ pub trait IModuleGen: Debug {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
-    async fn dump_module_database(
+    async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
@@ -360,7 +360,7 @@ pub trait ModuleGen: Debug + Sized {
 
     fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
 
-    async fn dump_module_database(
+    async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
@@ -434,12 +434,12 @@ where
         <Self as ModuleGen>::validate_config(self, identity, config)
     }
 
-    async fn dump_module_database(
+    async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        <Self as ModuleGen>::dump_module_database(self, dbtx, prefix_names).await
+        <Self as ModuleGen>::dump_database(self, dbtx, prefix_names).await
     }
 }
 

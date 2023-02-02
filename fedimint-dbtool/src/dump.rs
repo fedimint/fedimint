@@ -5,7 +5,6 @@ use fedimint_api::{
     config::ModuleGenRegistry,
     db::DatabaseTransaction,
     encoding::Encodable,
-    filter_prefixes_by_name,
     module::{DynModuleGen, __reexports::serde_json, registry::ModuleDecoderRegistry},
     push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde,
 };
@@ -123,7 +122,7 @@ impl<'a> DatabaseDump<'a> {
                 }
 
                 let module_serialized = init
-                    .dump_module_database(
+                    .dump_database(
                         &mut self.read_only.with_module_prefix(*module_id),
                         self.prefixes.clone(),
                     )
@@ -152,11 +151,12 @@ impl<'a> DatabaseDump<'a> {
     async fn retrieve_consensus_data(&mut self) {
         let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
-        let prefixes = &self.prefixes;
+        let prefix_names = &self.prefixes;
 
-        for table in ConsensusRange::DbKeyPrefix::iter() {
-            filter_prefixes_by_name!(table, prefixes);
-
+        let filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
             match table {
                 ConsensusRange::DbKeyPrefix::ProposedTransaction => {
                     push_db_pair_items_no_serde!(
@@ -237,10 +237,11 @@ impl<'a> DatabaseDump<'a> {
     async fn retrieve_ln_client_data(&mut self) {
         let mut ln_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
-        let prefixes = &self.prefixes;
-        for table in ClientLightningRange::DbKeyPrefix::iter() {
-            filter_prefixes_by_name!(table, prefixes);
-
+        let prefix_names = &self.prefixes;
+        let filtered_prefixes = ClientLightningRange::DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
             match table {
                 ClientLightningRange::DbKeyPrefix::ConfirmedInvoice => {
                     push_db_pair_items!(
@@ -303,10 +304,11 @@ impl<'a> DatabaseDump<'a> {
     async fn retrieve_mint_client_data(&mut self) {
         let mut mint_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
-        let prefixes = &self.prefixes;
-        for table in ClientMintRange::DbKeyPrefix::iter() {
-            filter_prefixes_by_name!(table, prefixes);
-
+        let prefix_names = &self.prefixes;
+        let filtered_prefixes = ClientMintRange::DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
             match table {
                 ClientMintRange::DbKeyPrefix::Note => {
                     push_db_pair_items!(
@@ -369,10 +371,11 @@ impl<'a> DatabaseDump<'a> {
     async fn retrieve_wallet_client_data(&mut self) {
         let mut wallet_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
-        let prefixes = &self.prefixes;
-        for table in ClientWalletRange::DbKeyPrefix::iter() {
-            filter_prefixes_by_name!(table, prefixes);
-
+        let prefix_names = &self.prefixes;
+        let filtered_prefixes = ClientWalletRange::DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
             match table {
                 ClientWalletRange::DbKeyPrefix::PegIn => {
                     push_db_pair_items!(
@@ -391,13 +394,16 @@ impl<'a> DatabaseDump<'a> {
             .insert("Client Wallet".to_string(), Box::new(wallet_client));
     }
 
+    /// Iterates through each of the prefixes within the client range and retrieves
+    /// the corresponding data.
     async fn retrieve_client_data(&mut self) {
         let mut client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let prefixes = &self.prefixes;
+        let prefix_names = &self.prefixes;
+        let filtered_prefixes = ClientRange::DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
 
-        for table in ClientRange::DbKeyPrefix::iter() {
-            filter_prefixes_by_name!(table, prefixes);
-
+        for table in filtered_prefixes {
             match table {
                 ClientRange::DbKeyPrefix::ClientSecret => {
                     let secret = self
