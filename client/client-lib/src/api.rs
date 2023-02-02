@@ -13,6 +13,7 @@ use fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
+use fedimint_api::fmt_utils::AbbreviateDebug;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::sleep;
 use fedimint_api::task::{RwLock, RwLockWriteGuard};
@@ -217,7 +218,10 @@ pub trait FederationApiExt: IFederationApi {
             futures.push(Box::pin(async {
                 PeerResponse {
                     peer: *peer_id,
-                    result: self.request_raw(*peer_id, &method, &params).await,
+                    result: self
+                        .request_raw(*peer_id, &method, &params)
+                        .await
+                        .map(AbbreviateDebug),
                 }
             }));
         }
@@ -230,12 +234,12 @@ pub trait FederationApiExt: IFederationApi {
         let max_delay_ms = 1000;
         loop {
             let response = futures.next().await;
-            trace!(?response, method, ?params, "Received member response");
+            trace!(?response, method, params = ?AbbreviateDebug(params.as_slice()), "Received member response");
             match response {
                 Some(PeerResponse { peer, result }) => {
                     let result: MemberResult<MemberRet> =
                         result.map_err(MemberError::Rpc).and_then(|o| {
-                            serde_json::from_value::<MemberRet>(o)
+                            serde_json::from_value::<MemberRet>(o.0)
                                 .map_err(|e| MemberError::ResponseDeserialization(e.into()))
                         });
 
@@ -267,7 +271,8 @@ pub trait FederationApiExt: IFederationApi {
                                             peer: retry_peer,
                                             result: self
                                                 .request_raw(retry_peer, method, params)
-                                                .await,
+                                                .await
+                                                .map(AbbreviateDebug),
                                         }
                                     }
                                 }));
