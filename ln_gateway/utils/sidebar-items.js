@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["retry","Retry an operation util the operation succeeds, OR The maximum number of attempts are made without success"]]};
+window.SIDEBAR_ITEMS = {"fn":[["retry","Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the supplied `Duration` `interval` between attempts"]]};
