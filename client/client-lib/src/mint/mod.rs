@@ -897,7 +897,7 @@ mod tests {
     }
 
     #[allow(clippy::needless_collect)]
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_parallel_issuance() {
         const ITERATIONS: usize = 10_000;
 
