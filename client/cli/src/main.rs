@@ -12,7 +12,9 @@ use clap::{Parser, Subcommand};
 use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_core::config::{load_from_file, ClientConfig, ModuleGenRegistry};
+use fedimint_core::config::{
+    load_from_file, ClientConfig, ModuleGenRegistry, META_FEDERATION_NAME_KEY,
+};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -533,7 +535,7 @@ async fn handle_command(
                 .config()
                 .as_ref()
                 .meta
-                .get("federation_name")
+                .get(META_FEDERATION_NAME_KEY)
                 .ok_or_else(|| {
                     CliError::from(
                         CliErrorKind::GeneralFederationError,

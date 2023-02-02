@@ -687,7 +687,7 @@ impl ServerConfigParams {
             tls,
             fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
-            meta: BTreeMap::from([("federation_name".to_owned(), federation_name)]),
+            meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
             modules,
         }
     }

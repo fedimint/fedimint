@@ -649,6 +649,10 @@ impl SGroup for G1Projective {
     }
 }
 
+/// Key under which the federation name can be sent to client in the `meta` part
+/// of the config
+pub const META_FEDERATION_NAME_KEY: &str = "federation_name";
+
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
     let file = std::fs::File::open(path)?;
     Ok(serde_json::from_reader(file)?)
