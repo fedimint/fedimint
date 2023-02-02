@@ -1125,6 +1125,11 @@
 <a href="#1125" id="1125">1125</a>
 <a href="#1126" id="1126">1126</a>
 <a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::pin::Pin;
@@ -1140,6 +1145,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
+<span class="kw">use </span>fedimint_api::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::task::sleep;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
@@ -1344,7 +1350,10 @@
             futures.push(Box::pin(<span class="kw">async </span>{
                 PeerResponse {
                     peer: <span class="kw-2">*</span>peer_id,
-                    result: <span class="self">self</span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>params).<span class="kw">await</span>,
+                    result: <span class="self">self
+                        </span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>params)
+                        .<span class="kw">await
+                        </span>.map(AbbreviateDebug),
                 }
             }));
         }
@@ -1357,12 +1366,12 @@
         </span><span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
         <span class="kw">loop </span>{
             <span class="kw">let </span>response = futures.next().<span class="kw">await</span>;
-            <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, <span class="question-mark">?</span>params, <span class="string">&quot;Received member response&quot;</span>);
+            <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, params = <span class="question-mark">?</span>AbbreviateDebug(params.as_slice()), <span class="string">&quot;Received member response&quot;</span>);
             <span class="kw">match </span>response {
                 <span class="prelude-val">Some</span>(PeerResponse { peer, result }) =&gt; {
                     <span class="kw">let </span>result: MemberResult&lt;MemberRet&gt; =
                         result.map_err(MemberError::Rpc).and_then(|o| {
-                            serde_json::from_value::&lt;MemberRet&gt;(o)
+                            serde_json::from_value::&lt;MemberRet&gt;(o.<span class="number">0</span>)
                                 .map_err(|e| MemberError::ResponseDeserialization(e.into()))
                         });
 
@@ -1394,7 +1403,8 @@
                                             peer: retry_peer,
                                             result: <span class="self">self
                                                 </span>.request_raw(retry_peer, method, params)
-                                                .<span class="kw">await</span>,
+                                                .<span class="kw">await
+                                                </span>.map(AbbreviateDebug),
                                         }
                                     }
                                 }));
