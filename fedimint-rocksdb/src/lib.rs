@@ -64,57 +64,67 @@ impl IDatabase for RocksDb {
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        let val = self.0.get(key).unwrap();
-        self.0.put(key, value)?;
-        Ok(val)
+        fedimint_api::task::block_in_place(|| {
+            let val = self.0.get(key).unwrap();
+            self.0.put(key, value)?;
+            Ok(val)
+        })
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(self.0.snapshot().get(key)?)
+        fedimint_api::task::block_in_place(|| Ok(self.0.snapshot().get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let val = self.0.get(key).unwrap();
-        self.0.delete(key)?;
-        Ok(val)
+        fedimint_api::task::block_in_place(|| {
+            let val = self.0.get(key).unwrap();
+            self.0.delete(key)?;
+            Ok(val)
+        })
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
-        let prefix = key_prefix.to_vec();
-        let mut options = rocksdb::ReadOptions::default();
-        options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
-        let iter = self.0.snapshot().iterator_opt(
-            rocksdb::IteratorMode::From(&prefix, rocksdb::Direction::Forward),
-            options,
-        );
-        Box::new(
-            iter.map_while(move |res| {
-                let (key_bytes, value_bytes) = res.expect("DB error");
-                key_bytes
-                    .starts_with(&prefix)
-                    .then_some((key_bytes, value_bytes))
-            })
-            .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-            .map(Ok),
-        )
+        fedimint_api::task::block_in_place(|| {
+            let prefix = key_prefix.to_vec();
+            let mut options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+            let iter = self.0.snapshot().iterator_opt(
+                rocksdb::IteratorMode::From(&prefix, rocksdb::Direction::Forward),
+                options,
+            );
+            Box::new(
+                iter.map_while(move |res| {
+                    let (key_bytes, value_bytes) = res.expect("DB error");
+                    key_bytes
+                        .starts_with(&prefix)
+                        .then_some((key_bytes, value_bytes))
+                })
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                .map(Ok),
+            )
+        })
     }
 
     async fn commit_tx(self: Box<Self>) -> Result<()> {
-        self.0.commit()?;
-        Ok(())
+        fedimint_api::task::block_in_place(|| {
+            self.0.commit()?;
+            Ok(())
+        })
     }
 
     async fn rollback_tx_to_savepoint(&mut self) {
-        match self.0.rollback_to_savepoint() {
+        fedimint_api::task::block_in_place(|| match self.0.rollback_to_savepoint() {
             Ok(()) => {}
             _ => {
                 warn!("Rolling back database transaction without a set savepoint");
             }
-        }
+        })
     }
 
     async fn set_tx_savepoint(&mut self) {
-        self.0.set_savepoint();
+        fedimint_api::task::block_in_place(|| {
+            self.0.set_savepoint();
+        })
     }
 }
 
@@ -125,7 +135,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(self.0.get(key)?)
+        fedimint_api::task::block_in_place(|| Ok(self.0.get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -133,19 +143,21 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
-        let prefix = key_prefix.to_vec();
-        Box::new(
-            self.0
-                .prefix_iterator(prefix.clone())
-                .map_while(move |res| {
-                    let (key_bytes, value_bytes) = res.expect("DB error");
-                    key_bytes
-                        .starts_with(&prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map(Ok),
-        )
+        fedimint_api::task::block_in_place(|| {
+            let prefix = key_prefix.to_vec();
+            Box::new(
+                self.0
+                    .prefix_iterator(prefix.clone())
+                    .map_while(move |res| {
+                        let (key_bytes, value_bytes) = res.expect("DB error");
+                        key_bytes
+                            .starts_with(&prefix)
+                            .then_some((key_bytes, value_bytes))
+                    })
+                    .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                    .map(Ok),
+            )
+        })
     }
 
     async fn commit_tx(self: Box<Self>) -> Result<()> {
@@ -179,13 +191,13 @@ mod fedimint_rocksdb_tests {
         )
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_insert_elements() {
         fedimint_api::db::verify_insert_elements(open_temp_db("fcb-rocksdb-test-insert-elements"))
             .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_remove_nonexisting() {
         fedimint_api::db::verify_remove_nonexisting(open_temp_db(
             "fcb-rocksdb-test-remove-nonexisting",
@@ -193,19 +205,19 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_remove_existing() {
         fedimint_api::db::verify_remove_existing(open_temp_db("fcb-rocksdb-test-remove-existing"))
             .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_read_own_writes() {
         fedimint_api::db::verify_read_own_writes(open_temp_db("fcb-rocksdb-test-read-own-writes"))
             .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_prevent_dirty_reads() {
         fedimint_api::db::verify_prevent_dirty_reads(open_temp_db(
             "fcb-rocksdb-test-prevent-dirty-reads",
@@ -213,18 +225,18 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_find_by_prefix() {
         fedimint_api::db::verify_find_by_prefix(open_temp_db("fcb-rocksdb-test-find-by-prefix"))
             .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_commit() {
         fedimint_api::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit")).await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_prevent_nonrepeatable_reads() {
         fedimint_api::db::verify_prevent_nonrepeatable_reads(open_temp_db(
             "fcb-rocksdb-test-prevent-nonrepeatable-reads",
@@ -232,7 +244,7 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_rollback_to_savepoint() {
         fedimint_api::db::verify_rollback_to_savepoint(open_temp_db(
             "fcb-rocksdb-test-rollback-to-savepoint",
@@ -240,19 +252,19 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_phantom_entry() {
         fedimint_api::db::verify_phantom_entry(open_temp_db("fcb-rocksdb-test-phantom-entry"))
             .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_write_conflict() {
         fedimint_api::db::expect_write_conflict(open_temp_db("fcb-rocksdb-test-write-conflict"))
             .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_remove_by_prefix() {
         fedimint_api::db::verify_remove_by_prefix(open_temp_db(
             "fcb-rocksdb-test-remove-by-prefix",
@@ -260,13 +272,13 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_module_dbtx() {
         fedimint_api::db::verify_module_prefix(open_temp_db("fcb-rocksdb-test-module-prefix"))
             .await;
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_module_db() {
         let module_instance_id = 1;
         let path = tempfile::Builder::new()
@@ -286,9 +298,9 @@ mod fedimint_rocksdb_tests {
         .await;
     }
 
-    #[test_log::test()]
+    #[tokio::test(flavor = "multi_thread")]
     #[should_panic(expected = "Cannot isolate and already isolated database.")]
-    fn test_cannot_isolate_already_isolated_db() {
+    async fn test_cannot_isolate_already_isolated_db() {
         let module_instance_id = 1;
         let db = open_temp_db("rocksdb-test-already-isolated").new_isolated(module_instance_id);
 
