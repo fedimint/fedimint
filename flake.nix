@@ -879,6 +879,7 @@
                 fenixToolchainRustfmt
                 cargo-llvm-cov
                 cargo-udeps
+                pkgs.parallel
 
                 # This is required to prevent a mangled bash shell in nix develop
                 # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
@@ -957,7 +958,7 @@
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.git
-                pkgs-unstable.convco
+                pkgs.parallel
               ];
             };
 
@@ -981,4 +982,6 @@
     extra-substituters = [ "https://fedimint.cachix.org" ];
     extra-trusted-public-keys = [ "fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=" ];
   };
+
+
 }
