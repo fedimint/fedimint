@@ -30,6 +30,7 @@ use url::Url;
 use crate::fedimint_api::encoding::Encodable;
 use crate::fedimint_api::BitcoinHash;
 use crate::fedimint_api::NumPeers;
+use crate::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use crate::net::connect::TlsConfig;
 use crate::net::connect::{parse_host_port, Connector};
 use crate::net::peers::NetworkConfig;
@@ -488,7 +489,7 @@ impl ServerConfig {
                         done_peers.insert(peer_id);
                     },
                     Ok((peer_id, msg)) => {
-                        error!(%peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
+                        error!(target: LOG_NET_PEER_DKG, %peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
                     },
                     Err(Cancelled) => {/* ignore shutdown for time being, we'll timeout soon anyway */},
                 }
@@ -496,7 +497,7 @@ impl ServerConfig {
         })
         .await
         {
-            error!("Timeout waiting for dkg completion confirmation from other peers");
+            error!(target: LOG_NET_PEER_DKG, "Timeout waiting for dkg completion confirmation from other peers");
         };
 
         let server = ServerConfig::from(
@@ -509,7 +510,10 @@ impl ServerConfig {
             module_cfgs,
         );
 
-        info!("Distributed key generation has completed successfully!");
+        info!(
+            target: LOG_NET_PEER,
+            "Distributed key generation has completed successfully!"
+        );
 
         Ok(Ok(server))
     }

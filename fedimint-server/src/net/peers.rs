@@ -23,9 +23,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Instant;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 use url::Url;
 
+use crate::logging::LOG_NET_PEER;
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
@@ -170,7 +171,7 @@ where
             let (peer, connection) = match new_connection.expect("Listener closed") {
                 Ok(connection) => connection,
                 Err(e) => {
-                    error!(mint = ?cfg.identity, err = %e, "Error while opening incoming connection");
+                    warn!(target: LOG_NET_PEER, mint = ?cfg.identity, err = %e, "Error while opening incoming connection");
                     continue;
                 }
             };
@@ -184,6 +185,7 @@ where
 
             if err {
                 warn!(
+                    target: LOG_NET_PEER,
                     ?peer,
                     "Could not send incoming connection to peer io task (possibly banned)"
                 );
@@ -243,7 +245,7 @@ where
 
     async fn ban_peer(&mut self, peer: PeerId) {
         self.connections.remove(&peer);
-        warn!("Peer {} banned.", peer);
+        warn!(target: LOG_NET_PEER, "Peer {} banned.", peer);
     }
 }
 
@@ -313,7 +315,7 @@ where
             new_connection_res = self.incoming_connections.recv() => {
                 match new_connection_res {
                     Some(new_connection) => {
-                        warn!("Replacing existing connection");
+                        info!(target: LOG_NET_PEER, "Replacing existing connection");
                         self.connect(new_connection, 0).await
                     },
                     None => {
@@ -435,7 +437,7 @@ where
         }
 
         if msg.id > expected {
-            warn!(?expected, received = ?msg.id, "Received message from the future");
+            warn!(target: LOG_NET_PEER, ?expected, received = ?msg.id, "Received message from the future");
             return Err(anyhow::anyhow!("Received message from the future"));
         }
 

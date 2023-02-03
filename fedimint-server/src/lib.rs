@@ -40,6 +40,7 @@ use crate::consensus::{
 use crate::db::LastEpochKey;
 use crate::fedimint_api::encoding::Encodable;
 use crate::fedimint_api::net::peers::IPeerConnections;
+use crate::logging::LOG_CONSENSUS;
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::PeerSlice;
 use crate::net::peers::{PeerConnector, ReconnectPeerConnections};
@@ -58,6 +59,9 @@ pub mod config;
 
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
+
+/// Logging targets and helpers
+pub mod logging;
 
 type PeerMessage = (PeerId, EpochMessage);
 
@@ -127,7 +131,7 @@ impl FedimintServer {
                 Ok(response) if response.consensus_hash == consensus.consensus_hash => break,
                 Ok(_) => bail!("Our consensus config doesn't match peers!"),
                 Err(e) => {
-                    warn!("ERROR {:?}", e)
+                    warn!(target: LOG_CONSENSUS, "ERROR {:?}", e)
                 }
             }
             sleep(Duration::from_millis(1000)).await;
@@ -409,7 +413,7 @@ impl FedimintServer {
         }
 
         if !step.fault_log.is_empty() {
-            warn!(?step.fault_log);
+            warn!(target: LOG_CONSENSUS, fault_log = ?step.fault_log, "HBBFT step fault");
         }
 
         let mut outcomes: Vec<HbbftConsensusOutcome> = vec![];
@@ -528,7 +532,10 @@ fn module_parse_outcome(
             match decoded_cis {
                 Ok(cis) => Some((peer, cis)),
                 Err(e) => {
-                    warn!("Received invalid message from peer {}: {}", peer, e);
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        "Received invalid message from peer {}: {}", peer, e
+                    );
                     ban_peers.push(peer);
                     None
                 }

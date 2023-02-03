@@ -35,6 +35,7 @@ use crate::db::{
     EpochHistoryKey, LastEpochKey, ProposedTransactionKey, ProposedTransactionKeyPrefix,
     RejectedTransactionKey,
 };
+use crate::logging::LOG_CONSENSUS;
 use crate::transaction::{Transaction, TransactionError};
 
 pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
@@ -279,7 +280,10 @@ impl FedimintConsensus {
         dbtx.commit_tx().await.expect("DB Error");
 
         if new.is_some() {
-            warn!("Added consensus item was already in consensus queue");
+            warn!(
+                target: LOG_CONSENSUS,
+                "Added consensus item was already in consensus queue"
+            );
         }
     }
 
@@ -426,7 +430,7 @@ impl FedimintConsensus {
                     Err(error) => {
                         rejected_txs.insert(txid);
                         dbtx.rollback_tx_to_savepoint().await;
-                        warn!(%error, "Transaction failed");
+                        warn!(target: LOG_CONSENSUS, %error, "Transaction failed");
                         dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{:?}", error))
                             .await
                             .expect("DB Error");
@@ -518,7 +522,10 @@ impl FedimintConsensus {
                 let tx = dbtx.insert_entry(&ClientConfigSignatureKey, &serde_sig);
                 tx.await.expect("DB Error");
             } else {
-                warn!("Did not receive enough valid client config sig shares")
+                warn!(
+                    target: LOG_CONSENSUS,
+                    "Did not receive enough valid client config sig shares"
+                )
             }
 
             for peer in peers {
@@ -586,10 +593,16 @@ impl FedimintConsensus {
                         .expect("DB Error");
                 }
                 Err(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) => {
-                    warn!("Unable to sign epoch {}", prev_epoch_key.0);
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        "Unable to sign epoch {}", prev_epoch_key.0
+                    );
                     for peer in peers {
                         if !contributing_peers.contains(&peer) {
-                            warn!("Dropping {} for not contributing valid epoch sigs.", peer);
+                            warn!(
+                                target: LOG_CONSENSUS,
+                                "Dropping {} for not contributing valid epoch sigs.", peer
+                            );
                             drop_peers.push(peer);
                         }
                     }

@@ -13,6 +13,8 @@ use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{error, trace};
 
+use crate::logging::LOG_NET_PEER;
+
 /// Owned [`FramedTransport`] trait object
 pub type AnyFramedTransport<M> = Box<dyn FramedTransport<M> + Send + Unpin + 'static>;
 
@@ -185,7 +187,10 @@ where
 
         // Then we serialize the message into the buffer
         bincode::serialize_into(dst.writer(), &item).map_err(|e| {
-            error!("Serializing message failed: {:?}", item);
+            error!(
+                target: LOG_NET_PEER,
+                "Serializing message failed: {:?}", item
+            );
             e
         })?;
 
