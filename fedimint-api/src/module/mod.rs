@@ -425,8 +425,7 @@ where
 
 #[async_trait]
 pub trait ServerModule: Debug + Sized {
-    const KIND: ModuleKind;
-
+    type Gen: ModuleGen;
     type Decoder: Decoder;
     type Input: Input;
     type Output: Output;
@@ -436,7 +435,7 @@ pub trait ServerModule: Debug + Sized {
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't allocate
-        Self::KIND
+        Self::Gen::KIND
     }
 
     fn decoder(&self) -> Self::Decoder;

@@ -354,8 +354,7 @@ impl ModuleGen for LightningGen {
 
 #[async_trait]
 impl ServerModule for Lightning {
-    const KIND: ModuleKind = KIND;
-
+    type Gen = LightningGen;
     type Decoder = LightningDecoder;
     type Input = LightningInput;
     type Output = LightningOutput;

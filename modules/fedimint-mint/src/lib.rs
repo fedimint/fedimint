@@ -361,7 +361,7 @@ impl std::fmt::Display for MintConsensusItem {
 
 #[async_trait]
 impl ServerModule for Mint {
-    const KIND: ModuleKind = KIND;
+    type Gen = MintGen;
     type Decoder = MintDecoder;
     type Input = MintInput;
     type Output = MintOutput;

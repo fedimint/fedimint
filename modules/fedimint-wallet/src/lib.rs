@@ -400,8 +400,7 @@ pub struct WalletVerificationCache;
 
 #[async_trait]
 impl ServerModule for Wallet {
-    const KIND: ModuleKind = KIND;
-
+    type Gen = WalletGen;
     type Decoder = WalletDecoder;
     type Input = WalletInput;
     type Output = WalletOutput;

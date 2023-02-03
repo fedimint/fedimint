@@ -188,8 +188,7 @@ impl fmt::Display for DummyOutputConfirmation {
 
 #[async_trait]
 impl ServerModule for Dummy {
-    const KIND: ModuleKind = KIND;
-
+    type Gen = DummyConfigGenerator;
     type Decoder = DummyDecoder;
     type Input = DummyInput;
     type Output = DummyOutput;
