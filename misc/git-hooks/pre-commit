@@ -58,6 +58,11 @@ function check_dbg() {
 }
 export -f check_dbg
 
+function check_semgrep() {
+  semgrep -q --error --config .semgrep.yaml fedimint-server/
+}
+export -f check_semgrep
+
 
 function check_shellcheck() {
   for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
@@ -91,4 +96,4 @@ function check_eof() {
 export -f check_eof
 
 
-parallel ::: check_nix check_cargo_fmt check_dbg check_shellcheck check_eof 
+parallel ::: check_nix check_cargo_fmt check_dbg check_semgrep check_shellcheck check_eof 
