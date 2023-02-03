@@ -251,7 +251,7 @@ fn scid_to_u64(scid: ShortChannelId) -> u64 {
     scid_num
 }
 
-/// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+/// BOLT 4: <https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages>
 /// 16399 error code reports unknown payment details.
 ///
 /// TODO: We should probably use a more specific error code based on htlc processing fail reason

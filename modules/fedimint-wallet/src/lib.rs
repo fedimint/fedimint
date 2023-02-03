@@ -37,7 +37,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ConsensusProposal, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -239,6 +240,10 @@ impl ModuleGen for WalletGen {
 
     fn decoder(&self) -> WalletDecoder {
         WalletDecoder {}
+    }
+
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
     }
 
     async fn init(
@@ -489,6 +494,13 @@ impl ServerModule for Wallet {
 
     fn decoder(&self) -> Self::Decoder {
         WalletDecoder
+    }
+
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {

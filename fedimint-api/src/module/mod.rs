@@ -265,6 +265,8 @@ where
 pub trait IModuleGen: Debug {
     fn decoder(&self) -> DynDecoder;
 
+    fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion>;
+
     fn module_kind(&self) -> ModuleKind;
 
     /// Initialize the [`DynServerModule`] instance from its config
@@ -311,6 +313,70 @@ dyn_newtype_define!(
     pub DynModuleGen(Arc<IModuleGen>)
 );
 
+/// Consensus version of a core server
+///
+/// Breaking changes in the Fedimint's core consensus require incrementing it.
+///
+/// See [`ModuleConsensusVersion`] for more details on how it interacts with
+/// module's consensus.
+#[derive(Debug, Copy, Clone)]
+pub struct CoreConsensusVersion(pub u32);
+
+/// Consensus version of a specific module instance
+///
+/// Any breaking change to the module's consensus rules require incrementing it.
+///
+/// A module instance can run only in one consensus version, which must be the
+/// same accross all corresponding instances on other nodes of the federation.
+///
+/// When [`CoreConsensusVersion`] changes, this can but is not requires to be
+/// a breaking change for each module's [`ModuleConsensusVersion`].
+///
+/// Incrementing the module's consensus version can be considered an in-place
+/// upgrade path, similar to a blockchain hard-fork consensus upgrade.
+///
+/// As of time of writting this comment there are no plans to support any kind
+/// of "soft-forks" which mean a consensus minor version. As the set of federation
+/// member's is closed and limited, it is always preferable to synchronize
+/// upgrade and avoid cross-version incompatibilities.
+///
+/// For many modules it might be preferable to implement a new [`ModuleKind`]
+/// "versions" (to be implemented at the time of writting this comment), and
+/// by running two instances of the module at the same time (each of different
+/// `ModuleKind` version), allow users to slowly migrate to a new one.
+/// This avoids complex and error-prone server-side consensus-migration logic.
+#[derive(Debug, Copy, Clone)]
+pub struct ModuleConsensusVersion(pub u32);
+
+/// Api version supported by a core server or a client/server module at a given [`ModuleConsensusVersion`]
+///
+/// Changing [`ModuleConsensusVersion`] implies resetting the api versioning.
+///
+/// For a client and server to be able to communicate with each other:
+///
+/// * The client needs API version support for the [`ModuleConsensusVersion`] that the server is currently
+///   running with.
+/// * Within that [`ModuleConsensusVersion`] during handshake negotation process client and server must find
+///   at least one `Api::major` version where client's `minor` is lower or equal server's `major` version.
+///
+/// A practical module implementation needs to implement large range of version backward compatibility
+/// on both client and server side to accomodate end user client devices receiving updates at a
+/// pace hard to control, and technical and coordination challanges of upgrading servers.
+#[derive(Debug, Copy, Clone)]
+pub struct ApiVersion {
+    /// Major API version
+    ///
+    /// Each time [`ModuleConsensusVersion`] is incremented, this number (and `minor` number as well) should be reset to `0`.
+    ///
+    /// Should be incremented each time the API was changed in a backward-incompatible ways (while resetting `minor` to `0`).
+    pub major: u32,
+    /// Minor API version
+    ///
+    /// * For clients this means *minimum* supported minor version of the `major` version required by client implementation
+    /// * For servers this means *maximum* supported minor version of the `major` version implemented by the server implementation
+    pub minor: u32,
+}
+
 /// Module Generation trait with associated types
 ///
 /// Needs to be implemented by module generation type
@@ -324,6 +390,17 @@ pub trait ModuleGen: Debug + Sized {
     type Decoder: Decoder;
 
     fn decoder(&self) -> Self::Decoder;
+
+    /// Version of the module consensus supported by this implementation given a certain
+    /// [`CoreConsensusVersion`].
+    ///
+    /// Refer to [`ModuleConsensusVersion`] for more information about versioning.
+    ///
+    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can potentially
+    /// implement multiple versions of the consensus, and depending on the config module instance
+    /// config, instantiate the desired one. This method should expose all the available
+    /// versions, purely for information, setup UI and sanity checking purposes.
+    fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
 
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
@@ -375,6 +452,10 @@ where
 
     fn module_kind(&self) -> ModuleKind {
         <Self as ModuleGen>::KIND
+    }
+
+    fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion> {
+        <Self as ModuleGen>::versions(self, core).to_vec()
     }
 
     async fn init(
@@ -512,6 +593,9 @@ pub trait ServerModule: Debug + Sized {
     }
 
     fn decoder(&self) -> Self::Decoder;
+
+    /// Module consensus version this module is running with and the API versions it supports in it
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut DatabaseTransaction<'_>);

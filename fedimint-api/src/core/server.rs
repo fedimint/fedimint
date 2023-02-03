@@ -15,7 +15,8 @@ use fedimint_api::{
 
 use super::*;
 use crate::module::{
-    ApiEndpoint, ConsensusProposal, InputMeta, ModuleError, ServerModule, TransactionItemAmount,
+    ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, ModuleConsensusVersion, ModuleError,
+    ServerModule, TransactionItemAmount,
 };
 
 pub trait IVerificationCache: Debug {
@@ -48,10 +49,12 @@ where
 /// Server side Fedimint module needs to implement this trait.
 #[async_trait]
 pub trait IServerModule: Debug {
+    fn as_any(&self) -> &dyn Any;
+
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> DynDecoder;
 
-    fn as_any(&self) -> &dyn Any;
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>);
@@ -182,6 +185,10 @@ where
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        <Self as ServerModule>::versions(self)
     }
 
     /// Blocks until a new `consensus_proposal` is available.

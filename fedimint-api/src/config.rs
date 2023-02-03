@@ -75,7 +75,7 @@ impl JsonWithKind {
     /// TODO: In the future, we should have a typed and erased versions of
     /// module construction traits, and then we can try with and
     /// without the workaround to have both cases working.
-    /// See https://github.com/fedimint/fedimint/issues/1303
+    /// See <https://github.com/fedimint/fedimint/issues/1303>
     pub fn with_fixed_empty_value(self) -> Self {
         if let serde_json::Value::Object(ref o) = self.value {
             if o.is_empty() {
