@@ -383,7 +383,7 @@ mod tests {
                 },
             )
             .with(
-                format!("/module/{}/account", module_id),
+                format!("/module/{module_id}/account"),
                 |mint: Arc<Mutex<FakeFed<Lightning>>>, contract: ContractId| async move {
                     Ok(mint
                         .lock()

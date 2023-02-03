@@ -17,14 +17,14 @@ impl MockApi {
     ) -> FederationApiFaker<tokio::sync::Mutex<MockApi>> {
         FederationApiFaker::new(Arc::new(Mutex::new(MockApi::default())), members)
             .with(
-                format!("/module/{}/register_gateway", module_id),
+                format!("/module/{module_id}/register_gateway"),
                 |mint: Arc<Mutex<MockApi>>, gateway: LightningGateway| async move {
                     mint.lock().await.gateway = Some(gateway);
                     Ok(())
                 },
             )
             .with(
-                format!("/module/{}/list_gateways", module_id),
+                format!("/module/{module_id}/list_gateways"),
                 |mint: Arc<Mutex<MockApi>>, _: ()| async move {
                     Ok(mint
                         .lock()

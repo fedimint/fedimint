@@ -465,7 +465,7 @@ fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
 }
 
 async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
-    let connection_string = format!("sqlite://{}/{}.db", dir, db_name);
+    let connection_string = format!("sqlite://{dir}/{db_name}.db");
     fedimint_sqlite::SqliteDb::open(connection_string.as_str())
         .await
         .unwrap()
@@ -513,8 +513,8 @@ impl GatewayTest {
             valid_until: SystemTime::now(),
         };
 
-        let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
-        let announce_addr = Url::parse(format!("http://{}", bind_addr).as_str())
+        let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();
+        let announce_addr = Url::parse(format!("http://{bind_addr}").as_str())
             .expect("Could not parse URL to generate GatewayClientConfig API endpoint");
         let gw_client_cfg = GatewayClientConfig {
             mint_channel_id,

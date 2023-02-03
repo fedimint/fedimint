@@ -130,7 +130,7 @@ where
             "test" => Network::Testnet,
             "regtest" => Network::Regtest,
             "signet" => Network::Signet,
-            n => panic!("Unknown Network \"{}\"", n),
+            n => panic!("Unknown Network \"{n}\""),
         })
     }
 

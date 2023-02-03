@@ -149,7 +149,7 @@ async fn main() -> anyhow::Result<()> {
             password,
         } => {
             let config_str = create_cert(dir_out_path, p2p_url, api_url, name, password)?;
-            Ok(println!("{}", config_str))
+            Ok(println!("{config_str}"))
         }
         Command::Run {
             dir_out_path,
@@ -187,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
             encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
             write_nonprivate_configs(&server, dir_out_path, &module_config_gens)
         }
-        Command::VersionHash => Ok(println!("{}", CODE_VERSION)),
+        Command::VersionHash => Ok(println!("{CODE_VERSION}")),
         Command::ConfigDecrypt {
             in_file,
             out_file,

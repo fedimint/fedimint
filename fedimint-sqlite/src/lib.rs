@@ -22,7 +22,7 @@ impl SqliteDb {
             info!("Creating new sqlite database: {:?}", connection_string);
             match Sqlite::create_database(connection_string).await {
                 Ok(_) => {}
-                Err(error) => panic!("Could not create SQLite Database: {}", error),
+                Err(error) => panic!("Could not create SQLite Database: {error}"),
             }
         }
 
@@ -101,7 +101,7 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let mut str_prefix = "".to_string();
         for prefix in key_prefix {
-            str_prefix = format!("{}{:02X?}", str_prefix, prefix);
+            str_prefix = format!("{str_prefix}{prefix:02X?}");
         }
         str_prefix = format!("{}{}", str_prefix, "%");
         let query = "SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY value DESC";
@@ -126,7 +126,7 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let mut str_prefix = "".to_string();
         for prefix in key_prefix {
-            str_prefix = format!("{}{:02X?}", str_prefix, prefix);
+            str_prefix = format!("{str_prefix}{prefix:02X?}");
         }
         str_prefix = format!("{}{}", str_prefix, "%");
         let query = "DELETE FROM kv WHERE hex(key) LIKE ?";

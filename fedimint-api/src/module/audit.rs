@@ -34,7 +34,7 @@ impl Audit {
             .await
             .map(|res| {
                 let (key, value) = res.expect("DB error");
-                let name = format!("{:?}", key);
+                let name = format!("{key:?}");
                 let milli_sat = to_milli_sat(key, value);
                 AuditItem { name, milli_sat }
             })
@@ -47,7 +47,7 @@ impl Display for Audit {
     fn fmt(&self, formatter: &mut Formatter) -> std::fmt::Result {
         formatter.write_str("- Balance Sheet -")?;
         for item in &self.items {
-            formatter.write_fmt(format_args!("\n{}", item))?;
+            formatter.write_fmt(format_args!("\n{item}"))?;
         }
         formatter.write_fmt(format_args!("\n{}", self.sum()))
     }

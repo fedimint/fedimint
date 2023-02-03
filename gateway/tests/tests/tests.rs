@@ -32,7 +32,7 @@ async fn test_gateway_authentication() -> Result<()> {
     let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
     let gw_bind_address = SocketAddr::from(([127, 0, 0, 1], gw_port));
     let gw_announce_address =
-        Url::parse(&format!("http://{}", gw_bind_address)).expect("Invalid gateway address");
+        Url::parse(&format!("http://{gw_bind_address}")).expect("Invalid gateway address");
     let federation_id = FederationId::dummy();
 
     let cfg = GatewayConfig {
@@ -134,7 +134,7 @@ where
         retry(
             "fn".to_string(),
             || async {
-                func(format!("foobar{}", gw_password))
+                func(format!("foobar{gw_password}"))
                     .await
                     .map_err(|e| anyhow::anyhow!(e))
             },

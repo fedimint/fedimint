@@ -462,7 +462,7 @@ pub enum LnGatewayError {
 
 impl IntoResponse for LnGatewayError {
     fn into_response(self) -> Response {
-        let mut err = Cow::<'static, str>::Owned(format!("{:?}", self)).into_response();
+        let mut err = Cow::<'static, str>::Owned(format!("{self:?}")).into_response();
         *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
         err
     }

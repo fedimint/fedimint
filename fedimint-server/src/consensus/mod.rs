@@ -336,8 +336,7 @@ impl FedimintConsensus {
                             // implementations.
                             assert_eq!(
                                 reference_rejected_txs, &rejected_txs,
-                                "rejected_txs mismatch: reference = {:?} != {:?}",
-                                reference_rejected_txs, rejected_txs
+                                "rejected_txs mismatch: reference = {reference_rejected_txs:?} != {rejected_txs:?}"
                             );
                         }
 
@@ -354,10 +353,7 @@ impl FedimintConsensus {
 
         let audit = self.audit().await;
         if audit.sum().milli_sat < 0 {
-            panic!(
-                "Balance sheet of the fed has gone negative, this should never happen! {}",
-                audit
-            )
+            panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
         }
 
         epoch_history
@@ -431,7 +427,7 @@ impl FedimintConsensus {
                         rejected_txs.insert(txid);
                         dbtx.rollback_tx_to_savepoint().await;
                         warn!(target: LOG_CONSENSUS, %error, "Transaction failed");
-                        dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{:?}", error))
+                        dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{error:?}"))
                             .await
                             .expect("DB Error");
                     }

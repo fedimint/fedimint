@@ -98,7 +98,7 @@ impl<'a> DatabaseDump<'a> {
     /// Prints the contents of the BTreeMap to a pretty JSON string
     fn print_database(&self) {
         let json = serde_json::to_string_pretty(&self.serialized).unwrap();
-        println!("{}", json);
+        println!("{json}");
     }
 
     /// Iterates through all the specified ranges in the database and retrieves the
@@ -128,10 +128,8 @@ impl<'a> DatabaseDump<'a> {
                     )
                     .await
                     .collect::<BTreeMap<String, _>>();
-                self.serialized.insert(
-                    format!("{}-{}", kind, module_id),
-                    Box::new(module_serialized),
-                );
+                self.serialized
+                    .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
             }
         }
 

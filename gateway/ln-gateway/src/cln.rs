@@ -103,7 +103,7 @@ impl LnRpc for ClnRpc {
                 Ok(secp256k1::PublicKey::from_slice(&node_pubkey.serialize()).unwrap())
             }
             Ok(_) => panic!("Core lightning sent wrong message"),
-            Err(e) => panic!("Failed to fetch core-lightning node pubkey {:?}", e),
+            Err(e) => panic!("Failed to fetch core-lightning node pubkey {e:?}"),
         }
     }
 

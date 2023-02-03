@@ -17,7 +17,7 @@ pub mod serde_binary_human_readable {
     pub fn serialize<T: Serialize, S: Serializer>(x: &T, s: S) -> Result<S::Ok, S::Error> {
         if s.is_human_readable() {
             let bytes =
-                bincode::serialize(x).map_err(|e| serde::ser::Error::custom(format!("{:?}", e)))?;
+                bincode::serialize(x).map_err(|e| serde::ser::Error::custom(format!("{e:?}")))?;
             s.serialize_str(&bytes.to_hex())
         } else {
             Serialize::serialize(x, s)
@@ -28,7 +28,7 @@ pub mod serde_binary_human_readable {
         if d.is_human_readable() {
             let hex_str: Cow<str> = Deserialize::deserialize(d)?;
             let bytes = Vec::from_hex(&hex_str).map_err(serde::de::Error::custom)?;
-            bincode::deserialize(&bytes).map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+            bincode::deserialize(&bytes).map_err(|e| serde::de::Error::custom(format!("{e:?}")))
         } else {
             Deserialize::deserialize(d)
         }

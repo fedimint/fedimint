@@ -164,7 +164,7 @@ impl std::fmt::Display for LightningOutput {
                 write!(f, "LN offer for {} with hash {}", offer.amount, offer.hash)
             }
             LightningOutput::CancelOutgoing { contract, .. } => {
-                write!(f, "LN outgoing contract cancellation {}", contract)
+                write!(f, "LN outgoing contract cancellation {contract}")
             }
         }
     }
@@ -197,10 +197,10 @@ impl std::fmt::Display for LightningOutputOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LightningOutputOutcome::Contract { id, .. } => {
-                write!(f, "LN Contract {}", id)
+                write!(f, "LN Contract {id}")
             }
             LightningOutputOutcome::Offer { id } => {
-                write!(f, "LN Offer {}", id)
+                write!(f, "LN Offer {id}")
             }
         }
     }
