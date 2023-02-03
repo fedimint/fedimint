@@ -15,7 +15,7 @@ pub fn print_git_hash() {
             // by giving it a prefix (0x0123456)
             String::from("01234569afbe457afa1d2683a099c7af48a523c1")
         };
-        println!("cargo:rustc-env=GIT_HASH={}", git_hash);
+        println!("cargo:rustc-env=GIT_HASH={git_hash}");
     }
     println!("cargo:rerun-if-env-changed=GIT_HASH");
 }
