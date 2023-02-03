@@ -23,12 +23,15 @@ pub trait ClientModule: Debug {
     fn decoder(&self) -> Self::Decoder;
 
     /// Returns the amount represented by the input and the fee its processing requires
-    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount;
+    fn input_amount(
+        &self,
+        input: &<<Self::Module as ServerModule>::Decoder as Decoder>::Input,
+    ) -> TransactionItemAmount;
 
     /// Returns the amount represented by the output and the fee its processing requires
     fn output_amount(
         &self,
-        output: &<Self::Module as ServerModule>::Output,
+        output: &<<Self::Module as ServerModule>::Decoder as Decoder>::Output,
     ) -> TransactionItemAmount;
 }
 

@@ -356,10 +356,6 @@ impl ModuleGen for LightningGen {
 impl ServerModule for Lightning {
     type Gen = LightningGen;
     type Decoder = LightningDecoder;
-    type Input = LightningInput;
-    type Output = LightningOutput;
-    type OutputOutcome = LightningOutputOutcome;
-    type ConsensusItem = LightningConsensusItem;
     type VerificationCache = LightningVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
@@ -375,7 +371,7 @@ impl ServerModule for Lightning {
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
+    ) -> Vec<LightningConsensusItem> {
         dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
             .await
             .map(|res| {
@@ -388,7 +384,7 @@ impl ServerModule for Lightning {
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, LightningConsensusItem)>,
     ) {
         for (peer, decryption_share) in consensus_items.into_iter() {
             let span = info_span!("process decryption share", %peer);
@@ -405,7 +401,7 @@ impl ServerModule for Lightning {
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::Input>,
+        _inputs: impl Iterator<Item = &'a LightningInput>,
     ) -> Self::VerificationCache {
         LightningVerificationCache
     }
@@ -415,7 +411,7 @@ impl ServerModule for Lightning {
         interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a LightningInput,
     ) -> Result<InputMeta, ModuleError> {
         let account: ContractAccount = self
             .get_contract_account(dbtx, input.contract_id)
@@ -487,7 +483,7 @@ impl ServerModule for Lightning {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b LightningInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let meta = self
@@ -511,7 +507,7 @@ impl ServerModule for Lightning {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &LightningOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         match output {
             LightningOutput::Contract(contract) => {
@@ -585,7 +581,7 @@ impl ServerModule for Lightning {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
@@ -856,7 +852,7 @@ impl ServerModule for Lightning {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<LightningOutputOutcome> {
         dbtx.get_value(&ContractUpdateKey(out_point))
             .await
             .expect("DB error")

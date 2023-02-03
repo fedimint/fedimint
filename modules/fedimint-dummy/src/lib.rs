@@ -42,7 +42,7 @@ pub struct Dummy {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct DummyOutputConfirmation;
+pub struct DummyConsensusItem;
 
 #[derive(Debug, Clone)]
 pub struct DummyVerificationCache;
@@ -180,7 +180,7 @@ impl fmt::Display for DummyOutputOutcome {
     }
 }
 
-impl fmt::Display for DummyOutputConfirmation {
+impl fmt::Display for DummyConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DummyOutputConfirmation")
     }
@@ -190,10 +190,6 @@ impl fmt::Display for DummyOutputConfirmation {
 impl ServerModule for Dummy {
     type Gen = DummyConfigGenerator;
     type Decoder = DummyDecoder;
-    type Input = DummyInput;
-    type Output = DummyOutput;
-    type OutputOutcome = DummyOutputOutcome;
-    type ConsensusItem = DummyOutputConfirmation;
     type VerificationCache = DummyVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
@@ -207,20 +203,20 @@ impl ServerModule for Dummy {
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
+    ) -> Vec<DummyConsensusItem> {
         vec![]
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         _dbtx: &mut DatabaseTransaction<'b>,
-        _consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        _consensus_items: Vec<(PeerId, DummyConsensusItem)>,
     ) {
     }
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::Input> + Send,
+        _inputs: impl Iterator<Item = &'a DummyInput> + Send,
     ) -> Self::VerificationCache {
         DummyVerificationCache
     }
@@ -230,7 +226,7 @@ impl ServerModule for Dummy {
         _interconnect: &dyn ModuleInterconect,
         _dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
-        _input: &'a Self::Input,
+        _input: &'a DummyInput,
     ) -> Result<InputMeta, ModuleError> {
         unimplemented!()
     }
@@ -239,7 +235,7 @@ impl ServerModule for Dummy {
         &'a self,
         _interconnect: &'a dyn ModuleInterconect,
         _dbtx: &mut DatabaseTransaction<'c>,
-        _input: &'b Self::Input,
+        _input: &'b DummyInput,
         _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         unimplemented!()
@@ -248,7 +244,7 @@ impl ServerModule for Dummy {
     async fn validate_output(
         &self,
         _dbtx: &mut DatabaseTransaction,
-        _output: &Self::Output,
+        _output: &DummyOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         unimplemented!()
     }
@@ -256,7 +252,7 @@ impl ServerModule for Dummy {
     async fn apply_output<'a, 'b>(
         &'a self,
         _dbtx: &mut DatabaseTransaction<'b>,
-        _output: &'a Self::Output,
+        _output: &'a DummyOutput,
         _out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         unimplemented!()
@@ -274,7 +270,7 @@ impl ServerModule for Dummy {
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
         _out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<DummyOutputOutcome> {
         None
     }
 
@@ -305,7 +301,7 @@ plugin_types_trait_impl!(
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
-    DummyOutputConfirmation,
+    DummyConsensusItem,
     DummyVerificationCache
 );
 

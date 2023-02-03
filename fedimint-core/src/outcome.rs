@@ -18,7 +18,7 @@ pub type SerdeOutputOutcome = SerdeModuleEncoding<fedimint_api::core::DynOutputO
 
 pub mod legacy {
     use fedimint_api::core::{
-        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_api::encoding::{Decodable, Encodable};
@@ -36,9 +36,9 @@ pub mod legacy {
 
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     pub enum OutputOutcome {
-        Mint(<Mint as ServerModule>::OutputOutcome),
-        Wallet(<Wallet as ServerModule>::OutputOutcome),
-        LN(<Lightning as ServerModule>::OutputOutcome),
+        Mint(<<Mint as ServerModule>::Decoder as Decoder>::OutputOutcome),
+        Wallet(<<Wallet as ServerModule>::Decoder as Decoder>::OutputOutcome),
+        LN(<<Lightning as ServerModule>::Decoder as Decoder>::OutputOutcome),
     }
 
     impl From<fedimint_api::core::DynOutputOutcome> for OutputOutcome {

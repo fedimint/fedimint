@@ -19,10 +19,7 @@ use tracing::instrument;
 
 use crate::cancellable::Cancellable;
 use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
-use crate::core::{
-    Decoder, DynDecoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
-    OutputOutcome,
-};
+use crate::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
 use crate::db::{Database, DatabaseTransaction};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -427,10 +424,6 @@ where
 pub trait ServerModule: Debug + Sized {
     type Gen: ModuleGen;
     type Decoder: Decoder;
-    type Input: Input;
-    type Output: Output;
-    type OutputOutcome: OutputOutcome;
-    type ConsensusItem: ModuleConsensusItem;
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
@@ -447,7 +440,7 @@ pub trait ServerModule: Debug + Sized {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem>;
+    ) -> Vec<<Self::Decoder as Decoder>::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The database transaction will be
@@ -456,7 +449,7 @@ pub trait ServerModule: Debug + Sized {
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, <Self::Decoder as Decoder>::ConsensusItem)>,
     );
 
     /// Some modules may have slow to verify inputs that would block transaction processing. If the
@@ -465,7 +458,7 @@ pub trait ServerModule: Debug + Sized {
     /// constructing such lookup tables.
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a Self::Input> + Send,
+        inputs: impl Iterator<Item = &'a <Self::Decoder as Decoder>::Input> + Send,
     ) -> Self::VerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
@@ -477,7 +470,7 @@ pub trait ServerModule: Debug + Sized {
         interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a <Self::Decoder as Decoder>::Input,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
@@ -491,7 +484,7 @@ pub trait ServerModule: Debug + Sized {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b <Self::Decoder as Decoder>::Input,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
@@ -502,7 +495,7 @@ pub trait ServerModule: Debug + Sized {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &<Self::Decoder as Decoder>::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
@@ -518,7 +511,7 @@ pub trait ServerModule: Debug + Sized {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a <Self::Decoder as Decoder>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -540,7 +533,7 @@ pub trait ServerModule: Debug + Sized {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome>;
+    ) -> Option<<Self::Decoder as Decoder>::OutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///

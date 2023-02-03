@@ -158,17 +158,14 @@ impl ClientModule for MintClient {
         MintDecoder
     }
 
-    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
+    fn input_amount(&self, input: &MintInput) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.total_amount(),
             fee: self.config.fee_consensus.note_spend_abs * (input.count_items() as u64),
         }
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Module as ServerModule>::Output,
-    ) -> TransactionItemAmount {
+    fn output_amount(&self, output: &MintOutput) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: output.total_amount(),
             fee: self.config.fee_consensus.note_issuance_abs * (output.count_items() as u64),
