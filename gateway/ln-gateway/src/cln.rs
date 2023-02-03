@@ -6,13 +6,14 @@ use async_trait::async_trait;
 use cln_plugin::{anyhow, options, Builder, Error, Plugin};
 use cln_rpc::model::{ListchannelsRequest, ListpeersPeersChannelsState, ListpeersRequest};
 use cln_rpc::primitives::ShortChannelId;
-use cln_rpc::{model, ClnRpc, Request, Response};
+use cln_rpc::{model, Request, Response};
 use fedimint_api::Amount;
 use fedimint_server::modules::ln::contracts::Preimage;
 use fedimint_server::modules::ln::route_hints::{RouteHint, RouteHintHop};
+use lightning_invoice::Invoice;
+use secp256k1::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::io::{stdin, stdout};
-use tokio::sync::Mutex;
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::ReceivePaymentPayload;
@@ -58,18 +59,41 @@ pub struct HtlcAccepted {
 
 pub struct ClnRpcRef {
     // CLN RPC client
-    pub ln_rpc: Arc<Mutex<ClnRpc>>,
+    pub ln_rpc: Arc<ClnRpc>,
     // Config directory
     pub work_dir: PathBuf,
 }
 
+/// Core Lightning RPC client
+#[derive(Debug, Clone)]
+pub struct ClnRpc {
+    socket: PathBuf,
+}
+
+impl ClnRpc {
+    pub fn new(socket: PathBuf) -> ClnRpc {
+        ClnRpc { socket }
+    }
+
+    /// Creates a new RPC client for a request.
+    ///
+    /// This operation is cheap enough to do it for each request since it merely connects to a UNIX
+    /// domain socket without doing any further initialization.
+    async fn rpc_client(&self) -> Result<cln_rpc::ClnRpc, LightningError> {
+        cln_rpc::ClnRpc::new(&self.socket).await.map_err(|err| {
+            error!("Could not connect to CLN RPC socket: {err}");
+            LightningError(None)
+        })
+    }
+}
+
 #[async_trait]
-impl LnRpc for Mutex<cln_rpc::ClnRpc> {
+impl LnRpc for ClnRpc {
     #[instrument(name = "LnRpc::pubkey", skip(self))]
-    async fn pubkey(&self) -> Result<secp256k1::PublicKey, LightningError> {
+    async fn pubkey(&self) -> Result<PublicKey, LightningError> {
         let pubkey_result = self
-            .lock()
-            .await
+            .rpc_client()
+            .await?
             .call(Request::Getinfo(model::requests::GetinfoRequest {}))
             .await;
 
@@ -83,18 +107,18 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
         }
     }
 
-    #[instrument(name = "LnRpc::pay", skip(self))]
+    #[instrument(name = "LnRpc::route_hints", skip(self))]
     async fn pay(
         &self,
-        invoice: lightning_invoice::Invoice,
+        invoice: Invoice,
         max_delay: u64,
         max_fee_percent: f64,
     ) -> Result<Preimage, LightningError> {
         debug!("Attempting to pay invoice");
 
         let pay_result = self
-            .lock()
-            .await
+            .rpc_client()
+            .await?
             .call(cln_rpc::Request::Pay(model::PayRequest {
                 bolt11: invoice.to_string(),
                 amount_msat: None,
@@ -136,7 +160,10 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
             .await
             .map_err(|err| anyhow!("Lightning error: {:?}", err))?;
 
-        let mut client_lock = self.lock().await;
+        let mut client_lock = self
+            .rpc_client()
+            .await
+            .map_err(|_| anyhow!("Could not connect to CLN unix socket"))?;
 
         let peers_response = client_lock
             .call(Request::ListPeers(ListpeersRequest {
@@ -314,12 +341,9 @@ pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<ClnRpcRef, Error>
 
         let config = plugin.configuration();
         let cln_rpc_socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
-        let cln_rpc = ClnRpc::new(cln_rpc_socket)
-            .await
-            .expect("connect to ln_socket");
 
         Ok(ClnRpcRef {
-            ln_rpc: Arc::new(Mutex::new(cln_rpc)),
+            ln_rpc: Arc::new(ClnRpc::new(cln_rpc_socket)),
             work_dir,
         })
     } else {

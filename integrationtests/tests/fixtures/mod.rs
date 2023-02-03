@@ -16,7 +16,6 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
-use cln_rpc::ClnRpc;
 use fake::FakeLightningTest;
 use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
@@ -60,6 +59,7 @@ use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
+use ln_gateway::cln::ClnRpc;
 use ln_gateway::{
     actor::GatewayActor,
     client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
@@ -75,7 +75,6 @@ use mint_client::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
-use tokio::sync::Mutex;
 use tracing::{debug, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -218,11 +217,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =
                 RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
-            let gateway_lightning_rpc = Mutex::new(
-                ClnRpc::new(socket_gateway.clone())
-                    .await
-                    .expect("connect to ln_socket"),
-            );
+            let gateway_lightning_rpc = ClnRpc::new(socket_gateway.clone());
             let lightning_rpc_adapter = LnRpcAdapter::new(Box::new(gateway_lightning_rpc));
 
             let connect_gen =
