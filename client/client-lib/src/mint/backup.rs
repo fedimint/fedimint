@@ -17,7 +17,7 @@ use anyhow::Result;
 use fedimint_api::{
     cancellable::{Cancellable, Cancelled},
     core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    task::{TaskGroup, TaskHandle},
+    task::TaskGroup,
     NumPeers, PeerId,
 };
 use fedimint_core::{
@@ -26,11 +26,10 @@ use fedimint_core::{
 };
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
-use tokio::sync::mpsc;
 use tracing::{error, info};
 
 use super::{db::NextECashNoteIndexKeyPrefix, *};
-use crate::api::{self, GlobalFederationApi, MintFederationApi};
+use crate::api::{FederationError, GlobalFederationApi, MintFederationApi};
 
 impl MintClient {
     /// Prepare an encrypted backup and send it to federation for storing
@@ -216,14 +215,17 @@ impl MintClient {
     /// errors via `sender` itself.
     ///
     /// TODO: could be internal to recovery_loop?
-    async fn fetch_epochs(
+    fn fetch_epochs_stream(
         &self,
         epoch_range: RangeInclusive<u64>,
-        sender: mpsc::Sender<api::FederationResult<SignedEpochOutcome>>,
-        task_handle: &TaskHandle,
-    ) {
-        let mut fetch_epoch_stream = futures::stream::iter(epoch_range)
-            .map(|epoch| {
+    ) -> impl futures::Stream<
+        Item = (
+            u64,
+            std::result::Result<SignedEpochOutcome, FederationError>,
+        ),
+    > + '_ {
+        futures::stream::iter(epoch_range)
+            .map(move |epoch| {
                 Box::pin(async move {
                     info!(epoch, "Fetching epoch");
                     (
@@ -235,30 +237,7 @@ impl MintClient {
                     )
                 })
             })
-            .buffered(8);
-
-        while let Some((epoch_i, epoch)) = fetch_epoch_stream.next().await {
-            if task_handle.is_shutting_down() {
-                break;
-            }
-
-            match epoch {
-                Ok(epoch_history) => {
-                    assert_eq!(epoch_history.outcome.epoch, epoch_i);
-                    // If the other side disconnected (probably due to an error),
-                    // we don't need to keep trying
-                    if sender.send(Ok(epoch_history)).await.is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    // TODO: retry?
-                    if sender.send(Err(e)).await.is_err() {
-                        break;
-                    }
-                }
-            }
-        }
+            .buffered(8)
     }
 
     pub async fn restore_current_state_from_backup(
@@ -280,20 +259,6 @@ impl MintClient {
             end_epoch, "Recovering from snapshot"
         );
 
-        // Since fetching epochs will be slow, we start a dedicated task to do it
-        let (tx, mut rx) = mpsc::channel(10);
-        let self_clone = self.clone();
-        task_group
-            .spawn("fetch epochs", {
-                let epoch_range = epoch_range.clone();
-                |task_handle| async move {
-                    self_clone
-                        .fetch_epochs(epoch_range, tx, &task_handle)
-                        .await
-                }
-            })
-            .await;
-
         let mut tracker = EcashRecoveryTracker::from_backup(
             backup,
             self.secret.clone(),
@@ -301,16 +266,17 @@ impl MintClient {
             self.config.tbs_pks.clone(),
             self.config.peer_tbs_pks.clone(),
         );
+        let task_handle = task_group.make_handle();
 
-        for epoch in epoch_range {
+        let mut epoch_stream = self.fetch_epochs_stream(epoch_range);
+        while let Some((epoch, epoch_res)) = epoch_stream.next().await {
+            if task_handle.is_shutting_down() {
+                return Ok(Err(Cancelled));
+            }
             // if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
             info!(epoch, "Awaiting epoch");
-            let epoch_history = match rx.recv().await {
-                Some(Ok(o)) => o,
-                Some(Err(e)) => return Err(e.into()),
-                None => return Ok(Err(Cancelled)),
-            };
+            let epoch_history = epoch_res?;
             assert_eq!(epoch_history.outcome.epoch, epoch);
 
             info!(epoch, "Processing epoch");
