@@ -852,32 +852,6 @@
 <a href="#852" id="852">852</a>
 <a href="#853" id="853">853</a>
 <a href="#854" id="854">854</a>
-<a href="#855" id="855">855</a>
-<a href="#856" id="856">856</a>
-<a href="#857" id="857">857</a>
-<a href="#858" id="858">858</a>
-<a href="#859" id="859">859</a>
-<a href="#860" id="860">860</a>
-<a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -897,7 +871,7 @@
 <span class="kw">use </span>fedimint_api::{
     cancellable::{Cancellable, Cancelled},
     core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    task::{TaskGroup, TaskHandle},
+    task::TaskGroup,
     NumPeers, PeerId,
 };
 <span class="kw">use </span>fedimint_core::{
@@ -906,11 +880,10 @@
 };
 <span class="kw">use </span>fedimint_mint::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
-<span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use super</span>::{db::NextECashNoteIndexKeyPrefix, <span class="kw-2">*</span>};
-<span class="kw">use </span><span class="kw">crate</span>::api::{<span class="self">self</span>, GlobalFederationApi, MintFederationApi};
+<span class="kw">use </span><span class="kw">crate</span>::api::{FederationError, GlobalFederationApi, MintFederationApi};
 
 <span class="kw">impl </span>MintClient {
     <span class="doccomment">/// Prepare an encrypted backup and send it to federation for storing
@@ -1096,41 +1069,29 @@
     /// errors via `sender` itself.
     ///
     /// TODO: could be internal to recovery_loop?
-    </span><span class="kw">async fn </span>fetch_epochs(
+    </span><span class="kw">fn </span>fetch_epochs_stream(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         epoch_range: RangeInclusive&lt;u64&gt;,
-        sender: mpsc::Sender&lt;api::FederationResult&lt;SignedEpochOutcome&gt;&gt;,
-        task_handle: <span class="kw-2">&amp;</span>TaskHandle,
-    ) {
-        <span class="kw">for </span>epoch <span class="kw">in </span>epoch_range {
-            <span class="kw">if </span>task_handle.is_shutting_down() {
-                <span class="kw">break</span>;
-            }
-
-            <span class="macro">info!</span>(epoch, <span class="string">&quot;Fetching epoch&quot;</span>);
-
-            <span class="kw">match </span><span class="self">self
-                </span>.context
-                .api
-                .fetch_epoch_history(epoch, <span class="self">self</span>.epoch_pk, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(epoch_history) =&gt; {
-                    <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
-                    <span class="comment">// If the other side disconnected (probably due to an error),
-                    // we don&#39;t need to keep trying
-                    </span><span class="kw">if </span>sender.send(<span class="prelude-val">Ok</span>(epoch_history)).<span class="kw">await</span>.is_err() {
-                        <span class="kw">break</span>;
-                    }
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="comment">// TODO: retry?
-                    </span><span class="kw">if </span>sender.send(<span class="prelude-val">Err</span>(e)).<span class="kw">await</span>.is_err() {
-                        <span class="kw">break</span>;
-                    }
-                }
-            }
-        }
+    ) -&gt; <span class="kw">impl </span>futures::Stream&lt;
+        Item = (
+            u64,
+            std::result::Result&lt;SignedEpochOutcome, FederationError&gt;,
+        ),
+    &gt; + <span class="lifetime">&#39;_ </span>{
+        futures::stream::iter(epoch_range)
+            .map(<span class="kw">move </span>|epoch| {
+                Box::pin(<span class="kw">async move </span>{
+                    <span class="macro">info!</span>(epoch, <span class="string">&quot;Fetching epoch&quot;</span>);
+                    (
+                        epoch,
+                        <span class="self">self</span>.context
+                            .api
+                            .fetch_epoch_history(epoch, <span class="self">self</span>.epoch_pk, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
+                            .<span class="kw">await</span>,
+                    )
+                })
+            })
+            .buffered(<span class="number">8</span>)
     }
 
     <span class="kw">pub async fn </span>restore_current_state_from_backup(
@@ -1152,20 +1113,6 @@
             end_epoch, <span class="string">&quot;Recovering from snapshot&quot;
         </span>);
 
-        <span class="comment">// Since fetching epochs will be slow, we start a dedicated task to do it
-        </span><span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::channel(<span class="number">10</span>);
-        <span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
-        task_group
-            .spawn(<span class="string">&quot;fetch epochs&quot;</span>, {
-                <span class="kw">let </span>epoch_range = epoch_range.clone();
-                |task_handle| <span class="kw">async move </span>{
-                    self_clone
-                        .fetch_epochs(epoch_range, tx, <span class="kw-2">&amp;</span>task_handle)
-                        .<span class="kw">await
-                </span>}
-            })
-            .<span class="kw">await</span>;
-
         <span class="kw">let </span><span class="kw-2">mut </span>tracker = EcashRecoveryTracker::from_backup(
             backup,
             <span class="self">self</span>.secret.clone(),
@@ -1173,16 +1120,17 @@
             <span class="self">self</span>.config.tbs_pks.clone(),
             <span class="self">self</span>.config.peer_tbs_pks.clone(),
         );
+        <span class="kw">let </span>task_handle = task_group.make_handle();
 
-        <span class="kw">for </span>epoch <span class="kw">in </span>epoch_range {
+        <span class="kw">let </span><span class="kw-2">mut </span>epoch_stream = <span class="self">self</span>.fetch_epochs_stream(epoch_range);
+        <span class="kw">while let </span><span class="prelude-val">Some</span>((epoch, epoch_res)) = epoch_stream.next().<span class="kw">await </span>{
+            <span class="kw">if </span>task_handle.is_shutting_down() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
+            }
             <span class="comment">// if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
             </span><span class="macro">info!</span>(epoch, <span class="string">&quot;Awaiting epoch&quot;</span>);
-            <span class="kw">let </span>epoch_history = <span class="kw">match </span>rx.recv().<span class="kw">await </span>{
-                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(o)) =&gt; o,
-                <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e)) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.into()),
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled)),
-            };
+            <span class="kw">let </span>epoch_history = epoch_res<span class="question-mark">?</span>;
             <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
 
             <span class="macro">info!</span>(epoch, <span class="string">&quot;Processing epoch&quot;</span>);
