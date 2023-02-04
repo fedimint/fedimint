@@ -806,27 +806,24 @@ impl FederationTest {
             .unwrap();
 
         for server in &self.servers {
-            block_on(async {
-                let svr = server.borrow_mut();
-                let mut dbtx = svr.database.begin_transaction().await;
+            let svr = server.borrow_mut();
+            let mut dbtx = svr.database.begin_transaction().await;
 
-                {
-                    let mut module_dbtx =
-                        dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
-                    module_dbtx
-                        .insert_new_entry(
-                            &UTXOKey(input.outpoint()),
-                            &SpendableUTXO {
-                                tweak: input.tweak_contract_key().serialize(),
-                                amount: bitcoin::Amount::from_sat(input.tx_output().value),
-                            },
-                        )
-                        .await
-                        .expect("DB Error");
-                }
+            {
+                let mut module_dbtx = dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
+                module_dbtx
+                    .insert_new_entry(
+                        &UTXOKey(input.outpoint()),
+                        &SpendableUTXO {
+                            tweak: input.tweak_contract_key().serialize(),
+                            amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                        },
+                    )
+                    .await
+                    .expect("DB Error");
+            }
 
-                dbtx.commit_tx().await.expect("DB Error");
-            });
+            dbtx.commit_tx().await.expect("DB Error");
         }
     }
 
@@ -912,12 +909,9 @@ impl FederationTest {
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
             let svr = server.borrow();
-            let mut dbtx = block_on(svr.database.begin_transaction());
+            let mut dbtx = svr.database.begin_transaction().await;
             let module_dbtx = dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
-            block_on(fedimint_wallet::broadcast_pending_tx(
-                module_dbtx,
-                &svr.bitcoin_rpc,
-            ));
+            fedimint_wallet::broadcast_pending_tx(module_dbtx, &svr.bitcoin_rpc).await;
         }
     }
 
@@ -974,10 +968,12 @@ impl FederationTest {
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
-        let mut dbtx = block_on(server.consensus.db.begin_transaction());
+        let mut dbtx = server.consensus.db.begin_transaction().await;
         let mut module_dbtx = dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
-        let height = block_on(wallet.consensus_height(&mut module_dbtx)).unwrap_or(0);
-        let proposal = block_on(server.consensus.get_consensus_proposal());
+        let height = wallet.consensus_height(&mut module_dbtx).await.unwrap_or(0);
+        let proposal = server.consensus.get_consensus_proposal().await;
+        drop(module_dbtx);
+        drop(dbtx);
 
         for item in proposal.items {
             match item {
