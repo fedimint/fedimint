@@ -326,6 +326,30 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -334,13 +358,14 @@
 <span class="kw">use </span>cln_plugin::{anyhow, options, Builder, Error, Plugin};
 <span class="kw">use </span>cln_rpc::model::{ListchannelsRequest, ListpeersPeersChannelsState, ListpeersRequest};
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
-<span class="kw">use </span>cln_rpc::{model, ClnRpc, Request, Response};
+<span class="kw">use </span>cln_rpc::{model, Request, Response};
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
 <span class="kw">use </span>fedimint_server::modules::ln::route_hints::{RouteHint, RouteHintHop};
+<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
 <span class="kw">use </span>tokio::io::{stdin, stdout};
-<span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::ReceivePaymentPayload;
@@ -386,18 +411,41 @@
 
 <span class="kw">pub struct </span>ClnRpcRef {
     <span class="comment">// CLN RPC client
-    </span><span class="kw">pub </span>ln_rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
+    </span><span class="kw">pub </span>ln_rpc: Arc&lt;ClnRpc&gt;,
     <span class="comment">// Config directory
     </span><span class="kw">pub </span>work_dir: PathBuf,
 }
 
+<span class="doccomment">/// Core Lightning RPC client
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>ClnRpc {
+    socket: PathBuf,
+}
+
+<span class="kw">impl </span>ClnRpc {
+    <span class="kw">pub fn </span>new(socket: PathBuf) -&gt; ClnRpc {
+        ClnRpc { socket }
+    }
+
+    <span class="doccomment">/// Creates a new RPC client for a request.
+    ///
+    /// This operation is cheap enough to do it for each request since it merely connects to a UNIX
+    /// domain socket without doing any further initialization.
+    </span><span class="kw">async fn </span>rpc_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;cln_rpc::ClnRpc, LightningError&gt; {
+        cln_rpc::ClnRpc::new(<span class="kw-2">&amp;</span><span class="self">self</span>.socket).<span class="kw">await</span>.map_err(|err| {
+            <span class="macro">error!</span>(<span class="string">&quot;Could not connect to CLN RPC socket: {err}&quot;</span>);
+            LightningError(<span class="prelude-val">None</span>)
+        })
+    }
+}
+
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>LnRpc <span class="kw">for </span>Mutex&lt;cln_rpc::ClnRpc&gt; {
+</span><span class="kw">impl </span>LnRpc <span class="kw">for </span>ClnRpc {
     <span class="attr">#[instrument(name = <span class="string">&quot;LnRpc::pubkey&quot;</span>, skip(<span class="self">self</span>))]
-    </span><span class="kw">async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, LightningError&gt; {
+    </span><span class="kw">async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PublicKey, LightningError&gt; {
         <span class="kw">let </span>pubkey_result = <span class="self">self
-            </span>.lock()
-            .<span class="kw">await
+            </span>.rpc_client()
+            .<span class="kw">await</span><span class="question-mark">?
             </span>.call(Request::Getinfo(model::requests::GetinfoRequest {}))
             .<span class="kw">await</span>;
 
@@ -411,18 +459,18 @@
         }
     }
 
-    <span class="attr">#[instrument(name = <span class="string">&quot;LnRpc::pay&quot;</span>, skip(<span class="self">self</span>))]
+    <span class="attr">#[instrument(name = <span class="string">&quot;LnRpc::route_hints&quot;</span>, skip(<span class="self">self</span>))]
     </span><span class="kw">async fn </span>pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice: lightning_invoice::Invoice,
+        invoice: Invoice,
         max_delay: u64,
         max_fee_percent: f64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningError&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Attempting to pay invoice&quot;</span>);
 
         <span class="kw">let </span>pay_result = <span class="self">self
-            </span>.lock()
-            .<span class="kw">await
+            </span>.rpc_client()
+            .<span class="kw">await</span><span class="question-mark">?
             </span>.call(cln_rpc::Request::Pay(model::PayRequest {
                 bolt11: invoice.to_string(),
                 amount_msat: <span class="prelude-val">None</span>,
@@ -464,7 +512,10 @@
             .<span class="kw">await
             </span>.map_err(|err| <span class="macro">anyhow!</span>(<span class="string">&quot;Lightning error: {:?}&quot;</span>, err))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>client_lock = <span class="self">self</span>.lock().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>client_lock = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;Could not connect to CLN unix socket&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>peers_response = client_lock
             .call(Request::ListPeers(ListpeersRequest {
@@ -642,12 +693,9 @@
 
         <span class="kw">let </span>config = plugin.configuration();
         <span class="kw">let </span>cln_rpc_socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
-        <span class="kw">let </span>cln_rpc = ClnRpc::new(cln_rpc_socket)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;connect to ln_socket&quot;</span>);
 
         <span class="prelude-val">Ok</span>(ClnRpcRef {
-            ln_rpc: Arc::new(Mutex::new(cln_rpc)),
+            ln_rpc: Arc::new(ClnRpc::new(cln_rpc_socket)),
             work_dir,
         })
     } <span class="kw">else </span>{
