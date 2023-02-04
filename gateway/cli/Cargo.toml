@@ -15,7 +15,7 @@ async-trait = "0.1.59"
 axum = "0.6.4"
 axum-macros = "0.3.1"
 bitcoin = { version = "0.29.2", features = ["serde"] }
-clap = { version = "4.1.1", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
+clap = { version = "4.1.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 fedimint-server = { path = "../../fedimint-server/" }
 ln-gateway = { path= "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
