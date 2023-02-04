@@ -86,8 +86,8 @@ where
 #[async_trait]
 impl<MuxKey, Msg> IMuxPeerConnections<MuxKey, Msg> for PeerConnectionMultiplexer<MuxKey, Msg>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send + Debug,
-    MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone,
+    Msg: Serialize + DeserializeOwned + Sync + Send + Debug,
+    MuxKey: Serialize + DeserializeOwned + Sync + Send + Debug + Eq + Hash + Clone,
 {
     async fn send(&self, peers: &[PeerId], key: MuxKey, msg: Msg) -> Cancellable<()> {
         debug!("Sending to {peers:?}/{key:?}, {msg:?}");
@@ -127,7 +127,7 @@ where
             }
 
             // try lock is used to avoid a deadlock (see below)
-            if let Ok(mut connections) = self.inner.connections.try_lock() {
+            if let Ok(connections) = self.inner.connections.try_lock() {
                 // `out_of_order` lock guard is dropped *after* we obtained `connections`,
                 // guaranteeing that new elements could have been added to `out_of_order`
                 // since we've last checked.

@@ -102,6 +102,20 @@ pub struct FedimintServer {
     pub decoders: ModuleDecoderRegistry,
 }
 
+// TODO: delete this after we convert the codebase to actually
+// use (and thus enforce) `Send` and `Sync` on `FedimintServer`
+const _: () = {
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+
+    #[allow(path_statements)]
+    #[allow(clippy::no_effect)]
+    fn assert_all() {
+        assert_send::<FedimintServer>;
+        assert_sync::<FedimintServer>();
+    }
+};
+
 impl FedimintServer {
     /// Start all the components of the mint and plug them together
     pub async fn run(

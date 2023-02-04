@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,19 +12,13 @@ use crate::cancellable::Cancellable;
 pub mod fake;
 
 /// Owned [`PeerConnections`] trait object type
-pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + Unpin + 'static>);
+pub struct PeerConnections<Msg>(Arc<dyn IPeerConnections<Msg> + Send + Sync + 'static>);
 
 impl<Msg> Deref for PeerConnections<Msg> {
-    type Target = dyn IPeerConnections<Msg> + Send + Unpin + 'static;
+    type Target = dyn IPeerConnections<Msg> + Send + Sync + 'static;
 
     fn deref(&self) -> &Self::Target {
         &*self.0
-    }
-}
-
-impl<Msg> DerefMut for PeerConnections<Msg> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.0
     }
 }
 
@@ -42,26 +36,26 @@ impl<Msg> DerefMut for PeerConnections<Msg> {
 #[async_trait]
 pub trait IPeerConnections<Msg>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send,
+    Msg: Serialize + DeserializeOwned + Sync + Send,
 {
     /// Send a message to a specific peer.
     ///
     /// The message is sent immediately and cached if the peer is reachable and only cached
     /// otherwise.
-    async fn send(&mut self, peers: &[PeerId], msg: Msg) -> Cancellable<()>;
+    async fn send(&self, peers: &[PeerId], msg: Msg) -> Cancellable<()>;
 
     /// Await receipt of a message from any connected peer.
-    async fn receive(&mut self) -> Cancellable<(PeerId, Msg)>;
+    async fn receive(&self) -> Cancellable<(PeerId, Msg)>;
 
     /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, peer: PeerId);
+    async fn ban_peer(&self, peer: PeerId);
 
     /// Converts the struct to a `PeerConnection` trait object
     fn into_dyn(self) -> PeerConnections<Msg>
     where
-        Self: Sized + Send + Unpin + 'static,
+        Self: Sized + Send + Sync + 'static,
     {
-        PeerConnections(Box::new(self))
+        PeerConnections(Arc::new(self))
     }
 }
 
@@ -87,8 +81,8 @@ impl<MuxKey, Msg> Deref for MuxPeerConnections<MuxKey, Msg> {
 /// channel at the same time.
 pub trait IMuxPeerConnections<MuxKey, Msg>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send,
-    MuxKey: Serialize + DeserializeOwned + Unpin + Send,
+    Msg: Serialize + DeserializeOwned + Sync + Send,
+    MuxKey: Serialize + DeserializeOwned + Sync + Send,
 {
     /// Send a message to a specific destination at specific peer.
     async fn send(&self, peers: &[PeerId], mux_key: MuxKey, msg: Msg) -> Cancellable<()>;
