@@ -125,8 +125,13 @@ async fn post_guardians(
     let state_copy = state.clone();
     let mut state = state.lock().await;
     let params = state.params.clone().expect("invalid state");
-    let mut connection_strings: Vec<String> =
-        serde_json::from_str(&form.connection_strings).expect("not json");
+    let connection_strings: Vec<String> = serde_json::from_str(&form.connection_strings)
+        .map_err(|_| anyhow::anyhow!("Invalid connection string"))?;
+    let mut connection_strings: Vec<String> = connection_strings
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .collect();
+
     connection_strings.push(params.guardian.tls_connect_string);
 
     // Don't allow re-running DKG if configs already exist
