@@ -208,7 +208,7 @@ impl<T> Client<T> {
 }
 
 // TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
-impl<T: AsRef<ClientConfig> + Clone> Client<T> {
+impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     pub fn db(&self) -> &Database {
         &self.context.db
     }

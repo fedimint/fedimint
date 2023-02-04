@@ -280,7 +280,8 @@ impl FedimintServer {
         // once we produce an outcome we no longer need to rejoin
         self.rejoin_at_epoch = None;
 
-        for epoch_num in self.next_epoch_to_process()..=last_outcome.epoch {
+        let next_epoch_to_process = self.next_epoch_to_process();
+        for epoch_num in next_epoch_to_process..=last_outcome.epoch {
             let (items, epoch, prev_epoch_hash, rejected_txs, at_know_trusted_checkpoint) =
                 if epoch_num == last_outcome.epoch {
                     (

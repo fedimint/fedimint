@@ -1,11 +1,11 @@
 use std::fmt::Debug;
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::{error::Error, marker::PhantomData};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use futures::{stream, Stream, StreamExt};
 use thiserror::Error;
 use tracing::{debug, instrument, trace, warn};
@@ -151,9 +151,7 @@ impl Database {
         max_retries: Option<usize>,
     ) -> Result<T, AutocommitError<E>>
     where
-        for<'a> F: Fn(
-            &'a mut DatabaseTransaction<'dt>,
-        ) -> Pin<Box<dyn Future<Output = Result<T, E>> + 'a>>,
+        for<'a> F: Fn(&'a mut DatabaseTransaction<'dt>) -> BoxFuture<'a, Result<T, E>>,
     {
         let mut retries: usize = 0;
         loop {
