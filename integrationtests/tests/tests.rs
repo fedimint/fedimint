@@ -52,6 +52,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
         assert_matches!(
             assert_ci(
                 fed.last_consensus_items()
+                    .await
                     .iter()
                     .find(|ci| {
                         let ConsensusItem::Module(mci) = ci else { return false };
@@ -70,7 +71,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
             .unwrap();
         assert!(matches!(
             assert_ci(
-                fed.last_consensus_items()
+                fed.last_consensus_items().await
                     .iter()
                     .find(|ci| {
                         let ConsensusItem::Module(mci) = ci else { return false };
@@ -286,14 +287,18 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
 
 async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Result<()> {
     // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad proposal
-    fed.subset_peers(&[1, 2, 3]).run_consensus_epochs(1).await;
-    fed.subset_peers(&[0]).run_consensus_epochs(1).await;
+    fed.subset_peers(&[1, 2, 3])
+        .await
+        .run_consensus_epochs(1)
+        .await;
+    fed.subset_peers(&[0]).await.run_consensus_epochs(1).await;
 
     // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
     for maybe_cancelled in join_all(vec![
-        Either::Left(fed.subset_peers(&[1, 2]).await_consensus_epochs(1)),
+        Either::Left(fed.subset_peers(&[1, 2]).await.await_consensus_epochs(1)),
         Either::Right(
             fed.subset_peers(&[0, 3])
+                .await
                 .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
         ),
     ])
@@ -312,13 +317,17 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
         let peg_out_address = bitcoin.get_new_address();
         user.peg_out(1000, &peg_out_address).await;
         // Ensure peer 0 who received the peg out request is in the next epoch
-        fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+        fed.subset_peers(&[0, 1, 2])
+            .await
+            .run_consensus_epochs(1)
+            .await;
         fed.subset_peers(&[3])
+            .await
             .await_consensus_epochs(1)
             .await
             .unwrap();
 
-        fed.subset_peers(&[3]).override_proposal(vec![]);
+        fed.subset_peers(&[3]).await.override_proposal(vec![]).await;
         drop_peer_3_during_epoch(&fed).await.unwrap();
 
         fed.broadcast_transactions().await;
@@ -326,7 +335,7 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
             bitcoin.mine_block_and_get_received(&peg_out_address),
             sats(1000)
         );
-        assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
+        assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -360,6 +369,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
         let share = SecretKeyShare::default()
             .decrypt_share_no_verify(&SecretKey::random().public_key().encrypt(""));
         fed.subset_peers(&[3])
+            .await
             .override_proposal(vec![ConsensusItem::Module(
                 fedimint_api::core::DynModuleConsensusItem::from_typed(
                     LEGACY_HARDCODED_INSTANCE_ID_LN,
@@ -368,17 +378,21 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
                         share: PreimageDecryptionShare(share),
                     },
                 ),
-            )]);
+            )])
+            .await;
         drop_peer_3_during_epoch(&fed).await.unwrap(); // preimage decryption
 
         user.client
             .claim_incoming_contract(contract_id, rng())
             .await
             .unwrap();
-        fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(2).await; // contract to mint notes, sign notes
+        fed.subset_peers(&[0, 1, 2])
+            .await
+            .run_consensus_epochs(2)
+            .await; // contract to mint notes, sign notes
 
         user.assert_total_notes(payment_amount).await;
-        assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
+        assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -391,11 +405,11 @@ async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
             .await;
         fed.database_add_notes_for_user(&user, sats(2000)).await;
 
-        fed.subset_peers(&[3]).override_proposal(vec![]);
+        fed.subset_peers(&[3]).await.override_proposal(vec![]).await;
         drop_peer_3_during_epoch(&fed).await.unwrap();
 
         user.assert_total_notes(sats(2000)).await;
-        assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
+        assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
     })
     .await
 }
@@ -416,11 +430,14 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
             ),
         )];
 
-        fed.subset_peers(&[3]).override_proposal(bad_proposal);
+        fed.subset_peers(&[3])
+            .await
+            .override_proposal(bad_proposal)
+            .await;
         drop_peer_3_during_epoch(&fed).await.unwrap();
 
         user.assert_total_notes(sats(2000)).await;
-        assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
+        assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
     })
     .await
 }
@@ -805,6 +822,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
 
         let ln_items = fed
             .last_consensus_items()
+            .await
             .iter()
             .filter(|item| match item {
                 ConsensusItem::Module(mci) => {
@@ -989,8 +1007,8 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         fed.run_consensus_epochs(1).await;
 
         // Keep peer 3 out of consensus
-        let online_peers = fed.subset_peers(&[0, 1, 2]);
-        let peer3 = fed.subset_peers(&[3]);
+        let online_peers = fed.subset_peers(&[0, 1, 2]).await;
+        let peer3 = fed.subset_peers(&[3]).await;
         bitcoin.mine_blocks(100);
         online_peers.run_consensus_epochs(1).await;
         bitcoin.mine_blocks(100);

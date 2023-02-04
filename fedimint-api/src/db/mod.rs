@@ -152,7 +152,7 @@ impl Database {
     where
         for<'a> F: Fn(
             &'a mut DatabaseTransaction<'dt>,
-        ) -> Pin<Box<dyn Future<Output = Result<T, E>> + 'a>>,
+        ) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'a>>,
     {
         let mut retries: usize = 0;
         loop {
