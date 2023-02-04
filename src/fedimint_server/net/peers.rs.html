@@ -685,6 +685,8 @@
 <a href="#685" id="685">685</a>
 <a href="#686" id="686">686</a>
 <a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
@@ -710,9 +712,10 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::mpsc::{Receiver, Sender};
 <span class="kw">use </span>tokio::time::Instant;
-<span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
+<span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_NET_PEER;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
 <span class="kw">use </span><span class="kw">crate</span>::net::queue::{MessageId, MessageQueue, UniqueMessage};
@@ -857,7 +860,7 @@
             <span class="kw">let </span>(peer, connection) = <span class="kw">match </span>new_connection.expect(<span class="string">&quot;Listener closed&quot;</span>) {
                 <span class="prelude-val">Ok</span>(connection) =&gt; connection,
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(mint = <span class="question-mark">?</span>cfg.identity, err = %e, <span class="string">&quot;Error while opening incoming connection&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_NET_PEER, mint = <span class="question-mark">?</span>cfg.identity, err = %e, <span class="string">&quot;Error while opening incoming connection&quot;</span>);
                     <span class="kw">continue</span>;
                 }
             };
@@ -871,6 +874,7 @@
 
             <span class="kw">if </span>err {
                 <span class="macro">warn!</span>(
+                    target: LOG_NET_PEER,
                     <span class="question-mark">?</span>peer,
                     <span class="string">&quot;Could not send incoming connection to peer io task (possibly banned)&quot;
                 </span>);
@@ -930,7 +934,7 @@
 
     <span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId) {
         <span class="self">self</span>.connections.remove(<span class="kw-2">&amp;</span>peer);
-        <span class="macro">warn!</span>(<span class="string">&quot;Peer {} banned.&quot;</span>, peer);
+        <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">&quot;Peer {} banned.&quot;</span>, peer);
     }
 }
 
@@ -1000,7 +1004,7 @@
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
                 <span class="kw">match </span>new_connection_res {
                     <span class="prelude-val">Some</span>(new_connection) =&gt; {
-                        <span class="macro">warn!</span>(<span class="string">&quot;Replacing existing connection&quot;</span>);
+                        <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">&quot;Replacing existing connection&quot;</span>);
                         <span class="self">self</span>.connect(new_connection, <span class="number">0</span>).<span class="kw">await
                     </span>},
                     <span class="prelude-val">None </span>=&gt; {
@@ -1122,7 +1126,7 @@
         }
 
         <span class="kw">if </span>msg.id &gt; expected {
-            <span class="macro">warn!</span>(<span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received message from the future&quot;</span>);
+            <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received message from the future&quot;</span>);
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Received message from the future&quot;</span>));
         }
 

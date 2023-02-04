@@ -249,6 +249,7 @@
 <a href="#249" id="249">249</a>
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::{
@@ -262,8 +263,9 @@
 <span class="kw">use </span>fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
 <span class="kw">use </span>serde::{de::DeserializeOwned, Deserialize, Serialize};
 <span class="kw">use </span>tokio::{sync::Mutex, time::sleep};
-<span class="kw">use </span>tracing::{debug, error};
+<span class="kw">use </span>tracing::{debug, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_NET_PEER;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="doccomment">/// TODO: Use proper ModuleId after modularization is complete
@@ -404,7 +406,7 @@
                         .or_default()
                         .push_back((peer, new_msg.msg));
                 } <span class="kw">else </span>{
-                    <span class="macro">error!</span>(<span class="string">&quot;Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Droping new message.&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">&quot;Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Droping new message.&quot;</span>);
                 }
             } <span class="kw">else </span>{
                 drop(out_of_order);

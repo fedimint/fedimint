@@ -302,6 +302,11 @@
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based one
 </span><span class="kw">use </span>std::convert::TryInto;
 <span class="kw">use </span>std::fmt::Debug;
@@ -316,6 +321,8 @@
 <span class="kw">use </span>tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 <span class="kw">use </span>tokio_util::codec::{FramedRead, FramedWrite};
 <span class="kw">use </span>tracing::{error, trace};
+
+<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_NET_PEER;
 
 <span class="doccomment">/// Owned [`FramedTransport`] trait object
 </span><span class="kw">pub type </span>AnyFramedTransport&lt;M&gt; = Box&lt;<span class="kw">dyn </span>FramedTransport&lt;M&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;;
@@ -489,7 +496,10 @@
 
         <span class="comment">// Then we serialize the message into the buffer
         </span>bincode::serialize_into(dst.writer(), <span class="kw-2">&amp;</span>item).map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;Serializing message failed: {:?}&quot;</span>, item);
+            <span class="macro">error!</span>(
+                target: LOG_NET_PEER,
+                <span class="string">&quot;Serializing message failed: {:?}&quot;</span>, item
+            );
             e
         })<span class="question-mark">?</span>;
 

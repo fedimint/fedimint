@@ -543,6 +543,13 @@
 <a href="#543" id="543">543</a>
 <a href="#544" id="544">544</a>
 <a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -585,6 +592,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::LastEpochKey;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::IPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_CONSENSUS;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::PeerSlice;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{PeerConnector, ReconnectPeerConnections};
@@ -603,6 +611,9 @@
 
 <span class="doccomment">/// Implementation of multiplexed peer connections
 </span><span class="kw">pub mod </span>multiplexed;
+
+<span class="doccomment">/// Logging targets and helpers
+</span><span class="kw">pub mod </span>logging;
 
 <span class="kw">type </span>PeerMessage = (PeerId, EpochMessage);
 
@@ -672,7 +683,7 @@
                 <span class="prelude-val">Ok</span>(response) <span class="kw">if </span>response.consensus_hash == consensus.consensus_hash =&gt; <span class="kw">break</span>,
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;ERROR {:?}&quot;</span>, e)
+                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;ERROR {:?}&quot;</span>, e)
                 }
             }
             sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
@@ -954,7 +965,7 @@
         }
 
         <span class="kw">if </span>!step.fault_log.is_empty() {
-            <span class="macro">warn!</span>(<span class="question-mark">?</span>step.fault_log);
+            <span class="macro">warn!</span>(target: LOG_CONSENSUS, fault_log = <span class="question-mark">?</span>step.fault_log, <span class="string">&quot;HBBFT step fault&quot;</span>);
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>outcomes: Vec&lt;HbbftConsensusOutcome&gt; = <span class="macro">vec!</span>[];
@@ -1073,7 +1084,10 @@
             <span class="kw">match </span>decoded_cis {
                 <span class="prelude-val">Ok</span>(cis) =&gt; <span class="prelude-val">Some</span>((peer, cis)),
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Received invalid message from peer {}: {}&quot;</span>, peer, e);
+                    <span class="macro">warn!</span>(
+                        target: LOG_CONSENSUS,
+                        <span class="string">&quot;Received invalid message from peer {}: {}&quot;</span>, peer, e
+                    );
                     ban_peers.push(peer);
                     <span class="prelude-val">None
                 </span>}

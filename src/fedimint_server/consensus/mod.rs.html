@@ -860,6 +860,19 @@
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -897,6 +910,7 @@
     EpochHistoryKey, LastEpochKey, ProposedTransactionKey, ProposedTransactionKeyPrefix,
     RejectedTransactionKey,
 };
+<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_CONSENSUS;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{Transaction, TransactionError};
 
 <span class="kw">pub type </span>HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;;
@@ -1141,7 +1155,10 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">if </span>new.is_some() {
-            <span class="macro">warn!</span>(<span class="string">&quot;Added consensus item was already in consensus queue&quot;</span>);
+            <span class="macro">warn!</span>(
+                target: LOG_CONSENSUS,
+                <span class="string">&quot;Added consensus item was already in consensus queue&quot;
+            </span>);
         }
     }
 
@@ -1288,7 +1305,7 @@
                     <span class="prelude-val">Err</span>(error) =&gt; {
                         rejected_txs.insert(txid);
                         dbtx.rollback_tx_to_savepoint().<span class="kw">await</span>;
-                        <span class="macro">warn!</span>(%error, <span class="string">&quot;Transaction failed&quot;</span>);
+                        <span class="macro">warn!</span>(target: LOG_CONSENSUS, %error, <span class="string">&quot;Transaction failed&quot;</span>);
                         dbtx.insert_entry(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid), <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, error))
                             .<span class="kw">await
                             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -1380,7 +1397,10 @@
                 <span class="kw">let </span>tx = dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientConfigSignatureKey, <span class="kw-2">&amp;</span>serde_sig);
                 tx.<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
             } <span class="kw">else </span>{
-                <span class="macro">warn!</span>(<span class="string">&quot;Did not receive enough valid client config sig shares&quot;</span>)
+                <span class="macro">warn!</span>(
+                    target: LOG_CONSENSUS,
+                    <span class="string">&quot;Did not receive enough valid client config sig shares&quot;
+                </span>)
             }
 
             <span class="kw">for </span>peer <span class="kw">in </span>peers {
@@ -1448,10 +1468,16 @@
                         </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
                 }
                 <span class="prelude-val">Err</span>(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, prev_epoch_key.<span class="number">0</span>);
+                    <span class="macro">warn!</span>(
+                        target: LOG_CONSENSUS,
+                        <span class="string">&quot;Unable to sign epoch {}&quot;</span>, prev_epoch_key.<span class="number">0
+                    </span>);
                     <span class="kw">for </span>peer <span class="kw">in </span>peers {
                         <span class="kw">if </span>!contributing_peers.contains(<span class="kw-2">&amp;</span>peer) {
-                            <span class="macro">warn!</span>(<span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, peer);
+                            <span class="macro">warn!</span>(
+                                target: LOG_CONSENSUS,
+                                <span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, peer
+                            );
                             drop_peers.push(peer);
                         }
                     }

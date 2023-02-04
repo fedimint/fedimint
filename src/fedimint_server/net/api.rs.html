@@ -228,6 +228,13 @@
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -255,6 +262,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
+<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_NET_API;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::SerdeTransaction;
 
 <span class="doccomment">/// A state of fedimint server passed to each rpc handler callback
@@ -343,7 +351,10 @@
                     .catch_unwind()
                     .<span class="kw">await
                     </span>.map_err(|<span class="kw">_</span>| {
-                        <span class="macro">error!</span>(path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;</span>);
+                        <span class="macro">error!</span>(
+                            target: LOG_NET_API,
+                            path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;
+                        </span>);
                         jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                             <span class="number">500</span>,
                             <span class="string">&quot;API handler panicked&quot;</span>,
@@ -393,7 +404,10 @@
                 .catch_unwind()
                 .<span class="kw">await
                 </span>.map_err(|<span class="kw">_</span>| {
-                    <span class="macro">error!</span>(path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;</span>);
+                    <span class="macro">error!</span>(
+                        target: LOG_NET_API,
+                        path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;
+                    </span>);
                     jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                         <span class="number">500</span>,
                         <span class="string">&quot;API handler panicked&quot;</span>,

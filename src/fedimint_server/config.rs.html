@@ -822,6 +822,10 @@
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
 <a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
@@ -854,6 +858,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::BitcoinHash;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_api::NumPeers;
+<span class="kw">use </span><span class="kw">crate</span>::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, Connector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::NetworkConfig;
@@ -1312,7 +1317,7 @@
                         done_peers.insert(peer_id);
                     },
                     <span class="prelude-val">Ok</span>((peer_id, msg)) =&gt; {
-                        <span class="macro">error!</span>(%peer_id, <span class="question-mark">?</span>msg, <span class="string">&quot;Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.&quot;</span>);
+                        <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, %peer_id, <span class="question-mark">?</span>msg, <span class="string">&quot;Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.&quot;</span>);
                     },
                     <span class="prelude-val">Err</span>(Cancelled) =&gt; {<span class="comment">/* ignore shutdown for time being, we&#39;ll timeout soon anyway */</span>},
                 }
@@ -1320,7 +1325,7 @@
         })
         .<span class="kw">await
         </span>{
-            <span class="macro">error!</span>(<span class="string">&quot;Timeout waiting for dkg completion confirmation from other peers&quot;</span>);
+            <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, <span class="string">&quot;Timeout waiting for dkg completion confirmation from other peers&quot;</span>);
         };
 
         <span class="kw">let </span>server = ServerConfig::from(
@@ -1333,7 +1338,10 @@
             module_cfgs,
         );
 
-        <span class="macro">info!</span>(<span class="string">&quot;Distributed key generation has completed successfully!&quot;</span>);
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER,
+            <span class="string">&quot;Distributed key generation has completed successfully!&quot;
+        </span>);
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server))
     }
