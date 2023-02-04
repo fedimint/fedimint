@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+set -eu
+
+export tmp_file="$1.tmp"
+
+function rm_tmp_file {
+  rm -f "$tmp_file"
+}
+
+trap rm_tmp_file EXIT
+
+while : ; do
+  # Sanitize file first, by removing leading lines that are empty or start with a hash,
+  # as `convco` currently does not do it automatically (but git will)
+  echo -n "" > "$tmp_file"
+  body_detected=""
+  while read -r line ; do
+    # skip any initial comments (possibly from previous run)
+    if [ -z "${body_detected:-}" ] && { [[ "$line" =~ ^#.*$ ]] || [ "$line" == "" ]; }; then
+      continue
+    fi
+    body_detected="true"
+
+    echo "$line" >> "$tmp_file"
+  done < "$1"
+
+  # We have a sanitized version in "$tmp_file" now, move it the original
+  cp "$tmp_file" "$1"
+
+
+  # Run convco, start preparing a buffer we will display to the user,
+  # if lint fails.
+  echo -n "# " > "$tmp_file"
+  if convco check < "$1" 2>> "$tmp_file" ; then
+     break
+  fi
+
+  # lint failed, prepare the content to show
+  {
+    echo "# Refer to https://www.conventionalcommits.org/en/v1.0.0/#summary"
+    echo "# Quit without changes to abort"
+    cat "$1"
+  } >> "$tmp_file"
+
+  # "$tmp_file" has a commit message prefixed with comments explaining what's wrong.
+  cp "$tmp_file" "$1"
+  "${VISUAL:-${EDITOR:-vi}}" "$1"
+  if cmp -s "$tmp_file" "$1"; then
+    >&2 echo "Not changes. Exiting..."
+    exit 1
+  fi
+done
