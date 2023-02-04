@@ -222,21 +222,29 @@ impl MintClient {
         sender: mpsc::Sender<api::FederationResult<SignedEpochOutcome>>,
         task_handle: &TaskHandle,
     ) {
-        for epoch in epoch_range {
+        let mut fetch_epoch_stream = futures::stream::iter(epoch_range)
+            .map(|epoch| {
+                Box::pin(async move {
+                    info!(epoch, "Fetching epoch");
+                    (
+                        epoch,
+                        self.context
+                            .api
+                            .fetch_epoch_history(epoch, self.epoch_pk, &self.context.decoders)
+                            .await,
+                    )
+                })
+            })
+            .buffered(8);
+
+        while let Some((epoch_i, epoch)) = fetch_epoch_stream.next().await {
             if task_handle.is_shutting_down() {
                 break;
             }
 
-            info!(epoch, "Fetching epoch");
-
-            match self
-                .context
-                .api
-                .fetch_epoch_history(epoch, self.epoch_pk, &self.context.decoders)
-                .await
-            {
+            match epoch {
                 Ok(epoch_history) => {
-                    assert_eq!(epoch_history.outcome.epoch, epoch);
+                    assert_eq!(epoch_history.outcome.epoch, epoch_i);
                     // If the other side disconnected (probably due to an error),
                     // we don't need to keep trying
                     if sender.send(Ok(epoch_history)).await.is_err() {
