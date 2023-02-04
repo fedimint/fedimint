@@ -1,62 +1,140 @@
-{% extends "base.html" %}
-{% block title %} Fedimint {% endblock %}
-
-{% block content %}
-<div class="container mt-5">
+{% extends "base.html" %} {% block title %} Fedimint {% endblock %} {% block
+content %}
+<div class="container mt-5 pb-5">
   <h3>Configure Federation</h3>
   <form action="/post_federation_params" method="post">
     <div class="form-group">
       <label for="guardian_name">Your Name</label>
-      <input type="text" class="form-control" id="guardian_name" name="guardian_name" placeholder="Satoshi Nakamoto">
+      <input
+        type="text"
+        class="form-control"
+        id="guardian_name"
+        name="guardian_name"
+        placeholder="Satoshi Nakamoto"
+      />
     </div>
     <div class="form-group">
       <label for="federation_name">Federation Name</label>
-      <input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Cypherpunk Federation">
+      <input
+        type="text"
+        class="form-control"
+        id="federation_name"
+        name="federation_name"
+        placeholder="Cypherpunk Federation"
+      />
     </div>
     <div class="form-group">
-      <label for="guardians_count" class="col-form-label">Number of Guardians Including You</label>
-      <input class="form-control" type="number" name="guardians_count" required placeholder="4" min="1" />
+      <label for="guardians_count" class="col-form-label"
+        >Number of Guardians Including You</label
+      >
+      <input
+        class="form-control"
+        type="number"
+        name="guardians_count"
+        required
+        placeholder="4"
+        min="1"
+      />
     </div>
     <h5>Network connectivity</h5>
     <div class="form-group">
       <label for="bind_p2p">P2P Listen Address</label>
-      <input type="text" class="form-control" id="bind_p2p" name="bind_p2p" placeholder="127.0.0.1:8173" />
+      <input
+        type="text"
+        class="form-control"
+        id="bind_p2p"
+        name="bind_p2p"
+        placeholder="127.0.0.1:8173"
+      />
     </div>
     <div class="form-group">
       <label for="p2p_url">P2P Public URL</label>
-      <input type="text" class="form-control" id="p2p_url" name="p2p_url" placeholder="wss://p2p.your-website.com" />
+      <input
+        type="text"
+        class="form-control"
+        id="p2p_url"
+        name="p2p_url"
+        placeholder="wss://p2p.your-website.com"
+      />
     </div>
     <div class="form-group">
       <label for="bind_api">API Listen Address</label>
-      <input type="text" class="form-control" id="bind_api" name="bind_api" placeholder="127.0.0.1:8174" />
+      <input
+        type="text"
+        class="form-control"
+        id="bind_api"
+        name="bind_api"
+        placeholder="127.0.0.1:8174"
+      />
     </div>
     <div class="form-group">
       <label for="api_url">API Public URL</label>
-      <input type="text" class="form-control" id="api_url" name="api_url" placeholder="wss://api.your-website.com" />
+      <input
+        type="text"
+        class="form-control"
+        id="api_url"
+        name="api_url"
+        placeholder="wss://api.your-website.com"
+      />
     </div>
     <h5>Wallet settings</h5>
     <div class="form-group">
-      <label for="block_confirmations" class="col-form-label">Block Confirmations Required</label>
-      <input class="form-control" type="number" name="block_confirmations" required value="10" min="1" />
+      <label for="block_confirmations" class="col-form-label"
+        >Block Confirmations Required</label
+      >
+      <input
+        class="form-control"
+        type="number"
+        name="block_confirmations"
+        required
+        value="10"
+        min="1"
+      />
     </div>
     <h5>Bitcoind settings</h5>
     <div class="form-group">
       <label for="bitcoind_rpc">Bitcoin Backend Type</label>
-      <p type="text" class="form-control" style="border: none; margin-bottom: 0;">
+      <p
+        type="text"
+        class="form-control"
+        style="border: none; margin-bottom: 0"
+      >
         {{ro_bitcoin_rpc_type}}
       </p>
       <label for="bitcoind_rpc">Bitcoin Backend URL</label>
-      <p type="text" class="form-control" style="border: none; margin-bottom: 0;">
+      <p
+        type="text"
+        class="form-control"
+        style="border: none; margin-bottom: 0"
+      >
         {{ro_bitcoin_rpc_url}}
       </p>
     </div>
     <div class="form-group">
-      <label for="network1" class="col-form-label">Choose network</label><br>
-      <input type="radio" id="network1" name="network" value="regtest" required>
+      <label for="network1" class="col-form-label">Choose network</label><br />
+      <input
+        type="radio"
+        id="network1"
+        name="network"
+        value="regtest"
+        required
+      />
       <label for="network1">Regtest</label>
-      <input type="radio" id="network2" name="network" value="testnet" required>
+      <input
+        type="radio"
+        id="network2"
+        name="network"
+        value="testnet"
+        required
+      />
       <label for="network2">Testnet</label>
-      <input type="radio" id="network3" name="network" value="bitcoin" required>
+      <input
+        type="radio"
+        id="network3"
+        name="network"
+        value="bitcoin"
+        required
+      />
       <label for="network3">Mainnet</label>
     </div>
     <button class="btn btn-primary mt-3" type="submit">Submit</button>

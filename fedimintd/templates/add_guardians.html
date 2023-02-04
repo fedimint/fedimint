@@ -1,44 +1,55 @@
-{% extends "base.html" %}
-{% block title %} Fedimint {% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %} Fedimint {% endblock %} {% block
+content %}
 <div class="container text-center mt-5">
-    <!-- Show Your Federation Name -->
-    <h3>Share Connection Strings Strings</h3>
-    <div class="input-group mt-3">
-        <input type="text" class="form-control" id="my_connection_string" value="{{connect_string}}"
-            readonly>
-        <!-- Copy button that copies contents of the connection string on click -->
-        <div class="input-group-append">
-            <button class="btn btn-outline-primary" type="button" id="copy-button">Copy</button>
-        </div>
+  <!-- Show Your Federation Name -->
+  <h3>Share your connection string</h3>
+  <div class="input-group mt-3 mb-5">
+    <input
+      type="text"
+      class="form-control"
+      id="my_connection_string"
+      value="{{connect_string}}"
+      readonly
+    />
+    <!-- Copy button that copies contents of the connection string on click -->
+    <div class="input-group-append">
+      <button class="btn btn-outline-primary" type="button" id="copy-button">
+        Copy
+      </button>
     </div>
-    <!-- Form to input other guardian configs -->
-    <form id="guardians_form" action="/post_guardians" method="post">
-        {% for i in 1..num_guardians %}
-        <div class="input-group">
-            <input type="text" class="form-control" id="{{i}}-connection_string"
-                placeholder="Connection String">
-        </div>
-        {% endfor %}
-        <button class="btn btn-primary mt-3" type="submit">Submit</button>
-    </form>
+  </div>
+  <!-- Form to input other guardian configs -->
+  <h3>Enter each guardian string</h3>
+  <form id="guardians_form" action="/post_guardians" method="post">
+    {% for i in 1..num_guardians %}
+    <div class="input-group">
+      <input
+        type="text"
+        class="form-control"
+        id="{{i}}-connection_string"
+        placeholder="Connection String"
+      />
+    </div>
+    {% endfor %}
+    <button class="btn btn-primary mt-3" type="submit">Submit</button>
+  </form>
 </div>
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
-    document.querySelector("#copy-button").addEventListener("click", function (e) {
-        const config = document.getElementById("my_connection_string");
-        navigator.clipboard.writeText(config.value);
+  document
+    .querySelector("#copy-button")
+    .addEventListener("click", function (e) {
+      const config = document.getElementById("my_connection_string");
+      navigator.clipboard.writeText(config.value);
     });
 
-    // make a json vec all connection strings on submit
-    const form = document.querySelector("#guardians_form")
-    form.addEventListener('formdata', async (e) => {
-        let connection_strings = Array.from(form.querySelectorAll('input[type="text"]')).map((input) => input.value);
-        e.formData.set("connection_strings", JSON.stringify(connection_strings))
-    });
-
+  // make a json vec all connection strings on submit
+  const form = document.querySelector("#guardians_form");
+  form.addEventListener("formdata", async (e) => {
+    let connection_strings = Array.from(
+      form.querySelectorAll('input[type="text"]')
+    ).map((input) => input.value);
+    e.formData.set("connection_strings", JSON.stringify(connection_strings));
+  });
 </script>
 {% endblock %}
