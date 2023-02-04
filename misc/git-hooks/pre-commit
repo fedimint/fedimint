@@ -21,46 +21,79 @@ if [ $is_unclean -ne 0 ]; then
   trap revert_git_stash EXIT
 fi
 
+
+export git_ls_files
 git_ls_files="$(git ls-files)"
 
-errors=""
 
-# shellcheck disable=SC2046
-nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$')
+function check_nix() {
+  # shellcheck disable=SC2046
+  nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$')
+}
+export -f check_nix
 
 
-# Note: avoid `cargo fmt --all` so we don't need extra stuff in `ci` shell
-# so that CI is faster
-# shellcheck disable=SC2046
-cargo fmt --all --check
+function check_cargo_fmt() {
+  # Note: avoid `cargo fmt --all` so we don't need extra stuff in `ci` shell
+  # so that CI is faster
+  # shellcheck disable=SC2046
+  cargo fmt --all --check
+}
+export -f check_cargo_fmt
 
-for path in $(echo "$git_ls_files" | grep  '.*\.rs'); do
-  if grep 'dbg!(' "$path"  > /dev/null; then
-    >&2 echo "$path contains dbg! macro"
-    errors="true"
+
+function check_dbg() {
+  errors=""
+  for path in $(echo "$git_ls_files" | grep  '.*\.rs'); do
+    if grep 'dbg!(' "$path"  > /dev/null; then
+      >&2 echo "$path contains dbg! macro"
+      errors="true"
+    fi
+  done
+
+  if [ -n "$errors" ]; then
+    >&2 echo "Fix the problems above or use --no-verify" 1>&2
+    return 1
   fi
-done
+}
+export -f check_dbg
+
+function check_semgrep() {
+  semgrep -q --error --config .semgrep.yaml fedimint-server/
+}
+export -f check_semgrep
 
 
-for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
-  shellcheck --severity=warning "$path"
-done
+function check_shellcheck() {
+  for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
+    shellcheck --severity=warning "$path"
+  done
+}
+export -f check_shellcheck
 
-for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg)'); do
-  # extra branches for clarity
-  if [ ! -s "$path" ]; then
-     # echo "$path is empty"
-     true
-  elif [ -z "$(tail -c 1 < "$path")" ]; then
-     # echo "$path ends with a newline or with a null byte"
-     true
-  else
-    >&2 echo "$path doesn't end with a newline" 1>&2
-    errors="true"
+
+function check_eof() {
+  errors=""
+  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg)'); do
+    # extra branches for clarity
+    if [ ! -s "$path" ]; then
+       # echo "$path is empty"
+       true
+    elif [ -z "$(tail -c 1 < "$path")" ]; then
+       # echo "$path ends with a newline or with a null byte"
+       true
+    else
+      >&2 echo "$path doesn't end with a newline" 1>&2
+      errors="true"
+    fi
+  done
+
+  if [ -n "$errors" ]; then
+    >&2 echo "Fix the problems above or use --no-verify" 1>&2
+    return 1
   fi
-done
+}
+export -f check_eof
 
-if [ -n "$errors" ]; then
-  >&2 echo "Fix the problems above or use --no-verify" 1>&2
-  exit 1
-fi
+
+parallel ::: check_nix check_cargo_fmt check_dbg check_semgrep check_shellcheck check_eof 

@@ -25,6 +25,7 @@ use tracing::{debug, error};
 
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
+use crate::logging::LOG_NET_API;
 use crate::transaction::SerdeTransaction;
 
 /// A state of fedimint server passed to each rpc handler callback
@@ -113,7 +114,10 @@ fn attach_endpoints(
                     .catch_unwind()
                     .await
                     .map_err(|_| {
-                        error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                        error!(
+                            target: LOG_NET_API,
+                            path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                        );
                         jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                             500,
                             "API handler panicked",
@@ -163,7 +167,10 @@ fn attach_endpoints_erased(
                 .catch_unwind()
                 .await
                 .map_err(|_| {
-                    error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                    error!(
+                        target: LOG_NET_API,
+                        path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                    );
                     jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                         500,
                         "API handler panicked",
