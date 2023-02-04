@@ -292,7 +292,7 @@ async fn post_federation_params(
         state.data_dir.clone(),
         form.p2p_url.clone(),
         form.api_url.clone(),
-        form.guardian_name.clone(),
+        form.guardian_name.trim().replace(' ', "-"),
         Some(state.password.clone()),
     )?;
 
