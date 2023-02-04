@@ -433,12 +433,8 @@ impl std::fmt::Display for MintConsensusItem {
 
 #[async_trait]
 impl ServerModule for Mint {
-    const KIND: ModuleKind = KIND;
+    type Gen = MintGen;
     type Decoder = MintDecoder;
-    type Input = MintInput;
-    type Output = MintOutput;
-    type OutputOutcome = MintOutputOutcome;
-    type ConsensusItem = MintConsensusItem;
     type VerificationCache = VerifiedNotes;
 
     fn decoder(&self) -> Self::Decoder {
@@ -454,7 +450,7 @@ impl ServerModule for Mint {
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
+    ) -> Vec<MintConsensusItem> {
         dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .await
             .map(|res| {
@@ -470,7 +466,7 @@ impl ServerModule for Mint {
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, MintConsensusItem)>,
     ) {
         for (peer, consensus_item) in consensus_items {
             self.process_partial_signature(
@@ -485,7 +481,7 @@ impl ServerModule for Mint {
 
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a Self::Input> + Send,
+        inputs: impl Iterator<Item = &'a MintInput> + Send,
     ) -> Self::VerificationCache {
         // We build a lookup table for checking the validity of all notes for certain amounts. This
         // calculation can happen massively in parallel since verification is a pure function and
@@ -511,7 +507,7 @@ impl ServerModule for Mint {
         _interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a MintInput,
     ) -> Result<InputMeta, ModuleError> {
         for (amount, note) in input.iter_items() {
             let note_valid = verification_cache
@@ -550,7 +546,7 @@ impl ServerModule for Mint {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b MintInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let meta = self
@@ -571,7 +567,7 @@ impl ServerModule for Mint {
     async fn validate_output(
         &self,
         _dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &MintOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if output.longest_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
             return Err(MintError::ExceededMaxNotes(
@@ -601,7 +597,7 @@ impl ServerModule for Mint {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
@@ -753,7 +749,7 @@ impl ServerModule for Mint {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<MintOutputOutcome> {
         let we_proposed = dbtx
             .get_value(&ProposedPartialSignatureKey { out_point })
             .await

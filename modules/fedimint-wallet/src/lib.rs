@@ -482,14 +482,8 @@ pub struct WalletVerificationCache;
 
 #[async_trait]
 impl ServerModule for Wallet {
-    const KIND: ModuleKind = KIND;
-
+    type Gen = WalletGen;
     type Decoder = WalletDecoder;
-    type Input = WalletInput;
-    type Output = WalletOutput;
-    // TODO: implement outcome
-    type OutputOutcome = WalletOutputOutcome;
-    type ConsensusItem = WalletConsensusItem;
     type VerificationCache = WalletVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
@@ -513,7 +507,7 @@ impl ServerModule for Wallet {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
+    ) -> Vec<WalletConsensusItem> {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
@@ -561,7 +555,7 @@ impl ServerModule for Wallet {
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, WalletConsensusItem)>,
     ) {
         trace!(?consensus_items, "Received consensus proposals");
 
@@ -611,7 +605,7 @@ impl ServerModule for Wallet {
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::Input>,
+        _inputs: impl Iterator<Item = &'a WalletInput>,
     ) -> Self::VerificationCache {
         WalletVerificationCache
     }
@@ -621,7 +615,7 @@ impl ServerModule for Wallet {
         _interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a WalletInput,
     ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
@@ -654,7 +648,7 @@ impl ServerModule for Wallet {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b WalletInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let meta = self
@@ -678,7 +672,7 @@ impl ServerModule for Wallet {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &WalletOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if !is_address_valid_for_network(&output.recipient, self.cfg.consensus.network) {
             return Err(WalletError::WrongNetwork(
@@ -707,7 +701,7 @@ impl ServerModule for Wallet {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a WalletOutput,
         out_point: fedimint_api::OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
@@ -840,7 +834,7 @@ impl ServerModule for Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<WalletOutputOutcome> {
         dbtx.get_value(&PegOutBitcoinTransaction(out_point))
             .await
             .expect("DB error")

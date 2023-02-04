@@ -169,7 +169,7 @@ pub enum TransactionError {
 pub mod legacy {
     use bitcoin_hashes::Hash;
     use fedimint_api::core::{
-        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_api::encoding::{Decodable, Encodable};
@@ -201,18 +201,18 @@ pub mod legacy {
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
         // TODO: maybe treat every note as a seperate input?
-        Mint(<fedimint_mint::Mint as ServerModule>::Input),
-        Wallet(<fedimint_wallet::Wallet as ServerModule>::Input),
-        LN(<fedimint_ln::Lightning as ServerModule>::Input),
+        Mint(<<fedimint_mint::Mint as ServerModule>::Decoder as Decoder>::Input),
+        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Decoder as Decoder>::Input),
+        LN(<<fedimint_ln::Lightning as ServerModule>::Decoder as Decoder>::Input),
     }
 
     // TODO: check if clippy is right
     #[allow(clippy::large_enum_variant)]
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Output {
-        Mint(<fedimint_mint::Mint as ServerModule>::Output),
-        Wallet(<fedimint_wallet::Wallet as ServerModule>::Output),
-        LN(<fedimint_ln::Lightning as ServerModule>::Output),
+        Mint(<<fedimint_mint::Mint as ServerModule>::Decoder as Decoder>::Output),
+        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Decoder as Decoder>::Output),
+        LN(<<fedimint_ln::Lightning as ServerModule>::Decoder as Decoder>::Output),
     }
 
     impl Transaction {

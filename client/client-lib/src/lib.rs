@@ -30,8 +30,8 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::time::SystemTime;
+use fedimint_api::TieredMulti;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_api::{ServerModule, TieredMulti};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::modules::ln::common::LightningDecoder;
 use fedimint_core::modules::ln::config::LightningClientConfig;
@@ -1305,7 +1305,11 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<<fedimint_core::modules::mint::Mint as ServerModule>::OutputOutcome>(outpoint, Duration::from_secs(10), &self.context.decoders)
+            .await_output_outcome::<MintOutputOutcome>(
+                outpoint,
+                Duration::from_secs(10),
+                &self.context.decoders,
+            )
             .await?;
         // We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need

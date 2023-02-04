@@ -11,6 +11,8 @@ use fedimint_core::modules::wallet::common::WalletDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+use fedimint_core::modules::wallet::WalletInput;
+use fedimint_core::modules::wallet::WalletOutput;
 use fedimint_core::modules::wallet::{Wallet, WalletOutputOutcome};
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
@@ -40,17 +42,14 @@ impl ClientModule for WalletClient {
         WalletDecoder
     }
 
-    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
+    fn input_amount(&self, input: &WalletInput) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: Amount::from_sats(input.tx_output().value),
             fee: self.config.fee_consensus.peg_in_abs,
         }
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Module as ServerModule>::Output,
-    ) -> TransactionItemAmount {
+    fn output_amount(&self, output: &WalletOutput) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
             fee: self.config.fee_consensus.peg_out_abs,

@@ -219,7 +219,7 @@ where
                         peer,
                         Clone::clone(
                             item.as_any()
-                                .downcast_ref::<<Self as ServerModule>::ConsensusItem>()
+                                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::ConsensusItem>()
                                 .expect("incorrect consensus item type passed to module plugin"),
                         ),
                     )
@@ -238,7 +238,7 @@ where
             self,
             inputs.iter().map(|i| {
                 i.as_any()
-                    .downcast_ref::<<Self as ServerModule>::Input>()
+                    .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
                     .expect("incorrect input type passed to module plugin")
             }),
         )
@@ -266,7 +266,7 @@ where
                 .expect("incorrect verification cache type passed to module plugin"),
             input
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Input>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
                 .expect("incorrect input type passed to module plugin"),
         )
         .await
@@ -293,7 +293,7 @@ where
             dbtx,
             input
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Input>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
                 .expect("incorrect input type passed to module plugin"),
             verification_cache
                 .as_any()
@@ -318,7 +318,7 @@ where
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Output>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Output>()
                 .expect("incorrect output type passed to module plugin"),
         )
         .await
@@ -345,7 +345,7 @@ where
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Output>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
         )
