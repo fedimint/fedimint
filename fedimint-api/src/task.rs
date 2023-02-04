@@ -155,12 +155,14 @@ impl TaskGroup {
     }
 
     #[cfg(not(target_family = "wasm"))]
-    pub async fn spawn<Fut>(
+    pub async fn spawn<Fut, R>(
         &mut self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + Send + 'static,
-    ) where
-        Fut: Future<Output = ()> + Send + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + Send + 'static,
+        R: Send + 'static,
     {
         let name = name.into();
         let mut guard = TaskPanicGuard {
@@ -170,12 +172,16 @@ impl TaskGroup {
         };
         let handle = self.make_handle();
 
+        let (tx, rx) = oneshot::channel();
         if let Some(handle) = self::imp::spawn(async move {
-            f(handle).await;
+            // if receiver is not interested, just drop the message
+            let _ = tx.send(f(handle).await);
         }) {
             self.inner.join.lock().await.push_back((name, handle));
         }
         guard.completed = true;
+
+        rx
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -203,12 +209,14 @@ impl TaskGroup {
     }
     // TODO: Send vs lack of Send bound; do something about it
     #[cfg(target_family = "wasm")]
-    pub async fn spawn<Fut>(
+    pub async fn spawn<Fut, R>(
         &mut self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + 'static,
-    ) where
-        Fut: Future<Output = ()> + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + 'static,
+        R: 'static,
     {
         let name = name.into();
         let mut guard = TaskPanicGuard {
@@ -218,12 +226,15 @@ impl TaskGroup {
         };
         let handle = self.make_handle();
 
+        let (tx, rx) = oneshot::channel();
         if let Some(handle) = self::imp::spawn(async move {
-            f(handle).await;
+            let _ = tx.send(f(handle).await);
         }) {
             self.inner.join.lock().await.push_back((name, handle));
         }
         guard.completed = true;
+
+        rx
     }
 
     pub async fn join_all(self, join_timeout: Option<Duration>) -> Result<(), anyhow::Error> {
