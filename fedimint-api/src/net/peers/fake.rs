@@ -9,11 +9,12 @@ use fedimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 struct FakePeerConnections<Msg> {
     tx: Sender<Msg>,
-    rx: Receiver<Msg>,
+    rx: Mutex<Receiver<Msg>>,
     peer_id: PeerId,
     task_handle: TaskHandle,
 }
@@ -21,9 +22,9 @@ struct FakePeerConnections<Msg> {
 #[async_trait]
 impl<Msg> IPeerConnections<Msg> for FakePeerConnections<Msg>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send,
+    Msg: Serialize + DeserializeOwned + Sync + Send,
 {
-    async fn send(&mut self, peers: &[PeerId], msg: Msg) -> Cancellable<()> {
+    async fn send(&self, peers: &[PeerId], msg: Msg) -> Cancellable<()> {
         assert_eq!(peers, &[self.peer_id]);
 
         // If the peer is gone, just pretend we are going to resend
@@ -32,11 +33,11 @@ where
         Ok(())
     }
 
-    async fn receive(&mut self) -> Cancellable<(PeerId, Msg)> {
+    async fn receive(&self) -> Cancellable<(PeerId, Msg)> {
         // Just like a real implementation, do not return
         // if the peer is gone.
         while !self.task_handle.is_shutting_down() {
-            if let Some(msg) = self.rx.recv().await {
+            if let Some(msg) = self.rx.lock().await.recv().await {
                 return Ok((self.peer_id, msg));
             } else {
                 sleep(Duration::from_secs(10)).await
@@ -46,7 +47,7 @@ where
     }
 
     /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, _peer: PeerId) {
+    async fn ban_peer(&self, _peer: PeerId) {
         unimplemented!();
     }
 }
@@ -62,7 +63,7 @@ pub fn make_fake_peer_connection<Msg>(
     task_handle: TaskHandle,
 ) -> (PeerConnections<Msg>, PeerConnections<Msg>)
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send + 'static,
+    Msg: Serialize + DeserializeOwned + Sync + Send + 'static,
 {
     let (tx1, rx1) = mpsc::channel(buf_size);
     let (tx2, rx2) = mpsc::channel(buf_size);
@@ -70,14 +71,14 @@ where
     (
         FakePeerConnections {
             tx: tx1,
-            rx: rx2,
+            rx: Mutex::new(rx2),
             peer_id: peer2,
             task_handle: task_handle.clone(),
         }
         .into_dyn(),
         FakePeerConnections {
             tx: tx2,
-            rx: rx1,
+            rx: Mutex::new(rx1),
             peer_id: peer1,
             task_handle,
         }

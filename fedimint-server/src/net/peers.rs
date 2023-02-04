@@ -22,6 +22,7 @@ use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 use url::Url;
@@ -49,8 +50,10 @@ pub struct ReconnectPeerConnections<T> {
 }
 
 struct PeerConnection<T> {
-    outgoing: Sender<T>,
-    incoming: Receiver<T>,
+    // Ban status is tracked as a standalone `Option`, to avoid having to have to
+    // ever lock the owning container, which is otherwise immutable after creation
+    outgoing: Mutex<Option<Sender<T>>>,
+    incoming: Mutex<Option<Receiver<T>>>,
 }
 
 /// Specifies the network configuration for federation-internal communication
@@ -215,10 +218,10 @@ where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
     #[must_use]
-    async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()> {
+    async fn send(&self, peers: &[PeerId], msg: T) -> Cancellable<()> {
         for peer_id in peers {
             trace!(?peer_id, "Sending message to");
-            if let Some(peer) = self.connections.get_mut(peer_id) {
+            if let Some(peer) = self.connections.get(peer_id) {
                 peer.send(msg.clone()).await?;
             } else {
                 trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
@@ -227,10 +230,10 @@ where
         Ok(())
     }
 
-    async fn receive(&mut self) -> Cancellable<(PeerId, T)> {
+    async fn receive(&self) -> Cancellable<(PeerId, T)> {
         // TODO: optimize, don't throw away remaining futures
 
-        let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
+        let futures_non_banned = self.connections.iter().map(|(&peer, connection)| {
             let receive_future = async move {
                 let msg = connection.receive().await;
                 (peer, msg)
@@ -243,9 +246,13 @@ where
         first_response.0 .1.map(|v| (first_response.0 .0, v))
     }
 
-    async fn ban_peer(&mut self, peer: PeerId) {
-        self.connections.remove(&peer);
-        warn!(target: LOG_NET_PEER, "Peer {} banned.", peer);
+    async fn ban_peer(&self, peer_id: PeerId) {
+        if let Some(peer) = self.connections.get(&peer_id) {
+            peer.ban().await;
+            warn!(target: LOG_NET_PEER, "Peer {peer_id} banned.");
+        } else {
+            warn!(target: LOG_NET_PEER, "Peer {peer_id} was already banned.");
+        }
     }
 }
 
@@ -571,17 +578,31 @@ where
         ));
 
         PeerConnection {
-            outgoing: outgoing_sender,
-            incoming: incoming_receiver,
+            outgoing: Mutex::new(Some(outgoing_sender)),
+            incoming: Mutex::new(Some(incoming_receiver)),
         }
     }
 
-    async fn send(&mut self, msg: M) -> Cancellable<()> {
-        self.outgoing.send(msg).await.map_err(|_e| Cancelled)
+    async fn send(&self, msg: M) -> Cancellable<()> {
+        if let Some(tx) = self.outgoing.lock().await.as_mut() {
+            tx.send(msg).await.map_err(|_e| Cancelled)
+        } else {
+            Ok(())
+        }
     }
 
-    async fn receive(&mut self) -> Cancellable<M> {
-        self.incoming.recv().await.ok_or(Cancelled)
+    async fn receive(&self) -> Cancellable<M> {
+        if let Some(rx) = self.incoming.lock().await.as_mut() {
+            rx.recv().await.ok_or(Cancelled)
+        } else {
+            // banned peer will never receive anything anymore
+            std::future::pending().await
+        }
+    }
+
+    async fn ban(&self) {
+        self.incoming.lock().await.take();
+        self.outgoing.lock().await.take();
     }
 
     #[instrument(skip_all, fields(peer))]
@@ -667,8 +688,8 @@ mod tests {
                 ReconnectPeerConnections::<u64>::new(cfg, connect, &mut task_group).await
             };
 
-            let mut peers_a = build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
-            let mut peers_b = build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
+            let peers_a = build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
+            let peers_b = build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
 
             peers_a.send(&[PeerId::from(2)], 42).await.unwrap();
             let recv = timeout(peers_b.receive()).await.unwrap().unwrap();
@@ -677,7 +698,7 @@ mod tests {
 
             peers_a.send(&[PeerId::from(3)], 21).await.unwrap();
 
-            let mut peers_c = build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
+            let peers_c = build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
             let recv = timeout(peers_c.receive()).await.unwrap().unwrap();
             assert_eq!(recv.0, PeerId::from(1));
             assert_eq!(recv.1, 21);
