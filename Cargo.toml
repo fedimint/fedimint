@@ -62,6 +62,7 @@ zeroize = { opt-level = 2 }
 bls12_381 = { opt-level = 2 }
 subtle = { opt-level = 2 }
 ring = { opt-level = 2 }
+threshold_crypto = { opt-level = 2 }
 
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
