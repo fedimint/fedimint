@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["CANCELLATION_TAG",""]],"struct":[["OutgoingContract","Specialized smart contract for outgoing payments."]]};
+window.SIDEBAR_ITEMS = {"constant":[["CANCELLATION_TAG",""],["FIELDS",""]],"enum":[["__Field",""]],"struct":[["OutgoingContract","Specialized smart contract for outgoing payments."],["__FieldVisitor",""],["__Visitor",""]]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["CompressedPublicKey",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"struct":[["CompressedPublicKey",""],["__FieldVisitor",""],["__Visitor",""]]};

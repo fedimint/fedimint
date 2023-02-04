@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["main",""],["salt_file_path_from_file_path",""]],"struct":[["Cli",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["main",""],["salt_file_path_from_file_path",""]],"static":[["CALLSITE",""],["META",""]],"struct":[["Cli",""]]};

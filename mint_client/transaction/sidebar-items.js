@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["TransactionBuilder",""]],"trait":[["Final",""]]};
+window.SIDEBAR_ITEMS = {"opaque":[["",""]],"struct":[["TransactionBuilder",""]],"trait":[["Final",""]]};

@@ -1443,6 +1443,43 @@
 <a href="#1443" id="1443">1443</a>
 <a href="#1444" id="1444">1444</a>
 <a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::pin::Pin;
@@ -2151,6 +2188,43 @@
     <span class="kw">pub fn </span>wrong_length(expected: usize, found: usize) -&gt; DecodingError {
         DecodingError::WrongLength { expected, found }
     }
+}
+
+<span class="attr">#[macro_export]
+</span><span class="macro">macro_rules! </span>push_db_pair_items {
+    (<span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$prefix_type</span>:expr, <span class="macro-nonterminal">$key_type</span>:ty, <span class="macro-nonterminal">$value_type</span>:ty, <span class="macro-nonterminal">$map</span>:ident, <span class="macro-nonterminal">$key_literal</span>:literal) =&gt; {
+        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx</span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;(<span class="macro-nonterminal">$key_type</span>, <span class="macro-nonterminal">$value_type</span>)&gt; = Vec::new();
+        <span class="kw">for </span>item <span class="kw">in </span>db_items {
+            items.push(item.unwrap());
+        }
+        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(items));
+    };
+}
+
+<span class="attr">#[macro_export]
+</span><span class="macro">macro_rules! </span>push_db_pair_items_no_serde {
+    (<span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$prefix_type</span>:expr, <span class="macro-nonterminal">$key_type</span>:ty, <span class="macro-nonterminal">$value_type</span>:ty, <span class="macro-nonterminal">$map</span>:ident, <span class="macro-nonterminal">$key_literal</span>:literal) =&gt; {
+        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx</span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;(<span class="macro-nonterminal">$key_type</span>, SerdeWrapper)&gt; = Vec::new();
+        <span class="kw">for </span>item <span class="kw">in </span>db_items {
+            <span class="kw">let </span>(k, v) = item.unwrap();
+            items.push((k, SerdeWrapper::from_encodable(v)));
+        }
+        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(items));
+    };
+}
+
+<span class="attr">#[macro_export]
+</span><span class="macro">macro_rules! </span>push_db_key_items {
+    (<span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$prefix_type</span>:expr, <span class="macro-nonterminal">$key_type</span>:ty, <span class="macro-nonterminal">$map</span>:ident, <span class="macro-nonterminal">$key_literal</span>:literal) =&gt; {
+        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx</span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;<span class="macro-nonterminal">$key_type</span>&gt; = Vec::new();
+        <span class="kw">for </span>item <span class="kw">in </span>db_items {
+            items.push(item.unwrap().<span class="number">0</span>);
+        }
+        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(items));
+    };
 }
 
 <span class="kw">mod </span>tests {
@@ -2889,4 +2963,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (658fad6c5 2023-02-03)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

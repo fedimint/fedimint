@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["AccountContract","A generic contract to hold money in a pub key locked account"]]};
+window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"struct":[["AccountContract","A generic contract to hold money in a pub key locked account"],["__FieldVisitor",""],["__Visitor",""]]};

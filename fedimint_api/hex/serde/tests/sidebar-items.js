@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["Data",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"struct":[["Data",""],["__DeserializeWith",""],["__FieldVisitor",""],["__SerializeWith",""],["__Visitor",""]]};

@@ -76,12 +76,67 @@
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>bytes::Bytes;
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+
+<span class="kw">use </span><span class="kw">crate</span>::dump::DatabaseDump;
+
+<span class="kw">mod </span>dump;
 
 <span class="attr">#[derive(Debug, Clone, Parser)]
 </span><span class="kw">struct </span>Options {
@@ -111,6 +166,19 @@
         <span class="attr">#[arg(value_parser = hex_parser)]
         </span>key: Bytes,
     },
+    <span class="doccomment">/// Dump a subset of the specified database and serialize the retrieved data to JSON.
+    /// Module and prefix are used to specify which subset of the database to dump.
+    /// Password is used to decrypt the server&#39;s configuration file. If dumping the client database,
+    /// the password can be an arbitrary string.
+    </span>Dump {
+        cfg_dir: PathBuf,
+        <span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+        </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        <span class="attr">#[arg(required = <span class="bool-val">false</span>)]
+        </span>modules: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        <span class="attr">#[arg(required = <span class="bool-val">false</span>)]
+        </span>prefixes: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    },
 }
 
 <span class="kw">fn </span>hex_parser(hex: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Bytes&gt; {
@@ -131,28 +199,58 @@
 </span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>options: Options = Options::parse();
 
-    <span class="kw">let </span>db = open_db(<span class="kw-2">&amp;</span>options.database).<span class="kw">await</span>.expect(<span class="string">&quot;Failed to open DB&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-
     <span class="kw">match </span>options.command {
         DbCommand::List { prefix } =&gt; {
+            <span class="kw">let </span>db = open_db(<span class="kw-2">&amp;</span>options.database).<span class="kw">await</span>.expect(<span class="string">&quot;Failed to open DB&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">let </span>prefix_iter = dbtx.raw_find_by_prefix(<span class="kw-2">&amp;</span>prefix).<span class="kw">await</span>;
             <span class="kw">for </span>db_res <span class="kw">in </span>prefix_iter {
                 <span class="kw">let </span>(key, value) = db_res.expect(<span class="string">&quot;DB error&quot;</span>);
                 print_kv(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value);
             }
+            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
         DbCommand::Write { key, value } =&gt; {
+            <span class="kw">let </span>db = open_db(<span class="kw-2">&amp;</span>options.database).<span class="kw">await</span>.expect(<span class="string">&quot;Failed to open DB&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             dbtx.raw_insert_bytes(<span class="kw-2">&amp;</span>key, value.into())
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;DB error&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
         DbCommand::Delete { key } =&gt; {
+            <span class="kw">let </span>db = open_db(<span class="kw-2">&amp;</span>options.database).<span class="kw">await</span>.expect(<span class="string">&quot;Failed to open DB&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             dbtx.raw_remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        }
+        DbCommand::Dump {
+            cfg_dir,
+            modules,
+            prefixes,
+            password,
+        } =&gt; {
+            <span class="kw">let </span>modules = <span class="kw">match </span>modules {
+                <span class="prelude-val">Some</span>(mods) =&gt; mods
+                    .split(<span class="string">&#39;,&#39;</span>)
+                    .map(|s| s.to_string().to_lowercase())
+                    .collect::&lt;Vec&lt;String&gt;&gt;(),
+                <span class="prelude-val">None </span>=&gt; Vec::new(),
+            };
+
+            <span class="kw">let </span>prefix_names = <span class="kw">match </span>prefixes {
+                <span class="prelude-val">Some</span>(db_prefixes) =&gt; db_prefixes
+                    .split(<span class="string">&#39;,&#39;</span>)
+                    .map(|s| s.to_string().to_lowercase())
+                    .collect::&lt;Vec&lt;String&gt;&gt;(),
+                <span class="prelude-val">None </span>=&gt; Vec::new(),
+            };
+
+            <span class="kw">let </span><span class="kw-2">mut </span>dbdump =
+                DatabaseDump::new(cfg_dir, options.database, password, modules, prefix_names);
+            dbdump.dump_database().<span class="kw">await</span>;
         }
     }
-
-    dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="dbtool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="dbtool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (658fad6c5 2023-02-03)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

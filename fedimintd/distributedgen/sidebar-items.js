@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["create_cert",""],["gen_tls",""],["parse_peer_params",""],["run_dkg",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["create_cert",""],["gen_tls",""],["parse_peer_params",""],["run_dkg",""]],"opaque":[["",""]]};
