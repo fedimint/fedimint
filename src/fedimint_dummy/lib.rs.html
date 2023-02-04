@@ -318,11 +318,6 @@
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt;
@@ -367,7 +362,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>DummyOutputConfirmation;
+</span><span class="kw">pub struct </span>DummyConsensusItem;
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>DummyVerificationCache;
@@ -513,7 +508,7 @@
     }
 }
 
-<span class="kw">impl </span>fmt::Display <span class="kw">for </span>DummyOutputConfirmation {
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>DummyConsensusItem {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         <span class="macro">write!</span>(f, <span class="string">&quot;DummyOutputConfirmation&quot;</span>)
     }
@@ -521,13 +516,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Dummy {
-    <span class="kw">const </span>KIND: ModuleKind = KIND;
-
+    <span class="kw">type </span>Gen = DummyConfigGenerator;
     <span class="kw">type </span>Decoder = DummyDecoder;
-    <span class="kw">type </span>Input = DummyInput;
-    <span class="kw">type </span>Output = DummyOutput;
-    <span class="kw">type </span>OutputOutcome = DummyOutputOutcome;
-    <span class="kw">type </span>ConsensusItem = DummyOutputConfirmation;
     <span class="kw">type </span>VerificationCache = DummyVerificationCache;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder {
@@ -541,20 +531,20 @@
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
+    ) -&gt; Vec&lt;DummyConsensusItem&gt; {
         <span class="macro">vec!</span>[]
     }
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        _consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
+        _consensus_items: Vec&lt;(PeerId, DummyConsensusItem)&gt;,
     ) {
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input&gt; + Send,
+        _inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyInput&gt; + Send,
     ) -&gt; <span class="self">Self</span>::VerificationCache {
         DummyVerificationCache
     }
@@ -564,7 +554,7 @@
         _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        _input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
+        _input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="macro">unimplemented!</span>()
     }
@@ -573,7 +563,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         _interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        _input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::Input,
+        _input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DummyInput,
         _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="macro">unimplemented!</span>()
@@ -582,7 +572,7 @@
     <span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
-        _output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
+        _output: <span class="kw-2">&amp;</span>DummyOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="macro">unimplemented!</span>()
     }
@@ -590,7 +580,7 @@
     <span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        _output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
+        _output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyOutput,
         _out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="macro">unimplemented!</span>()
@@ -608,7 +598,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         _out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;DummyOutputOutcome&gt; {
         <span class="prelude-val">None
     </span>}
 
@@ -639,7 +629,7 @@
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
-    DummyOutputConfirmation,
+    DummyConsensusItem,
     DummyVerificationCache
 );
 

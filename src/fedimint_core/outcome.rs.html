@@ -185,7 +185,7 @@
 
 <span class="kw">pub mod </span>legacy {
     <span class="kw">use </span>fedimint_api::core::{
-        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -203,9 +203,9 @@
 
     <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>OutputOutcome {
-        Mint(&lt;Mint <span class="kw">as </span>ServerModule&gt;::OutputOutcome),
-        Wallet(&lt;Wallet <span class="kw">as </span>ServerModule&gt;::OutputOutcome),
-        LN(&lt;Lightning <span class="kw">as </span>ServerModule&gt;::OutputOutcome),
+        Mint(&lt;&lt;Mint <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome),
+        Wallet(&lt;&lt;Wallet <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome),
+        LN(&lt;&lt;Lightning <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome),
     }
 
     <span class="kw">impl </span>From&lt;fedimint_api::core::DynOutputOutcome&gt; <span class="kw">for </span>OutputOutcome {

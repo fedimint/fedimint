@@ -588,14 +588,6 @@
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
 <a href="#590" id="590">590</a>
-<a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -617,10 +609,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
-<span class="kw">use </span><span class="kw">crate</span>::core::{
-    Decoder, DynDecoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
-    OutputOutcome,
-};
+<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseTransaction};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
@@ -1043,18 +1032,13 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ServerModule: Debug + Sized {
-    <span class="kw">const </span>KIND: ModuleKind;
-
+    <span class="kw">type </span>Gen: ModuleGen;
     <span class="kw">type </span>Decoder: Decoder;
-    <span class="kw">type </span>Input: Input;
-    <span class="kw">type </span>Output: Output;
-    <span class="kw">type </span>OutputOutcome: OutputOutcome;
-    <span class="kw">type </span>ConsensusItem: ModuleConsensusItem;
     <span class="kw">type </span>VerificationCache: VerificationCache;
 
     <span class="kw">fn </span>module_kind() -&gt; ModuleKind {
         <span class="comment">// Note: All modules should define kinds as &amp;&#39;static str, so this doesn&#39;t allocate
-        </span><span class="self">Self</span>::KIND
+        </span><span class="self">Self</span>::Gen::KIND
     }
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
@@ -1066,7 +1050,7 @@
     </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt;;
+    ) -&gt; Vec&lt;&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The database transaction will be
@@ -1075,7 +1059,7 @@
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
+        consensus_items: Vec&lt;(PeerId, &lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::ConsensusItem)&gt;,
     );
 
     <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction processing. If the
@@ -1084,7 +1068,7 @@
     /// constructing such lookup tables.
     </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input&gt; + Send,
+        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input&gt; + Send,
     ) -&gt; <span class="self">Self</span>::VerificationCache;
 
     <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
@@ -1096,7 +1080,7 @@
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Input,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
     <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the
@@ -1110,7 +1094,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::Input,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
@@ -1121,7 +1105,7 @@
     </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
-        output: <span class="kw-2">&amp;</span><span class="self">Self</span>::Output,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
@@ -1137,7 +1121,7 @@
     </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
@@ -1159,7 +1143,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::OutputOutcome&gt;;
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome&gt;;
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
     ///

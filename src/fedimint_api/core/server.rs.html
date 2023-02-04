@@ -629,7 +629,7 @@
                         peer,
                         Clone::clone(
                             item.as_any()
-                                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::ConsensusItem&gt;()
+                                .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::ConsensusItem&gt;()
                                 .expect(<span class="string">&quot;incorrect consensus item type passed to module plugin&quot;</span>),
                         ),
                     )
@@ -648,7 +648,7 @@
             <span class="self">self</span>,
             inputs.iter().map(|i| {
                 i.as_any()
-                    .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Input&gt;()
+                    .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input&gt;()
                     .expect(<span class="string">&quot;incorrect input type passed to module plugin&quot;</span>)
             }),
         )
@@ -676,7 +676,7 @@
                 .expect(<span class="string">&quot;incorrect verification cache type passed to module plugin&quot;</span>),
             input
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Input&gt;()
+                .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input&gt;()
                 .expect(<span class="string">&quot;incorrect input type passed to module plugin&quot;</span>),
         )
         .<span class="kw">await
@@ -703,7 +703,7 @@
             dbtx,
             input
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Input&gt;()
+                .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input&gt;()
                 .expect(<span class="string">&quot;incorrect input type passed to module plugin&quot;</span>),
             verification_cache
                 .as_any()
@@ -728,7 +728,7 @@
             dbtx,
             output
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Output&gt;()
+                .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Output&gt;()
                 .expect(<span class="string">&quot;incorrect output type passed to module plugin&quot;</span>),
         )
         .<span class="kw">await
@@ -755,7 +755,7 @@
             dbtx,
             output
                 .as_any()
-                .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Output&gt;()
+                .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Output&gt;()
                 .expect(<span class="string">&quot;incorrect output type passed to module plugin&quot;</span>),
             out_point,
         )

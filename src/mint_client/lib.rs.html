@@ -1502,6 +1502,10 @@
 <a href="#1502" id="1502">1502</a>
 <a href="#1503" id="1503">1503</a>
 <a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1534,8 +1538,8 @@
 <span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::time::SystemTime;
+<span class="kw">use </span>fedimint_api::TieredMulti;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_api::{ServerModule, TieredMulti};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
 <span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningClientConfig;
@@ -2809,7 +2813,11 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.context
             .api
-            .await_output_outcome::&lt;&lt;fedimint_core::modules::mint::Mint <span class="kw">as </span>ServerModule&gt;::OutputOutcome&gt;(outpoint, Duration::from_secs(<span class="number">10</span>), <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
+            .await_output_outcome::&lt;MintOutputOutcome&gt;(
+                outpoint,
+                Duration::from_secs(<span class="number">10</span>),
+                <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need

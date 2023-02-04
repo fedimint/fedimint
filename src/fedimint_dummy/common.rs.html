@@ -43,7 +43,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 
-<span class="kw">use crate</span>::{DummyInput, DummyOutput, DummyOutputConfirmation, DummyOutputOutcome};
+<span class="kw">use crate</span>::{DummyConsensusItem, DummyInput, DummyOutput, DummyOutputOutcome};
 
 <span class="attr">#[derive(Debug, Default, Clone)]
 </span><span class="kw">pub struct </span>DummyDecoder;
@@ -52,7 +52,7 @@
     <span class="kw">type </span>Input = DummyInput;
     <span class="kw">type </span>Output = DummyOutput;
     <span class="kw">type </span>OutputOutcome = DummyOutputOutcome;
-    <span class="kw">type </span>ConsensusItem = DummyOutputConfirmation;
+    <span class="kw">type </span>ConsensusItem = DummyConsensusItem;
 
     <span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;DummyInput, DecodeError&gt; {
         DummyInput::consensus_decode(<span class="kw-2">&amp;mut </span>d, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
@@ -72,8 +72,8 @@
     <span class="kw">fn </span>decode_consensus_item(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DummyOutputConfirmation, DecodeError&gt; {
-        DummyOutputConfirmation::consensus_decode(<span class="kw-2">&amp;mut </span>r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;DummyConsensusItem, DecodeError&gt; {
+        DummyConsensusItem::consensus_decode(<span class="kw-2">&amp;mut </span>r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
     }
 }
 </code></pre></div>

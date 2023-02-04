@@ -358,6 +358,13 @@
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
 <a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -366,7 +373,7 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
-<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -393,8 +400,6 @@
 <span class="kw">impl</span>&lt;Module&gt; FakeFed&lt;Module&gt;
 <span class="kw">where
     </span>Module: ServerModule + <span class="lifetime">&#39;static </span>+ Send + Sync,
-    Module::ConsensusItem: Clone,
-    Module::OutputOutcome: Eq + Debug,
     Module::Decoder: Sync + Send + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">pub async fn </span>new&lt;ConfGen, F, FF&gt;(
@@ -437,14 +442,17 @@
         <span class="self">self</span>.block_height.store(bh, Ordering::Relaxed);
     }
 
-    <span class="kw">pub async fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>Module::Input) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
+    <span class="kw">pub async fn </span>verify_input(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span>&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Input,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
         <span class="kw">async fn </span>member_validate&lt;M: ServerModule&gt;(
             member: <span class="kw-2">&amp;</span>M,
             dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
             fake_ic: <span class="kw-2">&amp;</span>FakeInterconnect,
-            input: <span class="kw-2">&amp;</span>M::Input,
+            input: <span class="kw-2">&amp;</span>&lt;M::Decoder <span class="kw">as </span>Decoder&gt;::Input,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
             <span class="kw">let </span>cache = member.build_verification_cache(std::iter::once(input));
             <span class="kw">let </span>InputMeta {
@@ -475,7 +483,7 @@
         assert_all_equal_result(results.into_iter())
     }
 
-    <span class="kw">pub async fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>Module::Output) -&gt; bool {
+    <span class="kw">pub async fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Output) -&gt; bool {
         <span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
         <span class="kw">for </span>(<span class="kw">_</span>, member, db, module_instance_id) <span class="kw">in </span><span class="self">self</span>.members.iter() {
             results.push(
@@ -497,10 +505,10 @@
     <span class="comment">// TODO: add expected result to inputs/outputs
     </span><span class="kw">pub async fn </span>consensus_round(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        inputs: <span class="kw-2">&amp;</span>[Module::Input],
-        outputs: <span class="kw-2">&amp;</span>[(OutPoint, Module::Output)],
+        inputs: <span class="kw-2">&amp;</span>[&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Input],
+        outputs: <span class="kw-2">&amp;</span>[(OutPoint, &lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Output)],
     ) <span class="kw">where
-        </span>&lt;Module <span class="kw">as </span>ServerModule&gt;::Input: Send + Sync,
+        </span>&lt;&lt;Module <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input: Send + Sync + Eq,
     {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
         <span class="comment">// TODO: only include some of the proposals for realism
@@ -553,7 +561,13 @@
         }
     }
 
-    <span class="kw">pub async fn </span>output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;Module::OutputOutcome&gt; {
+    <span class="kw">pub async fn </span>output_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome&gt;
+    <span class="kw">where
+        </span>&lt;&lt;Module <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome: Eq,
+    {
         <span class="comment">// Since every member is in the same epoch they should have the same internal state, even
         // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
         // main consensus loop into another thread to optimize latency. This test will probably fail

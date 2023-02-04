@@ -404,7 +404,6 @@
 <a href="#404" id="404">404</a>
 <a href="#405" id="405">405</a>
 <a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -418,6 +417,8 @@
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::modules::wallet::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+<span class="kw">use </span>fedimint_core::modules::wallet::WalletInput;
+<span class="kw">use </span>fedimint_core::modules::wallet::WalletOutput;
 <span class="kw">use </span>fedimint_core::modules::wallet::{Wallet, WalletOutputOutcome};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
@@ -447,17 +448,14 @@
         WalletDecoder
     }
 
-    <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Input) -&gt; TransactionItemAmount {
+    <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>WalletInput) -&gt; TransactionItemAmount {
         TransactionItemAmount {
             amount: Amount::from_sats(input.tx_output().value),
             fee: <span class="self">self</span>.config.fee_consensus.peg_in_abs,
         }
     }
 
-    <span class="kw">fn </span>output_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Output,
-    ) -&gt; TransactionItemAmount {
+    <span class="kw">fn </span>output_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>WalletOutput) -&gt; TransactionItemAmount {
         TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
             fee: <span class="self">self</span>.config.fee_consensus.peg_out_abs,

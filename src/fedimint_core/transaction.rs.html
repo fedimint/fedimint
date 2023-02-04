@@ -507,7 +507,7 @@
 </span><span class="kw">pub mod </span>legacy {
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_api::core::{
-        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -539,18 +539,18 @@
     </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>Input {
         <span class="comment">// TODO: maybe treat every note as a seperate input?
-        </span>Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Input),
-        Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Input),
-        LN(&lt;fedimint_ln::Lightning <span class="kw">as </span>ServerModule&gt;::Input),
+        </span>Mint(&lt;&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input),
+        Wallet(&lt;&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input),
+        LN(&lt;&lt;fedimint_ln::Lightning <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input),
     }
 
     <span class="comment">// TODO: check if clippy is right
     </span><span class="attr">#[allow(clippy::large_enum_variant)]
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>Output {
-        Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Output),
-        Wallet(&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Output),
-        LN(&lt;fedimint_ln::Lightning <span class="kw">as </span>ServerModule&gt;::Output),
+        Mint(&lt;&lt;fedimint_mint::Mint <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Output),
+        Wallet(&lt;&lt;fedimint_wallet::Wallet <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Output),
+        LN(&lt;&lt;fedimint_ln::Lightning <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Output),
     }
 
     <span class="kw">impl </span>Transaction {
