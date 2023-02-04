@@ -7,7 +7,7 @@ use std::ops::Sub;
 use async_trait::async_trait;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
-use db::{ECashUserBackupSnapshot, EcashBackupKey};
+use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     scalar, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams, ServerModuleConfig,
@@ -29,8 +29,8 @@ use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
-    plugin_types_trait_impl, Amount, NumPeers, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
-    TieredMultiZip,
+    plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
+    PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
 use impl_tools::autoimpl;
 use itertools::Itertools;
@@ -38,6 +38,7 @@ use rand::rngs::OsRng;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use secp256k1_zkp::SECP256K1;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use tbs::{
     combine_valid_shares, dealer_keygen, sign_blinded_msg, verify_blind_share, Aggregatable,
     AggregatePublicKey, PublicKeyShare, SecretKeyShare,
@@ -49,8 +50,9 @@ use tracing::{debug, error, info, warn};
 use crate::common::MintDecoder;
 use crate::config::{MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate};
 use crate::db::{
-    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
-    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
+    DbKeyPrefix, EcashBackupKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey,
+    OutputOutcomeKey, OutputOutcomeKeyPrefix, ProposedPartialSignatureKey,
+    ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
     ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
 };
 
@@ -295,6 +297,76 @@ impl ModuleGen for MintGen {
         config: serde_json::Value,
     ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
         serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
+    }
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::NoteNonce => {
+                    push_db_key_items!(dbtx, NonceKeyPrefix, NonceKey, mint, "Used Coins");
+                }
+                DbKeyPrefix::MintAuditItem => {
+                    push_db_pair_items!(
+                        dbtx,
+                        MintAuditItemKeyPrefix,
+                        MintAuditItemKey,
+                        fedimint_api::Amount,
+                        mint,
+                        "Mint Audit Items"
+                    );
+                }
+                DbKeyPrefix::OutputOutcome => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OutputOutcomeKeyPrefix,
+                        OutputOutcomeKey,
+                        MintOutputBlindSignatures,
+                        mint,
+                        "Output Outcomes"
+                    );
+                }
+                DbKeyPrefix::ProposedPartialSig => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ProposedPartialSignaturesKeyPrefix,
+                        ProposedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        "Proposed Signature Shares"
+                    );
+                }
+                DbKeyPrefix::ReceivedPartialSig => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ReceivedPartialSignaturesKeyPrefix,
+                        ReceivedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        "Received Signature Shares"
+                    );
+                }
+                DbKeyPrefix::EcashBackup => {
+                    push_db_pair_items!(
+                        dbtx,
+                        EcashBackupKeyPrefix,
+                        EcashBackupKey,
+                        ECashUserBackupSnapshot,
+                        mint,
+                        "User Ecash Backup"
+                    );
+                }
+            }
+        }
+
+        Box::new(mint.into_iter())
     }
 }
 

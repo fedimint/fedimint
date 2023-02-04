@@ -739,18 +739,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "docopt"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f3f119846c823f9eafcf953a8f6ffb6ed69bf6240883261a7f13b634579a51f"
-dependencies = [
- "lazy_static",
- "regex",
- "serde",
- "strsim",
-]
-
-[[package]]
 name = "dotenvy"
 version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -870,6 +858,7 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
+ "erased-serde",
  "fedimint-derive",
  "futures",
  "getrandom",
@@ -974,10 +963,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-dbdump"
+name = "fedimint-dbtool"
 version = "0.1.0"
 dependencies = [
- "docopt",
+ "anyhow",
+ "bitcoin_hashes",
+ "bytes",
+ "clap",
  "erased-serde",
  "fedimint-api",
  "fedimint-core",
@@ -986,25 +978,13 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet",
+ "fedimintd",
+ "hex",
  "mint-client",
- "secp256k1",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
- "tokio",
-]
-
-[[package]]
-name = "fedimint-dbtool"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitcoin_hashes",
- "bytes",
- "clap",
- "fedimint-api",
- "fedimint-rocksdb",
  "tokio",
 ]
 
@@ -1037,6 +1017,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin_hashes",
+ "erased-serde",
  "fedimint-api",
  "futures",
  "impl-tools",
@@ -1056,6 +1037,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin_hashes",
+ "erased-serde",
  "fedimint-api",
  "fedimint-testing",
  "futures",
@@ -1087,6 +1069,7 @@ dependencies = [
  "bincode",
  "bitcoin_hashes",
  "counter",
+ "erased-serde",
  "fedimint-api",
  "futures",
  "impl-tools",
@@ -1240,6 +1223,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
+ "erased-serde",
  "fedimint-api",
  "fedimint-bitcoind",
  "impl-tools",
@@ -1736,6 +1720,9 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "hex_fmt"
