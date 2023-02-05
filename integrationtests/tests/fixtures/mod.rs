@@ -598,7 +598,7 @@ impl UserTest<UserClientConfig> {
     }
 }
 
-impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
+impl<T: AsRef<ClientConfig> + Clone + Send> UserTest<T> {
     pub fn new(client: Arc<Client<T>>) -> Self {
         let config = client.config();
         UserTest { client, config }
@@ -746,7 +746,7 @@ impl FederationTest {
     }
 
     /// Helper to issue change for a user
-    pub async fn spend_ecash<C: AsRef<ClientConfig> + Clone>(
+    pub async fn spend_ecash<C: AsRef<ClientConfig> + Clone + Send + Sync + 'static>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
@@ -761,17 +761,27 @@ impl FederationTest {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
         }
 
-        tokio::join!(
-            user.client.spend_ecash(amount, rng()),
-            self.await_consensus_epochs(2)
-        )
-        .0
-        .unwrap()
+        let mut task_group = TaskGroup::new();
+
+        let client = user.client.clone();
+
+        let res = task_group
+            .spawn("spend ecash", move |_| async move {
+                client.spend_ecash(amount, rng()).await
+            })
+            .await;
+
+        self.await_consensus_epochs(2).await.unwrap();
+
+        let res = res.await.unwrap();
+        task_group.join_all(None).await.unwrap();
+
+        res.unwrap()
     }
 
     /// Mines a UTXO then mints notes for user, assuring that the balance sheet of the federation
     /// nets out to zero.
-    pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone>(
+    pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         bitcoin: &dyn BitcoinTest,
@@ -785,7 +795,7 @@ impl FederationTest {
 
     /// Inserts notes directly into the databases of federation nodes, runs consensus to sign them
     /// then fetches the notes for the user client.
-    pub async fn mint_notes_for_user<C: AsRef<ClientConfig> + Clone>(
+    pub async fn mint_notes_for_user<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
@@ -796,7 +806,7 @@ impl FederationTest {
     }
 
     /// Mines a UTXO owned by the federation.
-    pub async fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone>(
+    pub async fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         bitcoin: &dyn BitcoinTest,
@@ -856,7 +866,7 @@ impl FederationTest {
     }
 
     /// Inserts notes directly into the databases of federation nodes
-    pub async fn database_add_notes_for_user<C: AsRef<ClientConfig> + Clone>(
+    pub async fn database_add_notes_for_user<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
