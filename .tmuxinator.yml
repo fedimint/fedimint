@@ -10,6 +10,7 @@ pre_window:
   - alias gateway-cli="\$FM_GATEWAY_CLI"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
   - alias dbtool="\$FM_DB_TOOL"
+  - alias restart="./scripts/restart-tmux.sh"
 tmux_detached: false
 windows:
   - main:
