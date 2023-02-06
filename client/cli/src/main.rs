@@ -609,7 +609,7 @@ async fn handle_command(
             description,
             expiry_time,
         } => client
-            .generate_invoice(amount, description, &mut rng, expiry_time)
+            .generate_confirmed_invoice(amount, description, &mut rng, expiry_time)
             .await
             .transform(
                 |confirmed_invoice| CliOutput::LnInvoice {

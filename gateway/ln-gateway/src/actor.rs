@@ -21,6 +21,12 @@ pub struct GatewayActor {
     client: Arc<GatewayClient>,
 }
 
+#[derive(Debug, Clone)]
+pub enum BuyPreimage {
+    Internal((OutPoint, ContractId)),
+    External(Preimage),
+}
+
 impl GatewayActor {
     pub async fn new(client: Arc<GatewayClient>, route_hints: Vec<RouteHint>) -> Result<Self> {
         let register_client = client.clone();
@@ -92,8 +98,20 @@ impl GatewayActor {
         ln_rpc: Arc<dyn LnRpc>,
         contract_id: ContractId,
     ) -> Result<OutPoint> {
+        self.pay_invoice_buy_preimage_finalize_and_claim(
+            contract_id,
+            self.pay_invoice_buy_preimage(ln_rpc, contract_id).await?,
+        )
+        .await
+    }
+
+    #[instrument(skip_all, fields(%contract_id), err)]
+    pub async fn pay_invoice_buy_preimage(
+        &self,
+        ln_rpc: Arc<dyn LnRpc>,
+        contract_id: ContractId,
+    ) -> Result<BuyPreimage> {
         info!("Fetching contract");
-        let rng = rand::rngs::OsRng;
         let contract_account = self.client.fetch_outgoing_contract(contract_id).await?;
 
         let payment_params = match self
@@ -127,15 +145,48 @@ impl GatewayActor {
                 .await
                 .unwrap_or(false);
 
-        let preimage_res = if is_internal_payment {
-            self.buy_preimage_internal(&payment_params.payment_hash, &payment_params.invoice_amount)
-                .await
+        Ok(if is_internal_payment {
+            BuyPreimage::Internal(
+                self.buy_preimage_internal(
+                    &payment_params.payment_hash,
+                    &payment_params.invoice_amount,
+                )
+                .await?,
+            )
         } else {
-            self.buy_preimage_external(ln_rpc, contract_account.contract.invoice, &payment_params)
-                .await
-        };
+            BuyPreimage::External(
+                self.buy_preimage_external(
+                    ln_rpc,
+                    contract_account.contract.invoice,
+                    &payment_params,
+                )
+                .await?,
+            )
+        })
+    }
 
-        match preimage_res {
+    pub async fn pay_invoice_buy_preimage_finalize(
+        &self,
+        buy_preimage: BuyPreimage,
+    ) -> Result<Preimage> {
+        match buy_preimage {
+            BuyPreimage::Internal((out_point, contract_id)) => {
+                self.buy_preimage_internal_await_decryption(out_point, contract_id)
+                    .await
+            }
+            BuyPreimage::External(preimage) => Ok(preimage),
+        }
+    }
+
+    #[instrument(skip_all, fields(?buy_preimage), err)]
+    pub async fn pay_invoice_buy_preimage_finalize_and_claim(
+        &self,
+        contract_id: ContractId,
+        buy_preimage: BuyPreimage,
+    ) -> Result<OutPoint> {
+        let rng = rand::rngs::OsRng;
+
+        match self.pay_invoice_buy_preimage_finalize(buy_preimage).await {
             Ok(preimage) => {
                 let outpoint = self
                     .client
@@ -158,16 +209,25 @@ impl GatewayActor {
         &self,
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
-    ) -> Result<Preimage> {
+    ) -> Result<(OutPoint, ContractId)> {
+        let mut rng = rand::rngs::OsRng;
+
         info!("buy_preimage_internal");
         self.fetch_all_notes().await;
 
-        let mut rng = rand::rngs::OsRng;
-        let (out_point, contract_id) = self
+        Ok(self
             .client
             .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
-            .await?;
+            .await?)
+    }
 
+    #[instrument(skip(self), ret, err)]
+    pub async fn buy_preimage_internal_await_decryption(
+        &self,
+        out_point: OutPoint,
+        contract_id: ContractId,
+    ) -> Result<Preimage> {
+        let rng = rand::rngs::OsRng;
         info!("Awaiting decryption of preimage");
         match self.client.await_preimage_decryption(out_point).await {
             Ok(preimage) => Ok(preimage),
@@ -204,6 +264,7 @@ impl GatewayActor {
         }
     }
 
+    #[instrument(skip_all, fields(contract_id, ?outpoint), ret, err)]
     pub async fn await_outgoing_contract_claimed(
         &self,
         contract_id: ContractId,

@@ -1178,6 +1178,7 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1202,6 +1203,7 @@ dependencies = [
  "futures",
  "hbbft",
  "itertools",
+ "lazy_static",
  "lightning",
  "lightning-invoice",
  "ln-gateway",

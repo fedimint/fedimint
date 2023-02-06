@@ -478,6 +478,9 @@ pub trait LightningTest {
 
     /// Returns the amount that the gateway LN node has sent
     async fn amount_sent(&self) -> Amount;
+
+    /// Is this a LN instance shared with other tests
+    fn is_shared(&self) -> bool;
 }
 
 pub struct GatewayTest {
@@ -754,13 +757,9 @@ impl FederationTest {
         if notes.total_amount() == amount {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
         }
-
-        tokio::join!(
-            user.client.spend_ecash(amount, rng()),
-            self.await_consensus_epochs(2)
-        )
-        .0
-        .unwrap()
+        user.client.remint_ecash(amount, rng()).await.unwrap();
+        self.await_consensus_epochs(2).await.unwrap();
+        user.client.remint_ecash_await(amount).await.unwrap()
     }
 
     /// Mines a UTXO then mints notes for user, assuring that the balance sheet of the federation
@@ -797,7 +796,7 @@ impl FederationTest {
         amount: bitcoin::Amount,
     ) {
         let address = user.client.get_new_pegin_address(rng()).await;
-        let (txout_proof, btc_transaction) = bitcoin.send_and_mine_block(&address, amount);
+        let (txout_proof, btc_transaction) = bitcoin.send_and_mine_block(&address, amount).await;
         let (_, input) = user
             .client
             .wallet_client()
@@ -957,6 +956,24 @@ impl FederationTest {
             self.update_last_consensus();
         }
         Ok(())
+    }
+
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn has_pending_epoch(&self) -> bool {
+        for server in &self.servers {
+            if server
+                .borrow_mut()
+                .fedimint
+                .consensus
+                .get_consensus_proposal()
+                .await
+                .items
+                .is_empty()
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// Returns true if the fed would produce an empty epoch proposal (no new information)

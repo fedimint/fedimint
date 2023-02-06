@@ -98,10 +98,12 @@ async fn test_gateway_authentication() -> Result<()> {
     // Test gateway authentication on `deposit` function
     // *  `deposit` with correct password succeeds
     // *  `deposit` with incorrect password fails
-    let (proof, tx) = bitcoin.send_and_mine_block(
-        &bitcoin.get_new_address(),
-        bitcoin::Amount::from_btc(1.0).unwrap(),
-    );
+    let (proof, tx) = bitcoin
+        .send_and_mine_block(
+            &bitcoin.get_new_address().await,
+            bitcoin::Amount::from_btc(1.0).unwrap(),
+        )
+        .await;
     let payload = DepositPayload {
         federation_id: federation_id.clone(),
         txout_proof: proof,
@@ -118,7 +120,7 @@ async fn test_gateway_authentication() -> Result<()> {
     let payload = WithdrawPayload {
         federation_id,
         amount: bitcoin::Amount::from_sat(100),
-        address: bitcoin.get_new_address(),
+        address: bitcoin.get_new_address().await,
     };
     test_auth(&gw_password, |pw| client_ref.withdraw(pw, payload.clone())).await?;
 

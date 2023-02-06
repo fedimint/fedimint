@@ -273,8 +273,14 @@ impl LnGateway {
         // We use a random federation as the default (works because we only have one federation registered)
         //
         // TODO: Use subscribe intercept htlc streams to avoid actor selection with every intercepted htlc!
-        self.actors.lock().await.values().collect::<Vec<_>>()[0]
-            .buy_preimage_internal(&payment_hash, &invoice_amount)
+        let lock = &self.actors.lock().await;
+        let gateway_actor = lock.values().collect::<Vec<_>>()[0];
+        gateway_actor
+            .pay_invoice_buy_preimage_finalize(actor::BuyPreimage::Internal(
+                gateway_actor
+                    .buy_preimage_internal(&payment_hash, &invoice_amount)
+                    .await?,
+            ))
             .await
     }
 

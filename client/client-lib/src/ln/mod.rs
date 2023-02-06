@@ -129,7 +129,7 @@ impl LnClient {
     }
 
     pub async fn get_contract_account(&self, id: ContractId) -> Result<ContractAccount> {
-        timeout(Duration::from_secs(10), self.context.api.fetch_contract(id))
+        timeout(Duration::from_secs(30), self.context.api.fetch_contract(id))
             .await
             .map_err(|_e| LnClientError::Timeout)?
             .map_err(LnClientError::ApiError)
