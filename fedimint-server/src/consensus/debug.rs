@@ -12,7 +12,7 @@ pub fn epoch_message(consensus: &HbbftConsensusOutcome) -> String {
     for (peer, items) in consensus.contributions.iter() {
         for item in items {
             let item_debug = item_message(item);
-            write!(debug, "\n  Peer {}: {}", peer, item_debug).unwrap();
+            write!(debug, "\n  Peer {peer}: {item_debug}").unwrap();
         }
     }
     debug
@@ -32,10 +32,10 @@ fn item_message(item: &ConsensusItem) -> String {
             let mut tx_debug = "Transaction".to_string();
             for input in inputs.iter() {
                 // TODO: add pretty print fn to interface
-                write!(tx_debug, "\n    Input: {}", input).unwrap();
+                write!(tx_debug, "\n    Input: {input}").unwrap();
             }
             for output in outputs.iter() {
-                write!(tx_debug, "\n    Output: {}", output).unwrap();
+                write!(tx_debug, "\n    Output: {output}").unwrap();
             }
             tx_debug
         }

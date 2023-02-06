@@ -48,7 +48,7 @@ async fn main() {
     let mut args = std::env::args();
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
-            println!("{}", CODE_VERSION);
+            println!("{CODE_VERSION}");
             return;
         }
     }

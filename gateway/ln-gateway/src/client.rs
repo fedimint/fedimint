@@ -168,7 +168,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
     fn save_config(&self, config: GatewayClientConfig) -> Result<()> {
         let id = config.client_config.federation_id.to_string();
-        let path: PathBuf = self.work_dir.join(format!("{}.json", id));
+        let path: PathBuf = self.work_dir.join(format!("{id}.json"));
 
         if Path::new(&path).is_file() {
             if config

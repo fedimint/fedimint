@@ -94,7 +94,7 @@ impl fmt::Display for FederationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Federation rpc error(")?;
         for (i, (peer, e)) in self.0.iter().enumerate() {
-            f.write_fmt(format_args!("{} => {})", peer, e))?;
+            f.write_fmt(format_args!("{peer} => {e})"))?;
             if i == self.0.len() - 1 {
                 f.write_str(", ")?;
             }
@@ -550,7 +550,7 @@ where
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
         self.request_with_strategy(
             Retry404::new(self.all_members().one_honest()),
-            format!("/module/{}/account", LEGACY_HARDCODED_INSTANCE_ID_LN),
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/account"),
             erased_single_param(&contract),
         )
         .await
@@ -561,7 +561,7 @@ where
     ) -> FederationResult<IncomingContractOffer> {
         self.request_with_strategy(
             Retry404::new(self.all_members().one_honest()),
-            format!("/module/{}/offer", LEGACY_HARDCODED_INSTANCE_ID_LN),
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/offer"),
             erased_single_param(&payment_hash),
         )
         .await
@@ -569,7 +569,7 @@ where
 
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
         self.request_union(
-            format!("/module/{}/list_gateways", LEGACY_HARDCODED_INSTANCE_ID_LN),
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/list_gateways"),
             erased_no_param(),
         )
         .await
@@ -577,10 +577,7 @@ where
 
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.request_current_consensus(
-            format!(
-                "/module/{}/register_gateway",
-                LEGACY_HARDCODED_INSTANCE_ID_LN
-            ),
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/register_gateway"),
             erased_single_param(gateway),
         )
         .await
@@ -619,7 +616,7 @@ where
         request: &fedimint_mint::SignedBackupRequest,
     ) -> FederationResult<()> {
         self.request_current_consensus(
-            format!("/module/{}/backup", LEGACY_HARDCODED_INSTANCE_ID_MINT),
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/backup"),
             erased_single_param(request),
         )
         .await
@@ -633,7 +630,7 @@ where
                 UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
                     self.all_members().one_honest(),
                 ),
-                format!("/module/{}/recover", LEGACY_HARDCODED_INSTANCE_ID_MINT),
+                format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/recover"),
                 erased_single_param(id),
             )
             .await?
@@ -663,10 +660,7 @@ where
     async fn fetch_consensus_block_height(&self) -> FederationResult<u64> {
         self.request_with_strategy(
             EventuallyConsistent::new(self.all_members().one_honest()),
-            format!(
-                "/module/{}/block_height",
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET
-            ),
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/block_height"),
             erased_no_param(),
         )
         .await
@@ -678,10 +672,7 @@ where
         amount: bitcoin::Amount,
     ) -> FederationResult<Option<PegOutFees>> {
         self.request_eventually_consistent(
-            format!(
-                "/module/{}/peg_out_fees",
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET
-            ),
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/peg_out_fees"),
             erased_multi_param(&(address, amount.to_sat())),
         )
         .await

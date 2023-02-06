@@ -555,7 +555,7 @@ where
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
 
         futures::executor::block_on(task_group.spawn(
-            format!("io-thread-peer-{}", id),
+            format!("io-thread-peer-{id}"),
             move |handle| async move {
                 Self::run_io_thread(
                     incoming_sender,

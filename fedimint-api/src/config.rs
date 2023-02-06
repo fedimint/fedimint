@@ -618,7 +618,7 @@ impl<G: DkgGroup> Dkg<G> {
         match msg {
             DkgMessage::HashedCommit(hashed) => {
                 match self.hashed_commits.get(&peer) {
-                    Some(old) if *old != hashed => panic!("{} sent us two hashes!", peer),
+                    Some(old) if *old != hashed => panic!("{peer} sent us two hashes!"),
                     _ => self.hashed_commits.insert(peer, hashed),
                 };
 
@@ -629,11 +629,11 @@ impl<G: DkgGroup> Dkg<G> {
             }
             DkgMessage::Commit(commit) => {
                 let hash = self.hash(commit.clone());
-                assert_eq!(self.threshold, commit.len(), "wrong degree from {}", peer);
-                assert_eq!(hash, self.hashed_commits[&peer], "wrong hash from {}", peer);
+                assert_eq!(self.threshold, commit.len(), "wrong degree from {peer}");
+                assert_eq!(hash, self.hashed_commits[&peer], "wrong hash from {peer}");
 
                 match self.commitments.get(&peer) {
-                    Some(old) if *old != commit => panic!("{} sent us two commitments!", peer),
+                    Some(old) if *old != commit => panic!("{peer} sent us two commitments!"),
                     _ => self.commitments.insert(peer, commit),
                 };
 
@@ -659,7 +659,7 @@ impl<G: DkgGroup> Dkg<G> {
                 let commitment = self
                     .commitments
                     .get(&peer)
-                    .unwrap_or_else(|| panic!("{} sent share before commit", peer));
+                    .unwrap_or_else(|| panic!("{peer} sent share before commit"));
                 let commit_product: G = commitment
                     .iter()
                     .enumerate()
@@ -667,9 +667,9 @@ impl<G: DkgGroup> Dkg<G> {
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
-                assert_eq!(share_product, commit_product, "bad commit from {}", peer);
+                assert_eq!(share_product, commit_product, "bad commit from {peer}");
                 match self.sk_shares.get(&peer) {
-                    Some(old) if *old != s1 => panic!("{} sent us two shares!", peer),
+                    Some(old) if *old != s1 => panic!("{peer} sent us two shares!"),
                     _ => self.sk_shares.insert(peer, s1),
                 };
 
@@ -689,7 +689,7 @@ impl<G: DkgGroup> Dkg<G> {
                 let share = self
                     .sk_shares
                     .get(&peer)
-                    .unwrap_or_else(|| panic!("{} sent extract before share", peer));
+                    .unwrap_or_else(|| panic!("{peer} sent extract before share"));
                 let share_product = self.gen_g * *share;
                 let extract_product: G = extract
                     .iter()
@@ -698,10 +698,10 @@ impl<G: DkgGroup> Dkg<G> {
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
-                assert_eq!(share_product, extract_product, "bad extract from {}", peer);
-                assert_eq!(self.threshold, extract.len(), "wrong degree from {}", peer);
+                assert_eq!(share_product, extract_product, "bad extract from {peer}");
+                assert_eq!(self.threshold, extract.len(), "wrong degree from {peer}");
                 match self.pk_shares.get(&peer) {
-                    Some(old) if *old != extract => panic!("{} sent us two extracts!", peer),
+                    Some(old) if *old != extract => panic!("{peer} sent us two extracts!"),
                     _ => self.pk_shares.insert(peer, extract),
                 };
 

@@ -127,7 +127,7 @@ impl<'a> fmt::Debug for AbbreviateJson<'a> {
             // modified https://github.com/serde-rs/json/blob/e41ee42d92022dbffc00f4ed50580fa5e060a379/src/value/mod.rs#L177
             match self.0 {
                 Value::Null => formatter.write_str("Null"),
-                Value::Bool(boolean) => write!(formatter, "Bool({})", boolean),
+                Value::Bool(boolean) => write!(formatter, "Bool({boolean})"),
                 Value::Number(number) => fmt::Debug::fmt(number, formatter),
                 Value::String(string) => {
                     formatter.write_str("String(")?;

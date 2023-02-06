@@ -704,7 +704,7 @@ impl ServerConfigParams {
             .iter()
             .map(|peer| {
                 let peer_port = base_port + u16::from(*peer) * 10;
-                let p2p_url = format!("ws://127.0.0.1:{}", peer_port);
+                let p2p_url = format!("ws://127.0.0.1:{peer_port}");
                 let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
                 let params: PeerServerParams = PeerServerParams {

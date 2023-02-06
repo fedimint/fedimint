@@ -1121,8 +1121,7 @@ impl Wallet {
                 .await;
         } else {
             panic!(
-                "Median proposed consensus block height shrunk from {} to {}, the federation is broken",
-                consensus_height, median_proposal
+                "Median proposed consensus block height shrunk from {consensus_height} to {median_proposal}, the federation is broken"
             );
         }
 
@@ -1716,7 +1715,7 @@ pub enum ProcessPegOutSigError {
 /// **WARNING**: this is only intended to be used for testing
 impl PartialEq for WalletError {
     fn eq(&self, other: &Self) -> bool {
-        format!("{:?}", self) == format!("{:?}", other)
+        format!("{self:?}") == format!("{other:?}")
     }
 }
 

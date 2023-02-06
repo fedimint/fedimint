@@ -232,7 +232,7 @@ pub fn parse_host_port(url: Url) -> anyhow::Result<String> {
         .port()
         .ok_or_else(|| format_err!("Missing port in {url}"))?;
 
-    Ok(format!("{}:{}", host, port))
+    Ok(format!("{host}:{port}"))
 }
 
 /// Fake network stack used in tests
@@ -465,7 +465,7 @@ mod tests {
                 peer_names: peer_keys
                     .iter()
                     .enumerate()
-                    .map(|(peer, (_, _))| (PeerId::from(peer as u16), format!("peer-{}", peer)))
+                    .map(|(peer, (_, _))| (PeerId::from(peer as u16), format!("peer-{peer}")))
                     .collect(),
             })
             .collect()
