@@ -23,6 +23,7 @@ use fedimint_core::modules::ln::contracts::{
 use fedimint_core::modules::ln::{
     ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
 };
+use futures::StreamExt;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -198,7 +199,7 @@ impl LnClient {
             .await
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .await
-            .filter_map(|res| {
+            .filter_map(|res| async {
                 let (_key, outgoing_data) = res.expect("DB error");
                 let cancelled = outgoing_data.contract_account.contract.cancelled;
                 let timed_out =
@@ -209,7 +210,8 @@ impl LnClient {
                     None
                 }
             })
-            .collect()
+            .collect::<Vec<OutgoingContractData>>()
+            .await
     }
 
     pub fn create_refund_outgoing_contract_input<'a>(

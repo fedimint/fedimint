@@ -2,7 +2,8 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixIter};
+use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+use futures::stream;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{ConnectOptions, Error, Executor, Row, Sqlite, SqlitePool, Transaction};
@@ -98,7 +99,7 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         Ok(None)
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
         let mut str_prefix = "".to_string();
         for prefix in key_prefix {
             str_prefix = format!("{str_prefix}{prefix:02X?}");
@@ -110,17 +111,17 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
 
         if results.is_err() {
             warn!("sqlite find_by_prefix failed to retrieve key range. Returning empty iterator");
-            return Box::new(Vec::new().into_iter());
+            return Box::pin(stream::iter(Vec::new()));
         }
 
         let rows = results.unwrap().into_iter().map(|row| {
-            Ok((
+            (
                 row.get::<Vec<u8>, &str>("key"),
                 row.get::<Vec<u8>, &str>("value"),
-            ))
+            )
         });
 
-        Box::new(rows)
+        Box::pin(stream::iter(rows))
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {

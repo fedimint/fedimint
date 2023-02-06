@@ -606,7 +606,8 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                     Err(err) => Err(err),
                 }
             })
-            .collect::<FuturesUnordered<_>>();
+            .collect::<FuturesUnordered<_>>()
+            .await;
 
         let mut dbtx = self.context.db.begin_transaction().await;
         let mut all_notes = TieredMulti::<SpendableNote>::default();
@@ -1120,6 +1121,7 @@ impl Client<GatewayClientConfig> {
             .await
             .map(|res| res.expect("DB error").1)
             .collect()
+            .await
     }
 
     /// Abort payment if our node can't route it and give money back to user
@@ -1280,6 +1282,7 @@ impl Client<GatewayClientConfig> {
             .await
             .map(|res| res.expect("DB error").0 .0)
             .collect()
+            .await
     }
 
     /// Wait for a lightning preimage gateway has purchased to be decrypted by the federation

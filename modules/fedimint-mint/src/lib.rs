@@ -32,6 +32,7 @@ use fedimint_api::{
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
     PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
+use futures::StreamExt;
 use impl_tools::autoimpl;
 use itertools::Itertools;
 use rand::rngs::OsRng;
@@ -460,7 +461,8 @@ impl ServerModule for Mint {
                     signatures,
                 }
             })
-            .collect()
+            .collect::<Vec<MintConsensusItem>>()
+            .await
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
@@ -644,6 +646,9 @@ impl ServerModule for Mint {
                 let (key, partial_sig) = entry_res.expect("DB error");
                 (key.request_id, (key.peer_id, partial_sig))
             })
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
             .into_group_map()
             .into_iter();
         let mut issuance_requests = Vec::new();
@@ -729,7 +734,8 @@ impl ServerModule for Mint {
                 }
                 key
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            .await;
 
         for key in remove_audit_keys {
             dbtx.remove_entry(&key).await.expect("DB Error");
@@ -760,7 +766,8 @@ impl ServerModule for Mint {
                 request_id: out_point,
             })
             .await
-            .any(|res| res.is_ok());
+            .any(|res| async move { res.is_ok() })
+            .await;
 
         let final_sig = dbtx
             .get_value(&OutputOutcomeKey(out_point))
