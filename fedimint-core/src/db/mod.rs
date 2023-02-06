@@ -13,7 +13,7 @@ use macro_rules_attribute::apply;
 use serde::Serialize;
 use strum_macros::EnumIter;
 use thiserror::Error;
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::core::ModuleInstanceId;
 use crate::encoding::{Decodable, Encodable};
@@ -22,9 +22,11 @@ use crate::task::{MaybeSend, MaybeSync};
 use crate::{async_trait_maybe_send, maybe_add_send};
 
 pub mod mem_impl;
+pub mod notifications;
 
-pub use tests::*;
+pub use test_utils::*;
 
+use self::notifications::{Notifications, NotifyingTransaction};
 use crate::module::registry::ModuleDecoderRegistry;
 
 pub const MODULE_GLOBAL_PREFIX: u8 = 0xff;
@@ -37,6 +39,7 @@ pub trait DatabaseKeyPrefix: Debug {
 /// Extends `DatabaseKeyPrefix` to prepend the key's prefix.
 pub trait DatabaseRecord: DatabaseKeyPrefix {
     const DB_PREFIX: u8;
+    const NOTIFY_ON_MODIFY: bool = false;
     type Key: DatabaseKey + Debug;
     type Value: DatabaseValue + Debug;
 }
@@ -58,8 +61,19 @@ where
 /// `DatabaseKey` that represents the lookup structure for retrieving key/value
 /// pairs from the database.
 pub trait DatabaseKey: Sized {
+    /// Send a notification to tasks waiting to be notified if the value of
+    /// `DatabaseKey` is modified
+    ///
+    /// For instance, this can be used to be notified when a key in the
+    /// database is created. It is also possible to run a closure with the
+    /// value of the `DatabaseKey` as parameter to verify some changes to
+    /// that value.
+    const NOTIFY_ON_MODIFY: bool = false;
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError>;
 }
+
+/// Marker trait for `DatabaseKey`s where `NOTIFY` is true
+pub trait DatabaseKeyWithNotify {}
 
 /// `DatabaseValue` that represents the value structure of database records.
 pub trait DatabaseValue: Sized + Debug {
@@ -84,6 +98,7 @@ pub struct Database {
 // because it will impossible to construct otherwise
 #[derive(Debug)]
 struct DatabaseInner<Db: IDatabase + ?Sized> {
+    notifications: Notifications,
     module_decoders: ModuleDecoderRegistry,
     db: Db,
 }
@@ -116,6 +131,7 @@ impl Database {
     pub fn new(db: impl IDatabase + 'static, module_decoders: ModuleDecoderRegistry) -> Self {
         let inner = DatabaseInner {
             db,
+            notifications: Notifications::new(),
             module_decoders,
         };
 
@@ -141,6 +157,7 @@ impl Database {
         let dbtx = DatabaseTransaction::new(
             self.inner_db.db.begin_transaction().await,
             self.inner_db.module_decoders.clone(),
+            &self.inner_db.notifications,
         );
 
         match self.module_instance_id {
@@ -214,6 +231,75 @@ impl Database {
                 .expect("db autocommit retry counter overflowed");
         } // end of loop
     }
+
+    /// Waits for key to be notified.
+    ///
+    /// Calls the `checker` when value of the key may have changed.
+    /// Returns the value when `checker` returns a `Some(T)`.
+    pub async fn wait_key_check<'a, K, T>(
+        &'a self,
+        key: &K,
+        checker: impl Fn(Option<K::Value>) -> Option<T>,
+    ) -> (T, DatabaseTransaction<'a>)
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        let key_bytes = if let Some(module_id) = self.module_instance_id {
+            let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
+            module_id
+                .consensus_encode(&mut prefix_bytes)
+                .expect("Error encoding module instance id as prefix");
+            prefix_bytes.extend(key.to_bytes());
+            prefix_bytes
+        } else {
+            key.to_bytes()
+        };
+        loop {
+            // register for notification
+            let notify = self.inner_db.notifications.register(&key_bytes);
+
+            // check for value in db
+            let mut tx = self.inner_db.db.begin_transaction().await;
+
+            let maybe_value_bytes = tx
+                .raw_get_bytes(&key_bytes)
+                .await
+                .expect("Unrecoverable error when reading from database")
+                .map(|value_bytes| {
+                    trace!(
+                        "get_value: Decoding {} from bytes {:?}",
+                        std::any::type_name::<K::Value>(),
+                        value_bytes
+                    );
+                    K::Value::from_bytes(&value_bytes, &self.inner_db.module_decoders)
+                        .expect("Unrecoverable error when decoding the database value")
+                });
+
+            if let Some(value) = checker(maybe_value_bytes) {
+                return (
+                    value,
+                    DatabaseTransaction::new(
+                        tx,
+                        self.inner_db.module_decoders.clone(),
+                        &self.inner_db.notifications,
+                    ),
+                );
+            } else {
+                // key not found, try again
+                notify.await;
+                // if miss a notification between await and next register, it is
+                // fine. because we are going check the database
+            }
+        }
+    }
+
+    /// Waits for key to be present in database.
+    pub async fn wait_key_exists<K>(&self, key: &K) -> K::Value
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        self.wait_key_check(key, std::convert::identity).await.0
+    }
 }
 
 /// Fedimint requires that the database implementation implement Snapshot
@@ -285,6 +371,10 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
     /// transaction implementations will support setting a savepoint during
     /// a transaction.
     async fn set_tx_savepoint(&mut self);
+
+    fn add_notification_key(&mut self, _key: &[u8]) -> Result<()> {
+        anyhow::bail!("add_notification_key called without NotifyingTransaction")
+    }
 }
 
 /// `ISingleUseDatabaseTransaction` re-defines the functions from
@@ -309,6 +399,8 @@ pub trait ISingleUseDatabaseTransaction<'a>: 'a + Send {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
 
     async fn set_tx_savepoint(&mut self) -> Result<()>;
+
+    fn add_notification_key(&mut self, _key: &[u8]) -> Result<()>;
 }
 
 /// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
@@ -393,6 +485,13 @@ impl<'a, Tx: IDatabaseTransaction<'a> + Send> ISingleUseDatabaseTransaction<'a>
             .set_tx_savepoint()
             .await;
         Ok(())
+    }
+
+    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
+        self.0
+            .as_mut()
+            .context("Cannot add notification on an already consumed transaction")?
+            .add_notification_key(key)
     }
 }
 
@@ -486,6 +585,11 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommitableIsolatedDatabaseTransac
     async fn set_tx_savepoint(&mut self) -> Result<()> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.set_tx_savepoint().await
+    }
+
+    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        isolated.add_notification_key(key)
     }
 }
 
@@ -734,6 +838,12 @@ impl<'isolated, 'parent, T: Send + Encodable + 'isolated> ISingleUseDatabaseTran
     async fn set_tx_savepoint(&mut self) -> Result<()> {
         self.inner_tx.set_tx_savepoint().await
     }
+
+    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
+        let mut key_with_module = self.prefix.clone();
+        key_with_module.extend_from_slice(key);
+        self.inner_tx.add_notification_key(&key_with_module)
+    }
 }
 
 /// `DatabaseTransaction` is the parent-level database transaction that can
@@ -769,9 +879,10 @@ impl<'parent> DatabaseTransaction<'parent> {
     pub fn new(
         dbtx: Box<dyn ISingleUseDatabaseTransaction<'parent>>,
         decoders: ModuleDecoderRegistry,
+        notifications: &'parent Notifications,
     ) -> DatabaseTransaction<'parent> {
         DatabaseTransaction {
-            tx: dbtx,
+            tx: Box::new(NotifyingTransaction::new(dbtx, notifications)),
             decoders,
             commit_tracker: CommitTracker {
                 is_committed: false,
@@ -884,6 +995,10 @@ impl<'parent> DatabaseTransaction<'parent> {
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
+            self.add_notification_key(key);
+        }
+
         self.tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await
@@ -900,6 +1015,9 @@ impl<'parent> DatabaseTransaction<'parent> {
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
+            self.add_notification_key(key);
+        }
         let prev_val = self
             .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
@@ -915,12 +1033,25 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
     }
 
+    #[instrument(level = "debug", skip_all, fields(?key))]
+    fn add_notification_key<K>(&mut self, key: &K)
+    where
+        K: DatabaseKey + DatabaseRecord,
+    {
+        self.tx
+            .add_notification_key(&key.to_bytes())
+            .expect("Notifications not setup properly")
+    }
+
     #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
     pub async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
+            self.add_notification_key(key);
+        }
         let key_bytes = key.to_bytes();
         match self
             .tx
@@ -977,6 +1108,7 @@ where
     // module type is `()`)
     T: DatabaseRecord + crate::encoding::Decodable + Sized,
 {
+    const NOTIFY_ON_MODIFY: bool = <T as DatabaseRecord>::NOTIFY_ON_MODIFY;
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
         if data.is_empty() {
             // TODO: build better coding errors, pretty useless right now
@@ -1074,13 +1206,25 @@ where
 /// ```
 #[macro_export]
 macro_rules! impl_db_record {
-    (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(,)?) => {
+    (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(, notify_on_modify = $notify:tt)? $(,)?) => {
         impl $crate::db::DatabaseRecord for $key {
             const DB_PREFIX: u8 = $db_prefix as u8;
+            $(const NOTIFY_ON_MODIFY: bool = $notify;)?
             type Key = Self;
             type Value = $val;
         }
+        $(
+            impl_db_record! {
+                @impl_notify_marker key = $key, notify_on_modify = $notify
+            }
+        )?
     };
+    // if notify is set to true
+    (@impl_notify_marker key = $key:ty, notify_on_modify = true) => {
+        impl $crate::db::DatabaseKeyWithNotify for $key {}
+    };
+    // if notify is set to false
+    (@impl_notify_marker key = $key:ty, notify_on_modify = false) => {};
 }
 
 #[macro_export]
@@ -1255,8 +1399,10 @@ pub async fn apply_migrations<'a>(
 }
 
 #[allow(unused_imports)]
-mod tests {
-    use futures::{FutureExt, StreamExt};
+mod test_utils {
+    use std::time::Duration;
+
+    use futures::{Future, FutureExt, StreamExt};
 
     use super::{
         apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
@@ -1267,6 +1413,12 @@ mod tests {
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
 
+    pub async fn future_returns_shortly<F: Future>(fut: F) -> Option<F::Output> {
+        crate::task::timeout(Duration::from_millis(10), fut)
+            .await
+            .ok()
+    }
+
     #[repr(u8)]
     #[derive(Clone)]
     pub enum TestDbKeyPrefix {
@@ -1276,7 +1428,7 @@ mod tests {
     }
 
     #[derive(Debug, Encodable, Decodable)]
-    struct TestKey(u64);
+    pub(super) struct TestKey(pub u64);
 
     #[derive(Debug, Encodable, Decodable)]
     struct DbPrefixTestPrefix;
@@ -1284,7 +1436,8 @@ mod tests {
     impl_db_record!(
         key = TestKey,
         value = TestVal,
-        db_prefix = TestDbKeyPrefix::Test
+        db_prefix = TestDbKeyPrefix::Test,
+        notify_on_modify = true,
     );
     impl_db_lookup!(key = TestKey, query_prefix = DbPrefixTestPrefix);
 
@@ -1328,7 +1481,7 @@ mod tests {
 
     impl_db_lookup!(key = PercentTestKey, query_prefix = PercentPrefixTestPrefix);
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-    struct TestVal(u64);
+    pub(super) struct TestVal(pub u64);
 
     const TEST_MODULE_PREFIX: u16 = 1;
     const ALT_MODULE_PREFIX: u16 = 2;
@@ -1951,5 +2104,153 @@ mod tests {
             }
             AutocommitError::ClosureError { .. } => panic!("Closure did not return error"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::oneshot;
+
+    use super::mem_impl::MemDatabase;
+    use super::*;
+
+    async fn waiter(db: &Database, key: TestKey) -> tokio::task::JoinHandle<TestVal> {
+        let db = db.clone();
+        let (tx, rx) = oneshot::channel::<()>();
+        let join_handle = tokio::spawn(async move {
+            let sub = db.wait_key_exists(&key);
+            tx.send(()).unwrap();
+            sub.await
+        });
+        rx.await.unwrap();
+        join_handle
+    }
+
+    #[tokio::test]
+    async fn test_wait_key_before_transaction() {
+        let key = TestKey(1);
+        let val = TestVal(2);
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        let key_task = waiter(&db, TestKey(1)).await;
+
+        let mut tx = db.begin_transaction().await;
+        tx.insert_new_entry(&key, &val).await;
+        tx.commit_tx().await;
+
+        assert_eq!(
+            future_returns_shortly(async { key_task.await.unwrap() }).await,
+            Some(TestVal(2)),
+            "should notify"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_key_before_insert() {
+        let key = TestKey(1);
+        let val = TestVal(2);
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        let mut tx = db.begin_transaction().await;
+        let key_task = waiter(&db, TestKey(1)).await;
+        tx.insert_new_entry(&key, &val).await;
+        tx.commit_tx().await;
+
+        assert_eq!(
+            future_returns_shortly(async { key_task.await.unwrap() }).await,
+            Some(TestVal(2)),
+            "should notify"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_key_after_insert() {
+        let key = TestKey(1);
+        let val = TestVal(2);
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        let mut tx = db.begin_transaction().await;
+        tx.insert_new_entry(&key, &val).await;
+
+        let key_task = waiter(&db, TestKey(1)).await;
+
+        tx.commit_tx().await;
+
+        assert_eq!(
+            future_returns_shortly(async { key_task.await.unwrap() }).await,
+            Some(TestVal(2)),
+            "should notify"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_key_after_commit() {
+        let key = TestKey(1);
+        let val = TestVal(2);
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        let mut tx = db.begin_transaction().await;
+        tx.insert_new_entry(&key, &val).await;
+        tx.commit_tx().await;
+
+        let key_task = waiter(&db, TestKey(1)).await;
+        assert_eq!(
+            future_returns_shortly(async { key_task.await.unwrap() }).await,
+            Some(TestVal(2)),
+            "should notify"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_key_isolated_db() {
+        let module_instance_id = 10;
+        let key = TestKey(1);
+        let val = TestVal(2);
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = db.new_isolated(module_instance_id);
+
+        let mut tx = db.begin_transaction().await;
+        tx.insert_new_entry(&key, &val).await;
+        tx.commit_tx().await;
+
+        let key_task = waiter(&db, TestKey(1)).await;
+        assert_eq!(
+            future_returns_shortly(async { key_task.await.unwrap() }).await,
+            Some(TestVal(2)),
+            "should notify"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_key_isolated_tx() {
+        let module_instance_id = 10;
+        let key = TestKey(1);
+        let val = TestVal(2);
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        let mut tx = db.begin_transaction().await;
+        let mut tx_mod = tx.with_module_prefix(module_instance_id);
+        tx_mod.insert_new_entry(&key, &val).await;
+        drop(tx_mod);
+        tx.commit_tx().await;
+
+        let key_task = waiter(&db.new_isolated(module_instance_id), TestKey(1)).await;
+        assert_eq!(
+            future_returns_shortly(async { key_task.await.unwrap() }).await,
+            Some(TestVal(2)),
+            "should notify"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_key_no_transaction() {
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        let key_task = waiter(&db, TestKey(1)).await;
+        assert_eq!(
+            future_returns_shortly(async { key_task.await.unwrap() }).await,
+            None,
+            "should not notify"
+        );
     }
 }

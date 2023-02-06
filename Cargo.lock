@@ -971,6 +971,7 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
+ "bitvec",
  "erased-serde",
  "fedimint-derive",
  "fedimint-logging",
