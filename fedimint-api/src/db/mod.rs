@@ -680,6 +680,23 @@ where
     }
 }
 
+#[macro_export]
+macro_rules! impl_db_prefix_const {
+    ($key:ty, $key_prefix:ty, $val:ty, $prefix:expr) => {
+        impl DatabaseKeyPrefixConst for $key_prefix {
+            const DB_PREFIX: u8 = $prefix as u8;
+            type Key = $key;
+            type Value = $val;
+        }
+
+        impl DatabaseKeyPrefixConst for $key {
+            const DB_PREFIX: u8 = $prefix as u8;
+            type Key = Self;
+            type Value = $val;
+        }
+    };
+}
+
 #[derive(Debug, Error)]
 pub enum DecodingError {
     #[error("Key had a wrong prefix, expected {expected} but got {found}")]
@@ -773,56 +790,36 @@ mod tests {
     #[derive(Debug, Encodable, Decodable)]
     struct TestKey(u64);
 
-    impl DatabaseKeyPrefixConst for TestKey {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
-        type Key = Self;
-        type Value = TestVal;
-    }
-
     #[derive(Debug, Encodable, Decodable)]
     struct DbPrefixTestPrefix;
 
-    impl DatabaseKeyPrefixConst for DbPrefixTestPrefix {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
-        type Key = TestKey;
-        type Value = TestVal;
-    }
+    impl_db_prefix_const!(TestKey, DbPrefixTestPrefix, TestVal, TestDbKeyPrefix::Test);
 
     #[derive(Debug, Encodable, Decodable)]
     struct AltTestKey(u64);
 
-    impl DatabaseKeyPrefixConst for AltTestKey {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
-        type Key = Self;
-        type Value = TestVal;
-    }
-
     #[derive(Debug, Encodable, Decodable)]
     struct AltDbPrefixTestPrefix;
 
-    impl DatabaseKeyPrefixConst for AltDbPrefixTestPrefix {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
-        type Key = AltTestKey;
-        type Value = TestVal;
-    }
+    impl_db_prefix_const!(
+        AltTestKey,
+        AltDbPrefixTestPrefix,
+        TestVal,
+        TestDbKeyPrefix::AltTest
+    );
 
     #[derive(Debug, Encodable, Decodable)]
     struct PercentTestKey(u64);
 
-    impl DatabaseKeyPrefixConst for PercentTestKey {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
-        type Key = Self;
-        type Value = TestVal;
-    }
-
     #[derive(Debug, Encodable, Decodable)]
     struct PercentPrefixTestPrefix;
 
-    impl DatabaseKeyPrefixConst for PercentPrefixTestPrefix {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
-        type Key = PercentTestKey;
-        type Value = TestVal;
-    }
+    impl_db_prefix_const!(
+        PercentTestKey,
+        PercentPrefixTestPrefix,
+        TestVal,
+        TestDbKeyPrefix::PercentTestKey
+    );
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);

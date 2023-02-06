@@ -1,5 +1,6 @@
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::impl_db_prefix_const;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::LightningGateway;
 use serde::Serialize;
@@ -28,89 +29,64 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct OutgoingPaymentKey(pub ContractId);
 
-impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment as u8;
-    type Key = Self;
-    type Value = OutgoingContractData;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentKeyPrefix;
 
-impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment as u8;
-    type Key = OutgoingPaymentKey;
-    type Value = OutgoingContractData;
-}
+impl_db_prefix_const!(
+    OutgoingPaymentKey,
+    OutgoingPaymentKeyPrefix,
+    OutgoingContractData,
+    DbKeyPrefix::OutgoingPayment
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct OutgoingPaymentClaimKey(pub ContractId);
 
-impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim as u8;
-    type Key = Self;
-    type Value = ();
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentClaimKeyPrefix;
 
-impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim as u8;
-    type Key = OutgoingPaymentClaimKey;
-    type Value = ();
-}
+impl_db_prefix_const!(
+    OutgoingPaymentClaimKey,
+    OutgoingPaymentClaimKeyPrefix,
+    (),
+    DbKeyPrefix::OutgoingPaymentClaim
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct OutgoingContractAccountKey(pub ContractId);
 
-impl DatabaseKeyPrefixConst for OutgoingContractAccountKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount as u8;
-    type Key = Self;
-    type Value = OutgoingContractAccount;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingContractAccountKeyPrefix;
 
-impl DatabaseKeyPrefixConst for OutgoingContractAccountKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount as u8;
-    type Key = OutgoingContractAccountKey;
-    type Value = OutgoingContractAccount;
-}
+impl_db_prefix_const!(
+    OutgoingContractAccountKey,
+    OutgoingContractAccountKeyPrefix,
+    OutgoingContractAccount,
+    DbKeyPrefix::OutgoingContractAccount
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ConfirmedInvoiceKey(pub ContractId);
 
-impl DatabaseKeyPrefixConst for ConfirmedInvoiceKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice as u8;
-    type Key = Self;
-    type Value = ConfirmedInvoice;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct ConfirmedInvoiceKeyPrefix;
 
-impl DatabaseKeyPrefixConst for ConfirmedInvoiceKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice as u8;
-    type Key = ConfirmedInvoiceKey;
-    type Value = ConfirmedInvoice;
-}
+impl_db_prefix_const!(
+    ConfirmedInvoiceKey,
+    ConfirmedInvoiceKeyPrefix,
+    ConfirmedInvoice,
+    DbKeyPrefix::ConfirmedInvoice
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LightningGatewayKey;
 
-impl DatabaseKeyPrefixConst for LightningGatewayKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
-    type Key = Self;
-    type Value = LightningGateway;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct LightningGatewayKeyPrefix;
 
-impl DatabaseKeyPrefixConst for LightningGatewayKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
-    type Key = LightningGatewayKey;
-    type Value = LightningGateway;
-}
+impl_db_prefix_const!(
+    LightningGatewayKey,
+    LightningGatewayKeyPrefix,
+    LightningGateway,
+    DbKeyPrefix::LightningGateway
+);

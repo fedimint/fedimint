@@ -1,5 +1,6 @@
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::impl_db_prefix_const;
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::Nonce;
 use serde::{Deserialize, Serialize};
@@ -29,80 +30,59 @@ pub struct NoteKey {
     pub nonce: Nonce,
 }
 
-impl DatabaseKeyPrefixConst for NoteKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::Note as u8;
-    type Key = Self;
-    type Value = SpendableNote;
-}
-
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct NoteKeyPrefix;
 
-impl DatabaseKeyPrefixConst for NoteKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::Note as u8;
-    type Key = NoteKey;
-    type Value = SpendableNote;
-}
+impl_db_prefix_const!(NoteKey, NoteKeyPrefix, SpendableNote, DbKeyPrefix::Note);
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct PendingNotesKey(pub TransactionId);
 
-impl DatabaseKeyPrefixConst for PendingNotesKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::PendingNotes as u8;
-    type Key = Self;
-    type Value = TieredMulti<SpendableNote>;
-}
-
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct PendingNotesKeyPrefix;
 
-impl DatabaseKeyPrefixConst for PendingNotesKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::PendingNotes as u8;
-    type Key = PendingNotesKey;
-    type Value = TieredMulti<SpendableNote>;
-}
+impl_db_prefix_const!(
+    PendingNotesKey,
+    PendingNotesKeyPrefix,
+    TieredMulti<SpendableNote>,
+    DbKeyPrefix::PendingNotes
+);
 
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct OutputFinalizationKey(pub OutPoint);
 
-impl DatabaseKeyPrefixConst for OutputFinalizationKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutputFinalizationData as u8;
-    type Key = Self;
-    type Value = NoteIssuanceRequests;
-}
-
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct OutputFinalizationKeyPrefix;
 
-impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutputFinalizationData as u8;
-    type Key = OutputFinalizationKey;
-    type Value = NoteIssuanceRequests;
-}
-
-#[derive(Debug, Clone, Encodable, Decodable)]
-pub struct NextECashNoteIndexKeyPrefix;
-
-impl DatabaseKeyPrefixConst for NextECashNoteIndexKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::NextECashNoteIndex as u8;
-    type Key = NextECashNoteIndexKey;
-    type Value = u64;
-}
+impl_db_prefix_const!(
+    OutputFinalizationKey,
+    OutputFinalizationKeyPrefix,
+    NoteIssuanceRequests,
+    DbKeyPrefix::OutputFinalizationData
+);
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct NextECashNoteIndexKey(pub Amount);
 
-impl DatabaseKeyPrefixConst for NextECashNoteIndexKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::NextECashNoteIndex as u8;
-    type Key = Self;
-    type Value = u64;
-}
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct NextECashNoteIndexKeyPrefix;
+
+impl_db_prefix_const!(
+    NextECashNoteIndexKey,
+    NextECashNoteIndexKeyPrefix,
+    u64,
+    DbKeyPrefix::NextECashNoteIndex
+);
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct NotesPerDenominationKey;
 
-impl DatabaseKeyPrefixConst for NotesPerDenominationKey {
-    const DB_PREFIX: u8 = 0;
-    type Key = Self;
-    type Value = u16;
-}
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct NotesPerDenominationKeyPrefix;
+
+impl_db_prefix_const!(
+    NotesPerDenominationKey,
+    NotesPerDenominationKeyPrefix,
+    u16,
+    0
+);

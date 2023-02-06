@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use fedimint_api::db::{DatabaseKeyPrefixConst, MODULE_GLOBAL_PREFIX};
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::impl_db_prefix_const;
 use fedimint_api::{PeerId, TransactionId};
 use fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
 use serde::Serialize;
@@ -30,98 +31,72 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct AcceptedTransactionKey(pub TransactionId);
 
-impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::AcceptedTransaction as u8;
-    type Key = Self;
-    type Value = AcceptedTransaction;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct AcceptedTransactionKeyPrefix;
 
-impl DatabaseKeyPrefixConst for AcceptedTransactionKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::AcceptedTransaction as u8;
-    type Key = AcceptedTransactionKey;
-    type Value = AcceptedTransaction;
-}
+impl_db_prefix_const!(
+    AcceptedTransactionKey,
+    AcceptedTransactionKeyPrefix,
+    AcceptedTransaction,
+    DbKeyPrefix::AcceptedTransaction
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct RejectedTransactionKey(pub TransactionId);
 
-impl DatabaseKeyPrefixConst for RejectedTransactionKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::RejectedTransaction as u8;
-    type Key = Self;
-    type Value = String;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct RejectedTransactionKeyPrefix;
 
-impl DatabaseKeyPrefixConst for RejectedTransactionKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::RejectedTransaction as u8;
-    type Key = RejectedTransactionKey;
-    type Value = String;
-}
+impl_db_prefix_const!(
+    RejectedTransactionKey,
+    RejectedTransactionKeyPrefix,
+    String,
+    DbKeyPrefix::RejectedTransaction
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct DropPeerKey(pub PeerId);
 
-impl DatabaseKeyPrefixConst for DropPeerKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::DropPeer as u8;
-    type Key = Self;
-    type Value = ();
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct DropPeerKeyPrefix;
 
-impl DatabaseKeyPrefixConst for DropPeerKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::DropPeer as u8;
-    type Key = DropPeerKey;
-    type Value = ();
-}
+impl_db_prefix_const!(DropPeerKey, DropPeerKeyPrefix, (), DbKeyPrefix::DropPeer);
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
 pub struct EpochHistoryKey(pub u64);
 
-impl DatabaseKeyPrefixConst for EpochHistoryKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
-    type Key = Self;
-    type Value = SignedEpochOutcome;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct EpochHistoryKeyPrefix;
 
-impl DatabaseKeyPrefixConst for EpochHistoryKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
-    type Key = EpochHistoryKey;
-    type Value = SignedEpochOutcome;
-}
+impl_db_prefix_const!(
+    EpochHistoryKey,
+    EpochHistoryKeyPrefix,
+    SignedEpochOutcome,
+    DbKeyPrefix::EpochHistory
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LastEpochKey;
 
-impl DatabaseKeyPrefixConst for LastEpochKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::LastEpoch as u8;
-    type Key = Self;
-    type Value = EpochHistoryKey;
-}
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct LastEpochKeyPrefix;
+
+impl_db_prefix_const!(
+    LastEpochKey,
+    LastEpochKeyPrefix,
+    EpochHistoryKey,
+    DbKeyPrefix::LastEpoch
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientConfigSignatureKey;
 
-impl DatabaseKeyPrefixConst for ClientConfigSignatureKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ClientConfigSignature as u8;
-    type Key = Self;
-    type Value = SerdeSignature;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct ClientConfigSignatureKeyPrefix;
 
-impl DatabaseKeyPrefixConst for ClientConfigSignatureKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ClientConfigSignature as u8;
-    type Key = ClientConfigSignatureKey;
-    type Value = SerdeSignature;
-}
+impl_db_prefix_const!(
+    ClientConfigSignatureKey,
+    ClientConfigSignatureKeyPrefix,
+    SerdeSignature,
+    DbKeyPrefix::ClientConfigSignature
+);

@@ -2,6 +2,7 @@ use std::time::SystemTime;
 
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::impl_db_prefix_const;
 use fedimint_api::{Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -28,40 +29,25 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
 pub struct NonceKey(pub Nonce);
 
-impl DatabaseKeyPrefixConst for NonceKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::NoteNonce as u8;
-    type Key = Self;
-    type Value = ();
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct NonceKeyPrefix;
 
-impl DatabaseKeyPrefixConst for NonceKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::NoteNonce as u8;
-    type Key = NonceKey;
-    type Value = ();
-}
+impl_db_prefix_const!(NonceKey, NonceKeyPrefix, (), DbKeyPrefix::NoteNonce);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ProposedPartialSignatureKey {
     pub out_point: OutPoint, // tx + output idx
 }
 
-impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
-    type Key = Self;
-    type Value = MintOutputSignatureShare;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct ProposedPartialSignaturesKeyPrefix;
 
-impl DatabaseKeyPrefixConst for ProposedPartialSignaturesKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
-    type Key = ProposedPartialSignatureKey;
-    type Value = MintOutputSignatureShare;
-}
+impl_db_prefix_const!(
+    ProposedPartialSignatureKey,
+    ProposedPartialSignaturesKeyPrefix,
+    MintOutputSignatureShare,
+    DbKeyPrefix::ProposedPartialSig
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ReceivedPartialSignatureKey {
@@ -69,11 +55,15 @@ pub struct ReceivedPartialSignatureKey {
     pub peer_id: PeerId,
 }
 
-impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
-    type Key = Self;
-    type Value = MintOutputSignatureShare;
-}
+#[derive(Debug, Encodable, Decodable)]
+pub struct ReceivedPartialSignaturesKeyPrefix;
+
+impl_db_prefix_const!(
+    ReceivedPartialSignatureKey,
+    ReceivedPartialSignaturesKeyPrefix,
+    MintOutputSignatureShare,
+    DbKeyPrefix::ReceivedPartialSig
+);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct ReceivedPartialSignatureKeyOutputPrefix {
@@ -86,33 +76,19 @@ impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
     type Value = MintOutputSignatureShare;
 }
 
-#[derive(Debug, Encodable, Decodable)]
-pub struct ReceivedPartialSignaturesKeyPrefix;
-
-impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
-    type Key = ReceivedPartialSignatureKey;
-    type Value = MintOutputSignatureShare;
-}
-
 /// Transaction id and output index identifying an output outcome
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct OutputOutcomeKey(pub OutPoint);
 
-impl DatabaseKeyPrefixConst for OutputOutcomeKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
-    type Key = Self;
-    type Value = MintOutputBlindSignatures;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutputOutcomeKeyPrefix;
 
-impl DatabaseKeyPrefixConst for OutputOutcomeKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
-    type Key = OutputOutcomeKey;
-    type Value = MintOutputBlindSignatures;
-}
+impl_db_prefix_const!(
+    OutputOutcomeKey,
+    OutputOutcomeKeyPrefix,
+    MintOutputBlindSignatures,
+    DbKeyPrefix::OutputOutcome
+);
 
 /// Represents the amounts of issued (signed) and redeemed (verified) notes for auditing
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
@@ -123,33 +99,29 @@ pub enum MintAuditItemKey {
     RedemptionTotal,
 }
 
-impl DatabaseKeyPrefixConst for MintAuditItemKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
-    type Key = Self;
-    type Value = Amount;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct MintAuditItemKeyPrefix;
 
-impl DatabaseKeyPrefixConst for MintAuditItemKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
-    type Key = MintAuditItemKey;
-    type Value = Amount;
-}
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct EcashBackupKeyPrefix;
+impl_db_prefix_const!(
+    MintAuditItemKey,
+    MintAuditItemKeyPrefix,
+    Amount,
+    DbKeyPrefix::MintAuditItem
+);
 
 /// Key used to store user's ecash backups
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
 
-impl DatabaseKeyPrefixConst for EcashBackupKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
-    type Key = EcashBackupKey;
-    type Value = ECashUserBackupSnapshot;
-}
+#[derive(Debug, Encodable, Decodable)]
+pub struct EcashBackupKeyPrefix;
+
+impl_db_prefix_const!(
+    EcashBackupKey,
+    EcashBackupKeyPrefix,
+    ECashUserBackupSnapshot,
+    DbKeyPrefix::EcashBackup
+);
 
 /// User's backup, received at certain time, containing encrypted payload
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
@@ -157,10 +129,4 @@ pub struct ECashUserBackupSnapshot {
     pub timestamp: SystemTime,
     #[serde(with = "fedimint_api::hex::serde")]
     pub data: Vec<u8>,
-}
-
-impl DatabaseKeyPrefixConst for EcashBackupKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::EcashBackup as u8;
-    type Key = Self;
-    type Value = ECashUserBackupSnapshot;
 }
