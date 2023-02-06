@@ -1060,7 +1060,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
         user_send
             .client
             .mint_client()
-            .restore_ecash_from_federation(2, &mut task_group)
+            .restore_ecash_from_federation(10, &mut task_group)
             .await
             .unwrap()
             .unwrap();
@@ -1074,7 +1074,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
         user_send
             .client
             .mint_client()
-            .restore_ecash_from_federation(2, &mut task_group)
+            .restore_ecash_from_federation(10, &mut task_group)
             .await
             .unwrap()
             .unwrap();
@@ -1092,7 +1092,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
         user_send
             .client
             .mint_client()
-            .restore_ecash_from_federation(2, &mut task_group)
+            .restore_ecash_from_federation(10, &mut task_group)
             .await
             .unwrap()
             .unwrap();
