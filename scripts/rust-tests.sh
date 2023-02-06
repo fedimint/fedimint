@@ -2,7 +2,7 @@
 # Runs the all the Rust integration tests
 
 set -euxo pipefail
-export RUST_LOG=info
+export RUST_LOG="${RUST_LOG:-info}"
 
 source ./scripts/setup-tests.sh ""
 
