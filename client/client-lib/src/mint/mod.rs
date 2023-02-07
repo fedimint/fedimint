@@ -35,7 +35,7 @@ pub mod backup;
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 const MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(1);
-const MINT_FETCH_MAX_RETRIES: usize = 10;
+const MINT_E_CASH_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -423,6 +423,33 @@ impl MintClient {
             .expect("DB Error");
     }
 
+    pub async fn await_fetch_notes<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        outpoint: &OutPoint,
+    ) -> Result<OutPoint> {
+        let mut total_time = Duration::ZERO;
+        let retry_duration = Duration::from_millis(200);
+
+        loop {
+            match self.fetch_notes(dbtx, *outpoint).await {
+                Ok(_) => {
+                    break Ok(*outpoint);
+                }
+                // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                Err(e) if e.is_retryable() && total_time < MINT_E_CASH_FETCH_TIMEOUT => {
+                    trace!("Mint returned retryable error: {:?}", e);
+                    fedimint_api::task::sleep(retry_duration).await
+                }
+                Err(e) => {
+                    warn!("Mint returned error: {:?}", e);
+                    break Err(e);
+                }
+            }
+            total_time += retry_duration;
+        }
+    }
+
     pub async fn fetch_notes<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -489,29 +516,12 @@ impl MintClient {
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _>>>>::new();
-        for (out_point, _) in active_issuances {
+        for (outpoint, _) in active_issuances {
             futures.push(Box::pin(async {
                 let mut dbtx = self.context.db.begin_transaction().await;
-                let mut retries = 0;
-
-                loop {
-                    retries += 1;
-                    match self.fetch_notes(&mut dbtx, *out_point).await {
-                        Ok(_) => {
-                            dbtx.commit_tx().await.expect("DB Error");
-                            break Ok(*out_point);
-                        }
-                        // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                        Err(e) if e.is_retryable() && retries < MINT_FETCH_MAX_RETRIES => {
-                            trace!("Mint returned retryable error: {:?}", e);
-                            fedimint_api::task::sleep(Duration::from_millis(200)).await
-                        }
-                        Err(e) => {
-                            warn!("Mint returned error: {:?}", e);
-                            break Err(e);
-                        }
-                    }
-                }
+                let res = self.await_fetch_notes(&mut dbtx, outpoint).await;
+                dbtx.commit_tx().await.expect("DB Error");
+                res
             }))
         }
 

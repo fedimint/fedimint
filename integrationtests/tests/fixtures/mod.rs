@@ -607,6 +607,14 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
         UserTest { client, config }
     }
 
+    /// Helper for readability
+    pub async fn set_notes_per_denomination(&self, notes: u16) {
+        self.client
+            .mint_client()
+            .set_notes_per_denomination(notes)
+            .await;
+    }
+
     /// Helper to simplify the peg_out method calls
     pub async fn peg_out(&self, amount: u64, address: &Address) -> (Amount, OutPoint) {
         let peg_out = self
@@ -618,29 +626,27 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
         (peg_out.fees.amount().into(), out_point)
     }
 
-    /// Returns the amount denominations of all notes from lowest to highest
-    pub async fn note_amounts(&self) -> Vec<Amount> {
-        self.client
-            .notes()
-            .await
-            .iter()
-            .flat_map(|(a, c)| repeat(*a).take(c.len()))
-            .sorted()
-            .collect::<Vec<Amount>>()
-    }
-
     /// Returns sum total of all notes
     pub async fn total_notes(&self) -> Amount {
         self.client.notes().await.total_amount()
     }
 
     pub async fn assert_total_notes(&self, amount: Amount) {
-        self.client.fetch_all_notes().await;
+        self.client.fetch_all_notes().await.unwrap();
         assert_eq!(self.total_notes().await, amount);
     }
-    pub async fn assert_note_amounts(&self, amounts: Vec<Amount>) {
-        self.client.fetch_all_notes().await;
-        assert_eq!(self.note_amounts().await, amounts);
+
+    /// Asserts the amounts are equal to the denominations held by the user
+    pub fn assert_note_amounts(&self, amounts: Vec<Amount>) {
+        block_on(self.client.fetch_all_notes()).unwrap();
+        let notes = block_on(self.client.notes());
+        let user_amounts = notes
+            .iter()
+            .flat_map(|(a, c)| repeat(*a).take(c.len()))
+            .sorted()
+            .collect::<Vec<Amount>>();
+
+        assert_eq!(user_amounts, amounts);
     }
 }
 
@@ -748,13 +754,10 @@ impl FederationTest {
         user: &UserTest<C>,
         amount: Amount,
     ) -> TieredMulti<SpendableNote> {
-        let notes = user
-            .client
-            .mint_client()
-            .select_notes(amount)
-            .await
-            .unwrap();
-        if notes.total_amount() == amount {
+        // We mimic the logic in the spend_ecash function because we need to know whether we will
+        // be running 2 epochs for a reissue or not
+        let notes = user.client.mint_client().select_notes(amount).await;
+        if notes.unwrap().total_amount() == amount {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
         }
         user.client.remint_ecash(amount, rng()).await.unwrap();
@@ -785,7 +788,7 @@ impl FederationTest {
     ) {
         self.database_add_notes_for_user(user, amount).await;
         self.run_consensus_epochs(1).await;
-        user.client.fetch_all_notes().await;
+        user.client.fetch_all_notes().await.unwrap();
     }
 
     /// Mines a UTXO owned by the federation.
