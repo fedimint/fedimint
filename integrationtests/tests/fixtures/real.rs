@@ -164,9 +164,18 @@ impl BitcoinTest for RealBitcoinTest {
     }
 
     async fn mine_blocks(&self, block_num: u64) {
-        self.client
+        if let Some(block_hash) = self
+            .client
             .generate_to_address(block_num, &self.get_new_address().await)
-            .expect(Self::ERROR);
+            .expect(Self::ERROR)
+            .last()
+        {
+            // if this is not true, we will have to add some delay mechanism here, because tests expect it
+            let _ = self
+                .client
+                .get_block(block_hash)
+                .expect("there should be no delay between block being generated and available");
+        };
     }
 
     async fn send_and_mine_block(
