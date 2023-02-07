@@ -1,3 +1,21 @@
+//! Integration test suite
+//!
+//! This crate contains integration tests that work be creating
+//! per-test federation, ln-gatewa and driving bitcoind and lightning
+//! nodes to exercise certain behaviors on it.
+//!
+//! We run them in two modes:
+//!
+//! * With mocks - fake implementations of Lightning and Bitcoin node
+//!   that only simulate the real behavior. These are instantiated
+//!   per test.
+//! * Without mocks - against real bitcoind and lightningd.
+//!
+//! When running against real bitcoind, the other tests might create
+//! new blocks and transactions, so the tests can't expect to have
+//! exclusive control over it. When it is really necessary, `lock_exclusive`
+//! can be used to achieve it, but that makes the given test run serially
+//! is thus udesireable.
 mod fixtures;
 
 use std::future::Future;
@@ -98,10 +116,12 @@ async fn test_gateway_authentication() -> Result<()> {
     // Test gateway authentication on `deposit` function
     // *  `deposit` with correct password succeeds
     // *  `deposit` with incorrect password fails
-    let (proof, tx) = bitcoin.send_and_mine_block(
-        &bitcoin.get_new_address(),
-        bitcoin::Amount::from_btc(1.0).unwrap(),
-    );
+    let (proof, tx) = bitcoin
+        .send_and_mine_block(
+            &bitcoin.get_new_address().await,
+            bitcoin::Amount::from_btc(1.0).unwrap(),
+        )
+        .await;
     let payload = DepositPayload {
         federation_id: federation_id.clone(),
         txout_proof: proof,
@@ -118,7 +138,7 @@ async fn test_gateway_authentication() -> Result<()> {
     let payload = WithdrawPayload {
         federation_id,
         amount: bitcoin::Amount::from_sat(100),
-        address: bitcoin.get_new_address(),
+        address: bitcoin.get_new_address().await,
     };
     test_auth(&gw_password, |pw| client_ref.withdraw(pw, payload.clone())).await?;
 

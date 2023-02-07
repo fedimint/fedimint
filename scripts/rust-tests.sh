@@ -2,9 +2,9 @@
 # Runs the all the Rust integration tests
 
 set -euxo pipefail
-export RUST_LOG=info
+export RUST_LOG="${RUST_LOG:-info}"
 
-source ./scripts/setup-tests.sh
+source ./scripts/setup-tests.sh ""
 
 export FM_TEST_DISABLE_MOCKS=1
-cargo test -p fedimint-tests -- --test-threads=1
+cargo test -p fedimint-tests "$@"

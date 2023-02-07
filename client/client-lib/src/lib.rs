@@ -577,6 +577,47 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(final_notes)
     }
 
+    /// For tests only: Select notes of a given amount, and then remint them,
+    /// remove the amount of notes from the database and return it to the user.
+    ///
+    /// This is a respin of `spent_ecash` for tests, where it is neccessary
+    /// to process epochs after `self.submit_tx_with_change`. Then
+    /// `remint_ecash_await` can be called to do the rest.
+    ///
+    /// TODO: Like `spend_ecash`, I think this function works in tests mostly
+    /// by accident.
+    pub async fn remint_ecash<R: RngCore + CryptoRng>(&self, amount: Amount, rng: R) -> Result<()> {
+        let notes = self.mint_client().select_notes(amount).await?;
+
+        let mut tx = TransactionBuilder::default();
+
+        let (mut keys, input) = MintClient::ecash_input(notes)?;
+        tx.input(&mut keys, input);
+        self.submit_tx_with_change(tx, rng).await?;
+
+        Ok(())
+    }
+
+    /// Continuation of `remint_notes`
+    pub async fn remint_ecash_await(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
+        self.fetch_all_notes().await;
+        let notes = self.mint_client().select_notes(amount).await?;
+        assert_eq!(notes.total_amount(), amount, "should have exact change");
+
+        let mut dbtx = self.context.db.begin_transaction().await;
+        for (amount, note) in notes.iter_items() {
+            dbtx.remove_entry(&NoteKey {
+                amount,
+                nonce: note.note.0,
+            })
+            .await
+            .expect("DB Error");
+        }
+        dbtx.commit_tx().await.expect("DB Error");
+
+        Ok(notes)
+    }
+
     /// Tries to fetch e-cash notes from a certain out point. An error may just mean having queried
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
@@ -850,15 +891,49 @@ impl Client<UserClientConfig> {
             .map_err(|_| ClientError::Timeout)?
     }
 
-    pub async fn generate_invoice<R: RngCore + CryptoRng>(
+    pub async fn generate_confirmed_invoice<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
         description: String,
         mut rng: R,
         expiry_time: Option<u64>,
     ) -> Result<ConfirmedInvoice> {
-        let gateway = self.fetch_active_gateway().await?;
+        let (txid, invoice, payment_keypair) = self
+            .generate_unsigned_invoice_and_submit(amount, description, &mut rng, expiry_time)
+            .await?;
+
+        self.await_invoice_confirmation(txid, invoice, payment_keypair)
+            .await
+    }
+    pub async fn generate_unsigned_invoice_and_submit<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        description: String,
+        mut rng: R,
+        expiry_time: Option<u64>,
+    ) -> Result<(TransactionId, Invoice, KeyPair)> {
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
+        let (invoice, ln_output) = self
+            .generate_unsigned_invoice(amount, description, payment_keypair, &mut rng, expiry_time)
+            .await?;
+
+        // There is no input here because this is just an announcement
+        let mut tx = TransactionBuilder::default();
+        tx.output(ln_output);
+        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+
+        Ok((txid, invoice, payment_keypair))
+    }
+
+    pub async fn generate_unsigned_invoice<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        description: String,
+        payment_keypair: KeyPair,
+        mut rng: R,
+        expiry_time: Option<u64>,
+    ) -> Result<(Invoice, Output)> {
+        let gateway = self.fetch_active_gateway().await?;
         let raw_payment_secret: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
@@ -938,11 +1013,15 @@ impl Client<UserClientConfig> {
         );
         let ln_output = Output::LN(offer_output);
 
-        // There is no input here because this is just an announcement
-        let mut tx = TransactionBuilder::default();
-        tx.output(ln_output);
-        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+        Ok((invoice, ln_output))
+    }
 
+    pub async fn await_invoice_confirmation(
+        &self,
+        txid: TransactionId,
+        invoice: Invoice,
+        payment_keypair: KeyPair,
+    ) -> Result<ConfirmedInvoice> {
         // Await acceptance by the federation
         let timeout = std::time::Duration::from_secs(15);
         let outpoint = OutPoint { txid, out_idx: 0 };
@@ -950,13 +1029,11 @@ impl Client<UserClientConfig> {
             .api
             .await_output_outcome::<OfferId>(outpoint, timeout, &self.context.decoders)
             .await?;
-
         let confirmed = ConfirmedInvoice {
             invoice,
             keypair: payment_keypair,
         };
         self.ln_client().save_confirmed_invoice(&confirmed).await;
-
         Ok(confirmed)
     }
 
