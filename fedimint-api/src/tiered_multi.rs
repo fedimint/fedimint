@@ -149,27 +149,28 @@ where
     ///
     /// The caller can request change from the federation.
     // TODO: move somewhere else?
-    pub fn select_notes(&self, amount: Amount) -> Option<TieredMulti<C>> {
+    pub fn select_notes(&self, mut amount: Amount) -> Option<TieredMulti<C>> {
         if amount > self.total_amount() {
             return None;
         }
 
+        let mut selected = vec![];
         let mut remaining = self.total_amount();
 
-        let notes = self
-            .iter_items()
-            .rev()
-            .filter_map(|(note_amount, note)| {
-                if amount <= remaining - note_amount {
-                    remaining -= note_amount;
-                    None
-                } else {
-                    Some((note_amount, (*note).clone()))
-                }
-            })
-            .collect::<TieredMulti<C>>();
+        for (note_amount, note) in self.iter_items().rev() {
+            remaining -= note_amount;
 
-        Some(notes)
+            if note_amount <= amount {
+                amount -= note_amount;
+                selected.push((note_amount, (*note).clone()))
+            } else if remaining < amount {
+                // we can't make exact change, so just use this note
+                selected.push((note_amount, (*note).clone()));
+                break;
+            }
+        }
+
+        Some(selected.into_iter().collect::<TieredMulti<C>>())
     }
 }
 
