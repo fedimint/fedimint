@@ -14,7 +14,7 @@ use fedimint_api::config::{
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::{timeout, Elapsed, TaskGroup};
-use fedimint_api::{Amount, PeerId};
+use fedimint_api::{Amount, PeerId, Tiered};
 pub use fedimint_core::config::*;
 use fedimint_core::modules::mint::MintGenParams;
 use fedimint_wallet::WalletGenParams;
@@ -574,19 +574,6 @@ pub struct PeerServerParams {
 }
 
 impl ServerConfigParams {
-    /// Generates denominations as powers of 2 until a `max`
-    pub fn gen_denominations(max: Amount) -> Vec<Amount> {
-        let mut amounts = vec![];
-
-        let mut denomination = Amount::from_msats(1);
-        while denomination < max {
-            amounts.push(denomination);
-            denomination = denomination * 2;
-        }
-
-        amounts
-    }
-
     pub fn peers(&self) -> BTreeMap<PeerId, PeerEndpoint> {
         self.fed_network
             .peers
@@ -661,7 +648,10 @@ impl ServerConfigParams {
                     finality_delay,
                 })
                 .attach(MintGenParams {
-                    mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
+                    mint_amounts: Tiered::gen_denominations(max_denomination)
+                        .tiers()
+                        .cloned()
+                        .collect(),
                 }),
         }
     }

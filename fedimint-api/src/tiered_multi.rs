@@ -149,27 +149,28 @@ where
     ///
     /// The caller can request change from the federation.
     // TODO: move somewhere else?
-    pub fn select_notes(&self, amount: Amount) -> Option<TieredMulti<C>> {
+    pub fn select_notes(&self, mut amount: Amount) -> Option<TieredMulti<C>> {
         if amount > self.total_amount() {
             return None;
         }
 
+        let mut selected = vec![];
         let mut remaining = self.total_amount();
 
-        let notes = self
-            .iter_items()
-            .rev()
-            .filter_map(|(note_amount, note)| {
-                if amount <= remaining - note_amount {
-                    remaining -= note_amount;
-                    None
-                } else {
-                    Some((note_amount, (*note).clone()))
-                }
-            })
-            .collect::<TieredMulti<C>>();
+        for (note_amount, note) in self.iter_items().rev() {
+            remaining -= note_amount;
 
-        Some(notes)
+            if note_amount <= amount {
+                amount -= note_amount;
+                selected.push((note_amount, (*note).clone()))
+            } else if remaining < amount {
+                // we can't make exact change, so just use this note
+                selected.push((note_amount, (*note).clone()));
+                break;
+            }
+        }
+
+        Some(selected.into_iter().collect::<TieredMulti<C>>())
     }
 }
 
@@ -370,11 +371,11 @@ mod test {
     }
 
     #[test]
-    fn select_notes_returns_exact_amount() {
+    fn select_notes_returns_exact_amount_with_minimum_notes() {
         let starting = notes(vec![
-            (Amount::from_sats(1), 5),
-            (Amount::from_sats(5), 5),
-            (Amount::from_sats(20), 5),
+            (Amount::from_sats(1), 10),
+            (Amount::from_sats(5), 10),
+            (Amount::from_sats(20), 10),
         ]);
 
         assert_eq!(
@@ -384,11 +385,20 @@ mod test {
                 (Amount::from_sats(5), 1)
             ]))
         );
+
+        assert_eq!(
+            starting.select_notes(Amount::from_sats(20)),
+            Some(notes(vec![(Amount::from_sats(20), 1),]))
+        );
     }
 
     #[test]
-    fn select_notes_uses_smaller_denominations() {
-        let starting = notes(vec![(Amount::from_sats(5), 5), (Amount::from_sats(20), 5)]);
+    fn select_notes_returns_next_smallest_amount_if_exact_change_cannot_be_made() {
+        let starting = notes(vec![
+            (Amount::from_sats(1), 1),
+            (Amount::from_sats(5), 5),
+            (Amount::from_sats(20), 5),
+        ]);
 
         assert_eq!(
             starting.select_notes(Amount::from_sats(7)),
@@ -401,6 +411,22 @@ mod test {
         let starting = notes(vec![(Amount::from_sats(10), 1)]);
 
         assert_eq!(starting.select_notes(Amount::from_sats(100)), None);
+    }
+
+    #[test]
+    fn select_notes_avg_test() {
+        let max_amount = Amount::from_sats(1000000);
+        let tiers = Tiered::gen_denominations(max_amount);
+        let tiered =
+            TieredMulti::represent_amount::<(), ()>(max_amount, &Default::default(), &tiers, 3);
+
+        let mut total_notes = 0;
+        for multiplier in 1..100 {
+            let notes = notes(tiered.as_map().clone().into_iter().collect());
+            let select = notes.select_notes(Amount::from_sats(multiplier * 1000));
+            total_notes += select.unwrap().into_iter_items().count();
+        }
+        assert_eq!(total_notes / 100, 10);
     }
 
     fn notes(notes: Vec<(Amount, usize)>) -> TieredMulti<usize> {

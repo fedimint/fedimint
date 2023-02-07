@@ -86,6 +86,21 @@ impl Tiered<SecretKeyShare> {
     }
 }
 
+impl Tiered<()> {
+    /// Generates denominations as powers of 2 until a `max`
+    pub fn gen_denominations(max: Amount) -> Tiered<()> {
+        let mut amounts = vec![];
+
+        let mut denomination = Amount::from_msats(1);
+        while denomination < max {
+            amounts.push((denomination, ()));
+            denomination = denomination * 2;
+        }
+
+        amounts.into_iter().collect()
+    }
+}
+
 impl<T> FromIterator<(Amount, T)> for Tiered<T> {
     fn from_iter<I: IntoIterator<Item = (Amount, T)>>(iter: I) -> Self {
         Tiered(iter.into_iter().collect())
