@@ -15,8 +15,16 @@ pub trait BitcoinTest {
     /// Mines a given number of blocks
     async fn mine_blocks(&self, block_num: u64);
 
+    /// Prepare funding wallet
+    ///
+    /// If needed will mine initial 100 blocks for `send_and_mine_block` to work.
+    async fn prepare_funding_wallet(&self);
+
     /// Send some bitcoin to an address then mine a block to confirm it.
     /// Returns the proof that the transaction occurred.
+    ///
+    /// The implementation is responsible for making sure the funds can
+    /// be sent (e.g. first 100 blocks are mined to make funds available)
     async fn send_and_mine_block(
         &self,
         address: &Address,
