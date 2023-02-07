@@ -421,6 +421,32 @@
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
 <a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -572,27 +598,28 @@
     ///
     /// The caller can request change from the federation.
     </span><span class="comment">// TODO: move somewhere else?
-    </span><span class="kw">pub fn </span>select_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;TieredMulti&lt;C&gt;&gt; {
+    </span><span class="kw">pub fn </span>select_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>amount: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;TieredMulti&lt;C&gt;&gt; {
         <span class="kw">if </span>amount &gt; <span class="self">self</span>.total_amount() {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
 
+        <span class="kw">let </span><span class="kw-2">mut </span>selected = <span class="macro">vec!</span>[];
         <span class="kw">let </span><span class="kw-2">mut </span>remaining = <span class="self">self</span>.total_amount();
 
-        <span class="kw">let </span>notes = <span class="self">self
-            </span>.iter_items()
-            .rev()
-            .filter_map(|(note_amount, note)| {
-                <span class="kw">if </span>amount &lt;= remaining - note_amount {
-                    remaining -= note_amount;
-                    <span class="prelude-val">None
-                </span>} <span class="kw">else </span>{
-                    <span class="prelude-val">Some</span>((note_amount, (<span class="kw-2">*</span>note).clone()))
-                }
-            })
-            .collect::&lt;TieredMulti&lt;C&gt;&gt;();
+        <span class="kw">for </span>(note_amount, note) <span class="kw">in </span><span class="self">self</span>.iter_items().rev() {
+            remaining -= note_amount;
 
-        <span class="prelude-val">Some</span>(notes)
+            <span class="kw">if </span>note_amount &lt;= amount {
+                amount -= note_amount;
+                selected.push((note_amount, (<span class="kw-2">*</span>note).clone()))
+            } <span class="kw">else if </span>remaining &lt; amount {
+                <span class="comment">// we can&#39;t make exact change, so just use this note
+                </span>selected.push((note_amount, (<span class="kw-2">*</span>note).clone()));
+                <span class="kw">break</span>;
+            }
+        }
+
+        <span class="prelude-val">Some</span>(selected.into_iter().collect::&lt;TieredMulti&lt;C&gt;&gt;())
     }
 }
 
@@ -793,11 +820,11 @@
     }
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>select_notes_returns_exact_amount() {
+    </span><span class="kw">fn </span>select_notes_returns_exact_amount_with_minimum_notes() {
         <span class="kw">let </span>starting = notes(<span class="macro">vec!</span>[
-            (Amount::from_sats(<span class="number">1</span>), <span class="number">5</span>),
-            (Amount::from_sats(<span class="number">5</span>), <span class="number">5</span>),
-            (Amount::from_sats(<span class="number">20</span>), <span class="number">5</span>),
+            (Amount::from_sats(<span class="number">1</span>), <span class="number">10</span>),
+            (Amount::from_sats(<span class="number">5</span>), <span class="number">10</span>),
+            (Amount::from_sats(<span class="number">20</span>), <span class="number">10</span>),
         ]);
 
         <span class="macro">assert_eq!</span>(
@@ -807,11 +834,20 @@
                 (Amount::from_sats(<span class="number">5</span>), <span class="number">1</span>)
             ]))
         );
+
+        <span class="macro">assert_eq!</span>(
+            starting.select_notes(Amount::from_sats(<span class="number">20</span>)),
+            <span class="prelude-val">Some</span>(notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">20</span>), <span class="number">1</span>),]))
+        );
     }
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>select_notes_uses_smaller_denominations() {
-        <span class="kw">let </span>starting = notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">5</span>), <span class="number">5</span>), (Amount::from_sats(<span class="number">20</span>), <span class="number">5</span>)]);
+    </span><span class="kw">fn </span>select_notes_returns_next_smallest_amount_if_exact_change_cannot_be_made() {
+        <span class="kw">let </span>starting = notes(<span class="macro">vec!</span>[
+            (Amount::from_sats(<span class="number">1</span>), <span class="number">1</span>),
+            (Amount::from_sats(<span class="number">5</span>), <span class="number">5</span>),
+            (Amount::from_sats(<span class="number">20</span>), <span class="number">5</span>),
+        ]);
 
         <span class="macro">assert_eq!</span>(
             starting.select_notes(Amount::from_sats(<span class="number">7</span>)),
@@ -824,6 +860,22 @@
         <span class="kw">let </span>starting = notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">10</span>), <span class="number">1</span>)]);
 
         <span class="macro">assert_eq!</span>(starting.select_notes(Amount::from_sats(<span class="number">100</span>)), <span class="prelude-val">None</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>select_notes_avg_test() {
+        <span class="kw">let </span>max_amount = Amount::from_sats(<span class="number">1000000</span>);
+        <span class="kw">let </span>tiers = Tiered::gen_denominations(max_amount);
+        <span class="kw">let </span>tiered =
+            TieredMulti::represent_amount::&lt;(), ()&gt;(max_amount, <span class="kw-2">&amp;</span>Default::default(), <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>total_notes = <span class="number">0</span>;
+        <span class="kw">for </span>multiplier <span class="kw">in </span><span class="number">1</span>..<span class="number">100 </span>{
+            <span class="kw">let </span>notes = notes(tiered.as_map().clone().into_iter().collect());
+            <span class="kw">let </span>select = notes.select_notes(Amount::from_sats(multiplier * <span class="number">1000</span>));
+            total_notes += select.unwrap().into_iter_items().count();
+        }
+        <span class="macro">assert_eq!</span>(total_notes / <span class="number">100</span>, <span class="number">10</span>);
     }
 
     <span class="kw">fn </span>notes(notes: Vec&lt;(Amount, usize)&gt;) -&gt; TieredMulti&lt;usize&gt; {

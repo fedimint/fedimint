@@ -816,16 +816,6 @@
 <a href="#816" id="816">816</a>
 <a href="#817" id="817">817</a>
 <a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
@@ -842,7 +832,7 @@
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_api::task::{timeout, Elapsed, TaskGroup};
-<span class="kw">use </span>fedimint_api::{Amount, PeerId};
+<span class="kw">use </span>fedimint_api::{Amount, PeerId, Tiered};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::modules::mint::MintGenParams;
 <span class="kw">use </span>fedimint_wallet::WalletGenParams;
@@ -1402,19 +1392,6 @@
 }
 
 <span class="kw">impl </span>ServerConfigParams {
-    <span class="doccomment">/// Generates denominations as powers of 2 until a `max`
-    </span><span class="kw">pub fn </span>gen_denominations(max: Amount) -&gt; Vec&lt;Amount&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>amounts = <span class="macro">vec!</span>[];
-
-        <span class="kw">let </span><span class="kw-2">mut </span>denomination = Amount::from_msats(<span class="number">1</span>);
-        <span class="kw">while </span>denomination &lt; max {
-            amounts.push(denomination);
-            denomination = denomination * <span class="number">2</span>;
-        }
-
-        amounts
-    }
-
     <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, PeerEndpoint&gt; {
         <span class="self">self</span>.fed_network
             .peers
@@ -1489,7 +1466,10 @@
                     </span>finality_delay,
                 })
                 .attach(MintGenParams {
-                    mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
+                    mint_amounts: Tiered::gen_denominations(max_denomination)
+                        .tiers()
+                        .cloned()
+                        .collect(),
                 }),
         }
     }
