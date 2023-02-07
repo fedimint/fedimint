@@ -179,7 +179,8 @@ impl MintClient {
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .await
             .map(|res| res.expect("DB error"))
-            .collect();
+            .collect()
+            .await;
 
         let mut idxes = vec![];
         for &amount in self.config.tbs_pks.tiers() {

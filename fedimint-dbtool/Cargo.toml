@@ -22,6 +22,7 @@ fedimint-mint = { path = "../modules/fedimint-mint" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
 fedimint-wallet = { path = "../modules/fedimint-wallet" }
 fedimintd = { path = "../fedimintd" }
+futures = "0.3.24"
 erased-serde = "0.3"
 hex = { version = "0.4.3", features = [ "serde"] }
 mint-client = { path = "../client/client-lib" }

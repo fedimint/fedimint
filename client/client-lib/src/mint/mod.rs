@@ -325,6 +325,7 @@ impl MintClient {
                 (key.amount, spendable_note)
             })
             .collect()
+            .await
     }
 
     /// Get available spendable notes with a db transaction already opened
@@ -339,6 +340,7 @@ impl MintClient {
                 (key.amount, spendable_note)
             })
             .collect()
+            .await
     }
 
     pub async fn get_next_note_index(
@@ -476,6 +478,7 @@ impl MintClient {
                 (outpoint, cfd)
             })
             .collect()
+            .await
     }
 
     pub async fn fetch_all_notes(&self) -> Vec<Result<OutPoint>> {

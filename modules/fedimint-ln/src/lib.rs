@@ -42,6 +42,7 @@ use fedimint_api::task::TaskGroup;
 use fedimint_api::time::SystemTime;
 use fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
 use fedimint_api::{OutPoint, ServerModule};
+use futures::StreamExt;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -457,7 +458,8 @@ impl ServerModule for Lightning {
                 let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
                 LightningConsensusItem { contract_id, share }
             })
-            .collect()
+            .collect::<Vec<LightningConsensusItem>>()
+            .await
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
@@ -773,6 +775,9 @@ impl ServerModule for Lightning {
                 let (key, value) = res.expect("DB error");
                 (key.0, (key.1, value))
             })
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
             .into_group_map();
 
         let mut bad_peers = vec![];
@@ -1018,7 +1023,8 @@ impl Lightning {
         dbtx.find_by_prefix(&OfferKeyPrefix)
             .await
             .map(|res| res.expect("DB error").1)
-            .collect()
+            .collect::<Vec<IncomingContractOffer>>()
+            .await
     }
 
     pub async fn get_contract_account(
@@ -1032,9 +1038,9 @@ impl Lightning {
     }
 
     pub async fn list_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<LightningGateway> {
-        dbtx.find_by_prefix(&LightningGatewayKeyPrefix)
-            .await
-            .filter_map(|res| {
+        let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
+        stream
+            .filter_map(|res| async {
                 let gw = res.expect("DB error").1;
                 // FIXME: actually remove from DB
                 if gw.valid_until > SystemTime::now() {
@@ -1043,7 +1049,8 @@ impl Lightning {
                     None
                 }
             })
-            .collect()
+            .collect::<Vec<LightningGateway>>()
+            .await
     }
 
     pub async fn register_gateway(

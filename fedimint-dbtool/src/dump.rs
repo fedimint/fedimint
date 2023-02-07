@@ -14,6 +14,7 @@ use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::{config::ServerConfig, db as ConsensusRange};
 use fedimint_wallet::WalletGen;
 use fedimintd::SALT_FILE;
+use futures::StreamExt;
 use mint_client::db as ClientRange;
 use mint_client::ln::db as ClientLightningRange;
 use mint_client::mint::db as ClientMintRange;

@@ -6,6 +6,7 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
+use futures::StreamExt;
 
 use crate::dump::DatabaseDump;
 
@@ -76,9 +77,12 @@ async fn main() {
         DbCommand::List { prefix } => {
             let db = open_db(&options.database).await.expect("Failed to open DB");
             let mut dbtx = db.begin_transaction().await;
-            let prefix_iter = dbtx.raw_find_by_prefix(&prefix).await;
-            for db_res in prefix_iter {
-                let (key, value) = db_res.expect("DB error");
+            let prefix_iter = dbtx
+                .raw_find_by_prefix(&prefix)
+                .await
+                .collect::<Vec<_>>()
+                .await;
+            for (key, value) in prefix_iter {
                 print_kv(&key, &value);
             }
             dbtx.commit_tx().await.expect("DB Error");

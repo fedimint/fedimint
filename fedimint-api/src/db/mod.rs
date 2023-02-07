@@ -6,6 +6,7 @@ use std::{error::Error, marker::PhantomData};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::{stream, Stream, StreamExt};
 use thiserror::Error;
 use tracing::{debug, instrument, trace, warn};
 
@@ -45,7 +46,7 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError>;
 }
 
-pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
+pub type PrefixStream<'a> = Pin<Box<dyn Stream<Item = (Vec<u8>, Vec<u8>)> + Send + 'a>>;
 
 #[async_trait]
 pub trait IDatabase: Debug + Send + Sync {
@@ -226,18 +227,18 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_>;
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_>;
 
     /// Default implementation is a combination of [`Self::raw_find_by_prefix`] + loop over [`Self::raw_remove_entry`]
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        let mut keys = vec![];
-        for kv in self.raw_find_by_prefix(key_prefix).await {
-            let (k, _) = kv?;
-            keys.push(k);
-        }
-
-        for keys in &keys {
-            self.raw_remove_entry(keys).await?;
+        let keys = self
+            .raw_find_by_prefix(key_prefix)
+            .await
+            .map(|kv| kv.0)
+            .collect::<Vec<_>>()
+            .await;
+        for key in keys {
+            self.raw_remove_entry(key.as_slice()).await?;
         }
         Ok(())
     }
@@ -316,15 +317,14 @@ impl<'a> IDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
             .await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
-        Box::new(
-            self.dbtx
-                .with_module_prefix(self.prefix)
-                .raw_find_by_prefix(key_prefix)
-                .await
-                .collect::<Vec<_>>()
-                .into_iter(),
-        )
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
+        let mut sub_dbtx = self.dbtx.with_module_prefix(self.prefix);
+        let stream = sub_dbtx
+            .raw_find_by_prefix(key_prefix)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        Box::pin(stream::iter(stream))
     }
 
     async fn commit_tx(self: Box<Self>) -> Result<()> {
@@ -405,20 +405,18 @@ impl<'isolated, 'parent, T: Send + Encodable + 'isolated> IDatabaseTransaction<'
             .await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
         let mut prefix_with_module = self.prefix.clone();
         prefix_with_module.extend_from_slice(key_prefix);
         let raw_prefix = self
             .inner_tx
             .raw_find_by_prefix(prefix_with_module.as_slice())
             .await;
-        Box::new(raw_prefix.map(|pair| match pair {
-            Ok(kv) => {
-                let key = kv.0;
-                let stripped_key = &key[(self.prefix.len())..];
-                Ok((stripped_key.to_vec(), kv.1))
-            }
-            _ => pair,
+
+        Box::pin(raw_prefix.map(|kv| {
+            let key = kv.0;
+            let stripped_key = &key[(self.prefix.len())..];
+            (stripped_key.to_vec(), kv.1)
         }))
     }
 
@@ -543,7 +541,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     pub async fn find_by_prefix<KP>(
         &mut self,
         key_prefix: &KP,
-    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value)>> + '_
+    ) -> impl Stream<Item = Result<(KP::Key, KP::Value)>> + '_
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
@@ -553,12 +551,10 @@ impl<'parent> DatabaseTransaction<'parent> {
         self.tx
             .raw_find_by_prefix(&prefix_bytes)
             .await
-            .map(move |res| {
-                res.and_then(|(key_bytes, value_bytes)| {
-                    let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
-                    let value = decode_value(&value_bytes, &decoders)?;
-                    Ok((key, value))
-                })
+            .map(move |(key_bytes, value_bytes)| {
+                let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
+                let value = decode_value(&value_bytes, &decoders)?;
+                Ok((key, value))
             })
     }
 
@@ -711,41 +707,57 @@ impl DecodingError {
 #[macro_export]
 macro_rules! push_db_pair_items {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = $dbtx.find_by_prefix(&$prefix_type).await;
-        let mut items: Vec<($key_type, $value_type)> = Vec::new();
-        for item in db_items {
-            items.push(item.unwrap());
-        }
-        $map.insert($key_literal.to_string(), Box::new(items));
+        let db_items = $dbtx
+            .find_by_prefix(&$prefix_type)
+            .await
+            .map(|res| {
+                let (key, val) = res.expect("DB Error");
+                (key, val)
+            })
+            .collect::<Vec<($key_type, $value_type)>>()
+            .await;
+
+        $map.insert($key_literal.to_string(), Box::new(db_items));
     };
 }
 
 #[macro_export]
 macro_rules! push_db_pair_items_no_serde {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = $dbtx.find_by_prefix(&$prefix_type).await;
-        let mut items: Vec<($key_type, SerdeWrapper)> = Vec::new();
-        for item in db_items {
-            let (k, v) = item.unwrap();
-            items.push((k, SerdeWrapper::from_encodable(v)));
-        }
-        $map.insert($key_literal.to_string(), Box::new(items));
+        let db_items = $dbtx
+            .find_by_prefix(&$prefix_type)
+            .await
+            .map(|res| {
+                let (key, val) = res.expect("DB Error");
+                (key, SerdeWrapper::from_encodable(val))
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        $map.insert($key_literal.to_string(), Box::new(db_items));
     };
 }
 
 #[macro_export]
 macro_rules! push_db_key_items {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = $dbtx.find_by_prefix(&$prefix_type).await;
-        let mut items: Vec<$key_type> = Vec::new();
-        for item in db_items {
-            items.push(item.unwrap().0);
-        }
-        $map.insert($key_literal.to_string(), Box::new(items));
+        let db_items = $dbtx
+            .find_by_prefix(&$prefix_type)
+            .await
+            .map(|res| {
+                let (key, _) = res.expect("DB Error");
+                key
+            })
+            .collect::<Vec<$key_type>>()
+            .await;
+
+        $map.insert($key_literal.to_string(), Box::new(db_items));
     };
 }
 
 mod tests {
+    use futures::StreamExt;
+
     use super::Database;
     use crate::db::DatabaseKeyPrefixConst;
     use crate::encoding::{Decodable, Encodable};
@@ -920,43 +932,47 @@ mod tests {
 
         // Verify finding by prefix returns the correct set of key pairs
         let mut dbtx = db.begin_transaction().await;
-        let mut returned_keys = 0;
         let expected_keys = 2;
-        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                TestKey(55) => {
-                    assert!(res.unwrap().1.eq(&TestVal(9999)));
-                    returned_keys += 1;
-                }
-                TestKey(54) => {
-                    assert!(res.unwrap().1.eq(&TestVal(8888)));
-                    returned_keys += 1;
-                }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+
+        let returned_keys = dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                match key {
+                    TestKey(55) => {
+                        assert!(value.eq(&TestVal(9999)));
+                    }
+                    TestKey(54) => {
+                        assert!(value.eq(&TestVal(8888)));
+                    }
+                    _ => {}
+                };
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
 
-        let mut returned_keys = 0;
         let expected_keys = 2;
-        for res in dbtx.find_by_prefix(&AltDbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                AltTestKey(55) => {
-                    assert!(res.unwrap().1.eq(&TestVal(7777)));
-                    returned_keys += 1;
-                }
-                AltTestKey(54) => {
-                    assert!(res.unwrap().1.eq(&TestVal(6666)));
-                    returned_keys += 1;
-                }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+
+        let returned_keys = dbtx
+            .find_by_prefix(&AltDbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                match key {
+                    AltTestKey(55) => {
+                        assert!(value.eq(&TestVal(7777)));
+                    }
+                    AltTestKey(54) => {
+                        assert!(value.eq(&TestVal(6666)));
+                    }
+                    _ => {}
+                };
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
     }
@@ -1035,19 +1051,18 @@ mod tests {
         // of the data when the transaction started
         assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
 
-        let mut returned_keys = 0;
         let expected_keys = 0;
-        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                TestKey(100) => {
-                    assert!(res.unwrap().1.eq(&TestVal(101)));
-                    returned_keys += 1;
+        let returned_keys = dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                if let TestKey(100) = key {
+                    assert!(value.eq(&TestVal(101)));
                 }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
     }
@@ -1068,23 +1083,24 @@ mod tests {
         dbtx.commit_tx().await.expect("DB Error");
 
         let mut dbtx = db.begin_transaction().await;
-        let mut returned_keys = 0;
         let expected_keys = 2;
-        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                TestKey(100) => {
-                    assert!(res.unwrap().1.eq(&TestVal(101)));
-                    returned_keys += 1;
-                }
-                TestKey(101) => {
-                    assert!(res.unwrap().1.eq(&TestVal(102)));
-                    returned_keys += 1;
-                }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+        let returned_keys = dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                match key {
+                    TestKey(100) => {
+                        assert!(value.eq(&TestVal(101)));
+                    }
+                    TestKey(101) => {
+                        assert!(value.eq(&TestVal(102)));
+                    }
+                    _ => {}
+                };
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
 
@@ -1097,22 +1113,23 @@ mod tests {
 
         dbtx2.commit_tx().await.expect("DB Error");
 
-        let mut returned_keys = 0;
-        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                TestKey(100) => {
-                    assert!(res.unwrap().1.eq(&TestVal(101)));
-                    returned_keys += 1;
-                }
-                TestKey(101) => {
-                    assert!(res.unwrap().1.eq(&TestVal(102)));
-                    returned_keys += 1;
-                }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+        let returned_keys = dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                match key {
+                    TestKey(100) => {
+                        assert!(value.eq(&TestVal(101)));
+                    }
+                    TestKey(101) => {
+                        assert!(value.eq(&TestVal(102)));
+                    }
+                    _ => {}
+                };
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
     }
@@ -1181,19 +1198,18 @@ mod tests {
             .await
             .is_ok());
 
-        let mut returned_keys = 0;
         let expected_keys = 4;
-        for res in dbtx.find_by_prefix(&PercentPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                PercentTestKey(101) => {
-                    assert!(res.unwrap().1.eq(&TestVal(100)));
-                    returned_keys += 1;
+        let returned_keys = dbtx
+            .find_by_prefix(&PercentPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                if let PercentTestKey(101) = key {
+                    assert!(value.eq(&TestVal(100)));
                 }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
     }
@@ -1221,23 +1237,24 @@ mod tests {
         remove_dbtx.commit_tx().await.expect("DB Error");
 
         let mut dbtx = db.begin_transaction().await;
-        let mut returned_keys = 0;
         let expected_keys = 0;
-        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                TestKey(100) => {
-                    assert!(res.unwrap().1.eq(&TestVal(101)));
-                    returned_keys += 1;
-                }
-                TestKey(101) => {
-                    assert!(res.unwrap().1.eq(&TestVal(102)));
-                    returned_keys += 1;
-                }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+        let returned_keys = dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                match key {
+                    TestKey(100) => {
+                        assert!(value.eq(&TestVal(101)));
+                    }
+                    TestKey(101) => {
+                        assert!(value.eq(&TestVal(102)));
+                    }
+                    _ => {}
+                };
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
     }
@@ -1289,24 +1306,25 @@ mod tests {
 
         module_dbtx.commit_tx().await.expect("DB Error");
 
-        let mut returned_keys = 0;
         let expected_keys = 2;
         let mut dbtx = db.begin_transaction().await;
-        for res in dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                TestKey(100) => {
-                    assert!(res.unwrap().1.eq(&TestVal(101)));
-                    returned_keys += 1;
-                }
-                TestKey(101) => {
-                    assert!(res.unwrap().1.eq(&TestVal(102)));
-                    returned_keys += 1;
-                }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+        let returned_keys = dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                match key {
+                    TestKey(100) => {
+                        assert!(value.eq(&TestVal(101)));
+                    }
+                    TestKey(101) => {
+                        assert!(value.eq(&TestVal(102)));
+                    }
+                    _ => {}
+                };
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
 
@@ -1370,23 +1388,24 @@ mod tests {
             Some(TestVal(102))
         );
 
-        let mut returned_keys = 0;
         let expected_keys = 2;
-        for res in test_module_dbtx.find_by_prefix(&DbPrefixTestPrefix).await {
-            match res.as_ref().unwrap().0 {
-                TestKey(100) => {
-                    assert!(res.unwrap().1.eq(&TestVal(101)));
-                    returned_keys += 1;
-                }
-                TestKey(101) => {
-                    assert!(res.unwrap().1.eq(&TestVal(102)));
-                    returned_keys += 1;
-                }
-                _ => {
-                    returned_keys += 1;
-                }
-            }
-        }
+        let returned_keys = test_module_dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .fold(0, |returned_keys, kv| async move {
+                let (key, value) = kv.unwrap();
+                match key {
+                    TestKey(100) => {
+                        assert!(value.eq(&TestVal(101)));
+                    }
+                    TestKey(101) => {
+                        assert!(value.eq(&TestVal(102)));
+                    }
+                    _ => {}
+                };
+                returned_keys + 1
+            })
+            .await;
 
         assert_eq!(returned_keys, expected_keys);
 
@@ -1413,7 +1432,7 @@ mod tests {
         use anyhow::anyhow;
         use async_trait::async_trait;
 
-        use crate::db::{AutocommitError, IDatabase, IDatabaseTransaction, PrefixIter};
+        use crate::db::{AutocommitError, IDatabase, IDatabaseTransaction};
         use crate::ModuleDecoderRegistry;
 
         #[derive(Debug)]
@@ -1449,7 +1468,10 @@ mod tests {
                 unimplemented!()
             }
 
-            async fn raw_find_by_prefix(&mut self, _key_prefix: &[u8]) -> PrefixIter<'_> {
+            async fn raw_find_by_prefix(
+                &mut self,
+                _key_prefix: &[u8],
+            ) -> crate::db::PrefixStream<'_> {
                 unimplemented!()
             }
 

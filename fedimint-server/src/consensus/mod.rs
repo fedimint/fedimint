@@ -21,6 +21,7 @@ use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
 use fedimint_core::outcome::TransactionStatus;
 use futures::future::select_all;
+use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use thiserror::Error;
@@ -643,7 +644,8 @@ impl FedimintConsensus {
                 let key = res.expect("DB error").0;
                 key.0
             })
-            .collect();
+            .collect()
+            .await;
 
         let mut items: Vec<ConsensusItem> = dbtx
             .find_by_prefix(&ProposedTransactionKeyPrefix)
@@ -652,7 +654,8 @@ impl FedimintConsensus {
                 let (_key, value) = res.expect("DB error");
                 ConsensusItem::Transaction(value)
             })
-            .collect();
+            .collect()
+            .await;
 
         for (instance_id, module) in self.modules.iter_modules() {
             items.extend(

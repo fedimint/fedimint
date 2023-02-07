@@ -22,6 +22,7 @@ bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
 erased-serde = "0.3"
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-bitcoind = { path = "../../fedimint-bitcoind", features = [] }
+futures = "0.3"
 miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92", features = [ "compiler", "serde" ] }
 impl-tools = "0.6.1"
 rand = "0.8"

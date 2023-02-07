@@ -2,8 +2,8 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::PrefixIter;
-use fedimint_api::db::{IDatabase, IDatabaseTransaction};
+use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+use futures::stream;
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 use tracing::warn;
@@ -83,7 +83,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         })
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
         fedimint_api::task::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let mut options = rocksdb::ReadOptions::default();
@@ -92,16 +92,17 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
                 rocksdb::IteratorMode::From(&prefix, rocksdb::Direction::Forward),
                 options,
             );
-            Box::new(
-                iter.map_while(move |res| {
+
+            let rocksdb_iter = iter
+                .map_while(move |res| {
                     let (key_bytes, value_bytes) = res.expect("DB error");
                     key_bytes
                         .starts_with(&prefix)
                         .then_some((key_bytes, value_bytes))
                 })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map(Ok),
-            )
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+
+            Box::pin(stream::iter(rocksdb_iter))
         })
     }
 
@@ -142,21 +143,22 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         panic!("Cannot remove from a read only transaction");
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
         fedimint_api::task::block_in_place(|| {
             let prefix = key_prefix.to_vec();
-            Box::new(
-                self.0
-                    .prefix_iterator(prefix.clone())
-                    .map_while(move |res| {
-                        let (key_bytes, value_bytes) = res.expect("DB error");
-                        key_bytes
-                            .starts_with(&prefix)
-                            .then_some((key_bytes, value_bytes))
-                    })
-                    .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                    .map(Ok),
-            )
+
+            let rocksdb_iter = self
+                .0
+                .prefix_iterator(prefix.clone())
+                .map_while(move |res| {
+                    let (key_bytes, value_bytes) = res.expect("DB error");
+                    key_bytes
+                        .starts_with(&prefix)
+                        .then_some((key_bytes, value_bytes))
+                })
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+
+            Box::pin(stream::iter(rocksdb_iter))
         })
     }
 

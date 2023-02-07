@@ -50,6 +50,7 @@ use fedimint_api::{
     PeerId, ServerModule,
 };
 use fedimint_bitcoind::DynBitcoindRpc;
+use futures::{stream, StreamExt};
 use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
@@ -548,8 +549,9 @@ impl ServerModule for Wallet {
                     signature: val,
                 })
             })
-            .chain(std::iter::once(round_ci))
-            .collect()
+            .chain(stream::once(async { round_ci }))
+            .collect::<Vec<WalletConsensusItem>>()
+            .await
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
@@ -775,12 +777,19 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Sign and finalize any unsigned transactions that have signatures
-        let unsigned_txs: Vec<(UnsignedTransactionKey, UnsignedTransaction)> = dbtx
+        let unsigned_txs = dbtx
             .find_by_prefix(&UnsignedTransactionPrefixKey)
             .await
-            .map(|res| res.expect("DB error"))
-            .filter(|(_, unsigned)| !unsigned.signatures.is_empty())
-            .collect();
+            .map(|res| {
+                let (key, val) = res.expect("DB error");
+                (key, val)
+            })
+            .collect::<Vec<(UnsignedTransactionKey, UnsignedTransaction)>>()
+            .await;
+
+        let unsigned_txs = unsigned_txs
+            .into_iter()
+            .filter(|(_, unsigned)| !unsigned.signatures.is_empty());
 
         let mut drop_peers = Vec::<PeerId>::new();
         for (key, unsigned) in unsigned_txs {
@@ -974,7 +983,8 @@ impl Wallet {
                 let (key, val) = res.expect("DB error");
                 (key.0, val)
             })
-            .collect();
+            .collect()
+            .await;
 
         for (peer, sig) in signatures.into_iter() {
             match cache.get_mut(&sig.txid) {
@@ -1198,7 +1208,8 @@ impl Wallet {
                     let (key, transaction) = res.expect("DB error");
                     (key.0, transaction)
                 })
-                .collect::<HashMap<_, _>>();
+                .collect::<HashMap<_, _>>()
+                .await;
 
             match self.btc_rpc.backend_type() {
                 BitcoinRpcBackendType::Bitcoind => {
@@ -1310,8 +1321,12 @@ impl Wallet {
     ) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .await
-            .collect::<Result<_, _>>()
-            .expect("DB error")
+            .map(|res| {
+                let (key, val) = res.expect("FB error");
+                (key, val)
+            })
+            .collect::<Vec<(UTXOKey, SpendableUTXO)>>()
+            .await
     }
 
     pub async fn get_wallet_value(&self, dbtx: &mut DatabaseTransaction<'_>) -> bitcoin::Amount {
@@ -1631,8 +1646,12 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
     let pending_tx = dbtx
         .find_by_prefix(&PendingTransactionPrefixKey)
         .await
-        .collect::<Result<Vec<_>, _>>()
-        .expect("DB error");
+        .map(|res| {
+            let (key, val) = res.expect("DB Error");
+            (key, val)
+        })
+        .collect::<Vec<(_, _)>>()
+        .await;
 
     for (_, PendingTransaction { tx, .. }) in pending_tx {
         debug!(

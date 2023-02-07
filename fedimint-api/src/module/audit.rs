@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 
+use futures::StreamExt;
+
 use crate::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
 
 #[derive(Default)]
@@ -38,7 +40,8 @@ impl Audit {
                 let milli_sat = to_milli_sat(key, value);
                 AuditItem { name, milli_sat }
             })
-            .collect();
+            .collect::<Vec<AuditItem>>()
+            .await;
         self.items.append(&mut new_items);
     }
 }
