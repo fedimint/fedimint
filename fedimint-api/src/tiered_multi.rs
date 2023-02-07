@@ -49,6 +49,11 @@ impl<T> TieredMulti<T> {
         self.0.keys()
     }
 
+    /// Returns the summary of number of items in each tier
+    pub fn summary(&self) -> Tiered<usize> {
+        Tiered::from_iter(self.iter().map(|(amount, values)| (*amount, values.len())))
+    }
+
     /// Verifies whether all vectors in all tiers are empty
     pub fn is_empty(&self) -> bool {
         self.count_items() == 0
