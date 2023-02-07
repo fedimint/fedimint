@@ -882,6 +882,8 @@
                 pkgs.parallel
                 pkgs.semgrep
 
+                (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
+
                 # This is required to prevent a mangled bash shell in nix develop
                 # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
                 (hiPrio pkgs.bashInteractive)
