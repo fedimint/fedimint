@@ -178,6 +178,13 @@ impl BitcoinTest for RealBitcoinTest {
         };
     }
 
+    async fn prepare_funding_wallet(&self) {
+        let block_count = self.client.get_block_count().expect("should not fail");
+        if block_count < 100 {
+            self.mine_blocks(100 - block_count).await;
+        }
+    }
+
     async fn send_and_mine_block(
         &self,
         address: &Address,
@@ -234,6 +241,10 @@ impl BitcoinTest for RealBitcoinTestLocked {
 
     async fn mine_blocks(&self, block_num: u64) {
         self.inner.mine_blocks(block_num).await
+    }
+
+    async fn prepare_funding_wallet(&self) {
+        self.inner.prepare_funding_wallet().await;
     }
 
     async fn send_and_mine_block(

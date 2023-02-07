@@ -954,12 +954,13 @@ async fn runs_consensus_if_new_block() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
 
+        bitcoin.prepare_funding_wallet().await;
+
         // make the mint estabilish at least one block height record
         bitcoin.mine_blocks(1).await;
         fed.await_consensus_epochs(1).await.unwrap();
 
         let peg_in_address = user.client.get_new_pegin_address(rng()).await;
-        bitcoin.mine_blocks(100).await;
         let (proof, tx) = bitcoin
             .send_and_mine_block(&peg_in_address, Amount::from_sat(1000))
             .await;
@@ -1054,7 +1055,8 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
     test(4, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
 
-        bitcoin.mine_blocks(110).await;
+        bitcoin.prepare_funding_wallet().await;
+        bitcoin.mine_blocks(1).await;
         fed.run_consensus_epochs(1).await;
 
         // Keep peer 3 out of consensus
@@ -1175,7 +1177,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn verifies_client_configs() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
-        bitcoin.mine_blocks(100).await;
+        bitcoin.prepare_funding_wallet().await;
 
         // fed needs to run an epoch to combine shares
         let id = user.client.config().0.federation_id.clone();

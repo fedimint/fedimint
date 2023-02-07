@@ -92,6 +92,15 @@ impl BitcoinTest for FakeBitcoinTest {
         }
     }
 
+    async fn prepare_funding_wallet(&self) {
+        // In fake wallet this might not be technically neccessary,
+        // but it makes it behave more like the `RealBitcoinTest`.
+        let block_count = self.blocks.lock().unwrap().len() as u64;
+        if block_count < 100 {
+            self.mine_blocks(100 - block_count).await;
+        }
+    }
+
     async fn send_and_mine_block(
         &self,
         address: &Address,
