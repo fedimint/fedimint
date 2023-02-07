@@ -1,3 +1,21 @@
+//! Integration test suite
+//!
+//! This crate contains integration tests that work be creating
+//! per-test federation, ln-gatewa and driving bitcoind and lightning
+//! nodes to exercise certain behaviors on it.
+//!
+//! We run them in two modes:
+//!
+//! * With mocks - fake implementations of Lightning and Bitcoin node
+//!   that only simulate the real behavior. These are instantiated
+//!   per test.
+//! * Without mocks - against real bitcoind and lightningd.
+//!
+//! When running against real bitcoind, the other tests might create
+//! new blocks and transactions, so the tests can't expect to have
+//! exclusive control over it. When it is really necessary, `lock_exclusive`
+//! can be used to achieve it, but that makes the given test run serially
+//! is thus udesireable.
 mod fixtures;
 
 use std::future::Future;
