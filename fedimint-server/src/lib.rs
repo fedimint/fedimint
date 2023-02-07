@@ -480,8 +480,11 @@ impl FedimintServer {
                 Ok(self.handle_step(step).await?)
             }
             (_, EpochMessage::RejoinRequest(epoch)) => {
-                info!("Requested to run {} epochs", epoch);
-                self.run_empty_epochs = min(NUM_EPOCHS_REJOIN_AHEAD, epoch);
+                self.run_empty_epochs += min(NUM_EPOCHS_REJOIN_AHEAD, epoch);
+                info!(
+                    "Requested to run {} epochs, running {} epochs",
+                    epoch, self.run_empty_epochs
+                );
                 Ok(vec![])
             }
         }
