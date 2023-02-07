@@ -125,26 +125,6 @@
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_api::db::{DatabaseKeyPrefixConst, MODULE_GLOBAL_PREFIX};
@@ -155,12 +135,10 @@
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::AcceptedTransaction;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
-    ProposedTransaction = <span class="number">0x01</span>,
     AcceptedTransaction = <span class="number">0x02</span>,
     DropPeer = <span class="number">0x03</span>,
     RejectedTransaction = <span class="number">0x04</span>,
@@ -174,24 +152,6 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
         <span class="macro">write!</span>(f, <span class="string">&quot;{self:?}&quot;</span>)
     }
-}
-
-<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>ProposedTransactionKey(<span class="kw">pub </span>TransactionId);
-
-<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedTransactionKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction <span class="kw">as </span>u8;
-    <span class="kw">type </span>Key = <span class="self">Self</span>;
-    <span class="kw">type </span>Value = Transaction;
-}
-
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>ProposedTransactionKeyPrefix;
-
-<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedTransactionKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction <span class="kw">as </span>u8;
-    <span class="kw">type </span>Key = ProposedTransactionKey;
-    <span class="kw">type </span>Value = Transaction;
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]

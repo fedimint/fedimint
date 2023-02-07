@@ -411,16 +411,6 @@
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, path::PathBuf};
 
 <span class="kw">use </span>erased_serde::Serialize;
@@ -580,16 +570,6 @@
         });
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
             <span class="kw">match </span>table {
-                ConsensusRange::DbKeyPrefix::ProposedTransaction =&gt; {
-                    <span class="macro">push_db_pair_items_no_serde!</span>(
-                        dbtx,
-                        ConsensusRange::ProposedTransactionKeyPrefix,
-                        ConsensusRange::ProposedTransactionKey,
-                        fedimint_core::transaction::Transaction,
-                        consensus,
-                        <span class="string">&quot;Pending Transactions&quot;
-                    </span>);
-                }
                 ConsensusRange::DbKeyPrefix::AcceptedTransaction =&gt; {
                     <span class="macro">push_db_pair_items_no_serde!</span>(
                         dbtx,

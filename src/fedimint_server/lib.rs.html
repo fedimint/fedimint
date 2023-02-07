@@ -553,6 +553,7 @@
 <a href="#553" id="553">553</a>
 <a href="#554" id="554">554</a>
 <a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -912,7 +913,7 @@
               <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.tx_receiver).peek() =&gt; (),
               () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
             }
-            <span class="self">self</span>.save_new_txs().<span class="kw">await</span>;
+            <span class="self">self</span>.save_txs_to_consensus_cache();
             <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
             <span class="kw">let </span>epoch = <span class="self">self</span>.hbbft.epoch();
             <span class="self">self</span>.hbbft.skip_to_epoch(epoch + <span class="number">1</span>);
@@ -932,7 +933,7 @@
                 <span class="kw">_ </span>=&gt; <span class="kw">break </span><span class="macro">vec!</span>[],
             };
         };
-        <span class="self">self</span>.save_new_txs().<span class="kw">await</span>;
+        <span class="self">self</span>.save_txs_to_consensus_cache();
 
         <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
         <span class="kw">for </span>peer <span class="kw">in </span>proposal.drop_peers.iter() {
@@ -949,9 +950,10 @@
     }
 
     <span class="comment">// save any transactions we have in the channel
-    </span><span class="kw">async fn </span>save_new_txs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    </span><span class="kw">fn </span>save_txs_to_consensus_cache(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_cache = <span class="self">self</span>.consensus.tx_cache.lock().unwrap();
         <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(tx)) = <span class="self">self</span>.tx_receiver.next().now_or_never() {
-            <span class="self">self</span>.consensus.save_transaction_to_db(tx).<span class="kw">await</span>;
+            tx_cache.insert(tx);
         }
     }
 
