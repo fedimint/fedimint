@@ -61,6 +61,7 @@ use fedimint_core::{
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use itertools::{Either, Itertools};
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
@@ -545,6 +546,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         rng: R,
     ) -> Result<TieredMulti<SpendableNote>> {
         let notes = self.mint_client().select_notes(amount).await?;
+        let mut dbtx = self.context.db.begin_transaction().await;
 
         let final_notes = if notes.total_amount() == amount {
             notes
@@ -553,17 +555,18 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
             let (mut keys, input) = MintClient::ecash_input(notes)?;
             tx.input(&mut keys, input);
-            self.submit_tx_with_change(tx, rng).await?;
-            self.fetch_all_notes().await;
+            let txid = self.submit_tx_with_change(tx, rng).await?;
+            let outpoint = OutPoint { txid, out_idx: 0 };
+
+            self.mint_client()
+                .await_fetch_notes(&mut dbtx, &outpoint)
+                .await?;
             self.mint_client().select_notes(amount).await?
         };
-        assert_eq!(
-            final_notes.total_amount(),
-            amount,
-            "should have exact change"
-        );
+        if final_notes.total_amount() != amount {
+            return Err(ClientError::SpendReusedNote);
+        }
 
-        let mut dbtx = self.context.db.begin_transaction().await;
         for (amount, note) in final_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
                 amount,
@@ -600,7 +603,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Continuation of `remint_notes`
     pub async fn remint_ecash_await(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
-        self.fetch_all_notes().await;
+        self.fetch_all_notes().await?;
         let notes = self.mint_client().select_notes(amount).await?;
         assert_eq!(notes.total_amount(), amount, "should have exact change");
 
@@ -681,13 +684,22 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         }
     }
 
-    pub async fn fetch_all_notes<'a>(&self) -> Vec<Result<OutPoint>> {
-        self.mint_client()
+    pub async fn fetch_all_notes<'a>(&self) -> Result<Vec<OutPoint>> {
+        let (errors, outpoints): (Vec<_>, Vec<_>) = self
+            .mint_client()
             .fetch_all_notes()
             .await
             .into_iter()
-            .map(|res| res.map_err(|e| e.into()))
-            .collect()
+            .partition_map(|result| match result {
+                Ok(outpoint) => Either::Right(outpoint),
+                Err(error) => Either::Left(error.into()),
+            });
+
+        if errors.is_empty() {
+            Ok(outpoints)
+        } else {
+            Err(ClientError::UnableToFetchAllNotes(errors, outpoints))
+        }
     }
 
     pub async fn notes(&self) -> TieredMulti<SpendableNote> {
@@ -1561,12 +1573,14 @@ pub enum ClientError {
     DeleteUnknownOutgoingContract,
     #[error("Timeout")]
     Timeout,
-    #[error("Failed to spend ecash, all spend attempts re-used an ecash note")]
+    #[error("Failed to spend ecash, we tried to double-spend an ecash note")]
     SpendReusedNote,
     #[error("The contract is already cancelled and can't be processed by the gateway")]
     CancelledContract,
     #[error("The client config cannot be verified because {0:?}")]
     ConfigVerify(ConfigVerifyError),
+    #[error("Failed to fetch notes we expected to be issued {0:?}")]
+    UnableToFetchAllNotes(Vec<ClientError>, Vec<OutPoint>),
 }
 
 #[derive(Debug, Error)]

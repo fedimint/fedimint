@@ -141,7 +141,10 @@ async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
         assert_eq!(received1 + received2, sats(1000));
         user.client.reissue_pending_notes(rng()).await.unwrap();
         fed.run_consensus_epochs(2).await; // reissue the notes from the tx that failed
-        user.assert_total_notes(sats(5000 - 1000) - fees).await;
+
+        // either first peg-out failed OR second failed leaving us unissued change
+        assert!(user.client.fetch_all_notes().await.is_err() || received1 == sats(0));
+        assert_eq!(user.total_notes().await, sats(5000 - 1000) - fees);
     })
     .await
 }
@@ -252,22 +255,14 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     test(2, |fed, user_send, bitcoin, _, _| async move {
         let dummy_user = user_send.new_user_with_peers(peers(&[0])).await;
         let user_receive = user_send.new_user_with_peers(peers(&[0])).await;
-        user_send
-            .client
-            .mint_client()
-            .set_notes_per_denomination(1)
-            .await;
-        user_receive
-            .client
-            .mint_client()
-            .set_notes_per_denomination(1)
-            .await;
+
+        user_send.set_notes_per_denomination(1).await;
+        user_receive.set_notes_per_denomination(1).await;
 
         fed.mine_spendable_utxo(&dummy_user, &*bitcoin, Amount::from_sat(1000))
             .await;
         fed.mint_notes_for_user(&user_send, msats(8)).await;
-        let notes = vec![msats(1), msats(1), msats(2), msats(4)];
-        assert_eq!(user_send.note_amounts().await, notes);
+        user_send.assert_note_amounts(vec![msats(1), msats(1), msats(2), msats(4)]);
 
         user_receive
             .client
@@ -282,19 +277,19 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
 
         fed.run_consensus_epochs(2).await; // process transaction + sign new notes
 
-        user_receive
-            .assert_note_amounts(vec![msats(1), msats(2), msats(2)])
-            .await;
-        user_send
-            .assert_note_amounts(vec![msats(1), msats(2)])
-            .await;
+        // verify transfer occurred and change was made
+        user_receive.assert_note_amounts(vec![msats(1), msats(2), msats(2)]);
+        user_send.assert_note_amounts(vec![msats(1), msats(2)]);
+
+        // verify notes can be broken if we spend ecash
+        fed.spend_ecash(&user_send, msats(1)).await;
+        user_send.assert_note_amounts(vec![msats(2)]);
+
+        fed.spend_ecash(&user_send, msats(1)).await;
+        user_send.assert_note_amounts(vec![msats(1)]);
 
         // verify error occurs if we issue too many of one denomination
-        user_receive
-            .client
-            .mint_client()
-            .set_notes_per_denomination(10)
-            .await;
+        user_receive.set_notes_per_denomination(10).await;
         let notes = user_receive.client.notes().await;
         assert_matches!(user_receive.client.reissue(notes, rng()).await, Err(_));
     })

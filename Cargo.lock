@@ -2410,6 +2410,7 @@ dependencies = [
  "fedimint-testing",
  "futures",
  "hkdf",
+ "itertools",
  "jsonrpsee-core",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",

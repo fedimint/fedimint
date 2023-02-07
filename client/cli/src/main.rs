@@ -515,27 +515,14 @@ async fn handle_command(
             CliErrorKind::GeneralFederationError,
             "failed to execute spend (no further information)",
         ),
-        Command::Fetch => {
-            let mut result = Vec::<OutPoint>::new();
-            let mut last_error = None;
-            for fetch_result in client.fetch_all_notes().await {
-                match fetch_result {
-                    Ok(v) => result.push(v),
-                    Err(e) => {
-                        last_error = Some(e);
-                    }
-                }
-            }
-            if let Some(error) = last_error {
-                Err(CliError::from(
-                    CliErrorKind::GeneralFederationError,
-                    "failed to fetch notes",
-                    Some(Box::new(error)),
-                ))
-            } else {
-                Ok(CliOutput::Fetch { issuance: (result) })
-            }
-        }
+        Command::Fetch => match client.fetch_all_notes().await {
+            Ok(result) => Ok(CliOutput::Fetch { issuance: (result) }),
+            Err(error) => Err(CliError::from(
+                CliErrorKind::GeneralFederationError,
+                "failed to fetch notes",
+                Some(Box::new(error)),
+            )),
+        },
         Command::Info => {
             let notes = client.notes().await;
             let details_vec = notes

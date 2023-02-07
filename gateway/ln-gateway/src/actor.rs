@@ -65,10 +65,8 @@ impl GatewayActor {
     }
 
     async fn fetch_all_notes(&self) {
-        for fetch_result in self.client.fetch_all_notes().await {
-            if let Err(e) = fetch_result {
-                debug!(error = %e, "Fetching notes failed")
-            };
+        if let Err(e) = self.client.fetch_all_notes().await {
+            debug!(error = %e, "Fetching notes failed");
         }
     }
 
