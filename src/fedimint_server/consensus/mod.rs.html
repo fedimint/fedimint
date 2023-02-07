@@ -858,6 +858,7 @@
 <a href="#858" id="858">858</a>
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -1389,14 +1390,15 @@
         client
     }
 
-    <span class="kw">pub async fn </span>get_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+    <span class="kw">pub async fn </span>get_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
         <span class="self">self</span>.db
             .begin_transaction()
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>LastEpochKey)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;db query must not fail&quot;</span>)
-            .map(|e| e.<span class="number">0</span>)
+            .map(|ep_hist_key| ep_hist_key.<span class="number">0 </span>+ <span class="number">1</span>)
+            .unwrap_or(<span class="number">0</span>)
     }
 
     <span class="kw">pub async fn </span>epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt; {

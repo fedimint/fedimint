@@ -1491,7 +1491,7 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; FederationResult&lt;SignedEpochOutcome&gt;;
 
-    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
+    <span class="kw">async fn </span>fetch_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
     <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1580,8 +1580,8 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>fetch_last_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
-        <span class="self">self</span>.request_eventually_consistent(<span class="string">&quot;/epoch&quot;</span>.to_owned(), erased_no_param())
+    <span class="kw">async fn </span>fetch_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
+        <span class="self">self</span>.request_eventually_consistent(<span class="string">&quot;/fetch_epoch_count&quot;</span>.to_owned(), erased_no_param())
             .<span class="kw">await
     </span>}
 
