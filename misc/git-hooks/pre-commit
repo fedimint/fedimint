@@ -15,7 +15,7 @@ set -e
 
 
 # Stash pending changes and revert them when script ends
-if [ $is_unclean -ne 0 ]; then
+if [ -z "${NO_STASH:-}" ] && [ $is_unclean -ne 0 ]; then
   >&2 echo "Stashing uncommited changes..."
   git stash -q --keep-index
   trap revert_git_stash EXIT
@@ -28,7 +28,7 @@ git_ls_files="$(git ls-files)"
 
 function check_nix() {
   # shellcheck disable=SC2046
-  nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$')
+  nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$') 2> >(grep -v "0 / 7 would have been reformatted")
 }
 export -f check_nix
 
