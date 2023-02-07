@@ -1421,6 +1421,13 @@
 <a href="#1421" id="1421">1421</a>
 <a href="#1422" id="1422">1422</a>
 <a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -1455,6 +1462,7 @@
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
     PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -1883,8 +1891,9 @@
                     signatures,
                 }
             })
-            .collect()
-    }
+            .collect::&lt;Vec&lt;MintConsensusItem&gt;&gt;()
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
@@ -2067,6 +2076,9 @@
                 <span class="kw">let </span>(key, partial_sig) = entry_res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.request_id, (key.peer_id, partial_sig))
             })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await
+            </span>.into_iter()
             .into_group_map()
             .into_iter();
         <span class="kw">let </span><span class="kw-2">mut </span>issuance_requests = Vec::new();
@@ -2152,7 +2164,8 @@
                 }
                 key
             })
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
 
         <span class="kw">for </span>key <span class="kw">in </span>remove_audit_keys {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -2183,7 +2196,8 @@
                 request_id: out_point,
             })
             .<span class="kw">await
-            </span>.any(|res| res.is_ok());
+            </span>.any(|res| <span class="kw">async move </span>{ res.is_ok() })
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span>final_sig = dbtx
             .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point))

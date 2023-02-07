@@ -64,7 +64,12 @@
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
+
+<span class="kw">use </span>futures::StreamExt;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
 
@@ -104,7 +109,8 @@
                 <span class="kw">let </span>milli_sat = to_milli_sat(key, value);
                 AuditItem { name, milli_sat }
             })
-            .collect();
+            .collect::&lt;Vec&lt;AuditItem&gt;&gt;()
+            .<span class="kw">await</span>;
         <span class="self">self</span>.items.append(<span class="kw-2">&amp;mut </span>new_items);
     }
 }

@@ -1583,6 +1583,9 @@
 <a href="#1583" id="1583">1583</a>
 <a href="#1584" id="1584">1584</a>
 <a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -2232,7 +2235,8 @@
                     <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>(err),
                 }
             })
-            .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>all_notes = TieredMulti::&lt;SpendableNote&gt;::default();
@@ -2782,7 +2786,8 @@
             .<span class="kw">await
             </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .collect()
-    }
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Abort payment if our node can&#39;t route it and give money back to user
     </span><span class="kw">pub async fn </span>abort_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -2942,7 +2947,8 @@
             .<span class="kw">await
             </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0 </span>.<span class="number">0</span>)
             .collect()
-    }
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Wait for a lightning preimage gateway has purchased to be decrypted by the federation
     </span><span class="kw">pub async fn </span>await_preimage_decryption(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {

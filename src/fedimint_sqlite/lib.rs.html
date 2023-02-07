@@ -267,11 +267,13 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixIter};
+<span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+<span class="kw">use </span>futures::stream;
 <span class="kw">use </span>sqlx::migrate::MigrateDatabase;
 <span class="kw">use </span>sqlx::sqlite::SqliteConnectOptions;
 <span class="kw">use </span>sqlx::{ConnectOptions, Error, Executor, Row, Sqlite, SqlitePool, Transaction};
@@ -367,7 +369,7 @@
         </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>str_prefix = <span class="string">&quot;&quot;</span>.to_string();
         <span class="kw">for </span>prefix <span class="kw">in </span>key_prefix {
             str_prefix = <span class="macro">format!</span>(<span class="string">&quot;{str_prefix}{prefix:02X?}&quot;</span>);
@@ -379,17 +381,17 @@
 
         <span class="kw">if </span>results.is_err() {
             <span class="macro">warn!</span>(<span class="string">&quot;sqlite find_by_prefix failed to retrieve key range. Returning empty iterator&quot;</span>);
-            <span class="kw">return </span>Box::new(Vec::new().into_iter());
+            <span class="kw">return </span>Box::pin(stream::iter(Vec::new()));
         }
 
         <span class="kw">let </span>rows = results.unwrap().into_iter().map(|row| {
-            <span class="prelude-val">Ok</span>((
+            (
                 row.get::&lt;Vec&lt;u8&gt;, <span class="kw-2">&amp;</span>str&gt;(<span class="string">&quot;key&quot;</span>),
                 row.get::&lt;Vec&lt;u8&gt;, <span class="kw-2">&amp;</span>str&gt;(<span class="string">&quot;value&quot;</span>),
-            ))
+            )
         });
 
-        Box::new(rows)
+        Box::pin(stream::iter(rows))
     }
 
     <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {

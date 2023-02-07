@@ -852,6 +852,7 @@
 <a href="#852" id="852">852</a>
 <a href="#853" id="853">853</a>
 <a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -1033,7 +1034,8 @@
             .find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
             .<span class="kw">await
             </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
-            .collect();
+            .collect()
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>idxes = <span class="macro">vec!</span>[];
         <span class="kw">for </span><span class="kw-2">&amp;</span>amount <span class="kw">in </span><span class="self">self</span>.config.tbs_pks.tiers() {

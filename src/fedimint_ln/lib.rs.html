@@ -1160,6 +1160,13 @@
 <a href="#1160" id="1160">1160</a>
 <a href="#1161" id="1161">1161</a>
 <a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -1204,6 +1211,7 @@
 <span class="kw">use </span>fedimint_api::time::SystemTime;
 <span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
 <span class="kw">use </span>fedimint_api::{OutPoint, ServerModule};
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1619,8 +1627,9 @@
                 <span class="kw">let </span>(ProposeDecryptionShareKey(contract_id), share) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 LightningConsensusItem { contract_id, share }
             })
-            .collect()
-    }
+            .collect::&lt;Vec&lt;LightningConsensusItem&gt;&gt;()
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
@@ -1935,6 +1944,9 @@
                 <span class="kw">let </span>(key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 (key.<span class="number">0</span>, (key.<span class="number">1</span>, value))
             })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await
+            </span>.into_iter()
             .into_group_map();
 
         <span class="kw">let </span><span class="kw-2">mut </span>bad_peers = <span class="macro">vec!</span>[];
@@ -2180,8 +2192,9 @@
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>OfferKeyPrefix)
             .<span class="kw">await
             </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
-            .collect()
-    }
+            .collect::&lt;Vec&lt;IncomingContractOffer&gt;&gt;()
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>get_contract_account(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2194,9 +2207,9 @@
     }
 
     <span class="kw">pub async fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Vec&lt;LightningGateway&gt; {
-        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
-            .<span class="kw">await
-            </span>.filter_map(|res| {
+        <span class="kw">let </span>stream = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
+        stream
+            .filter_map(|res| <span class="kw">async </span>{
                 <span class="kw">let </span>gw = res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>;
                 <span class="comment">// FIXME: actually remove from DB
                 </span><span class="kw">if </span>gw.valid_until &gt; SystemTime::now() {
@@ -2205,8 +2218,9 @@
                     <span class="prelude-val">None
                 </span>}
             })
-            .collect()
-    }
+            .collect::&lt;Vec&lt;LightningGateway&gt;&gt;()
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>register_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

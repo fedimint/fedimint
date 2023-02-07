@@ -1480,6 +1480,28 @@
 <a href="#1480" id="1480">1480</a>
 <a href="#1481" id="1481">1481</a>
 <a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::pin::Pin;
@@ -1488,6 +1510,7 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>futures::{stream, Stream, StreamExt};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
@@ -1527,7 +1550,7 @@
     <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
 }
 
-<span class="kw">pub type </span>PrefixIter&lt;<span class="lifetime">&#39;a</span>&gt; = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;;
+<span class="kw">pub type </span>PrefixStream&lt;<span class="lifetime">&#39;a</span>&gt; = Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = (Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt;;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IDatabase: Debug + Send + Sync {
@@ -1708,18 +1731,18 @@
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt;;
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;;
 
     <span class="doccomment">/// Default implementation is a combination of [`Self::raw_find_by_prefix`] + loop over [`Self::raw_remove_entry`]
     </span><span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>keys = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>kv <span class="kw">in </span><span class="self">self</span>.raw_find_by_prefix(key_prefix).<span class="kw">await </span>{
-            <span class="kw">let </span>(k, <span class="kw">_</span>) = kv<span class="question-mark">?</span>;
-            keys.push(k);
-        }
-
-        <span class="kw">for </span>keys <span class="kw">in </span><span class="kw-2">&amp;</span>keys {
-            <span class="self">self</span>.raw_remove_entry(keys).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>keys = <span class="self">self
+            </span>.raw_find_by_prefix(key_prefix)
+            .<span class="kw">await
+            </span>.map(|kv| kv.<span class="number">0</span>)
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+        <span class="kw">for </span>key <span class="kw">in </span>keys {
+            <span class="self">self</span>.raw_remove_entry(key.as_slice()).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -1798,15 +1821,14 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
-        Box::new(
-            <span class="self">self</span>.dbtx
-                .with_module_prefix(<span class="self">self</span>.prefix)
-                .raw_find_by_prefix(key_prefix)
-                .<span class="kw">await
-                </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                .into_iter(),
-        )
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>sub_dbtx = <span class="self">self</span>.dbtx.with_module_prefix(<span class="self">self</span>.prefix);
+        <span class="kw">let </span>stream = sub_dbtx
+            .raw_find_by_prefix(key_prefix)
+            .<span class="kw">await
+            </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+        Box::pin(stream::iter(stream))
     }
 
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -1887,20 +1909,18 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>prefix_with_module = <span class="self">self</span>.prefix.clone();
         prefix_with_module.extend_from_slice(key_prefix);
         <span class="kw">let </span>raw_prefix = <span class="self">self
             </span>.inner_tx
             .raw_find_by_prefix(prefix_with_module.as_slice())
             .<span class="kw">await</span>;
-        Box::new(raw_prefix.map(|pair| <span class="kw">match </span>pair {
-            <span class="prelude-val">Ok</span>(kv) =&gt; {
-                <span class="kw">let </span>key = kv.<span class="number">0</span>;
-                <span class="kw">let </span>stripped_key = <span class="kw-2">&amp;</span>key[(<span class="self">self</span>.prefix.len())..];
-                <span class="prelude-val">Ok</span>((stripped_key.to_vec(), kv.<span class="number">1</span>))
-            }
-            <span class="kw">_ </span>=&gt; pair,
+
+        Box::pin(raw_prefix.map(|kv| {
+            <span class="kw">let </span>key = kv.<span class="number">0</span>;
+            <span class="kw">let </span>stripped_key = <span class="kw-2">&amp;</span>key[(<span class="self">self</span>.prefix.len())..];
+            (stripped_key.to_vec(), kv.<span class="number">1</span>)
         }))
     }
 
@@ -2025,7 +2045,7 @@
     </span><span class="kw">pub async fn </span>find_by_prefix&lt;KP&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         key_prefix: <span class="kw-2">&amp;</span>KP,
-    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;(KP::Key, KP::Value)&gt;&gt; + <span class="lifetime">&#39;_
+    ) -&gt; <span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;(KP::Key, KP::Value)&gt;&gt; + <span class="lifetime">&#39;_
     </span><span class="kw">where
         </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
@@ -2035,12 +2055,10 @@
         <span class="self">self</span>.tx
             .raw_find_by_prefix(<span class="kw-2">&amp;</span>prefix_bytes)
             .<span class="kw">await
-            </span>.map(<span class="kw">move </span>|res| {
-                res.and_then(|(key_bytes, value_bytes)| {
-                    <span class="kw">let </span>key = KP::Key::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-                    <span class="kw">let </span>value = decode_value(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>((key, value))
-                })
+            </span>.map(<span class="kw">move </span>|(key_bytes, value_bytes)| {
+                <span class="kw">let </span>key = KP::Key::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+                <span class="kw">let </span>value = decode_value(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>((key, value))
             })
     }
 
@@ -2193,41 +2211,57 @@
 <span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>push_db_pair_items {
     (<span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$prefix_type</span>:expr, <span class="macro-nonterminal">$key_type</span>:ty, <span class="macro-nonterminal">$value_type</span>:ty, <span class="macro-nonterminal">$map</span>:ident, <span class="macro-nonterminal">$key_literal</span>:literal) =&gt; {
-        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx</span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>).<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;(<span class="macro-nonterminal">$key_type</span>, <span class="macro-nonterminal">$value_type</span>)&gt; = Vec::new();
-        <span class="kw">for </span>item <span class="kw">in </span>db_items {
-            items.push(item.unwrap());
-        }
-        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(items));
+        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>)
+            .<span class="kw">await
+            </span>.map(|res| {
+                <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;DB Error&quot;</span>);
+                (key, val)
+            })
+            .collect::&lt;Vec&lt;(<span class="macro-nonterminal">$key_type</span>, <span class="macro-nonterminal">$value_type</span>)&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(db_items));
     };
 }
 
 <span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>push_db_pair_items_no_serde {
     (<span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$prefix_type</span>:expr, <span class="macro-nonterminal">$key_type</span>:ty, <span class="macro-nonterminal">$value_type</span>:ty, <span class="macro-nonterminal">$map</span>:ident, <span class="macro-nonterminal">$key_literal</span>:literal) =&gt; {
-        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx</span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>).<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;(<span class="macro-nonterminal">$key_type</span>, SerdeWrapper)&gt; = Vec::new();
-        <span class="kw">for </span>item <span class="kw">in </span>db_items {
-            <span class="kw">let </span>(k, v) = item.unwrap();
-            items.push((k, SerdeWrapper::from_encodable(v)));
-        }
-        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(items));
+        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>)
+            .<span class="kw">await
+            </span>.map(|res| {
+                <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;DB Error&quot;</span>);
+                (key, SerdeWrapper::from_encodable(val))
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(db_items));
     };
 }
 
 <span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>push_db_key_items {
     (<span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$prefix_type</span>:expr, <span class="macro-nonterminal">$key_type</span>:ty, <span class="macro-nonterminal">$map</span>:ident, <span class="macro-nonterminal">$key_literal</span>:literal) =&gt; {
-        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx</span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>).<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;<span class="macro-nonterminal">$key_type</span>&gt; = Vec::new();
-        <span class="kw">for </span>item <span class="kw">in </span>db_items {
-            items.push(item.unwrap().<span class="number">0</span>);
-        }
-        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(items));
+        <span class="kw">let </span>db_items = <span class="macro-nonterminal">$dbtx
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>)
+            .<span class="kw">await
+            </span>.map(|res| {
+                <span class="kw">let </span>(key, <span class="kw">_</span>) = res.expect(<span class="string">&quot;DB Error&quot;</span>);
+                key
+            })
+            .collect::&lt;Vec&lt;<span class="macro-nonterminal">$key_type</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(db_items));
     };
 }
 
 <span class="kw">mod </span>tests {
+    <span class="kw">use </span>futures::StreamExt;
+
     <span class="kw">use </span><span class="kw">super</span>::Database;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseKeyPrefixConst;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
@@ -2402,43 +2436,47 @@
 
         <span class="comment">// Verify finding by prefix returns the correct set of key pairs
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                TestKey(<span class="number">55</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                TestKey(<span class="number">54</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">8888</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">match </span>key {
+                    TestKey(<span class="number">55</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>)));
+                    }
+                    TestKey(<span class="number">54</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">8888</span>)));
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                };
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>AltDbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                AltTestKey(<span class="number">55</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                AltTestKey(<span class="number">54</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">6666</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>AltDbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">match </span>key {
+                    AltTestKey(<span class="number">55</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>)));
+                    }
+                    AltTestKey(<span class="number">54</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">6666</span>)));
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                };
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
     }
@@ -2517,19 +2555,18 @@
         // of the data when the transaction started
         </span><span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">0</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                TestKey(<span class="number">100</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
-                    returned_keys += <span class="number">1</span>;
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">if let </span>TestKey(<span class="number">100</span>) = key {
+                    <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
                 }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
     }
@@ -2550,23 +2587,24 @@
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                TestKey(<span class="number">100</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                TestKey(<span class="number">101</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">match </span>key {
+                    TestKey(<span class="number">100</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
+                    }
+                    TestKey(<span class="number">101</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                };
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
 
@@ -2579,22 +2617,23 @@
 
         dbtx2.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                TestKey(<span class="number">100</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                TestKey(<span class="number">101</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">match </span>key {
+                    TestKey(<span class="number">100</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
+                    }
+                    TestKey(<span class="number">101</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                };
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
     }
@@ -2663,19 +2702,18 @@
             .<span class="kw">await
             </span>.is_ok());
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">4</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>PercentPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                PercentTestKey(<span class="number">101</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">100</span>)));
-                    returned_keys += <span class="number">1</span>;
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>PercentPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">if let </span>PercentTestKey(<span class="number">101</span>) = key {
+                    <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">100</span>)));
                 }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
     }
@@ -2703,23 +2741,24 @@
         remove_dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">0</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                TestKey(<span class="number">100</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                TestKey(<span class="number">101</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">match </span>key {
+                    TestKey(<span class="number">100</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
+                    }
+                    TestKey(<span class="number">101</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                };
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
     }
@@ -2771,24 +2810,25 @@
 
         module_dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                TestKey(<span class="number">100</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                TestKey(<span class="number">101</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+        <span class="kw">let </span>returned_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">match </span>key {
+                    TestKey(<span class="number">100</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
+                    }
+                    TestKey(<span class="number">101</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                };
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
 
@@ -2852,23 +2892,24 @@
             <span class="prelude-val">Some</span>(TestVal(<span class="number">102</span>))
         );
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = <span class="number">0</span>;
         <span class="kw">let </span>expected_keys = <span class="number">2</span>;
-        <span class="kw">for </span>res <span class="kw">in </span>test_module_dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix).<span class="kw">await </span>{
-            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
-                TestKey(<span class="number">100</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                TestKey(<span class="number">101</span>) =&gt; {
-                    <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
-                    returned_keys += <span class="number">1</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    returned_keys += <span class="number">1</span>;
-                }
-            }
-        }
+        <span class="kw">let </span>returned_keys = test_module_dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.fold(<span class="number">0</span>, |returned_keys, kv| <span class="kw">async move </span>{
+                <span class="kw">let </span>(key, value) = kv.unwrap();
+                <span class="kw">match </span>key {
+                    TestKey(<span class="number">100</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
+                    }
+                    TestKey(<span class="number">101</span>) =&gt; {
+                        <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">102</span>)));
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                };
+                returned_keys + <span class="number">1
+            </span>})
+            .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
 
@@ -2895,7 +2936,7 @@
         <span class="kw">use </span>anyhow::anyhow;
         <span class="kw">use </span>async_trait::async_trait;
 
-        <span class="kw">use </span><span class="kw">crate</span>::db::{AutocommitError, IDatabase, IDatabaseTransaction, PrefixIter};
+        <span class="kw">use </span><span class="kw">crate</span>::db::{AutocommitError, IDatabase, IDatabaseTransaction};
         <span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
 
         <span class="attr">#[derive(Debug)]
@@ -2931,7 +2972,10 @@
                 <span class="macro">unimplemented!</span>()
             }
 
-            <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+            <span class="kw">async fn </span>raw_find_by_prefix(
+                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+                _key_prefix: <span class="kw-2">&amp;</span>[u8],
+            ) -&gt; <span class="kw">crate</span>::db::PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
                 <span class="macro">unimplemented!</span>()
             }
 

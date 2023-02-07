@@ -869,6 +869,9 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -892,6 +895,7 @@
 <span class="kw">use </span>fedimint_core::epoch::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>futures::future::select_all;
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>hbbft::honey_badger::Batch;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>thiserror::Error;
@@ -1514,7 +1518,8 @@
                 <span class="kw">let </span>key = res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span>;
                 key.<span class="number">0
             </span>})
-            .collect();
+            .collect()
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;ConsensusItem&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposedTransactionKeyPrefix)
@@ -1523,7 +1528,8 @@
                 <span class="kw">let </span>(_key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                 ConsensusItem::Transaction(value)
             })
-            .collect();
+            .collect()
+            .<span class="kw">await</span>;
 
         <span class="kw">for </span>(instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             items.extend(

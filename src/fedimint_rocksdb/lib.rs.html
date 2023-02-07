@@ -309,12 +309,14 @@
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::db::PrefixIter;
-<span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction};
+<span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+<span class="kw">use </span>futures::stream;
 <span class="kw">pub use </span>rocksdb;
 <span class="kw">use </span>rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 <span class="kw">use </span>tracing::warn;
@@ -394,7 +396,7 @@
         })
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
         fedimint_api::task::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
@@ -403,16 +405,17 @@
                 rocksdb::IteratorMode::From(<span class="kw-2">&amp;</span>prefix, rocksdb::Direction::Forward),
                 options,
             );
-            Box::new(
-                iter.map_while(<span class="kw">move </span>|res| {
+
+            <span class="kw">let </span>rocksdb_iter = iter
+                .map_while(<span class="kw">move </span>|res| {
                     <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                     key_bytes
                         .starts_with(<span class="kw-2">&amp;</span>prefix)
                         .then_some((key_bytes, value_bytes))
                 })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map(<span class="prelude-val">Ok</span>),
-            )
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+
+            Box::pin(stream::iter(rocksdb_iter))
         })
     }
 
@@ -453,21 +456,22 @@
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot remove from a read only transaction&quot;</span>);
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
         fedimint_api::task::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
-            Box::new(
-                <span class="self">self</span>.<span class="number">0
-                    </span>.prefix_iterator(prefix.clone())
-                    .map_while(<span class="kw">move </span>|res| {
-                        <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                        key_bytes
-                            .starts_with(<span class="kw-2">&amp;</span>prefix)
-                            .then_some((key_bytes, value_bytes))
-                    })
-                    .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                    .map(<span class="prelude-val">Ok</span>),
-            )
+
+            <span class="kw">let </span>rocksdb_iter = <span class="self">self
+                </span>.<span class="number">0
+                </span>.prefix_iterator(prefix.clone())
+                .map_while(<span class="kw">move </span>|res| {
+                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                    key_bytes
+                        .starts_with(<span class="kw-2">&amp;</span>prefix)
+                        .then_some((key_bytes, value_bytes))
+                })
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+
+            Box::pin(stream::iter(rocksdb_iter))
         })
     }
 
