@@ -1,6 +1,7 @@
 pub mod api;
 pub mod db;
 pub mod ln;
+pub mod logging;
 pub mod mint;
 pub mod query;
 pub mod transaction;
@@ -59,7 +60,7 @@ use fedimint_core::{
     transaction::legacy::{Input, Output},
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use futures::stream::FuturesUnordered;
+use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
 use itertools::{Either, Itertools};
 use lightning::ln::PaymentSecret;
@@ -75,6 +76,7 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
+use tracing::trace;
 use tracing::{debug, info, instrument};
 use url::Url;
 
@@ -85,6 +87,7 @@ use crate::ln::db::{
 };
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
+use crate::logging::LOG_WALLET;
 use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
 use crate::mint::MintClientError;
 use crate::transaction::TransactionBuilder;
@@ -633,14 +636,19 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Should be called after any transaction that might have failed in order to get any note
     /// inputs back.
+    #[instrument(skip_all, level = "debug")]
     pub async fn reissue_pending_notes<R: RngCore + CryptoRng>(&self, rng: R) -> Result<OutPoint> {
         let mut dbtx = self.context.db.begin_transaction().await;
-        let pending = dbtx
+        let pending: Vec<_> = dbtx
             .find_by_prefix(&PendingNotesKeyPrefix)
             .await
-            .map(|res| res.expect("DB error"));
+            .map(|res| res.expect("DB error"))
+            .collect()
+            .await;
 
-        let stream = pending
+        debug!(target: LOG_WALLET, ?pending);
+
+        let stream = stream::iter(pending)
             .map(|(key, notes)| async move {
                 match self.context.api.fetch_tx_outcome(&key.0).await {
                     Ok(TransactionStatus::Rejected(_)) => Ok((key, notes)),
@@ -654,15 +662,18 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .await;
 
         let mut dbtx = self.context.db.begin_transaction().await;
-        let mut all_notes = TieredMulti::<SpendableNote>::default();
+        let mut notes_to_reissue = TieredMulti::<SpendableNote>::default();
         for result in stream.collect::<Vec<_>>().await {
             let (key, notes) = result?;
-            all_notes.extend(notes);
+            notes_to_reissue.extend(notes);
             dbtx.remove_entry(&key).await.expect("DB Error");
         }
         dbtx.commit_tx().await.expect("DB Error");
 
-        self.reissue(all_notes, rng).await
+        debug!(target: LOG_WALLET, notes_to_reissue = ?notes_to_reissue.summary(), total = %notes_to_reissue.total_amount());
+        trace!(target: LOG_WALLET, ?notes_to_reissue, "foo");
+
+        self.reissue(notes_to_reissue, rng).await
     }
 
     pub async fn await_consensus_block_height(

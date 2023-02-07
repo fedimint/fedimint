@@ -22,10 +22,11 @@ use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
+use mint_client::logging::LOG_TEST;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::{ClientError, ConfigVerifyError};
 use threshold_crypto::{SecretKey, SecretKeyShare};
-use tracing::debug;
+use tracing::{debug, info, instrument};
 
 use crate::fixtures::{assert_ci, peers, test, FederationTest};
 
@@ -123,27 +124,37 @@ async fn peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(name = "peg_outs_are_only_allowed_once_per_epoch")]
 async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
+        bitcoin.prepare_funding_wallet().await;
+
         let address1 = bitcoin.get_new_address().await;
         let address2 = bitcoin.get_new_address().await;
 
         fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
         let (fees, _) = user.peg_out(1000, &address1).await;
         user.peg_out(1000, &address2).await;
+        info!(target: LOG_TEST, ?fees, "Tx fee");
 
-        fed.run_consensus_epochs(2).await;
+        fed.await_consensus_epochs(2).await.unwrap();
         fed.broadcast_transactions().await;
 
         let received1 = bitcoin.mine_block_and_get_received(&address1).await;
         let received2 = bitcoin.mine_block_and_get_received(&address2).await;
 
         assert_eq!(received1 + received2, sats(1000));
-        user.client.reissue_pending_notes(rng()).await.unwrap();
-        fed.run_consensus_epochs(2).await; // reissue the notes from the tx that failed
-
         // either first peg-out failed OR second failed leaving us unissued change
-        assert!(user.client.fetch_all_notes().await.is_err() || received1 == sats(0));
+        assert!(received1 == sats(0) || received2 == sats(0));
+
+        assert_eq!(
+            user.total_notes().await,
+            sats(5000 - 2 * 1000) - fees - fees
+        );
+        user.client.reissue_pending_notes(rng()).await.unwrap();
+        fed.await_consensus_epochs(2).await.unwrap(); // reissue the notes from the tx that failed
+        user.client.fetch_all_notes().await.unwrap();
+
         assert_eq!(user.total_notes().await, sats(5000 - 1000) - fees);
     })
     .await
