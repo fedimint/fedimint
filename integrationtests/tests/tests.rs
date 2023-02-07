@@ -956,14 +956,14 @@ async fn runs_consensus_if_new_block() -> Result<()> {
 
         // make the mint estabilish at least one block height record
         bitcoin.mine_blocks(1).await;
-        fed.run_consensus_epochs(1).await;
+        fed.await_consensus_epochs(1).await.unwrap();
 
         let peg_in_address = user.client.get_new_pegin_address(rng()).await;
         bitcoin.mine_blocks(100).await;
         let (proof, tx) = bitcoin
             .send_and_mine_block(&peg_in_address, Amount::from_sat(1000))
             .await;
-        fed.run_consensus_epochs(1).await;
+        fed.await_consensus_epochs(1).await.unwrap();
 
         assert!(!fed.has_pending_epoch().await);
         bitcoin
@@ -976,7 +976,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
             .peg_in(proof.clone(), tx.clone(), rng())
             .await
             .unwrap();
-        fed.run_consensus_epochs(2).await; // peg-in + blind sign
+        fed.await_consensus_epochs(2).await.unwrap();
         user.assert_total_notes(sats(1000)).await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
