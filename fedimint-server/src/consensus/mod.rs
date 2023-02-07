@@ -529,14 +529,15 @@ impl FedimintConsensus {
         client
     }
 
-    pub async fn get_last_epoch(&self) -> Option<u64> {
+    pub async fn get_epoch_count(&self) -> u64 {
         self.db
             .begin_transaction()
             .await
             .get_value(&LastEpochKey)
             .await
             .expect("db query must not fail")
-            .map(|e| e.0)
+            .map(|ep_hist_key| ep_hist_key.0 + 1)
+            .unwrap_or(0)
     }
 
     pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {

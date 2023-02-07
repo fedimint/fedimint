@@ -72,7 +72,7 @@ impl MicroMintClient {
                     )
                 })
                 .collect(),
-            epoch: 0,
+            epoch_count: 0,
             next_note_idx: self.next_note_idx.clone(),
         }
     }
@@ -270,7 +270,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
         next_note_idx: Tiered::from_iter(
             [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
         ),
-        epoch: 0,
+        epoch_count: 0,
     };
 
     let encoded = orig.encode()?;
@@ -288,7 +288,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
         next_note_idx: Tiered::from_iter(
             [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
         ),
-        epoch: 1,
+        epoch_count: 1,
     };
 
     let secret = DerivableSecret::new_root(&[1; 32], &[1, 32]);
