@@ -8,12 +8,10 @@ use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::consensus::AcceptedTransaction;
-use crate::transaction::Transaction;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    ProposedTransaction = 0x01,
     AcceptedTransaction = 0x02,
     DropPeer = 0x03,
     RejectedTransaction = 0x04,
@@ -27,24 +25,6 @@ impl std::fmt::Display for DbKeyPrefix {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
-}
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ProposedTransactionKey(pub TransactionId);
-
-impl DatabaseKeyPrefixConst for ProposedTransactionKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction as u8;
-    type Key = Self;
-    type Value = Transaction;
-}
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct ProposedTransactionKeyPrefix;
-
-impl DatabaseKeyPrefixConst for ProposedTransactionKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction as u8;
-    type Key = ProposedTransactionKey;
-    type Value = Transaction;
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
