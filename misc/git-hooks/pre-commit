@@ -67,6 +67,12 @@ function check_dbg() {
 export -f check_dbg
 
 function check_semgrep() {
+
+  if ! command -v semgrep ; then
+    >&2 echo "Skipping semgrep check"
+    return 0
+  fi
+
   semgrep -q --error --config .semgrep.yaml fedimint-server/
 }
 export -f check_semgrep
