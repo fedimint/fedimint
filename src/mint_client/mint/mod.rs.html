@@ -975,6 +975,16 @@
 <a href="#975" id="975">975</a>
 <a href="#976" id="976">976</a>
 <a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -1012,7 +1022,7 @@
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 <span class="kw">const </span>MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">1</span>);
-<span class="kw">const </span>MINT_FETCH_MAX_RETRIES: usize = <span class="number">10</span>;
+<span class="kw">const </span>MINT_E_CASH_FETCH_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -1400,6 +1410,33 @@
             </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
+    <span class="kw">pub async fn </span>await_fetch_notes&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        outpoint: <span class="kw-2">&amp;</span>OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>total_time = Duration::ZERO;
+        <span class="kw">let </span>retry_duration = Duration::from_millis(<span class="number">200</span>);
+
+        <span class="kw">loop </span>{
+            <span class="kw">match </span><span class="self">self</span>.fetch_notes(dbtx, <span class="kw-2">*</span>outpoint).<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="kw">break </span><span class="prelude-val">Ok</span>(<span class="kw-2">*</span>outpoint);
+                }
+                <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                </span><span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() &amp;&amp; total_time &lt; MINT_E_CASH_FETCH_TIMEOUT =&gt; {
+                    <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, e);
+                    fedimint_api::task::sleep(retry_duration).<span class="kw">await
+                </span>}
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Mint returned error: {:?}&quot;</span>, e);
+                    <span class="kw">break </span><span class="prelude-val">Err</span>(e);
+                }
+            }
+            total_time += retry_duration;
+        }
+    }
+
     <span class="kw">pub async fn </span>fetch_notes&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -1466,29 +1503,12 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
         <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt;&gt;&gt;&gt;::new();
-        <span class="kw">for </span>(out_point, <span class="kw">_</span>) <span class="kw">in </span>active_issuances {
+        <span class="kw">for </span>(outpoint, <span class="kw">_</span>) <span class="kw">in </span>active_issuances {
             futures.push(Box::pin(<span class="kw">async </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-                <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
-
-                <span class="kw">loop </span>{
-                    retries += <span class="number">1</span>;
-                    <span class="kw">match </span><span class="self">self</span>.fetch_notes(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">*</span>out_point).<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-                            <span class="kw">break </span><span class="prelude-val">Ok</span>(<span class="kw-2">*</span>out_point);
-                        }
-                        <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                        </span><span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() &amp;&amp; retries &lt; MINT_FETCH_MAX_RETRIES =&gt; {
-                            <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, e);
-                            fedimint_api::task::sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await
-                        </span>}
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">warn!</span>(<span class="string">&quot;Mint returned error: {:?}&quot;</span>, e);
-                            <span class="kw">break </span><span class="prelude-val">Err</span>(e);
-                        }
-                    }
-                }
+                <span class="kw">let </span>res = <span class="self">self</span>.await_fetch_notes(<span class="kw-2">&amp;mut </span>dbtx, outpoint).<span class="kw">await</span>;
+                dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                res
             }))
         }
 

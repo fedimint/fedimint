@@ -1586,6 +1586,20 @@
 <a href="#1586" id="1586">1586</a>
 <a href="#1587" id="1587">1587</a>
 <a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1649,6 +1663,7 @@
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>itertools::{Either, Itertools};
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
@@ -2133,6 +2148,7 @@
         rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>notes = <span class="self">self</span>.mint_client().select_notes(amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>final_notes = <span class="kw">if </span>notes.total_amount() == amount {
             notes
@@ -2141,17 +2157,18 @@
 
             <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = MintClient::ecash_input(notes)<span class="question-mark">?</span>;
             tx.input(<span class="kw-2">&amp;mut </span>keys, input);
-            <span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="self">self</span>.fetch_all_notes().<span class="kw">await</span>;
+            <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
+
+            <span class="self">self</span>.mint_client()
+                .await_fetch_notes(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>outpoint)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.mint_client().select_notes(amount).<span class="kw">await</span><span class="question-mark">?
         </span>};
-        <span class="macro">assert_eq!</span>(
-            final_notes.total_amount(),
-            amount,
-            <span class="string">&quot;should have exact change&quot;
-        </span>);
+        <span class="kw">if </span>final_notes.total_amount() != amount {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::SpendReusedNote);
+        }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>final_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
                 amount,
@@ -2188,7 +2205,7 @@
 
     <span class="doccomment">/// Continuation of `remint_notes`
     </span><span class="kw">pub async fn </span>remint_ecash_await(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-        <span class="self">self</span>.fetch_all_notes().<span class="kw">await</span>;
+        <span class="self">self</span>.fetch_all_notes().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>notes = <span class="self">self</span>.mint_client().select_notes(amount).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">assert_eq!</span>(notes.total_amount(), amount, <span class="string">&quot;should have exact change&quot;</span>);
 
@@ -2269,13 +2286,22 @@
         }
     }
 
-    <span class="kw">pub async fn </span>fetch_all_notes&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="prelude-ty">Result</span>&lt;OutPoint&gt;&gt; {
-        <span class="self">self</span>.mint_client()
+    <span class="kw">pub async fn </span>fetch_all_notes&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;OutPoint&gt;&gt; {
+        <span class="kw">let </span>(errors, outpoints): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = <span class="self">self
+            </span>.mint_client()
             .fetch_all_notes()
             .<span class="kw">await
             </span>.into_iter()
-            .map(|res| res.map_err(|e| e.into()))
-            .collect()
+            .partition_map(|result| <span class="kw">match </span>result {
+                <span class="prelude-val">Ok</span>(outpoint) =&gt; Either::Right(outpoint),
+                <span class="prelude-val">Err</span>(error) =&gt; Either::Left(error.into()),
+            });
+
+        <span class="kw">if </span>errors.is_empty() {
+            <span class="prelude-val">Ok</span>(outpoints)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Err</span>(ClientError::UnableToFetchAllNotes(errors, outpoints))
+        }
     }
 
     <span class="kw">pub async fn </span>notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
@@ -3149,12 +3175,14 @@
     </span>DeleteUnknownOutgoingContract,
     <span class="attr">#[error(<span class="string">&quot;Timeout&quot;</span>)]
     </span>Timeout,
-    <span class="attr">#[error(<span class="string">&quot;Failed to spend ecash, all spend attempts re-used an ecash note&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Failed to spend ecash, we tried to double-spend an ecash note&quot;</span>)]
     </span>SpendReusedNote,
     <span class="attr">#[error(<span class="string">&quot;The contract is already cancelled and can&#39;t be processed by the gateway&quot;</span>)]
     </span>CancelledContract,
     <span class="attr">#[error(<span class="string">&quot;The client config cannot be verified because {0:?}&quot;</span>)]
     </span>ConfigVerify(ConfigVerifyError),
+    <span class="attr">#[error(<span class="string">&quot;Failed to fetch notes we expected to be issued {0:?}&quot;</span>)]
+    </span>UnableToFetchAllNotes(Vec&lt;ClientError&gt;, Vec&lt;OutPoint&gt;),
 }
 
 <span class="attr">#[derive(Debug, Error)]
