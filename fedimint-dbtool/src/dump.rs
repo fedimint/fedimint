@@ -157,16 +157,6 @@ impl<'a> DatabaseDump<'a> {
         });
         for table in filtered_prefixes {
             match table {
-                ConsensusRange::DbKeyPrefix::ProposedTransaction => {
-                    push_db_pair_items_no_serde!(
-                        dbtx,
-                        ConsensusRange::ProposedTransactionKeyPrefix,
-                        ConsensusRange::ProposedTransactionKey,
-                        fedimint_core::transaction::Transaction,
-                        consensus,
-                        "Pending Transactions"
-                    );
-                }
                 ConsensusRange::DbKeyPrefix::AcceptedTransaction => {
                     push_db_pair_items_no_serde!(
                         dbtx,

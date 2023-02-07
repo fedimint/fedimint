@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::os::unix::prelude::OsStrExt;
+use std::sync::Mutex;
 
 use fedimint_api::config::{ConfigResponse, ModuleGenRegistry};
 use fedimint_api::core::ModuleInstanceId;
@@ -33,8 +34,7 @@ use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, ClientConfigSignatureKey, DropPeerKey, DropPeerKeyPrefix,
-    EpochHistoryKey, LastEpochKey, ProposedTransactionKey, ProposedTransactionKeyPrefix,
-    RejectedTransactionKey,
+    EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
 };
 use crate::logging::LOG_CONSENSUS;
 use crate::transaction::{Transaction, TransactionError};
@@ -89,6 +89,10 @@ pub struct FedimintConsensus {
 
     /// For sending new transactions to consensus
     pub tx_sender: Sender<Transaction>,
+
+    /// Cache of transactions to include in a proposal
+    // TODO should be able to eventually remove this Mutex
+    pub tx_cache: Mutex<HashSet<Transaction>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -159,6 +163,7 @@ impl FedimintConsensus {
                 module_inits,
                 db,
                 tx_sender,
+                tx_cache: Default::default(),
             },
             tx_receiver,
         ))
@@ -182,6 +187,7 @@ impl FedimintConsensus {
                 module_inits,
                 db,
                 tx_sender,
+                tx_cache: Default::default(),
             },
             tx_receiver,
         )
@@ -268,24 +274,6 @@ impl FedimintConsensus {
             .await
             .map_err(|_e| TransactionSubmissionError::TxChannelError)?;
         Ok(())
-    }
-
-    /// For saving a tx, should be done prior to making a consensus proposal
-    pub async fn save_transaction_to_db(&self, transaction: Transaction) {
-        let mut dbtx = self.db.begin_transaction().await;
-
-        let new = dbtx
-            .insert_entry(&ProposedTransactionKey(transaction.tx_hash()), &transaction)
-            .await
-            .expect("DB error");
-        dbtx.commit_tx().await.expect("DB Error");
-
-        if new.is_some() {
-            warn!(
-                target: LOG_CONSENSUS,
-                "Added consensus item was already in consensus queue"
-            );
-        }
     }
 
     /// Calculate the result of the `consensus_outcome` and save it/them.
@@ -406,9 +394,8 @@ impl FedimintConsensus {
             let span = info_span!("Processing transaction");
             async {
                 trace!(?transaction);
-                dbtx.remove_entry(&ProposedTransactionKey(txid))
-                    .await
-                    .expect("DB Error");
+                let mut tx_cache = self.tx_cache.lock().unwrap();
+                tx_cache.remove(&transaction);
 
                 dbtx.set_tx_savepoint().await;
                 // TODO: use borrowed transaction
@@ -647,15 +634,14 @@ impl FedimintConsensus {
             .collect()
             .await;
 
-        let mut items: Vec<ConsensusItem> = dbtx
-            .find_by_prefix(&ProposedTransactionKeyPrefix)
-            .await
-            .map(|res| {
-                let (_key, value) = res.expect("DB error");
-                ConsensusItem::Transaction(value)
-            })
-            .collect()
-            .await;
+        let mut items: Vec<ConsensusItem> = self
+            .tx_cache
+            .lock()
+            .unwrap()
+            .iter()
+            .cloned()
+            .map(ConsensusItem::Transaction)
+            .collect();
 
         for (instance_id, module) in self.modules.iter_modules() {
             items.extend(

@@ -357,7 +357,7 @@ impl FedimintServer {
               _ = Pin::new(&mut self.tx_receiver).peek() => (),
               () = self.consensus.await_consensus_proposal() => (),
             }
-            self.save_new_txs().await;
+            self.save_txs_to_consensus_cache();
             let proposal = proposal.await;
             let epoch = self.hbbft.epoch();
             self.hbbft.skip_to_epoch(epoch + 1);
@@ -377,7 +377,7 @@ impl FedimintServer {
                 _ => break vec![],
             };
         };
-        self.save_new_txs().await;
+        self.save_txs_to_consensus_cache();
 
         let proposal = proposal.await;
         for peer in proposal.drop_peers.iter() {
@@ -394,9 +394,10 @@ impl FedimintServer {
     }
 
     // save any transactions we have in the channel
-    async fn save_new_txs(&mut self) {
+    fn save_txs_to_consensus_cache(&mut self) {
+        let mut tx_cache = self.consensus.tx_cache.lock().unwrap();
         while let Some(Some(tx)) = self.tx_receiver.next().now_or_never() {
-            self.consensus.save_transaction_to_db(tx).await;
+            tx_cache.insert(tx);
         }
     }
 
