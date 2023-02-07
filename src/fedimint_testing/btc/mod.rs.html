@@ -29,6 +29,14 @@
 <a href="#29" id="29">29</a>
 <a href="#30" id="30">30</a>
 <a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>bitcoind;
 <span class="kw">pub mod </span>fixtures;
 
@@ -46,8 +54,16 @@
     <span class="doccomment">/// Mines a given number of blocks
     </span><span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64);
 
+    <span class="doccomment">/// Prepare funding wallet
+    ///
+    /// If needed will mine initial 100 blocks for `send_and_mine_block` to work.
+    </span><span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>);
+
     <span class="doccomment">/// Send some bitcoin to an address then mine a block to confirm it.
     /// Returns the proof that the transaction occurred.
+    ///
+    /// The implementation is responsible for making sure the funds can
+    /// be sent (e.g. first 100 blocks are mined to make funds available)
     </span><span class="kw">async fn </span>send_and_mine_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
