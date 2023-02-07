@@ -954,6 +954,10 @@ async fn runs_consensus_if_new_block() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
 
+        // make the mint estabilish at least one block height record
+        bitcoin.mine_blocks(1).await;
+        fed.run_consensus_epochs(1).await;
+
         let peg_in_address = user.client.get_new_pegin_address(rng()).await;
         bitcoin.mine_blocks(100).await;
         let (proof, tx) = bitcoin
