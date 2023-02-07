@@ -1600,9 +1600,21 @@
 <a href="#1600" id="1600">1600</a>
 <a href="#1601" id="1601">1601</a>
 <a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
+<a href="#1605" id="1605">1605</a>
+<a href="#1606" id="1606">1606</a>
+<a href="#1607" id="1607">1607</a>
+<a href="#1608" id="1608">1608</a>
+<a href="#1609" id="1609">1609</a>
+<a href="#1610" id="1610">1610</a>
+<a href="#1611" id="1611">1611</a>
+<a href="#1612" id="1612">1612</a>
+<a href="#1613" id="1613">1613</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
+<span class="kw">pub mod </span>logging;
 <span class="kw">pub mod </span>mint;
 <span class="kw">pub mod </span>query;
 <span class="kw">pub mod </span>transaction;
@@ -1661,7 +1673,7 @@
     transaction::legacy::{Input, Output},
 };
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>futures::stream::FuturesUnordered;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, FuturesUnordered};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::{Either, Itertools};
 <span class="kw">use </span>lightning::ln::PaymentSecret;
@@ -1677,6 +1689,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::PublicKey;
+<span class="kw">use </span>tracing::trace;
 <span class="kw">use </span>tracing::{debug, info, instrument};
 <span class="kw">use </span>url::Url;
 
@@ -1687,6 +1700,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::LnClientError;
+<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_WALLET;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NoteKey, PendingNotesKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::mint::MintClientError;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
@@ -2235,14 +2249,19 @@
 
     <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any note
     /// inputs back.
+    </span><span class="attr">#[instrument(skip_all, level = <span class="string">&quot;debug&quot;</span>)]
     </span><span class="kw">pub async fn </span>reissue_pending_notes&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>pending = dbtx
+        <span class="kw">let </span>pending: Vec&lt;<span class="kw">_</span>&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>PendingNotesKeyPrefix)
             .<span class="kw">await
-            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>));
+            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
+            .collect()
+            .<span class="kw">await</span>;
 
-        <span class="kw">let </span>stream = pending
+        <span class="macro">debug!</span>(target: LOG_WALLET, <span class="question-mark">?</span>pending);
+
+        <span class="kw">let </span>stream = stream::iter(pending)
             .map(|(key, notes)| <span class="kw">async move </span>{
                 <span class="kw">match </span><span class="self">self</span>.context.api.fetch_tx_outcome(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>((key, notes)),
@@ -2256,15 +2275,18 @@
             .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>all_notes = TieredMulti::&lt;SpendableNote&gt;::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>notes_to_reissue = TieredMulti::&lt;SpendableNote&gt;::default();
         <span class="kw">for </span>result <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
             <span class="kw">let </span>(key, notes) = result<span class="question-mark">?</span>;
-            all_notes.extend(notes);
+            notes_to_reissue.extend(notes);
             dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
         }
         dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        <span class="self">self</span>.reissue(all_notes, rng).<span class="kw">await
+        <span class="macro">debug!</span>(target: LOG_WALLET, notes_to_reissue = <span class="question-mark">?</span>notes_to_reissue.summary(), total = %notes_to_reissue.total_amount());
+        <span class="macro">trace!</span>(target: LOG_WALLET, <span class="question-mark">?</span>notes_to_reissue, <span class="string">&quot;foo&quot;</span>);
+
+        <span class="self">self</span>.reissue(notes_to_reissue, rng).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>await_consensus_block_height(

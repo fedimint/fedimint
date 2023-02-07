@@ -23,7 +23,7 @@ var sourcesIndex = JSON.parse('{\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
 "ln_gateway":["",[["gatewayd",[],["actor.rs","gateway.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","cln.rs","config.rs","lib.rs","ln.rs","utils.rs"]],\
-"mint_client":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","query.rs","transaction.rs","utils.rs"]],\
+"mint_client":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","logging.rs","query.rs","transaction.rs","utils.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
 }');
 createSourceSidebar();
