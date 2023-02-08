@@ -21,12 +21,8 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientSecretKey;
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientSecretPrefixKey;
-
 impl_db_prefix_const!(
-    ClientSecretKey,
-    ClientSecretPrefixKey,
-    ClientSecret,
-    DbKeyPrefix::ClientSecret
+    key = ClientSecretKey,
+    value = ClientSecret,
+    prefix = DbKeyPrefix::ClientSecret
 );

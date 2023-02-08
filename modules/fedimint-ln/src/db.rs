@@ -33,10 +33,10 @@ pub struct ContractKey(pub ContractId);
 pub struct ContractKeyPrefix;
 
 impl_db_prefix_const!(
-    ContractKey,
-    ContractKeyPrefix,
-    ContractAccount,
-    DbKeyPrefix::Contract
+    key = ContractKey,
+    value = ContractAccount,
+    prefix = DbKeyPrefix::Contract,
+    key_prefix = ContractKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -46,10 +46,10 @@ pub struct ContractUpdateKey(pub OutPoint);
 pub struct ContractUpdateKeyPrefix;
 
 impl_db_prefix_const!(
-    ContractUpdateKey,
-    ContractUpdateKeyPrefix,
-    LightningOutputOutcome,
-    DbKeyPrefix::ContractUpdate
+    key = ContractUpdateKey,
+    value = LightningOutputOutcome,
+    prefix = DbKeyPrefix::ContractUpdate,
+    key_prefix = ContractUpdateKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -59,10 +59,10 @@ pub struct OfferKey(pub bitcoin_hashes::sha256::Hash);
 pub struct OfferKeyPrefix;
 
 impl_db_prefix_const!(
-    OfferKey,
-    OfferKeyPrefix,
-    IncomingContractOffer,
-    DbKeyPrefix::Offer
+    key = OfferKey,
+    value = IncomingContractOffer,
+    prefix = DbKeyPrefix::Offer,
+    key_prefix = OfferKeyPrefix
 );
 
 // TODO: remove redundancy
@@ -74,10 +74,10 @@ pub struct ProposeDecryptionShareKey(pub ContractId);
 pub struct ProposeDecryptionShareKeyPrefix;
 
 impl_db_prefix_const!(
-    ProposeDecryptionShareKey,
-    ProposeDecryptionShareKeyPrefix,
-    PreimageDecryptionShare,
-    DbKeyPrefix::ProposeDecryptionShare
+    key = ProposeDecryptionShareKey,
+    value = PreimageDecryptionShare,
+    prefix = DbKeyPrefix::ProposeDecryptionShare,
+    key_prefix = ProposeDecryptionShareKeyPrefix
 );
 
 /// Preimage decryption shares we received
@@ -89,10 +89,10 @@ pub struct AgreedDecryptionShareKey(pub ContractId, pub PeerId);
 pub struct AgreedDecryptionShareKeyPrefix;
 
 impl_db_prefix_const!(
-    AgreedDecryptionShareKey,
-    AgreedDecryptionShareKeyPrefix,
-    PreimageDecryptionShare,
-    DbKeyPrefix::AgreedDecryptionShare
+    key = AgreedDecryptionShareKey,
+    value = PreimageDecryptionShare,
+    prefix = DbKeyPrefix::AgreedDecryptionShare,
+    key_prefix = AgreedDecryptionShareKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -102,8 +102,8 @@ pub struct LightningGatewayKey(pub PublicKey);
 pub struct LightningGatewayKeyPrefix;
 
 impl_db_prefix_const!(
-    LightningGatewayKey,
-    LightningGatewayKeyPrefix,
-    LightningGateway,
-    DbKeyPrefix::LightningGateway
+    key = LightningGatewayKey,
+    value = LightningGateway,
+    prefix = DbKeyPrefix::LightningGateway,
+    key_prefix = LightningGatewayKeyPrefix
 );

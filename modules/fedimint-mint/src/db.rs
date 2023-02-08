@@ -32,7 +32,12 @@ pub struct NonceKey(pub Nonce);
 #[derive(Debug, Encodable, Decodable)]
 pub struct NonceKeyPrefix;
 
-impl_db_prefix_const!(NonceKey, NonceKeyPrefix, (), DbKeyPrefix::NoteNonce);
+impl_db_prefix_const!(
+    key = NonceKey,
+    value = (),
+    prefix = DbKeyPrefix::NoteNonce,
+    key_prefix = NonceKeyPrefix
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ProposedPartialSignatureKey {
@@ -43,10 +48,10 @@ pub struct ProposedPartialSignatureKey {
 pub struct ProposedPartialSignaturesKeyPrefix;
 
 impl_db_prefix_const!(
-    ProposedPartialSignatureKey,
-    ProposedPartialSignaturesKeyPrefix,
-    MintOutputSignatureShare,
-    DbKeyPrefix::ProposedPartialSig
+    key = ProposedPartialSignatureKey,
+    value = MintOutputSignatureShare,
+    prefix = DbKeyPrefix::ProposedPartialSig,
+    key_prefix = ProposedPartialSignaturesKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -58,23 +63,18 @@ pub struct ReceivedPartialSignatureKey {
 #[derive(Debug, Encodable, Decodable)]
 pub struct ReceivedPartialSignaturesKeyPrefix;
 
-impl_db_prefix_const!(
-    ReceivedPartialSignatureKey,
-    ReceivedPartialSignaturesKeyPrefix,
-    MintOutputSignatureShare,
-    DbKeyPrefix::ReceivedPartialSig
-);
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct ReceivedPartialSignatureKeyOutputPrefix {
     pub request_id: OutPoint, // tx + output idx
 }
 
-impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
-    type Key = ReceivedPartialSignatureKey;
-    type Value = MintOutputSignatureShare;
-}
+impl_db_prefix_const!(
+    key = ReceivedPartialSignatureKey,
+    value = MintOutputSignatureShare,
+    prefix = DbKeyPrefix::ReceivedPartialSig,
+    key_prefix = ReceivedPartialSignaturesKeyPrefix,
+    key_prefix = ReceivedPartialSignatureKeyOutputPrefix
+);
 
 /// Transaction id and output index identifying an output outcome
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
@@ -84,10 +84,10 @@ pub struct OutputOutcomeKey(pub OutPoint);
 pub struct OutputOutcomeKeyPrefix;
 
 impl_db_prefix_const!(
-    OutputOutcomeKey,
-    OutputOutcomeKeyPrefix,
-    MintOutputBlindSignatures,
-    DbKeyPrefix::OutputOutcome
+    key = OutputOutcomeKey,
+    value = MintOutputBlindSignatures,
+    prefix = DbKeyPrefix::OutputOutcome,
+    key_prefix = OutputOutcomeKeyPrefix
 );
 
 /// Represents the amounts of issued (signed) and redeemed (verified) notes for auditing
@@ -103,10 +103,10 @@ pub enum MintAuditItemKey {
 pub struct MintAuditItemKeyPrefix;
 
 impl_db_prefix_const!(
-    MintAuditItemKey,
-    MintAuditItemKeyPrefix,
-    Amount,
-    DbKeyPrefix::MintAuditItem
+    key = MintAuditItemKey,
+    value = Amount,
+    prefix = DbKeyPrefix::MintAuditItem,
+    key_prefix = MintAuditItemKeyPrefix
 );
 
 /// Key used to store user's ecash backups
@@ -117,10 +117,10 @@ pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
 pub struct EcashBackupKeyPrefix;
 
 impl_db_prefix_const!(
-    EcashBackupKey,
-    EcashBackupKeyPrefix,
-    ECashUserBackupSnapshot,
-    DbKeyPrefix::EcashBackup
+    key = EcashBackupKey,
+    value = ECashUserBackupSnapshot,
+    prefix = DbKeyPrefix::EcashBackup,
+    key_prefix = EcashBackupKeyPrefix
 );
 
 /// User's backup, received at certain time, containing encrypted payload

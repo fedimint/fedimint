@@ -25,4 +25,9 @@ pub struct PegInKey {
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct PegInPrefixKey;
 
-impl_db_prefix_const!(PegInKey, PegInPrefixKey, [u8; 32], DbKeyPrefix::PegIn);
+impl_db_prefix_const!(
+    key = PegInKey,
+    value = [u8; 32],
+    prefix = DbKeyPrefix::PegIn,
+    key_prefix = PegInPrefixKey
+);

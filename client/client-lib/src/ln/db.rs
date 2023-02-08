@@ -33,10 +33,10 @@ pub struct OutgoingPaymentKey(pub ContractId);
 pub struct OutgoingPaymentKeyPrefix;
 
 impl_db_prefix_const!(
-    OutgoingPaymentKey,
-    OutgoingPaymentKeyPrefix,
-    OutgoingContractData,
-    DbKeyPrefix::OutgoingPayment
+    key = OutgoingPaymentKey,
+    value = OutgoingContractData,
+    prefix = DbKeyPrefix::OutgoingPayment,
+    key_prefix = OutgoingPaymentKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -46,10 +46,10 @@ pub struct OutgoingPaymentClaimKey(pub ContractId);
 pub struct OutgoingPaymentClaimKeyPrefix;
 
 impl_db_prefix_const!(
-    OutgoingPaymentClaimKey,
-    OutgoingPaymentClaimKeyPrefix,
-    (),
-    DbKeyPrefix::OutgoingPaymentClaim
+    key = OutgoingPaymentClaimKey,
+    value = (),
+    prefix = DbKeyPrefix::OutgoingPaymentClaim,
+    key_prefix = OutgoingPaymentClaimKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -59,10 +59,10 @@ pub struct OutgoingContractAccountKey(pub ContractId);
 pub struct OutgoingContractAccountKeyPrefix;
 
 impl_db_prefix_const!(
-    OutgoingContractAccountKey,
-    OutgoingContractAccountKeyPrefix,
-    OutgoingContractAccount,
-    DbKeyPrefix::OutgoingContractAccount
+    key = OutgoingContractAccountKey,
+    value = OutgoingContractAccount,
+    prefix = DbKeyPrefix::OutgoingContractAccount,
+    key_prefix = OutgoingContractAccountKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -72,10 +72,10 @@ pub struct ConfirmedInvoiceKey(pub ContractId);
 pub struct ConfirmedInvoiceKeyPrefix;
 
 impl_db_prefix_const!(
-    ConfirmedInvoiceKey,
-    ConfirmedInvoiceKeyPrefix,
-    ConfirmedInvoice,
-    DbKeyPrefix::ConfirmedInvoice
+    key = ConfirmedInvoiceKey,
+    value = ConfirmedInvoice,
+    prefix = DbKeyPrefix::ConfirmedInvoice,
+    key_prefix = ConfirmedInvoiceKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -85,8 +85,8 @@ pub struct LightningGatewayKey;
 pub struct LightningGatewayKeyPrefix;
 
 impl_db_prefix_const!(
-    LightningGatewayKey,
-    LightningGatewayKeyPrefix,
-    LightningGateway,
-    DbKeyPrefix::LightningGateway
+    key = LightningGatewayKey,
+    value = LightningGateway,
+    prefix = DbKeyPrefix::LightningGateway,
+    key_prefix = LightningGatewayKeyPrefix
 );

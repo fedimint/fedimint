@@ -33,7 +33,12 @@ pub struct NoteKey {
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct NoteKeyPrefix;
 
-impl_db_prefix_const!(NoteKey, NoteKeyPrefix, SpendableNote, DbKeyPrefix::Note);
+impl_db_prefix_const!(
+    key = NoteKey,
+    value = SpendableNote,
+    prefix = DbKeyPrefix::Note,
+    key_prefix = NoteKeyPrefix
+);
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct PendingNotesKey(pub TransactionId);
@@ -42,10 +47,10 @@ pub struct PendingNotesKey(pub TransactionId);
 pub struct PendingNotesKeyPrefix;
 
 impl_db_prefix_const!(
-    PendingNotesKey,
-    PendingNotesKeyPrefix,
-    TieredMulti<SpendableNote>,
-    DbKeyPrefix::PendingNotes
+    key = PendingNotesKey,
+    value = TieredMulti<SpendableNote>,
+    prefix = DbKeyPrefix::PendingNotes,
+    key_prefix = PendingNotesKeyPrefix
 );
 
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
@@ -55,10 +60,10 @@ pub struct OutputFinalizationKey(pub OutPoint);
 pub struct OutputFinalizationKeyPrefix;
 
 impl_db_prefix_const!(
-    OutputFinalizationKey,
-    OutputFinalizationKeyPrefix,
-    NoteIssuanceRequests,
-    DbKeyPrefix::OutputFinalizationData
+    key = OutputFinalizationKey,
+    value = NoteIssuanceRequests,
+    prefix = DbKeyPrefix::OutputFinalizationData,
+    key_prefix = OutputFinalizationKeyPrefix
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
@@ -68,21 +73,13 @@ pub struct NextECashNoteIndexKey(pub Amount);
 pub struct NextECashNoteIndexKeyPrefix;
 
 impl_db_prefix_const!(
-    NextECashNoteIndexKey,
-    NextECashNoteIndexKeyPrefix,
-    u64,
-    DbKeyPrefix::NextECashNoteIndex
+    key = NextECashNoteIndexKey,
+    value = u64,
+    prefix = DbKeyPrefix::NextECashNoteIndex,
+    key_prefix = NextECashNoteIndexKeyPrefix
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct NotesPerDenominationKey;
 
-#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-pub struct NotesPerDenominationKeyPrefix;
-
-impl_db_prefix_const!(
-    NotesPerDenominationKey,
-    NotesPerDenominationKeyPrefix,
-    u16,
-    0
-);
+impl_db_prefix_const!(key = NotesPerDenominationKey, value = u16, prefix = 0);

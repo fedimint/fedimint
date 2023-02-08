@@ -680,20 +680,37 @@ where
     }
 }
 
+/// This is a helper macro that generates the implementations of
+/// DatabaseKeyPrefixConst necessary for reading/writing to the
+/// database and fetching by prefix.
+///
+/// - `key`: This is the type of struct that will be used as the key into the database.
+/// - `value`: This is the type of struct that will be used as the value into the database.
+/// - `prefix`: Enum expression that is represented as a `u8` that is the prefix prepended to this key.
+/// - `key_prefix`: Optional type of struct that can be passed multiple times if necessary. These will be used
+/// as the key prefix when querying the database via `find_by_prefix`.
+///
+/// Examples:
+///
+/// `impl_db_prefix_const!(key = TestKey, value = TestVal, prefix = TestDbKeyPrefix::Test);`
+///
+/// `impl_db_prefix_const!(key = AltTestKey, value = TestVal, prefix = TestDbKeyPrefix::AltTest, key_prefix = AltDbPrefixTestPrefix);`
 #[macro_export]
 macro_rules! impl_db_prefix_const {
-    ($key:ty, $key_prefix:ty, $val:ty, $prefix:expr) => {
-        impl DatabaseKeyPrefixConst for $key_prefix {
-            const DB_PREFIX: u8 = $prefix as u8;
-            type Key = $key;
-            type Value = $val;
-        }
-
+    (key = $key:ty, value = $val:ty, prefix = $prefix:expr $(, key_prefix = $prefix_ty:ty)* $(,)?) => {
         impl DatabaseKeyPrefixConst for $key {
             const DB_PREFIX: u8 = $prefix as u8;
             type Key = Self;
             type Value = $val;
         }
+
+        $(
+            impl DatabaseKeyPrefixConst for $prefix_ty {
+                const DB_PREFIX: u8 = $prefix as u8;
+                type Key = $key;
+                type Value = $val;
+            }
+        )*
     };
 }
 
@@ -793,7 +810,12 @@ mod tests {
     #[derive(Debug, Encodable, Decodable)]
     struct DbPrefixTestPrefix;
 
-    impl_db_prefix_const!(TestKey, DbPrefixTestPrefix, TestVal, TestDbKeyPrefix::Test);
+    impl_db_prefix_const!(
+        key = TestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::Test,
+        key_prefix = DbPrefixTestPrefix
+    );
 
     #[derive(Debug, Encodable, Decodable)]
     struct AltTestKey(u64);
@@ -802,10 +824,10 @@ mod tests {
     struct AltDbPrefixTestPrefix;
 
     impl_db_prefix_const!(
-        AltTestKey,
-        AltDbPrefixTestPrefix,
-        TestVal,
-        TestDbKeyPrefix::AltTest
+        key = AltTestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::AltTest,
+        key_prefix = AltDbPrefixTestPrefix
     );
 
     #[derive(Debug, Encodable, Decodable)]
@@ -815,10 +837,10 @@ mod tests {
     struct PercentPrefixTestPrefix;
 
     impl_db_prefix_const!(
-        PercentTestKey,
-        PercentPrefixTestPrefix,
-        TestVal,
-        TestDbKeyPrefix::PercentTestKey
+        key = PercentTestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::PercentTestKey,
+        key_prefix = PercentPrefixTestPrefix
     );
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]

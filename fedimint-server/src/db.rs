@@ -35,10 +35,10 @@ pub struct AcceptedTransactionKey(pub TransactionId);
 pub struct AcceptedTransactionKeyPrefix;
 
 impl_db_prefix_const!(
-    AcceptedTransactionKey,
-    AcceptedTransactionKeyPrefix,
-    AcceptedTransaction,
-    DbKeyPrefix::AcceptedTransaction
+    key = AcceptedTransactionKey,
+    value = AcceptedTransaction,
+    prefix = DbKeyPrefix::AcceptedTransaction,
+    key_prefix = AcceptedTransactionKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -48,10 +48,10 @@ pub struct RejectedTransactionKey(pub TransactionId);
 pub struct RejectedTransactionKeyPrefix;
 
 impl_db_prefix_const!(
-    RejectedTransactionKey,
-    RejectedTransactionKeyPrefix,
-    String,
-    DbKeyPrefix::RejectedTransaction
+    key = RejectedTransactionKey,
+    value = String,
+    prefix = DbKeyPrefix::RejectedTransaction,
+    key_prefix = RejectedTransactionKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -60,7 +60,12 @@ pub struct DropPeerKey(pub PeerId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct DropPeerKeyPrefix;
 
-impl_db_prefix_const!(DropPeerKey, DropPeerKeyPrefix, (), DbKeyPrefix::DropPeer);
+impl_db_prefix_const!(
+    key = DropPeerKey,
+    value = (),
+    prefix = DbKeyPrefix::DropPeer,
+    key_prefix = DropPeerKeyPrefix
+);
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
 pub struct EpochHistoryKey(pub u64);
@@ -69,23 +74,19 @@ pub struct EpochHistoryKey(pub u64);
 pub struct EpochHistoryKeyPrefix;
 
 impl_db_prefix_const!(
-    EpochHistoryKey,
-    EpochHistoryKeyPrefix,
-    SignedEpochOutcome,
-    DbKeyPrefix::EpochHistory
+    key = EpochHistoryKey,
+    value = SignedEpochOutcome,
+    prefix = DbKeyPrefix::EpochHistory,
+    key_prefix = EpochHistoryKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LastEpochKey;
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct LastEpochKeyPrefix;
-
 impl_db_prefix_const!(
-    LastEpochKey,
-    LastEpochKeyPrefix,
-    EpochHistoryKey,
-    DbKeyPrefix::LastEpoch
+    key = LastEpochKey,
+    value = EpochHistoryKey,
+    prefix = DbKeyPrefix::LastEpoch
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -95,8 +96,8 @@ pub struct ClientConfigSignatureKey;
 pub struct ClientConfigSignatureKeyPrefix;
 
 impl_db_prefix_const!(
-    ClientConfigSignatureKey,
-    ClientConfigSignatureKeyPrefix,
-    SerdeSignature,
-    DbKeyPrefix::ClientConfigSignature
+    key = ClientConfigSignatureKey,
+    value = SerdeSignature,
+    prefix = DbKeyPrefix::ClientConfigSignature,
+    key_prefix = ClientConfigSignatureKeyPrefix
 );

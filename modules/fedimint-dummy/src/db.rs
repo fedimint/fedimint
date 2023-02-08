@@ -22,4 +22,9 @@ pub struct ExampleKey(pub u64);
 #[derive(Debug, Encodable, Decodable)]
 pub struct ExampleKeyPrefix;
 
-impl_db_prefix_const!(ExampleKey, ExampleKeyPrefix, (), DbKeyPrefix::Example);
+impl_db_prefix_const!(
+    key = ExampleKey,
+    value = (),
+    prefix = DbKeyPrefix::Example,
+    key_prefix = ExampleKeyPrefix
+);
