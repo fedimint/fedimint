@@ -357,6 +357,9 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .await;
 
+            // Always be prepared to fund bitcoin wallet
+            bitcoin.prepare_funding_wallet().await;
+
             Fixtures {
                 fed,
                 user,

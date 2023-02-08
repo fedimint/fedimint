@@ -5,10 +5,6 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
-use fedimint_api::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
@@ -113,8 +109,6 @@ async fn peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
 #[instrument(name = "peg_outs_are_only_allowed_once_per_epoch")]
 async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
-        bitcoin.prepare_funding_wallet().await;
-
         let address1 = bitcoin.get_new_address().await;
         let address2 = bitcoin.get_new_address().await;
 
@@ -934,8 +928,6 @@ async fn runs_consensus_if_new_block() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
 
-        bitcoin.prepare_funding_wallet().await;
-
         // make the mint establish at least one block height record
         bitcoin.mine_blocks(1).await;
         fed.await_consensus_epochs(1).await.unwrap();
@@ -1023,8 +1015,6 @@ async fn can_get_signed_epoch_history() -> Result<()> {
 async fn rejoin_consensus_single_peer() -> Result<()> {
     test(4, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
-
-        bitcoin.prepare_funding_wallet().await;
         bitcoin.mine_blocks(1).await;
         fed.run_consensus_epochs(1).await;
 
@@ -1145,9 +1135,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn verifies_client_configs() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
-        bitcoin.prepare_funding_wallet().await;
-
+    test(2, |fed, user, _bitcoin, _, _| async move {
         // fed needs to run an epoch to combine shares
         let id = user.client.config().0.federation_id.clone();
         let res = user.client.verify_config(&id).await;
@@ -1166,7 +1154,6 @@ async fn verifies_client_configs() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn cannot_replay_transactions() -> Result<()> {
     test(4, |fed, user, bitcoin, _, _| async move {
-        bitcoin.prepare_funding_wallet().await;
         fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
 
         let notes = user.client.notes().await;
