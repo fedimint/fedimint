@@ -890,6 +890,7 @@
                 tmux
                 tmuxinator
                 docker-compose
+                pkgs.tokio-console
 
                 # Nix
                 pkgs.nixpkgs-fmt
