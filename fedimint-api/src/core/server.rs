@@ -14,7 +14,9 @@ use fedimint_api::{
 };
 
 use super::*;
-use crate::module::{ApiEndpoint, InputMeta, ModuleError, ServerModule, TransactionItemAmount};
+use crate::module::{
+    ApiEndpoint, ConsensusProposal, InputMeta, ModuleError, ServerModule, TransactionItemAmount,
+};
 
 pub trait IVerificationCache: Debug {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
@@ -59,7 +61,7 @@ pub trait IServerModule: Debug {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<DynModuleConsensusItem>;
+    ) -> ConsensusProposal<DynModuleConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The database transaction will be
@@ -192,12 +194,10 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<DynModuleConsensusItem> {
+    ) -> ConsensusProposal<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
             .await
-            .into_iter()
             .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
-            .collect()
     }
 
     /// This function is called once before transaction processing starts. All module consensus

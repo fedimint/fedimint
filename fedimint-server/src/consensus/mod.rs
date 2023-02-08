@@ -71,6 +71,7 @@ impl From<EpochOutcome> for ConsensusOutcomeConversion {
 pub struct ConsensusProposal {
     pub items: Vec<ConsensusItem>,
     pub drop_peers: Vec<PeerId>,
+    pub force_new_epoch: bool,
 }
 
 // TODO: we should make other fields private and get rid of this
@@ -644,12 +645,19 @@ impl FedimintConsensus {
             .cloned()
             .map(ConsensusItem::Transaction)
             .collect();
+        let mut force_new_epoch = false;
 
         for (instance_id, module) in self.modules.iter_modules() {
+            let consensus_proposal = module
+                .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
+                .await;
+            if consensus_proposal.forces_new_epoch() {
+                force_new_epoch = true;
+            }
+
             items.extend(
-                module
-                    .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
-                    .await
+                consensus_proposal
+                    .into_items()
                     .into_iter()
                     .map(ConsensusItem::Module),
             );
@@ -672,7 +680,11 @@ impl FedimintConsensus {
             items.push(item);
         }
 
-        ConsensusProposal { items, drop_peers }
+        ConsensusProposal {
+            items,
+            drop_peers,
+            force_new_epoch,
+        }
     }
 
     async fn process_transaction<'a>(
