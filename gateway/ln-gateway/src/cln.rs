@@ -107,7 +107,7 @@ impl LnRpc for ClnRpc {
         }
     }
 
-    #[instrument(name = "LnRpc::route_hints", skip(self))]
+    #[instrument(name = "LnRpc::pay", skip(self))]
     async fn pay(
         &self,
         invoice: Invoice,
