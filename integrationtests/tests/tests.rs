@@ -28,7 +28,7 @@ use mint_client::{ClientError, ConfigVerifyError};
 use threshold_crypto::{SecretKey, SecretKeyShare};
 use tracing::{debug, info, instrument};
 
-use crate::fixtures::{assert_ci, peers, test, FederationTest};
+use crate::fixtures::{peers, test, unwrap_item, FederationTest};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() -> Result<()> {
@@ -56,15 +56,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
         fed.run_consensus_epochs(2).await; // peg-out tx + peg out signing epoch
 
         assert_matches!(
-            assert_ci(
-                fed.last_consensus_items()
-                    .iter()
-                    .find(|ci| {
-                        let ConsensusItem::Module(mci) = ci else { return false };
-                        mci.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET
-                    })
-                    .unwrap()
-            ),
+            unwrap_item(&fed.find_module_item(LEGACY_HARDCODED_INSTANCE_ID_WALLET)),
             PegOutSignature(_)
         );
 
@@ -74,17 +66,9 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
             .await_peg_out_outcome(out_point)
             .await
             .unwrap();
-        assert!(matches!(
-            assert_ci(
-                fed.last_consensus_items()
-                    .iter()
-                    .find(|ci| {
-                        let ConsensusItem::Module(mci) = ci else { return false };
-                        mci.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET
-                    })
-                    .unwrap()
 
-            ),
+        assert!(matches!(
+            unwrap_item(&fed.find_module_item(LEGACY_HARDCODED_INSTANCE_ID_WALLET)),
             PegOutSignature(PegOutSignatureItem {
                 txid,
                 ..
@@ -874,17 +858,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
         bitcoin.mine_blocks(100).await; // create non-empty epoch
         fed.run_consensus_epochs(1).await; // if valid would create contract to mint notes
 
-        let ln_items = fed
-            .last_consensus_items()
-            .iter()
-            .filter(|item| match item {
-                ConsensusItem::Module(mci) => {
-                    mci.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_LN
-                }
-                _ => false,
-            })
-            .count();
-        assert_eq!(ln_items, 0);
+        assert_eq!(fed.find_module_item(LEGACY_HARDCODED_INSTANCE_ID_LN), None);
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -1006,18 +980,7 @@ async fn unbalanced_transactions_get_rejected() -> Result<()> {
     test(2, |fed, user, _, _, _| async move {
         // cannot make change for this invoice (results in unbalanced tx)
         let builder = TransactionBuilder::default();
-        let mint = user.client.mint_client();
-
-        let mut dbtx = mint.start_dbtx().await;
-        let tx = builder
-            .build_with_change(
-                user.client.mint_client(),
-                &mut dbtx,
-                rng(),
-                vec![sats(1000)],
-                &secp(),
-            )
-            .await;
+        let tx = user.tx_with_change(builder, sats(1000)).await;
         let response = fed.submit_transaction(tx.into_type_erased()).await;
 
         assert_matches!(
