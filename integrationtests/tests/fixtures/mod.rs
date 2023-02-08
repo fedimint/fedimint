@@ -858,6 +858,9 @@ impl FederationTest {
                 dbtx.commit_tx().await.expect("DB Error");
             });
         }
+        bitcoin
+            .mine_blocks(user.client.wallet_client().config.finality_delay as u64)
+            .await;
     }
 
     /// Removes the ecash nonces from the fed DB to simulate the fed losing track of what ecash
