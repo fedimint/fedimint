@@ -21,9 +21,9 @@ use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::core;
+use fedimint_api::core::{DynModuleConsensusItem, ModuleInstanceId};
 use fedimint_api::core::{
-    DynModuleConsensusItem as PerModuleConsensusItem, ModuleConsensusItem,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    ModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
@@ -38,6 +38,7 @@ use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_ln::{LightningGateway, LightningGen};
+use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
 use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
@@ -47,6 +48,7 @@ use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
+use fedimint_server::transaction::legacy::Transaction;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
@@ -68,6 +70,7 @@ use ln_gateway::{
     LnGateway,
 };
 use mint_client::module_decode_stubs;
+use mint_client::transaction::TransactionBuilder;
 use mint_client::{
     api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
     UserClient, UserClientConfig,
@@ -75,7 +78,7 @@ use mint_client::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
-use tracing::{debug, info};
+use tracing::info;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -607,6 +610,22 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
         UserTest { client, config }
     }
 
+    /// Creates a transaction for testing submissions to the federation
+    pub async fn tx_with_change(&self, builder: TransactionBuilder, change: Amount) -> Transaction {
+        let mint = self.client.mint_client();
+        let mut dbtx = mint.start_dbtx().await;
+
+        builder
+            .build_with_change(
+                self.client.mint_client(),
+                &mut dbtx,
+                rng(),
+                vec![change],
+                &secp(),
+            )
+            .await
+    }
+
     /// Helper for readability
     pub async fn set_notes_per_denomination(&self, notes: u16) {
         self.client
@@ -670,19 +689,18 @@ struct ServerTest {
 
 /// Represents a collection of fedimint peer servers
 impl FederationTest {
-    /// Returns the outcome of the last consensus epoch
-    pub fn last_consensus(&self) -> HbbftConsensusOutcome {
-        self.last_consensus.borrow().clone()
-    }
-
-    /// Returns the items that were in the last consensus
-    /// Filters out redundant consensus rounds where the block height doesn't change
-    pub fn last_consensus_items(&self) -> Vec<ConsensusItem> {
-        self.last_consensus()
+    /// Returns the first item with the given module id from the last consensus outcome
+    pub fn find_module_item(&self, id: ModuleInstanceId) -> Option<DynModuleConsensusItem> {
+        self.last_consensus
+            .borrow()
+            .clone()
             .contributions
             .values()
             .flat_map(|items| items.clone())
-            .collect()
+            .find_map(|ci| match ci {
+                ConsensusItem::Module(mci) if mci.module_instance_id() == id => Some(mci),
+                _ => None,
+            })
     }
 
     /// Sends a custom proposal, ignoring whatever is in FedimintConsensus
@@ -832,6 +850,29 @@ impl FederationTest {
         }
     }
 
+    /// Removes the ecash nonces from the fed DB to simulate the fed losing track of what ecash
+    /// has already been spent
+    pub async fn clear_spent_mint_nonces(&self) {
+        for server in &self.servers {
+            block_on(async {
+                let svr = server.borrow_mut();
+                let mut dbtx = svr.database.begin_transaction().await;
+
+                {
+                    let mut module_dbtx =
+                        dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_MINT);
+
+                    module_dbtx
+                        .remove_by_prefix(&NonceKeyPrefix)
+                        .await
+                        .expect("DB Error");
+                }
+
+                dbtx.commit_tx().await.expect("DB Error");
+            });
+        }
+    }
+
     /// Returns the maximum the fed's balance sheet has reached during the test.
     pub fn max_balance_sheet(&self) -> u64 {
         assert!(*self.max_balance_sheet.borrow() >= 0);
@@ -942,6 +983,15 @@ impl FederationTest {
         }
     }
 
+    /// Runs consensus epochs even if the epochs are empty
+    pub async fn run_empty_epochs(&self, epochs: usize) {
+        for server in &self.servers {
+            server.borrow_mut().fedimint.run_empty_epochs = epochs as u64;
+        }
+
+        self.await_consensus_epochs(epochs).await.unwrap();
+    }
+
     /// Runs a consensus epoch
     /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
     /// it will wait forever
@@ -1002,19 +1052,14 @@ impl FederationTest {
         for item in proposal.items {
             match item {
                 // ignore items that get automatically generated
-                ConsensusItem::Module(mci) => {
-                    if mci.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
-                        return false;
+                ConsensusItem::Module(mci) => match mci.as_any().downcast_ref() {
+                    Some(WalletConsensusItem::RoundConsensus(rci))
+                        if rci.block_height == height =>
+                    {
+                        continue
                     }
-
-                    let wci = assert_module_ci(&mci);
-                    if let WalletConsensusItem::RoundConsensus(rci) = wci {
-                        if rci.block_height == height {
-                            continue;
-                        }
-                    }
-                    return false;
-                }
+                    _ => return false,
+                },
                 ConsensusItem::EpochOutcomeSignatureShare(_) => continue,
                 _ => return false,
             }
@@ -1210,18 +1255,12 @@ impl FederationTest {
     }
 }
 
-pub fn assert_ci<M: ModuleConsensusItem>(ci: &ConsensusItem) -> &M {
-    if let ConsensusItem::Module(mci) = ci {
-        assert_module_ci(mci)
-    } else {
-        panic!("Not a module consensus item");
-    }
-}
-
-pub fn assert_module_ci<M: ModuleConsensusItem>(mci: &PerModuleConsensusItem) -> &M {
-    debug!(
-        module_instance_id = mci.module_instance_id(),
-        "Checking module consensus item"
-    );
-    mci.as_any().downcast_ref().unwrap()
+/// Unwraps a dyn consensus item into a specific one for making assertions
+#[track_caller]
+pub fn unwrap_item<M: ModuleConsensusItem>(mci: &Option<DynModuleConsensusItem>) -> &M {
+    mci.as_ref()
+        .expect("Module item exists")
+        .as_any()
+        .downcast_ref()
+        .expect("Unexpected type found")
 }

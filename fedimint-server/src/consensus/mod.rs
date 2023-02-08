@@ -32,6 +32,7 @@ use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument
 
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
+use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
     AcceptedTransactionKey, ClientConfigSignatureKey, DropPeerKey, DropPeerKeyPrefix,
     EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
@@ -221,7 +222,7 @@ impl FedimintConsensus {
             .await
             .is_some()
         {
-            return Ok(());
+            return Err(TransactionReplayError(transaction.tx_hash()));
         }
 
         let tx_hash = transaction.tx_hash();
@@ -684,6 +685,15 @@ impl FedimintConsensus {
 
         let tx_hash = transaction.tx_hash();
 
+        if dbtx
+            .get_value(&AcceptedTransactionKey(tx_hash))
+            .await
+            .expect("DB Error")
+            .is_some()
+        {
+            return Err(TransactionReplayError(tx_hash));
+        }
+
         let mut pub_keys = Vec::new();
         for input in transaction.inputs.iter() {
             let meta = self
@@ -854,8 +864,8 @@ pub enum TransactionSubmissionError {
     TransactionError(#[from] TransactionError),
     #[error("Module input or output error in tx {0}: {1}")]
     ModuleError(TransactionId, ModuleError),
-    #[error("Transaction conflict error")]
-    TransactionConflictError,
     #[error("Transaction channel was closed")]
     TxChannelError,
+    #[error("Transaction was already successfully processed: {0}")]
+    TransactionReplayError(TransactionId),
 }
