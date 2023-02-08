@@ -15,6 +15,7 @@ use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
 use fedimint_mint::{MintConsensusItem, MintOutputSignatureShare};
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
+use fedimint_server::consensus::TransactionSubmissionError::TransactionReplayError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::legacy::Output;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
@@ -23,6 +24,7 @@ use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
 use mint_client::logging::LOG_TEST;
+use mint_client::mint::MintClient;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::{ClientError, ConfigVerifyError};
 use threshold_crypto::{SecretKey, SecretKeyShare};
@@ -1159,6 +1161,42 @@ async fn verifies_client_configs() -> Result<()> {
         fed.run_consensus_epochs(1).await;
         let res = user.client.verify_config(&id).await;
         assert!(res.is_ok());
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cannot_replay_transactions() -> Result<()> {
+    test(4, |fed, user, bitcoin, _, _| async move {
+        bitcoin.prepare_funding_wallet().await;
+        fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
+
+        let notes = user.client.notes().await;
+        let mut builder = TransactionBuilder::default();
+        let (mut keys, input) = MintClient::ecash_input(notes).unwrap();
+        builder.input(&mut keys, input);
+        let tx_typed = user.tx_with_change(builder, sats(5000)).await;
+        let tx = tx_typed.into_type_erased();
+        let mint_id = LEGACY_HARDCODED_INSTANCE_ID_MINT;
+
+        // submit the tx successfully
+        let response = fed.submit_transaction(tx.clone()).await;
+        assert_matches!(response, Ok(()));
+        fed.run_empty_epochs(2).await;
+        assert!(fed.find_module_item(mint_id).is_some());
+        fed.clear_spent_mint_nonces().await;
+
+        // verify resubmitting the tx fails at the API level
+        let response = fed.submit_transaction(tx.clone()).await;
+        assert_matches!(response, Err(TransactionReplayError(_)));
+        fed.run_empty_epochs(2).await;
+        assert!(fed.find_module_item(mint_id).is_none());
+
+        // verify resubmitting the tx fails at the P2P level
+        fed.subset_peers(&[0])
+            .override_proposal(vec![ConsensusItem::Transaction(tx)]);
+        fed.run_empty_epochs(2).await;
+        assert!(fed.find_module_item(mint_id).is_none());
     })
     .await
 }

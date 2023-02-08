@@ -21,11 +21,10 @@ use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::core;
-use fedimint_api::core::{
-    ModuleConsensusItem,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
 use fedimint_api::core::{DynModuleConsensusItem, ModuleInstanceId};
+use fedimint_api::core::{
+    ModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
@@ -39,6 +38,7 @@ use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_ln::{LightningGateway, LightningGen};
+use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
 use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
@@ -78,7 +78,7 @@ use mint_client::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
-use tracing::{info};
+use tracing::info;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -850,6 +850,29 @@ impl FederationTest {
         }
     }
 
+    /// Removes the ecash nonces from the fed DB to simulate the fed losing track of what ecash
+    /// has already been spent
+    pub async fn clear_spent_mint_nonces(&self) {
+        for server in &self.servers {
+            block_on(async {
+                let svr = server.borrow_mut();
+                let mut dbtx = svr.database.begin_transaction().await;
+
+                {
+                    let mut module_dbtx =
+                        dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_MINT);
+
+                    module_dbtx
+                        .remove_by_prefix(&NonceKeyPrefix)
+                        .await
+                        .expect("DB Error");
+                }
+
+                dbtx.commit_tx().await.expect("DB Error");
+            });
+        }
+    }
+
     /// Returns the maximum the fed's balance sheet has reached during the test.
     pub fn max_balance_sheet(&self) -> u64 {
         assert!(*self.max_balance_sheet.borrow() >= 0);
@@ -958,6 +981,15 @@ impl FederationTest {
             }
             self.await_consensus_epochs(1).await.unwrap();
         }
+    }
+
+    /// Runs consensus epochs even if the epochs are empty
+    pub async fn run_empty_epochs(&self, epochs: usize) {
+        for server in &self.servers {
+            server.borrow_mut().fedimint.run_empty_epochs = epochs as u64;
+        }
+
+        self.await_consensus_epochs(epochs).await.unwrap();
     }
 
     /// Runs a consensus epoch
@@ -1224,10 +1256,11 @@ impl FederationTest {
 }
 
 /// Unwraps a dyn consensus item into a specific one for making assertions
+#[track_caller]
 pub fn unwrap_item<M: ModuleConsensusItem>(mci: &Option<DynModuleConsensusItem>) -> &M {
     mci.as_ref()
         .expect("Module item exists")
         .as_any()
         .downcast_ref()
-        .unwrap()
+        .expect("Unexpected type found")
 }
