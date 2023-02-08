@@ -38,6 +38,8 @@ pub struct ServerOpts {
     /// Port to run admin UI on
     #[arg(long = "listen-ui", env = "FM_LISTEN_UI")]
     pub listen_ui: Option<SocketAddr>,
+    #[arg(long = "tokio-console-bind", env = "FM_TOKIO_CONSOLE_BIND")]
+    pub tokio_console_bind: Option<SocketAddr>,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
@@ -56,14 +58,19 @@ async fn main() {
     info!("Starting fedimintd (version: {CODE_VERSION})");
 
     let opts: ServerOpts = ServerOpts::parse();
-    let fmt_layer = tracing_subscriber::fmt::layer();
     let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(filter_layer);
 
-    let registry = tracing_subscriber::registry()
-        .with(filter_layer)
-        .with(fmt_layer);
+    let console_opt = opts.tokio_console_bind.map(|l| {
+        console_subscriber::ConsoleLayer::builder()
+            .retention(Duration::from_secs(60))
+            .server_addr(l)
+            .spawn()
+            // tokio-console cares only about these layers, so we filter separately for it
+            .with_filter(EnvFilter::new("tokio=trace,runtime=trace"))
+    });
 
-    let telemetry_layer = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
+    let telemetry_layer_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
         #[cfg(feature = "telemetry")]
         if opts.with_telemetry {
             let tracer = opentelemetry_jaeger::new_pipeline()
@@ -76,11 +83,11 @@ async fn main() {
         None
     };
 
-    if let Some(layer) = telemetry_layer() {
-        registry.with(layer).init();
-    } else {
-        registry.init();
-    }
+    tracing_subscriber::registry()
+        .with(console_opt)
+        .with(fmt_layer)
+        .with(telemetry_layer_opt())
+        .init();
 
     let mut root_task_group = TaskGroup::new();
     root_task_group.install_kill_handler();
