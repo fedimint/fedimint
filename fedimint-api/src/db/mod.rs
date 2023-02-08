@@ -698,14 +698,14 @@ where
 #[macro_export]
 macro_rules! impl_db_prefix_const {
     (key = $key:ty, value = $val:ty, prefix = $prefix:expr $(, key_prefix = $prefix_ty:ty)* $(,)?) => {
-        impl DatabaseKeyPrefixConst for $key {
+        impl fedimint_api::db::DatabaseKeyPrefixConst for $key {
             const DB_PREFIX: u8 = $prefix as u8;
             type Key = Self;
             type Value = $val;
         }
 
         $(
-            impl DatabaseKeyPrefixConst for $prefix_ty {
+            impl $crate::db::DatabaseKeyPrefixConst for $prefix_ty {
                 const DB_PREFIX: u8 = $prefix as u8;
                 type Key = $key;
                 type Value = $val;
@@ -793,7 +793,6 @@ mod tests {
     use futures::StreamExt;
 
     use super::Database;
-    use crate::db::DatabaseKeyPrefixConst;
     use crate::encoding::{Decodable, Encodable};
 
     #[repr(u8)]

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use fedimint_api::db::{DatabaseKeyPrefixConst, MODULE_GLOBAL_PREFIX};
+use fedimint_api::db::MODULE_GLOBAL_PREFIX;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::impl_db_prefix_const;
 use fedimint_api::{PeerId, TransactionId};

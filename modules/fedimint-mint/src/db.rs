@@ -1,6 +1,5 @@
 use std::time::SystemTime;
 
-use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::impl_db_prefix_const;
 use fedimint_api::{Amount, OutPoint, PeerId};
