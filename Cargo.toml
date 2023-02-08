@@ -48,21 +48,21 @@ split-debuginfo = "packed"
 
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
-secp256k1 = { opt-level = 2 }
-secp256k1-zkp = { opt-level = 2 }
-secp256k1-sys = { opt-level = 2 }
-secp256k1-zkp-sys = { opt-level = 2 }
-bitcoin_hashes = { opt-level = 2 }
-ff = { opt-level = 2 }
-group = { opt-level = 2 }
-pairing = { opt-level = 2 }
-rand_core = { opt-level = 2 }
-byteorder = { opt-level = 2 }
-zeroize = { opt-level = 2 }
-bls12_381 = { opt-level = 2 }
-subtle = { opt-level = 2 }
-ring = { opt-level = 2 }
-threshold_crypto = { opt-level = 2 }
+secp256k1 = { opt-level = 3 }
+secp256k1-zkp = { opt-level = 3 }
+secp256k1-sys = { opt-level = 3 }
+secp256k1-zkp-sys = { opt-level = 3 }
+bitcoin_hashes = { opt-level = 3 }
+ff = { opt-level = 3 }
+group = { opt-level = 3 }
+pairing = { opt-level = 3 }
+rand_core = { opt-level = 3 }
+byteorder = { opt-level = 3 }
+zeroize = { opt-level = 3 }
+bls12_381 = { opt-level = 3 }
+subtle = { opt-level = 3 }
+ring = { opt-level = 3 }
+threshold_crypto = { opt-level = 3 }
 
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
