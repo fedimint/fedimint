@@ -87,12 +87,12 @@ impl Tiered<SecretKeyShare> {
 }
 
 impl Tiered<()> {
-    /// Generates denominations as powers of 2 until a `max`
+    /// Generates denominations as powers of 2 up to and including `max`
     pub fn gen_denominations(max: Amount) -> Tiered<()> {
         let mut amounts = vec![];
 
         let mut denomination = Amount::from_msats(1);
-        while denomination < max {
+        while denomination <= max {
             amounts.push((denomination, ()));
             denomination = denomination * 2;
         }
@@ -125,5 +125,21 @@ where
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         Ok(Tiered(BTreeMap::consensus_decode(d, modules)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_api::Amount;
+
+    use super::Tiered;
+
+    #[test]
+    fn tier_generation_including_max_amount() {
+        let max_amount = Amount::from_msats(16);
+        let denominations = Tiered::gen_denominations(max_amount);
+
+        // should produce [1, 2, 4, 8, 16]
+        assert_eq!(denominations.tiers().collect::<Vec<&Amount>>().len(), 5);
     }
 }
