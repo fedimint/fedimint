@@ -152,18 +152,8 @@ lazy_static! {
     static ref REAL_BITCOIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
 }
 
-#[async_trait]
-impl BitcoinTest for RealBitcoinTest {
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest> {
-        Box::new(RealBitcoinTestLocked {
-            inner: RealBitcoinTest {
-                client: self.client.clone(),
-            },
-            _guard: REAL_BITCOIN_LOCK.lock().await,
-        })
-    }
-
-    async fn mine_blocks(&self, block_num: u64) {
+impl RealBitcoinTest {
+    async fn mine_blocks_no_lock(&self, block_num: u64) {
         if let Some(block_hash) = self
             .client
             .generate_to_address(block_num, &self.get_new_address().await)
@@ -177,15 +167,7 @@ impl BitcoinTest for RealBitcoinTest {
                 .expect("there should be no delay between block being generated and available");
         };
     }
-
-    async fn prepare_funding_wallet(&self) {
-        let block_count = self.client.get_block_count().expect("should not fail");
-        if block_count < 100 {
-            self.mine_blocks(100 - block_count).await;
-        }
-    }
-
-    async fn send_and_mine_block(
+    async fn send_and_mine_block_no_lock(
         &self,
         address: &Address,
         amount: bitcoin::Amount,
@@ -194,7 +176,7 @@ impl BitcoinTest for RealBitcoinTest {
             .client
             .send_to_address(address, amount, None, None, None, None, None, None)
             .expect(Self::ERROR);
-        self.mine_blocks(1).await;
+        self.mine_blocks_no_lock(1).await;
 
         let tx = self
             .client
@@ -220,31 +202,39 @@ impl BitcoinTest for RealBitcoinTest {
 
         (proof, tx)
     }
-
-    async fn get_new_address(&self) -> Address {
-        self.client.get_new_address(None, None).expect(Self::ERROR)
-    }
-
-    async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
-        self.mine_blocks(1).await;
+    async fn mine_block_and_get_received_no_lock(&self, address: &Address) -> Amount {
+        self.mine_blocks_no_lock(1).await;
         self.client
             .get_received_by_address(address, None)
             .expect(Self::ERROR)
             .into()
     }
+    async fn prepare_funding_wallet_no_lock(&self) {
+        let block_count = self.client.get_block_count().expect("should not fail");
+        if block_count < 100 {
+            self.mine_blocks(100 - block_count).await;
+        }
+    }
 }
 #[async_trait]
-impl BitcoinTest for RealBitcoinTestLocked {
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest> {
-        panic!("Double-locking would lead to a hang");
+impl BitcoinTest for RealBitcoinTest {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send> {
+        Box::new(RealBitcoinTestLocked {
+            inner: RealBitcoinTest {
+                client: self.client.clone(),
+            },
+            _guard: REAL_BITCOIN_LOCK.lock().await,
+        })
     }
 
     async fn mine_blocks(&self, block_num: u64) {
-        self.inner.mine_blocks(block_num).await
+        let _lock = self.lock_exclusive().await;
+        self.mine_blocks_no_lock(block_num).await;
     }
 
     async fn prepare_funding_wallet(&self) {
-        self.inner.prepare_funding_wallet().await;
+        let _lock = self.lock_exclusive().await;
+        self.prepare_funding_wallet_no_lock().await;
     }
 
     async fn send_and_mine_block(
@@ -252,7 +242,44 @@ impl BitcoinTest for RealBitcoinTestLocked {
         address: &Address,
         amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
-        self.inner.send_and_mine_block(address, amount).await
+        let _lock = self.lock_exclusive().await;
+        self.send_and_mine_block_no_lock(address, amount).await
+    }
+
+    async fn get_new_address(&self) -> Address {
+        self.client.get_new_address(None, None).expect(Self::ERROR)
+    }
+
+    async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
+        let _lock = self.lock_exclusive().await;
+        self.mine_block_and_get_received_no_lock(address).await
+    }
+}
+#[async_trait]
+impl BitcoinTest for RealBitcoinTestLocked {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send> {
+        panic!("Double-locking would lead to a hang");
+    }
+
+    async fn mine_blocks(&self, block_num: u64) {
+        let pre = self.inner.client.get_block_count().unwrap();
+        self.inner.mine_blocks_no_lock(block_num).await;
+        let post = self.inner.client.get_block_count().unwrap();
+        assert_eq!(post - pre, block_num);
+    }
+
+    async fn prepare_funding_wallet(&self) {
+        self.inner.prepare_funding_wallet_no_lock().await;
+    }
+
+    async fn send_and_mine_block(
+        &self,
+        address: &Address,
+        amount: bitcoin::Amount,
+    ) -> (TxOutProof, Transaction) {
+        self.inner
+            .send_and_mine_block_no_lock(address, amount)
+            .await
     }
 
     async fn get_new_address(&self) -> Address {
@@ -260,6 +287,8 @@ impl BitcoinTest for RealBitcoinTestLocked {
     }
 
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
-        self.inner.mine_block_and_get_received(address).await
+        self.inner
+            .mine_block_and_get_received_no_lock(address)
+            .await
     }
 }
