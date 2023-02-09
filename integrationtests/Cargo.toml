@@ -33,6 +33,7 @@ fedimint-sqlite = { path = "../fedimint-sqlite" }
 fedimint-testing = { path = "../fedimint-testing" }
 fedimint-wallet = { path = "../modules/fedimint-wallet" }
 mint-client = { path = "../client/client-lib" }
+nix = "0.26.2"
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 tokio = { version = "1.24.2", features = ["full"] }

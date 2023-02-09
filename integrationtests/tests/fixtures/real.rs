@@ -1,5 +1,7 @@
+use std::fs::{File, OpenOptions};
 use std::io::Cursor;
 use std::ops::Sub;
+use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -13,7 +15,7 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{ClnRpc, Request, Response};
 use fedimint_api::encoding::Decodable;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::Amount;
+use fedimint_api::{task, Amount};
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_wallet::txoproof::TxOutProof;
 use futures::lock::Mutex;
@@ -145,7 +147,7 @@ impl RealBitcoinTest {
 
 pub struct RealBitcoinTestLocked {
     inner: RealBitcoinTest,
-    _guard: tokio::sync::MutexGuard<'static, ()>,
+    _guard: File,
 }
 
 lazy_static! {
@@ -155,11 +157,23 @@ lazy_static! {
 #[async_trait]
 impl BitcoinTest for RealBitcoinTest {
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest> {
+        let file = task::block_in_place(|| {
+            let file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .read(true)
+                .open(std::env::temp_dir().join(".realbitcointest.lock"))
+                .unwrap();
+            let fd = file.as_raw_fd();
+            nix::fcntl::flock(fd, nix::fcntl::FlockArg::LockExclusive).unwrap();
+            file
+        });
+
         Box::new(RealBitcoinTestLocked {
             inner: RealBitcoinTest {
                 client: self.client.clone(),
             },
-            _guard: REAL_BITCOIN_LOCK.lock().await,
+            _guard: file,
         })
     }
 
