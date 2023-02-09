@@ -77,7 +77,7 @@ impl FakeBitcoinTest {
 
 #[async_trait]
 impl BitcoinTest for FakeBitcoinTest {
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest> {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send> {
         // With  FakeBitcoinTest, every test spawns their own instance,
         // so not need to lock anything
         Box::new(self.clone())
