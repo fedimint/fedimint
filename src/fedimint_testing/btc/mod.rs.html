@@ -49,7 +49,7 @@
 </span><span class="kw">pub trait </span>BitcoinTest {
     <span class="doccomment">/// Make the underlying instance act as if it was exclusively available
     /// for the existance of the returned guard.
-    </span><span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest&gt;;
+    </span><span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send&gt;;
 
     <span class="doccomment">/// Mines a given number of blocks
     </span><span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64);
