@@ -363,10 +363,10 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
 {
     pub fn new(
         dbtx: &'isolated mut DatabaseTransaction<'parent>,
-        prefix: T,
+        module_prefix: T,
     ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
         let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
-        prefix
+        module_prefix
             .consensus_encode(&mut prefix_bytes)
             .expect("Error encoding module instance id as prefix");
         IsolatedDatabaseTransaction {
