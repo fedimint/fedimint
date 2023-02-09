@@ -21,7 +21,9 @@ use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::core;
-use fedimint_api::core::{DynModuleConsensusItem, ModuleInstanceId};
+use fedimint_api::core::{
+    DynModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
+};
 use fedimint_api::core::{
     ModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
@@ -355,6 +357,9 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .await;
 
+            // Always be prepared to fund bitcoin wallet
+            bitcoin.prepare_funding_wallet().await;
+
             Fixtures {
                 fed,
                 user,
@@ -676,6 +681,9 @@ pub struct FederationTest {
     pub wallet: WalletConfig,
     pub cfg: ServerConfig,
     decoders: ModuleDecoderRegistry,
+    pub mint_id: ModuleInstanceId,
+    pub ln_id: ModuleInstanceId,
+    pub wallet_id: ModuleInstanceId,
 }
 
 struct ServerTest {
@@ -763,6 +771,9 @@ impl FederationTest {
             last_consensus: self.last_consensus.clone(),
             max_balance_sheet: self.max_balance_sheet.clone(),
             decoders: self.decoders.clone(),
+            mint_id: self.mint_id,
+            ln_id: self.ln_id,
+            wallet_id: self.wallet_id,
         }
     }
 
@@ -831,8 +842,7 @@ impl FederationTest {
                 let mut dbtx = svr.database.begin_transaction().await;
 
                 {
-                    let mut module_dbtx =
-                        dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
+                    let mut module_dbtx = dbtx.with_module_prefix(self.wallet_id);
                     module_dbtx
                         .insert_new_entry(
                             &UTXOKey(input.outpoint()),
@@ -848,6 +858,9 @@ impl FederationTest {
                 dbtx.commit_tx().await.expect("DB Error");
             });
         }
+        bitcoin
+            .mine_blocks(user.client.wallet_client().config.finality_delay as u64)
+            .await;
     }
 
     /// Removes the ecash nonces from the fed DB to simulate the fed losing track of what ecash
@@ -859,8 +872,7 @@ impl FederationTest {
                 let mut dbtx = svr.database.begin_transaction().await;
 
                 {
-                    let mut module_dbtx =
-                        dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_MINT);
+                    let mut module_dbtx = dbtx.with_module_prefix(self.mint_id);
 
                     module_dbtx
                         .remove_by_prefix(&NonceKeyPrefix)
@@ -912,7 +924,7 @@ impl FederationTest {
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![core::DynOutput::from_typed(
-                            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                            self.mint_id,
                             MintOutput(notes.clone()),
                         )],
                         signature: None,
@@ -931,13 +943,10 @@ impl FederationTest {
                     svr.fedimint
                         .consensus
                         .modules
-                        .get_expect(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+                        .get_expect(self.mint_id)
                         .apply_output(
-                            &mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_MINT),
-                            &core::DynOutput::from_typed(
-                                LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                                MintOutput(notes.clone()),
-                            ),
+                            &mut dbtx.with_module_prefix(self.mint_id),
+                            &core::DynOutput::from_typed(self.mint_id, MintOutput(notes.clone())),
                             out_point,
                         )
                         .await
@@ -956,7 +965,7 @@ impl FederationTest {
         for server in &self.servers {
             let svr = server.borrow();
             let mut dbtx = block_on(svr.database.begin_transaction());
-            let module_dbtx = dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
+            let module_dbtx = dbtx.with_module_prefix(self.wallet_id);
             block_on(fedimint_wallet::broadcast_pending_tx(
                 module_dbtx,
                 &svr.bitcoin_rpc,
@@ -971,7 +980,7 @@ impl FederationTest {
         for _ in 0..(epochs) {
             let mut nonempty_proposals = 0;
             for server in &self.servers {
-                if !Self::empty_proposal(&mut server.borrow_mut().fedimint).await {
+                if !self.empty_proposal(&mut server.borrow_mut().fedimint).await {
                     nonempty_proposals += 1;
                 }
             }
@@ -1030,7 +1039,7 @@ impl FederationTest {
     }
 
     /// Returns true if the fed would produce an empty epoch proposal (no new information)
-    async fn empty_proposal(server: &mut FedimintServer) -> bool {
+    async fn empty_proposal(&self, server: &mut FedimintServer) -> bool {
         // Hack to avoid saying the proposal is empty if there are tx in the channel
         if let Ok(tx) = server.tx_receiver.get_mut().as_mut().try_recv() {
             server.consensus.tx_sender.send(tx).await.expect("Can send");
@@ -1040,12 +1049,12 @@ impl FederationTest {
         let wallet = server
             .consensus
             .modules
-            .get_expect(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .get_expect(self.wallet_id)
             .as_any()
             .downcast_ref::<Wallet>()
             .unwrap();
         let mut dbtx = block_on(server.consensus.db.begin_transaction());
-        let mut module_dbtx = dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
+        let mut module_dbtx = dbtx.with_module_prefix(self.wallet_id);
         let height = block_on(wallet.consensus_height(&mut module_dbtx)).unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
@@ -1251,6 +1260,9 @@ impl FederationTest {
             decoders: module_inits.decoders(cfg.iter_module_instances()).unwrap(),
             cfg,
             wallet,
+            mint_id: LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            ln_id: LEGACY_HARDCODED_INSTANCE_ID_LN,
+            wallet_id: LEGACY_HARDCODED_INSTANCE_ID_WALLET,
         }
     }
 }

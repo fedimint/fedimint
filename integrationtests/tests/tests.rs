@@ -5,10 +5,6 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
-use fedimint_api::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
@@ -58,7 +54,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
         fed.run_consensus_epochs(2).await; // peg-out tx + peg out signing epoch
 
         assert_matches!(
-            unwrap_item(&fed.find_module_item(LEGACY_HARDCODED_INSTANCE_ID_WALLET)),
+            unwrap_item(&fed.find_module_item(fed.wallet_id)),
             PegOutSignature(_)
         );
 
@@ -70,7 +66,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
             .unwrap();
 
         assert!(matches!(
-            unwrap_item(&fed.find_module_item(LEGACY_HARDCODED_INSTANCE_ID_WALLET)),
+            unwrap_item(&fed.find_module_item(fed.wallet_id)),
             PegOutSignature(PegOutSignatureItem {
                 txid,
                 ..
@@ -113,8 +109,6 @@ async fn peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
 #[instrument(name = "peg_outs_are_only_allowed_once_per_epoch")]
 async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
-        bitcoin.prepare_funding_wallet().await;
-
         let address1 = bitcoin.get_new_address().await;
         let address2 = bitcoin.get_new_address().await;
 
@@ -379,7 +373,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
         fed.subset_peers(&[3])
             .override_proposal(vec![ConsensusItem::Module(
                 fedimint_api::core::DynModuleConsensusItem::from_typed(
-                    LEGACY_HARDCODED_INSTANCE_ID_LN,
+                    fed.ln_id,
                     LightningConsensusItem {
                         contract_id,
                         share: PreimageDecryptionShare(share),
@@ -425,7 +419,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
         let out_point = fed.database_add_notes_for_user(&user, sats(2000)).await;
         let bad_proposal = vec![ConsensusItem::Module(
             fedimint_api::core::DynModuleConsensusItem::from_typed(
-                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                fed.mint_id,
                 MintConsensusItem {
                     out_point,
                     signatures: MintOutputSignatureShare(TieredMulti::default()),
@@ -857,10 +851,8 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
             .await;
         assert!(response.is_err());
 
-        bitcoin.mine_blocks(100).await; // create non-empty epoch
-        fed.run_consensus_epochs(1).await; // if valid would create contract to mint notes
-
-        assert_eq!(fed.find_module_item(LEGACY_HARDCODED_INSTANCE_ID_LN), None);
+        fed.run_empty_epochs(1).await; // if valid would create contract to mint notes
+        assert_eq!(fed.find_module_item(fed.ln_id), None);
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
@@ -936,9 +928,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
 
-        bitcoin.prepare_funding_wallet().await;
-
-        // make the mint estabilish at least one block height record
+        // make the mint establish at least one block height record
         bitcoin.mine_blocks(1).await;
         fed.await_consensus_epochs(1).await.unwrap();
 
@@ -1025,8 +1015,6 @@ async fn can_get_signed_epoch_history() -> Result<()> {
 async fn rejoin_consensus_single_peer() -> Result<()> {
     test(4, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
-
-        bitcoin.prepare_funding_wallet().await;
         bitcoin.mine_blocks(1).await;
         fed.run_consensus_epochs(1).await;
 
@@ -1147,9 +1135,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn verifies_client_configs() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
-        bitcoin.prepare_funding_wallet().await;
-
+    test(2, |fed, user, _bitcoin, _, _| async move {
         // fed needs to run an epoch to combine shares
         let id = user.client.config().0.federation_id.clone();
         let res = user.client.verify_config(&id).await;
@@ -1168,7 +1154,6 @@ async fn verifies_client_configs() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn cannot_replay_transactions() -> Result<()> {
     test(4, |fed, user, bitcoin, _, _| async move {
-        bitcoin.prepare_funding_wallet().await;
         fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
 
         let notes = user.client.notes().await;
@@ -1177,26 +1162,25 @@ async fn cannot_replay_transactions() -> Result<()> {
         builder.input(&mut keys, input);
         let tx_typed = user.tx_with_change(builder, sats(5000)).await;
         let tx = tx_typed.into_type_erased();
-        let mint_id = LEGACY_HARDCODED_INSTANCE_ID_MINT;
 
         // submit the tx successfully
         let response = fed.submit_transaction(tx.clone()).await;
         assert_matches!(response, Ok(()));
         fed.run_empty_epochs(2).await;
-        assert!(fed.find_module_item(mint_id).is_some());
+        assert!(fed.find_module_item(fed.mint_id).is_some());
         fed.clear_spent_mint_nonces().await;
 
         // verify resubmitting the tx fails at the API level
         let response = fed.submit_transaction(tx.clone()).await;
         assert_matches!(response, Err(TransactionReplayError(_)));
         fed.run_empty_epochs(2).await;
-        assert!(fed.find_module_item(mint_id).is_none());
+        assert!(fed.find_module_item(fed.mint_id).is_none());
 
         // verify resubmitting the tx fails at the P2P level
         fed.subset_peers(&[0])
             .override_proposal(vec![ConsensusItem::Transaction(tx)]);
         fed.run_empty_epochs(2).await;
-        assert!(fed.find_module_item(mint_id).is_none());
+        assert!(fed.find_module_item(fed.mint_id).is_none());
     })
     .await
 }
