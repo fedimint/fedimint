@@ -365,6 +365,7 @@
 <a href="#365" id="365">365</a>
 <a href="#366" id="366">366</a>
 <a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -523,7 +524,8 @@
                             </span>.with_module_prefix(<span class="kw-2">*</span>module_instance_id),
                     )
                     .<span class="kw">await
-                    </span>.into_iter()
+                    </span>.into_items()
+                    .into_iter()
                     .map(|ci| (<span class="kw-2">*</span>id, ci)),
             );
         }

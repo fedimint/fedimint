@@ -1428,6 +1428,8 @@
 <a href="#1428" id="1428">1428</a>
 <a href="#1429" id="1429">1429</a>
 <a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -1451,8 +1453,8 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, InputMeta, IntoModuleError,
+    ModuleError, ModuleGen, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
@@ -1873,7 +1875,7 @@
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="kw">if </span><span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.is_empty() {
+        <span class="kw">if </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
             std::future::pending().<span class="kw">await
         </span>}
     }
@@ -1881,19 +1883,21 @@
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Vec&lt;MintConsensusItem&gt; {
-        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
-            .<span class="kw">await
-            </span>.map(|res| {
-                <span class="kw">let </span>(key, signatures) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                MintConsensusItem {
-                    out_point: key.out_point,
-                    signatures,
-                }
-            })
-            .collect::&lt;Vec&lt;MintConsensusItem&gt;&gt;()
-            .<span class="kw">await
-    </span>}
+    ) -&gt; ConsensusProposal&lt;MintConsensusItem&gt; {
+        ConsensusProposal::new_auto_trigger(
+            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
+                .<span class="kw">await
+                </span>.map(|res| {
+                    <span class="kw">let </span>(key, signatures) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                    MintConsensusItem {
+                        out_point: key.out_point,
+                        signatures,
+                    }
+                })
+                .collect::&lt;Vec&lt;MintConsensusItem&gt;&gt;()
+                .<span class="kw">await</span>,
+        )
+    }
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,

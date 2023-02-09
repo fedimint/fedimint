@@ -869,6 +869,18 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -942,6 +954,7 @@
 </span><span class="kw">pub struct </span>ConsensusProposal {
     <span class="kw">pub </span>items: Vec&lt;ConsensusItem&gt;,
     <span class="kw">pub </span>drop_peers: Vec&lt;PeerId&gt;,
+    <span class="kw">pub </span>force_new_epoch: bool,
 }
 
 <span class="comment">// TODO: we should make other fields private and get rid of this
@@ -1515,13 +1528,20 @@
             .cloned()
             .map(ConsensusItem::Transaction)
             .collect();
+        <span class="kw">let </span><span class="kw-2">mut </span>force_new_epoch = <span class="bool-val">false</span>;
 
         <span class="kw">for </span>(instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+            <span class="kw">let </span>consensus_proposal = module
+                .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance_id), instance_id)
+                .<span class="kw">await</span>;
+            <span class="kw">if </span>consensus_proposal.forces_new_epoch() {
+                force_new_epoch = <span class="bool-val">true</span>;
+            }
+
             items.extend(
-                module
-                    .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance_id), instance_id)
-                    .<span class="kw">await
-                    </span>.into_iter()
+                consensus_proposal
+                    .into_items()
+                    .into_iter()
                     .map(ConsensusItem::Module),
             );
         }
@@ -1543,7 +1563,11 @@
             items.push(item);
         }
 
-        ConsensusProposal { items, drop_peers }
+        ConsensusProposal {
+            items,
+            drop_peers,
+            force_new_epoch,
+        }
     }
 
     <span class="kw">async fn </span>process_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(

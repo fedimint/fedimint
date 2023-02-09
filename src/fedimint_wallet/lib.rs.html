@@ -1740,6 +1740,8 @@
 <a href="#1740" id="1740">1740</a>
 <a href="#1741" id="1741">1741</a>
 <a href="#1742" id="1742">1742</a>
+<a href="#1743" id="1743">1743</a>
+<a href="#1744" id="1744">1744</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1779,7 +1781,7 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ConsensusProposal, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
@@ -2234,23 +2236,17 @@
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="kw">let </span><span class="kw-2">mut </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
-        <span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
-
-        <span class="kw">if </span><span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.len() == <span class="number">1 </span>{
-            <span class="kw">while </span>our_target_height &lt;= last_consensus_height {
-                our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
-                <span class="comment">// FIXME: remove after modularization finishes
-                </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-                </span>sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
-            }
+        <span class="kw">while </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
+            <span class="comment">// FIXME: remove after modularization finishes
+            </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+            </span>sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
         }
     }
 
     <span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Vec&lt;WalletConsensusItem&gt; {
+    ) -&gt; ConsensusProposal&lt;WalletConsensusItem&gt; {
         <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable
         </span><span class="kw">let </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
 
@@ -2282,7 +2278,8 @@
             randomness: OsRng.gen(),
         });
 
-        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>PegOutTxSignatureCIPrefix)
+        <span class="kw">let </span>items = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>PegOutTxSignatureCIPrefix)
             .<span class="kw">await
             </span>.map(|res| {
                 <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;FB error&quot;</span>);
@@ -2293,8 +2290,15 @@
             })
             .chain(stream::once(<span class="kw">async </span>{ round_ci }))
             .collect::&lt;Vec&lt;WalletConsensusItem&gt;&gt;()
-            .<span class="kw">await
-    </span>}
+            .<span class="kw">await</span>;
+
+        <span class="comment">// We force new epochs only if height changed, or we have peg-outs (more than just round_ci item)
+        </span><span class="kw">if </span>last_consensus_height &lt; proposed_height || <span class="number">1 </span>&lt; items.len() {
+            ConsensusProposal::Trigger(items)
+        } <span class="kw">else </span>{
+            ConsensusProposal::Contribute(items)
+        }
+    }
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,

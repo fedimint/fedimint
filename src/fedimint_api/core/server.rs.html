@@ -424,7 +424,9 @@
 };
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<span class="kw">use </span><span class="kw">crate</span>::module::{ApiEndpoint, InputMeta, ModuleError, ServerModule, TransactionItemAmount};
+<span class="kw">use </span><span class="kw">crate</span>::module::{
+    ApiEndpoint, ConsensusProposal, InputMeta, ModuleError, ServerModule, TransactionItemAmount,
+};
 
 <span class="kw">pub trait </span>IVerificationCache: Debug {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
@@ -469,7 +471,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; Vec&lt;DynModuleConsensusItem&gt;;
+    ) -&gt; ConsensusProposal&lt;DynModuleConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The database transaction will be
@@ -602,12 +604,10 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; Vec&lt;DynModuleConsensusItem&gt; {
+    ) -&gt; ConsensusProposal&lt;DynModuleConsensusItem&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::consensus_proposal(<span class="self">self</span>, dbtx)
             .<span class="kw">await
-            </span>.into_iter()
-            .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
-            .collect()
+            </span>.map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
     }
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus

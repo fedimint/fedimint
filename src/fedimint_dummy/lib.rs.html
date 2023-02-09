@@ -318,6 +318,7 @@
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt;
@@ -337,7 +338,8 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ConsensusProposal, InputMeta, ModuleError, ModuleGen,
+    TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
@@ -531,8 +533,8 @@
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Vec&lt;DummyConsensusItem&gt; {
-        <span class="macro">vec!</span>[]
+    ) -&gt; ConsensusProposal&lt;DummyConsensusItem&gt; {
+        ConsensusProposal::empty()
     }
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
