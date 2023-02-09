@@ -77,6 +77,26 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
@@ -130,8 +150,8 @@
         <span class="kw">let </span>(amt, denom) = s.split_at(i);
         fedimint_api::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
     } <span class="kw">else </span>{
-        <span class="comment">//default to satoshi
-        </span>fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+        <span class="comment">//default to millisatoshi
+        </span>fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
     }
 }
 
@@ -155,6 +175,26 @@
         Network::Testnet =&gt; Currency::BitcoinTestnet,
         Network::Signet =&gt; Currency::Signet,
     }
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>sanity_check_parse_fedimint_amount() {
+    <span class="macro">assert_eq!</span>(
+        parse_fedimint_amount(<span class="string">&quot;34&quot;</span>).unwrap(),
+        fedimint_api::Amount { msats: <span class="number">34 </span>}
+    );
+    <span class="macro">assert_eq!</span>(
+        parse_fedimint_amount(<span class="string">&quot;34msat&quot;</span>).unwrap(),
+        fedimint_api::Amount { msats: <span class="number">34 </span>}
+    );
+    <span class="macro">assert_eq!</span>(
+        parse_fedimint_amount(<span class="string">&quot;34sat&quot;</span>).unwrap(),
+        fedimint_api::Amount { msats: <span class="number">34 </span>* <span class="number">1000 </span>}
+    );
+    <span class="macro">assert_eq!</span>(
+        parse_fedimint_amount(<span class="string">&quot;34satoshi&quot;</span>).unwrap(),
+        fedimint_api::Amount { msats: <span class="number">34 </span>* <span class="number">1000 </span>}
+    );
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (ef934d9b6 2023-02-08)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
