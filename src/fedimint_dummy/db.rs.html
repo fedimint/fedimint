@@ -27,22 +27,15 @@
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
 <a href="#29" id="29">29</a>
-<a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::impl_db_prefix_const;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
-    <span class="comment">// TODO: Make sure this does not collide with other modules
-    </span>Example = <span class="number">0x80</span>,
+    Example = <span class="number">0x80</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -54,19 +47,14 @@
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
 </span><span class="kw">pub struct </span>ExampleKey(<span class="kw">pub </span>u64);
 
-<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ExampleKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Example <span class="kw">as </span>u8;
-    <span class="kw">type </span>Key = <span class="self">Self</span>;
-    <span class="kw">type </span>Value = ();
-}
-
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ExampleKeyPrefix;
 
-<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ExampleKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Example <span class="kw">as </span>u8;
-    <span class="kw">type </span>Key = ExampleKey;
-    <span class="kw">type </span>Value = ();
-}
+<span class="macro">impl_db_prefix_const!</span>(
+    key = ExampleKey,
+    value = (),
+    prefix = DbKeyPrefix::Example,
+    key_prefix = ExampleKeyPrefix
+);
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_dummy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (ef934d9b6 2023-02-08)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

@@ -1502,6 +1502,24 @@
 <a href="#1502" id="1502">1502</a>
 <a href="#1503" id="1503">1503</a>
 <a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::pin::Pin;
@@ -2184,6 +2202,40 @@
     }
 }
 
+<span class="doccomment">/// This is a helper macro that generates the implementations of
+/// DatabaseKeyPrefixConst necessary for reading/writing to the
+/// database and fetching by prefix.
+///
+/// - `key`: This is the type of struct that will be used as the key into the database.
+/// - `value`: This is the type of struct that will be used as the value into the database.
+/// - `prefix`: Enum expression that is represented as a `u8` that is the prefix prepended to this key.
+/// - `key_prefix`: Optional type of struct that can be passed multiple times if necessary. These will be used
+/// as the key prefix when querying the database via `find_by_prefix`.
+///
+/// Examples:
+///
+/// `impl_db_prefix_const!(key = TestKey, value = TestVal, prefix = TestDbKeyPrefix::Test);`
+///
+/// `impl_db_prefix_const!(key = AltTestKey, value = TestVal, prefix = TestDbKeyPrefix::AltTest, key_prefix = AltDbPrefixTestPrefix);`
+</span><span class="attr">#[macro_export]
+</span><span class="macro">macro_rules! </span>impl_db_prefix_const {
+    (key = <span class="macro-nonterminal">$key</span>:ty, value = <span class="macro-nonterminal">$val</span>:ty, prefix = <span class="macro-nonterminal">$prefix</span>:expr $(, key_prefix = <span class="macro-nonterminal">$prefix_ty</span>:ty)* $(,)<span class="question-mark">?</span>) =&gt; {
+        <span class="kw">impl </span>fedimint_api::db::DatabaseKeyPrefixConst <span class="kw">for </span><span class="macro-nonterminal">$key </span>{
+            <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$prefix </span><span class="kw">as </span>u8;
+            <span class="kw">type </span>Key = <span class="self">Self</span>;
+            <span class="kw">type </span>Value = <span class="macro-nonterminal">$val</span>;
+        }
+
+        $(
+            <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseKeyPrefixConst </span><span class="kw">for </span><span class="macro-nonterminal">$prefix_ty </span>{
+                <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$prefix </span><span class="kw">as </span>u8;
+                <span class="kw">type </span>Key = <span class="macro-nonterminal">$key</span>;
+                <span class="kw">type </span>Value = <span class="macro-nonterminal">$val</span>;
+            }
+        )*
+    };
+}
+
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>DecodingError {
     <span class="attr">#[error(<span class="string">&quot;Key had a wrong prefix, expected {expected} but got {found}&quot;</span>)]
@@ -2263,7 +2315,6 @@
     <span class="kw">use </span>futures::StreamExt;
 
     <span class="kw">use </span><span class="kw">super</span>::Database;
-    <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseKeyPrefixConst;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
     <span class="attr">#[repr(u8)]
@@ -2277,56 +2328,41 @@
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
     </span><span class="kw">struct </span>TestKey(u64);
 
-    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>TestKey {
-        <span class="kw">const </span>DB_PREFIX: u8 = TestDbKeyPrefix::Test <span class="kw">as </span>u8;
-        <span class="kw">type </span>Key = <span class="self">Self</span>;
-        <span class="kw">type </span>Value = TestVal;
-    }
-
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
     </span><span class="kw">struct </span>DbPrefixTestPrefix;
 
-    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>DbPrefixTestPrefix {
-        <span class="kw">const </span>DB_PREFIX: u8 = TestDbKeyPrefix::Test <span class="kw">as </span>u8;
-        <span class="kw">type </span>Key = TestKey;
-        <span class="kw">type </span>Value = TestVal;
-    }
+    <span class="macro">impl_db_prefix_const!</span>(
+        key = TestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::Test,
+        key_prefix = DbPrefixTestPrefix
+    );
 
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
     </span><span class="kw">struct </span>AltTestKey(u64);
 
-    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AltTestKey {
-        <span class="kw">const </span>DB_PREFIX: u8 = TestDbKeyPrefix::AltTest <span class="kw">as </span>u8;
-        <span class="kw">type </span>Key = <span class="self">Self</span>;
-        <span class="kw">type </span>Value = TestVal;
-    }
-
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
     </span><span class="kw">struct </span>AltDbPrefixTestPrefix;
 
-    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AltDbPrefixTestPrefix {
-        <span class="kw">const </span>DB_PREFIX: u8 = TestDbKeyPrefix::AltTest <span class="kw">as </span>u8;
-        <span class="kw">type </span>Key = AltTestKey;
-        <span class="kw">type </span>Value = TestVal;
-    }
+    <span class="macro">impl_db_prefix_const!</span>(
+        key = AltTestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::AltTest,
+        key_prefix = AltDbPrefixTestPrefix
+    );
 
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
     </span><span class="kw">struct </span>PercentTestKey(u64);
 
-    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PercentTestKey {
-        <span class="kw">const </span>DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey <span class="kw">as </span>u8;
-        <span class="kw">type </span>Key = <span class="self">Self</span>;
-        <span class="kw">type </span>Value = TestVal;
-    }
-
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
     </span><span class="kw">struct </span>PercentPrefixTestPrefix;
 
-    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PercentPrefixTestPrefix {
-        <span class="kw">const </span>DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey <span class="kw">as </span>u8;
-        <span class="kw">type </span>Key = PercentTestKey;
-        <span class="kw">type </span>Value = TestVal;
-    }
+    <span class="macro">impl_db_prefix_const!</span>(
+        key = PercentTestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::PercentTestKey,
+        key_prefix = PercentPrefixTestPrefix
+    );
 
     <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     </span><span class="kw">struct </span>TestVal(u64);
