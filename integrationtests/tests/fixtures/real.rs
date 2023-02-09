@@ -240,7 +240,10 @@ impl BitcoinTest for RealBitcoinTestLocked {
     }
 
     async fn mine_blocks(&self, block_num: u64) {
-        self.inner.mine_blocks(block_num).await
+        let pre = self.inner.client.get_block_count().unwrap();
+        self.inner.mine_blocks(block_num).await;
+        let post = self.inner.client.get_block_count().unwrap();
+        assert_eq!(post - pre, block_num);
     }
 
     async fn prepare_funding_wallet(&self) {
