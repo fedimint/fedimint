@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use fedimint_api::Amount;
 use lightning_invoice::Invoice;
 
+pub mod fixtures;
+
 #[async_trait]
 pub trait LightningTest {
     /// Creates invoice from a non-gateway LN node

@@ -13,7 +13,6 @@ use std::time::{Duration, SystemTime};
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
-use fake::FakeLightningTest;
 use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
@@ -51,7 +50,7 @@ use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_testing::{
     btc::{fixtures::FakeBitcoinTest, BitcoinTest},
-    ln::LightningTest,
+    ln::{fixtures::FakeLightningTest, LightningTest},
 };
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
@@ -89,7 +88,6 @@ use url::Url;
 use crate::fixtures::utils::LnRpcAdapter;
 use crate::ConsensusItem;
 
-mod fake;
 mod real;
 mod utils;
 

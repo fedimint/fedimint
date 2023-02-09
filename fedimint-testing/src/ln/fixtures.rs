@@ -1,5 +1,7 @@
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use anyhow::Error;
 use async_trait::async_trait;
@@ -22,7 +24,7 @@ use ln_gateway::{
 use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 
-use crate::fixtures::LightningTest;
+use super::LightningTest;
 
 #[derive(Clone, Debug)]
 pub struct FakeLightningTest {
