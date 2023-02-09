@@ -33,8 +33,9 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, InputMeta, IntoModuleError,
-    ModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -252,6 +253,10 @@ impl ModuleGen for LightningGen {
         LightningDecoder
     }
 
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -440,6 +445,13 @@ impl ServerModule for Lightning {
 
     fn decoder(&self) -> Self::Decoder {
         LightningDecoder
+    }
+
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {

@@ -21,8 +21,9 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, InputMeta, IntoModuleError,
-    ModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -149,6 +150,10 @@ impl ModuleGen for MintGen {
 
     fn decoder(&self) -> MintDecoder {
         MintDecoder
+    }
+
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
     }
 
     async fn init(
@@ -446,6 +451,13 @@ impl ServerModule for Mint {
         if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
         }
+    }
+
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
     }
 
     async fn consensus_proposal(

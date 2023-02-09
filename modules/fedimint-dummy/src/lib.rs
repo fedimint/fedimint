@@ -17,8 +17,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, InputMeta, ModuleError, ModuleGen,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -58,6 +58,10 @@ impl ModuleGen for DummyConfigGenerator {
 
     fn decoder(&self) -> DummyDecoder {
         DummyDecoder
+    }
+
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
     }
 
     async fn init(
@@ -203,6 +207,13 @@ impl ServerModule for Dummy {
 
     fn decoder(&self) -> Self::Decoder {
         DummyDecoder
+    }
+
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
     }
 
     async fn await_consensus_proposal(&self, _dbtx: &mut DatabaseTransaction<'_>) {
