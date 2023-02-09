@@ -648,6 +648,90 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -915,6 +999,8 @@
 </span><span class="kw">pub trait </span>IModuleGen: Debug {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder;
 
+    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; Vec&lt;ModuleConsensusVersion&gt;;
+
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
 
     <span class="doccomment">/// Initialize the [`DynServerModule`] instance from its config
@@ -961,6 +1047,70 @@
     </span><span class="kw">pub </span>DynModuleGen(Arc&lt;IModuleGen&gt;)
 );
 
+<span class="doccomment">/// Consensus version of a core server
+///
+/// Breaking changes in the Fedimint&#39;s core consensus require incrementing it.
+///
+/// See [`ModuleConsensusVersion`] for more details on how it interacts with
+/// module&#39;s consensus.
+</span><span class="attr">#[derive(Debug, Copy, Clone)]
+</span><span class="kw">pub struct </span>CoreConsensusVersion(<span class="kw">pub </span>u32);
+
+<span class="doccomment">/// Consensus version of a specific module instance
+///
+/// Any breaking change to the module&#39;s consensus rules require incrementing it.
+///
+/// A module instance can run only in one consensus version, which must be the
+/// same accross all corresponding instances on other nodes of the federation.
+///
+/// When [`CoreConsensusVersion`] changes, this can but is not requires to be
+/// a breaking change for each module&#39;s [`ModuleConsensusVersion`].
+///
+/// Incrementing the module&#39;s consensus version can be considered an in-place
+/// upgrade path, similar to a blockchain hard-fork consensus upgrade.
+///
+/// As of time of writting this comment there are no plans to support any kind
+/// of &quot;soft-forks&quot; which mean a consensus minor version. As the set of federation
+/// member&#39;s is closed and limited, it is always preferable to synchronize
+/// upgrade and avoid cross-version incompatibilities.
+///
+/// For many modules it might be preferable to implement a new [`ModuleKind`]
+/// &quot;versions&quot; (to be implemented at the time of writting this comment), and
+/// by running two instances of the module at the same time (each of different
+/// `ModuleKind` version), allow users to slowly migrate to a new one.
+/// This avoids complex and error-prone server-side consensus-migration logic.
+</span><span class="attr">#[derive(Debug, Copy, Clone)]
+</span><span class="kw">pub struct </span>ModuleConsensusVersion(<span class="kw">pub </span>u32);
+
+<span class="doccomment">/// Api version supported by a core server or a client/server module at a given [`ModuleConsensusVersion`]
+///
+/// Changing [`ModuleConsensusVersion`] implies resetting the api versioning.
+///
+/// For a client and server to be able to communicate with each other:
+///
+/// * The client needs API version support for the [`ModuleConsensusVersion`] that the server is currently
+///   running with.
+/// * Within that [`ModuleConsensusVersion`] during handshake negotation process client and server must find
+///   at least one `Api::major` version where client&#39;s `minor` is lower or equal server&#39;s `major` version.
+///
+/// A practical module implementation needs to implement large range of version backward compatibility
+/// on both client and server side to accomodate end user client devices receiving updates at a
+/// pace hard to control, and technical and coordination challanges of upgrading servers.
+</span><span class="attr">#[derive(Debug, Copy, Clone)]
+</span><span class="kw">pub struct </span>ApiVersion {
+    <span class="doccomment">/// Major API version
+    ///
+    /// Each time [`ModuleConsensusVersion`] is incremented, this number (and `minor` number as well) should be reset to `0`.
+    ///
+    /// Should be incremented each time the API was changed in a backward-incompatible ways (while resetting `minor` to `0`).
+    </span><span class="kw">pub </span>major: u32,
+    <span class="doccomment">/// Minor API version
+    ///
+    /// * For clients this means *minimum* supported minor version of the `major` version required by client implementation
+    /// * For servers this means *maximum* supported minor version of the `major` version implemented by the server implementation
+    </span><span class="kw">pub </span>minor: u32,
+}
+
 <span class="doccomment">/// Module Generation trait with associated types
 ///
 /// Needs to be implemented by module generation type
@@ -974,6 +1124,17 @@
     <span class="kw">type </span>Decoder: Decoder;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
+
+    <span class="doccomment">/// Version of the module consensus supported by this implementation given a certain
+    /// [`CoreConsensusVersion`].
+    ///
+    /// Refer to [`ModuleConsensusVersion`] for more information about versioning.
+    ///
+    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can potentially
+    /// implement multiple versions of the consensus, and depending on the config module instance
+    /// config, instantiate the desired one. This method should expose all the available
+    /// versions, purely for information, setup UI and sanity checking purposes.
+    </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion];
 
     <span class="doccomment">/// Initialize the [`DynServerModule`] instance from its config
     </span><span class="kw">async fn </span>init(
@@ -1025,6 +1186,10 @@
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::KIND
+    }
+
+    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; Vec&lt;ModuleConsensusVersion&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::versions(<span class="self">self</span>, core).to_vec()
     }
 
     <span class="kw">async fn </span>init(
@@ -1162,6 +1327,9 @@
     }
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
+
+    <span class="doccomment">/// Module consensus version this module is running with and the API versions it supports in it
+    </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleConsensusVersion, <span class="kw-2">&amp;</span>[ApiVersion]);
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
     </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);

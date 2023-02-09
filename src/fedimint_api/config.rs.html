@@ -1152,7 +1152,7 @@
     /// TODO: In the future, we should have a typed and erased versions of
     /// module construction traits, and then we can try with and
     /// without the workaround to have both cases working.
-    /// See https://github.com/fedimint/fedimint/issues/1303
+    /// See &lt;https://github.com/fedimint/fedimint/issues/1303&gt;
     </span><span class="kw">pub fn </span>with_fixed_empty_value(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="kw">if let </span>serde_json::Value::Object(<span class="kw-2">ref </span>o) = <span class="self">self</span>.value {
             <span class="kw">if </span>o.is_empty() {
