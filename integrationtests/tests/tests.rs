@@ -117,7 +117,7 @@ async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
         user.peg_out(1000, &address2).await;
         info!(target: LOG_TEST, ?fees, "Tx fee");
 
-        fed.await_consensus_epochs(2).await.unwrap();
+        fed.run_consensus_epochs(2).await;
         fed.broadcast_transactions().await;
 
         let received1 = bitcoin.mine_block_and_get_received(&address1).await;
@@ -132,7 +132,7 @@ async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
             sats(5000 - 2 * 1000) - fees - fees
         );
         user.client.reissue_pending_notes(rng()).await.unwrap();
-        fed.await_consensus_epochs(2).await.unwrap(); // reissue the notes from the tx that failed
+        fed.run_consensus_epochs(2).await; // reissue the notes from the tx that failed
         user.client.fetch_all_notes().await.unwrap();
 
         assert_eq!(user.total_notes().await, sats(5000 - 1000) - fees);
@@ -160,6 +160,10 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_must_wait_for_available_utxos() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
+        // at least one epoch needed to estabilish fees
+        bitcoin.prepare_funding_wallet().await;
+        fed.run_consensus_epochs(1).await;
+
         // This test has many assumptions about bitcoin L1 blocks
         // and FM epochs, so we just lock the node
         let bitcoin = bitcoin.lock_exclusive().await;
@@ -294,7 +298,7 @@ async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Result<()> {
 
     // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
     for maybe_cancelled in join_all(vec![
-        Either::Left(fed.subset_peers(&[1, 2]).await_consensus_epochs(1)),
+        Either::Left(fed.subset_peers(&[1, 2]).run_consensus_epochs_wait(1)),
         Either::Right(
             fed.subset_peers(&[0, 3])
                 .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
@@ -320,10 +324,7 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
         user.peg_out(1000, &peg_out_address).await;
         // Ensure peer 0 who received the peg out request is in the next epoch
         fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
-        fed.subset_peers(&[3])
-            .await_consensus_epochs(1)
-            .await
-            .unwrap();
+        fed.subset_peers(&[3]).run_consensus_epochs(1).await;
 
         fed.subset_peers(&[3]).override_proposal(vec![]);
         drop_peer_3_during_epoch(&fed).await.unwrap();
@@ -342,6 +343,8 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
     test(4, |fed, user, bitcoin, gateway, _| async move {
+        let bitcoin = bitcoin.lock_exclusive().await;
+
         let payment_amount = sats(2000);
         fed.mine_and_mint(&gateway.user, &*bitcoin, sats(3000))
             .await;
@@ -351,7 +354,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .generate_unsigned_invoice_and_submit(payment_amount, "".into(), &mut rng(), None)
             .await
             .unwrap();
-        fed.await_consensus_epochs(1).await.unwrap();
+        fed.run_consensus_epochs(1).await;
 
         let invoice = user
             .client
@@ -452,7 +455,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
                 .generate_unsigned_invoice_and_submit(sats(1000), "".into(), &mut rng(), None)
                 .await
                 .unwrap();
-            fed.await_consensus_epochs(1).await.unwrap();
+            fed.run_consensus_epochs(1).await;
 
             receiving_user
                 .client
@@ -499,7 +502,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
                 .unwrap();
 
             // buy preimage from offer, decrypt
-            fed.await_consensus_epochs(2).await.unwrap();
+            fed.run_consensus_epochs(2).await;
 
             gateway
                 .actor
@@ -509,7 +512,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         };
 
         //  claim, mint the notes
-        fed.await_consensus_epochs(2).await.unwrap();
+        fed.run_consensus_epochs(2).await;
 
         debug!("Gateway paid invoice on behalf of Sending User");
 
@@ -614,7 +617,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
             .generate_unsigned_invoice_and_submit(sats(1000), "".into(), &mut rng(), None)
             .await
             .unwrap();
-        fed.await_consensus_epochs(1).await.unwrap();
+        fed.run_consensus_epochs(1).await;
 
         let confirmed_invoice = receiving_client
             .client
@@ -659,7 +662,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
                 .unwrap();
 
             // buy preimage from offer, decrypt
-            fed.await_consensus_epochs(1).await.unwrap();
+            fed.run_consensus_epochs(1).await;
 
             gateway
                 .actor
@@ -705,7 +708,7 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
             .generate_unsigned_invoice_and_submit(preimage_price, "".into(), &mut rng(), None)
             .await
             .unwrap();
-        fed.await_consensus_epochs(1).await.unwrap();
+        fed.run_consensus_epochs(1).await;
 
         let invoice = user
             .client
@@ -906,15 +909,23 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_tx_submitted() -> Result<()> {
     test(2, |fed, user_send, bitcoin, _, _| async move {
+        fed.run_consensus_epochs(1).await;
+
+        // to assert we have no pending epochs, we need to make sure
+        // height change can't introduce any randomly
         let bitcoin = bitcoin.lock_exclusive().await;
         let user_receive = user_send.new_user_with_peers(peers(&[0])).await;
 
         fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
         let ecash = fed.spend_ecash(&user_send, sats(5000)).await;
 
-        assert!(!fed.has_pending_epoch().await);
+        assert!(
+            !fed.has_pending_epoch().await,
+            "Contains pending epochs with {:?}",
+            fed.get_pending_epoch_proposals().await
+        );
         user_receive.client.reissue(ecash, rng()).await.unwrap();
-        fed.await_consensus_epochs(2).await.unwrap();
+        fed.run_consensus_epochs(2).await;
         assert!(!fed.has_pending_epoch().await);
 
         user_receive.assert_total_notes(sats(5000)).await;
@@ -926,30 +937,38 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_new_block() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
+        // to assert we have no pending epochs, we need to make sure
+        // height change didn't couldn't introduce any
         let bitcoin = bitcoin.lock_exclusive().await;
 
-        // make the mint establish at least one block height record
+        // make the mint estabilish at least one block height record
         bitcoin.mine_blocks(1).await;
-        fed.await_consensus_epochs(1).await.unwrap();
+        fed.run_consensus_epochs(1).await;
 
         let peg_in_address = user.client.get_new_pegin_address(rng()).await;
         let (proof, tx) = bitcoin
             .send_and_mine_block(&peg_in_address, Amount::from_sat(1000))
             .await;
-        fed.await_consensus_epochs(1).await.unwrap();
+        fed.run_consensus_epochs(1).await;
 
-        assert!(!fed.has_pending_epoch().await);
+        assert!(
+            !fed.has_pending_epoch().await,
+            "Contains pending epochs with {:?}",
+            fed.get_pending_epoch_proposals().await
+        );
         bitcoin
             .mine_blocks(fed.wallet.consensus.finality_delay as u64)
             .await;
-        fed.await_consensus_epochs(1).await.unwrap();
+        fed.run_consensus_epochs(1).await;
         assert!(!fed.has_pending_epoch().await);
 
         user.client
             .peg_in(proof.clone(), tx.clone(), rng())
             .await
             .unwrap();
-        fed.await_consensus_epochs(2).await.unwrap();
+
+        fed.run_consensus_epochs(2).await;
+
         user.assert_total_notes(sats(1000)).await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
@@ -1030,11 +1049,11 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         // Run until peer 3 has rejoined
         join_all(vec![
             Either::Left(async {
-                online_peers.await_consensus_epochs(11).await.unwrap();
+                online_peers.run_consensus_epochs_wait(11).await.unwrap();
             }),
             Either::Right(async {
                 peer3.rejoin_consensus().await.unwrap();
-                peer3.await_consensus_epochs(1).await.unwrap();
+                peer3.run_consensus_epochs_wait(1).await.unwrap();
             }),
         ])
         .await;
@@ -1058,7 +1077,7 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
         bitcoin.mine_blocks(110).await;
         fed.run_consensus_epochs(1).await;
         fed.rejoin_consensus().await.unwrap();
-        fed.await_consensus_epochs(1).await.unwrap();
+        fed.run_consensus_epochs_wait(1).await.unwrap();
         bitcoin.mine_blocks(100).await;
         fed.run_consensus_epochs(1).await;
     })

@@ -56,10 +56,10 @@ use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::Wallet;
-use fedimint_wallet::WalletConsensusItem;
 use fedimint_wallet::{SpendableUTXO, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
+use futures::FutureExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
@@ -728,6 +728,8 @@ impl FederationTest {
             let proposal = ConsensusProposal {
                 items,
                 drop_peers: vec![],
+                // if we force it, we want to trigger an epoch
+                force_new_epoch: true,
             };
 
             server.borrow_mut().override_proposal = Some(proposal.clone());
@@ -790,7 +792,7 @@ impl FederationTest {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
         }
         user.client.remint_ecash(amount, rng()).await.unwrap();
-        self.await_consensus_epochs(2).await.unwrap();
+        self.run_consensus_epochs(2).await;
         user.client.remint_ecash_await(amount).await.unwrap()
     }
 
@@ -973,22 +975,26 @@ impl FederationTest {
         }
     }
 
-    /// Has every federation node send new consensus proposals then process the outcome.
-    /// If the epoch has empty proposals (no new information) then panic
+    /// Runs `n` epochs in the federation (each guardian node)
+    ///
+    /// Call in tests when new epoch conditions are already
+    /// in place, to trigger new epoch generation.
+    ///
+    /// Wallet chain height can trigger epoch randomly, but since
+    /// they will be processed along-side any other epochs you
+    /// already expect, nothing is being done about it. It should
+    /// not matter, but is worth pointing out.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there's an empty proposal.
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
-            let mut nonempty_proposals = 0;
-            for server in &self.servers {
-                if !self.empty_proposal(&mut server.borrow_mut().fedimint).await {
-                    nonempty_proposals += 1;
-                }
-            }
-
-            if nonempty_proposals == 0 {
+            if !self.has_pending_epoch().await {
                 panic!("Empty proposals, fed might wait forever");
             }
-            self.await_consensus_epochs(1).await.unwrap();
+            self.run_consensus_epochs_wait(1).await.unwrap();
         }
     }
 
@@ -998,13 +1004,26 @@ impl FederationTest {
             server.borrow_mut().fedimint.run_empty_epochs = epochs as u64;
         }
 
-        self.await_consensus_epochs(epochs).await.unwrap();
+        self.run_consensus_epochs_wait(epochs).await.unwrap();
     }
 
-    /// Runs a consensus epoch
+    /// Process n consensus epoch. Wait for events triggering them in case of empty proposals.
+    ///
     /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
-    /// it will wait forever
-    pub async fn await_consensus_epochs(&self, epochs: usize) -> anyhow::Result<()> {
+    /// it will wait forever.
+    ///
+    /// When conditions triggering proposals are already in place, calling this functions has
+    /// the same effect as calling [`run_consensus_epochs`], as blocking conditions can't
+    /// happen. However in that situation calling [`run_consensus_epochs`] is preferable, as
+    /// it will snappily panic, instead of handing in case of bugs.
+    ///
+    /// When called concurrently with actions triggering new epochs, care must be taken
+    /// as random epochs due to wallet module height changes can be triggered randomly,
+    /// making the use of this function flaky. Typically `bitcoin.lock_exclusive()` should
+    /// be called to avoid flakiness, but that makes the whole test run serially, which is
+    /// very undesierable. Prefer structuring your test to not require that (so you can use
+    /// `run_consensus_wait` instead).
+    pub async fn run_consensus_epochs_wait(&self, epochs: usize) -> anyhow::Result<()> {
         for _ in 0..(epochs) {
             for maybe_cancelled in join_all(
                 self.servers
@@ -1020,60 +1039,52 @@ impl FederationTest {
         Ok(())
     }
 
+    /// Does any of the modules return consensus proposal that forces a new epoch
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn has_pending_epoch(&self) -> bool {
         for server in &self.servers {
-            if server
-                .borrow_mut()
-                .fedimint
-                .consensus
-                .get_consensus_proposal()
-                .await
-                .items
-                .is_empty()
+            let mut server = server.borrow_mut();
+            let fedimint_server = &mut server.fedimint;
+
+            // Pending transactions will trigger an epoch
+            if let Some(Some(_)) = Pin::new(&mut fedimint_server.tx_receiver)
+                .peek()
+                .now_or_never()
             {
+                return true;
+            }
+
+            let consensus_proposal = fedimint_server.consensus.get_consensus_proposal().await;
+            if consensus_proposal.force_new_epoch {
                 return true;
             }
         }
         false
     }
 
-    /// Returns true if the fed would produce an empty epoch proposal (no new information)
-    async fn empty_proposal(&self, server: &mut FedimintServer) -> bool {
-        // Hack to avoid saying the proposal is empty if there are tx in the channel
-        if let Ok(tx) = server.tx_receiver.get_mut().as_mut().try_recv() {
-            server.consensus.tx_sender.send(tx).await.expect("Can send");
-            return false;
-        }
-
-        let wallet = server
-            .consensus
-            .modules
-            .get_expect(self.wallet_id)
-            .as_any()
-            .downcast_ref::<Wallet>()
-            .unwrap();
-        let mut dbtx = block_on(server.consensus.db.begin_transaction());
-        let mut module_dbtx = dbtx.with_module_prefix(self.wallet_id);
-        let height = block_on(wallet.consensus_height(&mut module_dbtx)).unwrap_or(0);
-        let proposal = block_on(server.consensus.get_consensus_proposal());
-
-        for item in proposal.items {
-            match item {
-                // ignore items that get automatically generated
-                ConsensusItem::Module(mci) => match mci.as_any().downcast_ref() {
-                    Some(WalletConsensusItem::RoundConsensus(rci))
-                        if rci.block_height == height =>
-                    {
-                        continue
-                    }
-                    _ => return false,
-                },
-                ConsensusItem::EpochOutcomeSignatureShare(_) => continue,
-                _ => return false,
+    /// Get the consensus items proposed by all the peers
+    ///
+    /// Notably, unlike [`has_pending_epoch`] this does not take into account
+    /// pending transactions or ignore consensus items that do not trigger
+    /// epoch on its own.
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn get_pending_epoch_proposals(&self) -> Vec<ConsensusItem> {
+        let mut proposals = vec![];
+        for server in &self.servers {
+            for item in server
+                .borrow_mut()
+                .fedimint
+                .consensus
+                .get_consensus_proposal()
+                .await
+                .items
+            {
+                if !proposals.contains(&item) {
+                    proposals.push(item);
+                }
             }
         }
-        true
+        proposals
     }
 
     /// Runs consensus, but delay peers and only wait for one to complete.

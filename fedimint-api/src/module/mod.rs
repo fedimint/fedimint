@@ -440,6 +440,66 @@ where
     }
 }
 
+pub enum ConsensusProposal<CI> {
+    /// Trigger new epoch immediately including these consensus items
+    Trigger(Vec<CI>),
+    /// Contribute consensus items if other module triggers an epoch
+    // TODO: turn into `(Vec<CI>, Update)` where `Updates` is a future
+    // that will return a new `ConsensusProposal` when updates are available.
+    // This wake we can get rid of `await_consensus_proposal`
+    Contribute(Vec<CI>),
+}
+
+impl<CI> ConsensusProposal<CI> {
+    pub fn empty() -> Self {
+        ConsensusProposal::Contribute(vec![])
+    }
+
+    /// Trigger new epoch if contains any elements, otherwise contribute nothing.
+    pub fn new_auto_trigger(ci: Vec<CI>) -> Self {
+        if ci.is_empty() {
+            Self::Contribute(vec![])
+        } else {
+            Self::Trigger(ci)
+        }
+    }
+
+    pub fn map<F, CIO>(self, f: F) -> ConsensusProposal<CIO>
+    where
+        F: FnMut(CI) -> CIO,
+    {
+        match self {
+            ConsensusProposal::Trigger(items) => {
+                ConsensusProposal::Trigger(items.into_iter().map(f).collect())
+            }
+            ConsensusProposal::Contribute(items) => {
+                ConsensusProposal::Contribute(items.into_iter().map(f).collect())
+            }
+        }
+    }
+
+    pub fn forces_new_epoch(&self) -> bool {
+        match self {
+            ConsensusProposal::Trigger(_) => true,
+            ConsensusProposal::Contribute(_) => false,
+        }
+    }
+
+    pub fn items(&self) -> &[CI] {
+        match self {
+            ConsensusProposal::Trigger(items) => items,
+            ConsensusProposal::Contribute(items) => items,
+        }
+    }
+
+    pub fn into_items(self) -> Vec<CI> {
+        match self {
+            ConsensusProposal::Trigger(items) => items,
+            ConsensusProposal::Contribute(items) => items,
+        }
+    }
+}
+
 #[async_trait]
 pub trait ServerModule: Debug + Sized {
     type Gen: ModuleGen;
@@ -460,7 +520,7 @@ pub trait ServerModule: Debug + Sized {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<<Self::Decoder as Decoder>::ConsensusItem>;
+    ) -> ConsensusProposal<<Self::Decoder as Decoder>::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The database transaction will be

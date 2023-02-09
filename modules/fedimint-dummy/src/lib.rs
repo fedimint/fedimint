@@ -17,7 +17,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ConsensusProposal, InputMeta, ModuleError, ModuleGen,
+    TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -211,8 +212,8 @@ impl ServerModule for Dummy {
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<DummyConsensusItem> {
-        vec![]
+    ) -> ConsensusProposal<DummyConsensusItem> {
+        ConsensusProposal::empty()
     }
 
     async fn begin_consensus_epoch<'a, 'b>(

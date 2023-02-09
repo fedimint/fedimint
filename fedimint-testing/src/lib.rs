@@ -156,6 +156,7 @@ where
                             .with_module_prefix(*module_instance_id),
                     )
                     .await
+                    .into_items()
                     .into_iter()
                     .map(|ci| (*id, ci)),
             );

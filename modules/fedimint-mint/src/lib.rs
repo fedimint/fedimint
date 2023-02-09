@@ -21,8 +21,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, InputMeta, IntoModuleError,
+    ModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -443,7 +443,7 @@ impl ServerModule for Mint {
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        if self.consensus_proposal(dbtx).await.is_empty() {
+        if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
         }
     }
@@ -451,18 +451,20 @@ impl ServerModule for Mint {
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<MintConsensusItem> {
-        dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
-            .await
-            .map(|res| {
-                let (key, signatures) = res.expect("DB error");
-                MintConsensusItem {
-                    out_point: key.out_point,
-                    signatures,
-                }
-            })
-            .collect::<Vec<MintConsensusItem>>()
-            .await
+    ) -> ConsensusProposal<MintConsensusItem> {
+        ConsensusProposal::new_auto_trigger(
+            dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
+                .await
+                .map(|res| {
+                    let (key, signatures) = res.expect("DB error");
+                    MintConsensusItem {
+                        out_point: key.out_point,
+                        signatures,
+                    }
+                })
+                .collect::<Vec<MintConsensusItem>>()
+                .await,
+        )
     }
 
     async fn begin_consensus_epoch<'a, 'b>(

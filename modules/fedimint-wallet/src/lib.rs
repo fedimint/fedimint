@@ -37,7 +37,7 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ConsensusProposal, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -492,23 +492,17 @@ impl ServerModule for Wallet {
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        let mut our_target_height = self.target_height().await;
-        let last_consensus_height = self.consensus_height(dbtx).await.unwrap_or(0);
-
-        if self.consensus_proposal(dbtx).await.len() == 1 {
-            while our_target_height <= last_consensus_height {
-                our_target_height = self.target_height().await;
-                // FIXME: remove after modularization finishes
-                #[cfg(not(target_family = "wasm"))]
-                sleep(Duration::from_millis(1000)).await;
-            }
+        while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
+            // FIXME: remove after modularization finishes
+            #[cfg(not(target_family = "wasm"))]
+            sleep(Duration::from_millis(1000)).await;
         }
     }
 
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<WalletConsensusItem> {
+    ) -> ConsensusProposal<WalletConsensusItem> {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
@@ -540,7 +534,8 @@ impl ServerModule for Wallet {
             randomness: OsRng.gen(),
         });
 
-        dbtx.find_by_prefix(&PegOutTxSignatureCIPrefix)
+        let items = dbtx
+            .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .await
             .map(|res| {
                 let (key, val) = res.expect("FB error");
@@ -551,7 +546,14 @@ impl ServerModule for Wallet {
             })
             .chain(stream::once(async { round_ci }))
             .collect::<Vec<WalletConsensusItem>>()
-            .await
+            .await;
+
+        // We force new epochs only if height changed, or we have peg-outs (more than just round_ci item)
+        if last_consensus_height < proposed_height || 1 < items.len() {
+            ConsensusProposal::Trigger(items)
+        } else {
+            ConsensusProposal::Contribute(items)
+        }
     }
 
     async fn begin_consensus_epoch<'a, 'b>(

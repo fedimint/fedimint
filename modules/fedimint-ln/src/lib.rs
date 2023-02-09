@@ -33,8 +33,8 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, InputMeta, IntoModuleError,
+    ModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -443,7 +443,7 @@ impl ServerModule for Lightning {
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        if self.consensus_proposal(dbtx).await.is_empty() {
+        if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
         }
     }
@@ -451,15 +451,17 @@ impl ServerModule for Lightning {
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<LightningConsensusItem> {
-        dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
-            .await
-            .map(|res| {
-                let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
-                LightningConsensusItem { contract_id, share }
-            })
-            .collect::<Vec<LightningConsensusItem>>()
-            .await
+    ) -> ConsensusProposal<LightningConsensusItem> {
+        ConsensusProposal::new_auto_trigger(
+            dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
+                .await
+                .map(|res| {
+                    let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
+                    LightningConsensusItem { contract_id, share }
+                })
+                .collect::<Vec<LightningConsensusItem>>()
+                .await,
+        )
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
