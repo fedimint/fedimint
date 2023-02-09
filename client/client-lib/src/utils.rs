@@ -51,8 +51,8 @@ pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_api::Amount, ParseAmoun
         let (amt, denom) = s.split_at(i);
         fedimint_api::Amount::from_str_in(amt, denom.parse()?)
     } else {
-        //default to satoshi
-        fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+        //default to millisatoshi
+        fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
     }
 }
 
@@ -76,4 +76,24 @@ pub fn network_to_currency(network: Network) -> Currency {
         Network::Testnet => Currency::BitcoinTestnet,
         Network::Signet => Currency::Signet,
     }
+}
+
+#[test]
+fn sanity_check_parse_fedimint_amount() {
+    assert_eq!(
+        parse_fedimint_amount("34").unwrap(),
+        fedimint_api::Amount { msats: 34 }
+    );
+    assert_eq!(
+        parse_fedimint_amount("34msat").unwrap(),
+        fedimint_api::Amount { msats: 34 }
+    );
+    assert_eq!(
+        parse_fedimint_amount("34sat").unwrap(),
+        fedimint_api::Amount { msats: 34 * 1000 }
+    );
+    assert_eq!(
+        parse_fedimint_amount("34satoshi").unwrap(),
+        fedimint_api::Amount { msats: 34 * 1000 }
+    );
 }
