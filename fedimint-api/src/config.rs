@@ -5,8 +5,8 @@ use std::io::Write;
 use std::ops::Mul;
 use std::str::FromStr;
 
-use anyhow::bail;
 use anyhow::format_err;
+use anyhow::{bail, ensure};
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::{FromHex, ToHex};
@@ -34,7 +34,6 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::Signature;
 use url::Url;
 
-use crate::cancellable::Cancellable;
 use crate::module::DynModuleGen;
 use crate::net::peers::MuxPeerConnections;
 use crate::PeerId;
@@ -614,26 +613,30 @@ impl<G: DkgGroup> Dkg<G> {
     }
 
     /// Runs a single step of the DKG algorithm, processing a `msg` from `peer`
-    pub fn step(&mut self, peer: PeerId, msg: DkgMessage<G>) -> DkgStep<G> {
+    pub fn step(&mut self, peer: PeerId, msg: DkgMessage<G>) -> anyhow::Result<DkgStep<G>> {
         match msg {
             DkgMessage::HashedCommit(hashed) => {
                 match self.hashed_commits.get(&peer) {
-                    Some(old) if *old != hashed => panic!("{peer} sent us two hashes!"),
+                    Some(old) if *old != hashed => {
+                        return Err(format_err!("{peer} sent us two hashes!"))
+                    }
                     _ => self.hashed_commits.insert(peer, hashed),
                 };
 
                 if self.hashed_commits.len() == self.peers.len() {
                     let our_commit = self.commitments[&self.our_id].clone();
-                    return self.broadcast(DkgMessage::Commit(our_commit));
+                    return Ok(self.broadcast(DkgMessage::Commit(our_commit)));
                 }
             }
             DkgMessage::Commit(commit) => {
                 let hash = self.hash(commit.clone());
-                assert_eq!(self.threshold, commit.len(), "wrong degree from {peer}");
-                assert_eq!(hash, self.hashed_commits[&peer], "wrong hash from {peer}");
+                ensure!(self.threshold == commit.len(), "wrong degree from {peer}");
+                ensure!(hash == self.hashed_commits[&peer], "wrong hash from {peer}");
 
                 match self.commitments.get(&peer) {
-                    Some(old) if *old != commit => panic!("{peer} sent us two commitments!"),
+                    Some(old) if *old != commit => {
+                        return Err(format_err!("{peer} sent us two commitments!"))
+                    }
                     _ => self.commitments.insert(peer, commit),
                 };
 
@@ -650,7 +653,7 @@ impl<G: DkgGroup> Dkg<G> {
                             messages.push((*peer, DkgMessage::Share(s1, s2)));
                         }
                     }
-                    return DkgStep::Messages(messages);
+                    return Ok(DkgStep::Messages(messages));
                 }
             }
             // Pedersen-VSS verifies the shares match the commitments
@@ -659,7 +662,7 @@ impl<G: DkgGroup> Dkg<G> {
                 let commitment = self
                     .commitments
                     .get(&peer)
-                    .unwrap_or_else(|| panic!("{peer} sent share before commit"));
+                    .ok_or_else(|| format_err!("{peer} sent share before commit"))?;
                 let commit_product: G = commitment
                     .iter()
                     .enumerate()
@@ -667,9 +670,11 @@ impl<G: DkgGroup> Dkg<G> {
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
-                assert_eq!(share_product, commit_product, "bad commit from {peer}");
+                ensure!(share_product == commit_product, "bad commit from {peer}");
                 match self.sk_shares.get(&peer) {
-                    Some(old) if *old != s1 => panic!("{peer} sent us two shares!"),
+                    Some(old) if *old != s1 => {
+                        return Err(format_err!("{peer} sent us two shares!"))
+                    }
                     _ => self.sk_shares.insert(peer, s1),
                 };
 
@@ -681,7 +686,7 @@ impl<G: DkgGroup> Dkg<G> {
                         .collect();
 
                     self.pk_shares.insert(self.our_id, extract.clone());
-                    return self.broadcast(DkgMessage::Extract(extract));
+                    return Ok(self.broadcast(DkgMessage::Extract(extract)));
                 }
             }
             // Feldman-VSS exposes the public key shares
@@ -689,7 +694,7 @@ impl<G: DkgGroup> Dkg<G> {
                 let share = self
                     .sk_shares
                     .get(&peer)
-                    .unwrap_or_else(|| panic!("{peer} sent extract before share"));
+                    .ok_or_else(|| format_err!("{peer} sent extract before share"))?;
                 let share_product = self.gen_g * *share;
                 let extract_product: G = extract
                     .iter()
@@ -698,10 +703,12 @@ impl<G: DkgGroup> Dkg<G> {
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
-                assert_eq!(share_product, extract_product, "bad extract from {peer}");
-                assert_eq!(self.threshold, extract.len(), "wrong degree from {peer}");
+                ensure!(share_product == extract_product, "bad extract from {peer}");
+                ensure!(self.threshold == extract.len(), "wrong degree from {peer}");
                 match self.pk_shares.get(&peer) {
-                    Some(old) if *old != extract => panic!("{peer} sent us two extracts!"),
+                    Some(old) if *old != extract => {
+                        return Err(format_err!("{peer} sent us two extracts!"))
+                    }
                     _ => self.pk_shares.insert(peer, extract),
                 };
 
@@ -718,15 +725,15 @@ impl<G: DkgGroup> Dkg<G> {
                         })
                         .collect();
 
-                    return DkgStep::Result(DkgKeys {
+                    return Ok(DkgStep::Result(DkgKeys {
                         public_key_set: pks,
                         secret_key_share: sks,
-                    });
+                    }));
                 }
             }
         }
 
-        DkgStep::Messages(vec![])
+        Ok(DkgStep::Messages(vec![]))
     }
 
     fn hash(&self, poly: Vec<G>) -> Sha256 {
@@ -795,7 +802,7 @@ where
         module_id: ModuleInstanceId,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Cancellable<HashMap<T, DkgKeys<G2Projective>>> {
+    ) -> anyhow::Result<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(module_id, G2Projective::generator(), connections, rng)
             .await
     }
@@ -806,7 +813,7 @@ where
         module_id: ModuleInstanceId,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Cancellable<HashMap<T, DkgKeys<G1Projective>>> {
+    ) -> anyhow::Result<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(module_id, G1Projective::generator(), connections, rng)
             .await
     }
@@ -818,7 +825,7 @@ where
         group: G,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Cancellable<HashMap<T, DkgKeys<G>>>
+    ) -> anyhow::Result<HashMap<T, DkgKeys<G>>>
     where
         DkgMessage<G>: ISupportedDkgMessage,
     {
@@ -852,15 +859,17 @@ where
         loop {
             let (peer, msg) = connections.receive(module_id).await?;
 
-            let (key, message) = if let DkgPeerMsg::DistributedGen(v) = msg {
-                v
-            } else {
-                panic!("Module {module_id} wrong message received: {msg:?}")
+            let parsed_msg = match msg {
+                DkgPeerMsg::DistributedGen(v) => Ok(v),
+                _ => Err(format_err!(
+                    "Module {module_id} wrong message received: {msg:?}"
+                )),
             };
 
+            let (key, message) = parsed_msg?;
             let key = serde_json::from_str(&key).expect("invalid key");
             let message = ISupportedDkgMessage::from_msg(message).expect("invalid message");
-            let step = dkgs.get_mut(&key).expect("exists").step(peer, message);
+            let step = dkgs.get_mut(&key).expect("exists").step(peer, message)?;
 
             match step {
                 DkgStep::Messages(messages) => {
@@ -1062,7 +1071,7 @@ mod tests {
                     for (receive_peer, msg) in messages {
                         let receive_dkg = dkgs.get_mut(&receive_peer).unwrap();
                         let step = receive_dkg.step(peer, msg);
-                        steps.push_back((receive_peer, step));
+                        steps.push_back((receive_peer, step.unwrap()));
                     }
                 }
                 Some((peer, DkgStep::Result(step_keys))) => {
