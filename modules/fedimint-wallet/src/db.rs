@@ -1,6 +1,6 @@
 use bitcoin::{BlockHash, Txid};
-use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::impl_db_prefix_const;
 use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -30,116 +30,86 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct BlockHashKey(pub BlockHash);
 
-impl DatabaseKeyPrefixConst for BlockHashKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::BlockHash as u8;
-    type Key = Self;
-    type Value = ();
-}
-
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct BlockHashKeyPrefix;
 
-impl DatabaseKeyPrefixConst for BlockHashKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::BlockHash as u8;
-    type Key = BlockHashKey;
-    type Value = ();
-}
+impl_db_prefix_const!(
+    key = BlockHashKey,
+    value = (),
+    prefix = DbKeyPrefix::BlockHash,
+    key_prefix = BlockHashKeyPrefix
+);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct UTXOKey(pub bitcoin::OutPoint);
 
-impl DatabaseKeyPrefixConst for UTXOKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::Utxo as u8;
-    type Key = Self;
-    type Value = SpendableUTXO;
-}
-
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UTXOPrefixKey;
 
-impl DatabaseKeyPrefixConst for UTXOPrefixKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::Utxo as u8;
-    type Key = UTXOKey;
-    type Value = SpendableUTXO;
-}
+impl_db_prefix_const!(
+    key = UTXOKey,
+    value = SpendableUTXO,
+    prefix = DbKeyPrefix::Utxo,
+    key_prefix = UTXOPrefixKey
+);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct RoundConsensusKey;
 
-impl DatabaseKeyPrefixConst for RoundConsensusKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::RoundConsensus as u8;
-    type Key = Self;
-    type Value = RoundConsensus;
-}
+impl_db_prefix_const!(
+    key = RoundConsensusKey,
+    value = RoundConsensus,
+    prefix = DbKeyPrefix::RoundConsensus,
+);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct UnsignedTransactionKey(pub Txid);
 
-impl DatabaseKeyPrefixConst for UnsignedTransactionKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::UnsignedTransaction as u8;
-    type Key = Self;
-    type Value = UnsignedTransaction;
-}
-
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UnsignedTransactionPrefixKey;
 
-impl DatabaseKeyPrefixConst for UnsignedTransactionPrefixKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::UnsignedTransaction as u8;
-    type Key = UnsignedTransactionKey;
-    type Value = UnsignedTransaction;
-}
+impl_db_prefix_const!(
+    key = UnsignedTransactionKey,
+    value = UnsignedTransaction,
+    prefix = DbKeyPrefix::UnsignedTransaction,
+    key_prefix = UnsignedTransactionPrefixKey
+);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct PendingTransactionKey(pub Txid);
 
-impl DatabaseKeyPrefixConst for PendingTransactionKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::PendingTransaction as u8;
-    type Key = Self;
-    type Value = PendingTransaction;
-}
-
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PendingTransactionPrefixKey;
 
-impl DatabaseKeyPrefixConst for PendingTransactionPrefixKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::PendingTransaction as u8;
-    type Key = PendingTransactionKey;
-    type Value = PendingTransaction;
-}
+impl_db_prefix_const!(
+    key = PendingTransactionKey,
+    value = PendingTransaction,
+    prefix = DbKeyPrefix::PendingTransaction,
+    key_prefix = PendingTransactionPrefixKey
+);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct PegOutTxSignatureCI(pub Txid);
 
-impl DatabaseKeyPrefixConst for PegOutTxSignatureCI {
-    const DB_PREFIX: u8 = DbKeyPrefix::PegOutTxSigCi as u8;
-    type Key = Self;
-    type Value = Vec<Signature>; // TODO: define newtype
-}
-
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PegOutTxSignatureCIPrefix;
 
-impl DatabaseKeyPrefixConst for PegOutTxSignatureCIPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::PegOutTxSigCi as u8;
-    type Key = PegOutTxSignatureCI;
-    type Value = Vec<Signature>;
-}
+impl_db_prefix_const!(
+    key = PegOutTxSignatureCI,
+    value = Vec<Signature>,
+    prefix = DbKeyPrefix::PegOutTxSigCi,
+    key_prefix = PegOutTxSignatureCIPrefix
+);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct PegOutBitcoinTransaction(pub fedimint_api::OutPoint);
 
-impl DatabaseKeyPrefixConst for PegOutBitcoinTransaction {
-    const DB_PREFIX: u8 = DbKeyPrefix::PegOutBitcoinOutPoint as u8;
-    type Key = Self;
-    type Value = WalletOutputOutcome;
-}
-
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PegOutBitcoinTransactionPrefix;
 
-impl DatabaseKeyPrefixConst for PegOutBitcoinTransactionPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::PegOutBitcoinOutPoint as u8;
-    type Key = PegOutBitcoinTransaction;
-    type Value = WalletOutputOutcome;
-}
+impl_db_prefix_const!(
+    key = PegOutBitcoinTransaction,
+    value = WalletOutputOutcome,
+    prefix = DbKeyPrefix::PegOutBitcoinOutPoint,
+    key_prefix = PegOutBitcoinTransactionPrefix
+);

@@ -1,5 +1,5 @@
-use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::impl_db_prefix_const;
 use fedimint_api::{OutPoint, PeerId};
 use secp256k1::PublicKey;
 use serde::Serialize;
@@ -28,111 +28,81 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct ContractKey(pub ContractId);
 
-impl DatabaseKeyPrefixConst for ContractKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::Contract as u8;
-    type Key = Self;
-    type Value = ContractAccount;
-}
-
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]
 pub struct ContractKeyPrefix;
 
-impl DatabaseKeyPrefixConst for ContractKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::Contract as u8;
-    type Key = ContractKey;
-    type Value = ContractAccount;
-}
+impl_db_prefix_const!(
+    key = ContractKey,
+    value = ContractAccount,
+    prefix = DbKeyPrefix::Contract,
+    key_prefix = ContractKeyPrefix
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ContractUpdateKey(pub OutPoint);
 
-impl DatabaseKeyPrefixConst for ContractUpdateKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate as u8;
-    type Key = Self;
-    type Value = LightningOutputOutcome;
-}
-
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]
 pub struct ContractUpdateKeyPrefix;
 
-impl DatabaseKeyPrefixConst for ContractUpdateKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate as u8;
-    type Key = ContractUpdateKey;
-    type Value = LightningOutputOutcome;
-}
+impl_db_prefix_const!(
+    key = ContractUpdateKey,
+    value = LightningOutputOutcome,
+    prefix = DbKeyPrefix::ContractUpdate,
+    key_prefix = ContractUpdateKeyPrefix
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct OfferKey(pub bitcoin_hashes::sha256::Hash);
 
-impl DatabaseKeyPrefixConst for OfferKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::Offer as u8;
-    type Key = Self;
-    type Value = IncomingContractOffer;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct OfferKeyPrefix;
 
-impl DatabaseKeyPrefixConst for OfferKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::Offer as u8;
-    type Key = OfferKey;
-    type Value = IncomingContractOffer;
-}
+impl_db_prefix_const!(
+    key = OfferKey,
+    value = IncomingContractOffer,
+    prefix = DbKeyPrefix::Offer,
+    key_prefix = OfferKeyPrefix
+);
 
 // TODO: remove redundancy
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ProposeDecryptionShareKey(pub ContractId);
 
-impl DatabaseKeyPrefixConst for ProposeDecryptionShareKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare as u8;
-    type Key = Self;
-    type Value = PreimageDecryptionShare;
-}
-
 /// Our preimage decryption shares that still need to be broadcasted
 #[derive(Debug, Encodable)]
 pub struct ProposeDecryptionShareKeyPrefix;
 
-impl DatabaseKeyPrefixConst for ProposeDecryptionShareKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare as u8;
-    type Key = ProposeDecryptionShareKey;
-    type Value = PreimageDecryptionShare;
-}
+impl_db_prefix_const!(
+    key = ProposeDecryptionShareKey,
+    value = PreimageDecryptionShare,
+    prefix = DbKeyPrefix::ProposeDecryptionShare,
+    key_prefix = ProposeDecryptionShareKeyPrefix
+);
 
 /// Preimage decryption shares we received
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct AgreedDecryptionShareKey(pub ContractId, pub PeerId);
 
-impl DatabaseKeyPrefixConst for AgreedDecryptionShareKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare as u8;
-    type Key = Self;
-    type Value = PreimageDecryptionShare;
-}
-
 /// Preimage decryption shares we received
 #[derive(Debug, Encodable)]
 pub struct AgreedDecryptionShareKeyPrefix;
 
-impl DatabaseKeyPrefixConst for AgreedDecryptionShareKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare as u8;
-    type Key = AgreedDecryptionShareKey;
-    type Value = PreimageDecryptionShare;
-}
+impl_db_prefix_const!(
+    key = AgreedDecryptionShareKey,
+    value = PreimageDecryptionShare,
+    prefix = DbKeyPrefix::AgreedDecryptionShare,
+    key_prefix = AgreedDecryptionShareKeyPrefix
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LightningGatewayKey(pub PublicKey);
 
-impl DatabaseKeyPrefixConst for LightningGatewayKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
-    type Key = Self;
-    type Value = LightningGateway;
-}
-
 #[derive(Debug, Encodable, Decodable)]
 pub struct LightningGatewayKeyPrefix;
 
-impl DatabaseKeyPrefixConst for LightningGatewayKeyPrefix {
-    const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
-    type Key = LightningGatewayKey;
-    type Value = LightningGateway;
-}
+impl_db_prefix_const!(
+    key = LightningGatewayKey,
+    value = LightningGateway,
+    prefix = DbKeyPrefix::LightningGateway,
+    key_prefix = LightningGatewayKeyPrefix
+);

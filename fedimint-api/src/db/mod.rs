@@ -680,6 +680,40 @@ where
     }
 }
 
+/// This is a helper macro that generates the implementations of
+/// DatabaseKeyPrefixConst necessary for reading/writing to the
+/// database and fetching by prefix.
+///
+/// - `key`: This is the type of struct that will be used as the key into the database.
+/// - `value`: This is the type of struct that will be used as the value into the database.
+/// - `prefix`: Enum expression that is represented as a `u8` that is the prefix prepended to this key.
+/// - `key_prefix`: Optional type of struct that can be passed multiple times if necessary. These will be used
+/// as the key prefix when querying the database via `find_by_prefix`.
+///
+/// Examples:
+///
+/// `impl_db_prefix_const!(key = TestKey, value = TestVal, prefix = TestDbKeyPrefix::Test);`
+///
+/// `impl_db_prefix_const!(key = AltTestKey, value = TestVal, prefix = TestDbKeyPrefix::AltTest, key_prefix = AltDbPrefixTestPrefix);`
+#[macro_export]
+macro_rules! impl_db_prefix_const {
+    (key = $key:ty, value = $val:ty, prefix = $prefix:expr $(, key_prefix = $prefix_ty:ty)* $(,)?) => {
+        impl fedimint_api::db::DatabaseKeyPrefixConst for $key {
+            const DB_PREFIX: u8 = $prefix as u8;
+            type Key = Self;
+            type Value = $val;
+        }
+
+        $(
+            impl $crate::db::DatabaseKeyPrefixConst for $prefix_ty {
+                const DB_PREFIX: u8 = $prefix as u8;
+                type Key = $key;
+                type Value = $val;
+            }
+        )*
+    };
+}
+
 #[derive(Debug, Error)]
 pub enum DecodingError {
     #[error("Key had a wrong prefix, expected {expected} but got {found}")]
@@ -759,7 +793,6 @@ mod tests {
     use futures::StreamExt;
 
     use super::Database;
-    use crate::db::DatabaseKeyPrefixConst;
     use crate::encoding::{Decodable, Encodable};
 
     #[repr(u8)]
@@ -773,56 +806,41 @@ mod tests {
     #[derive(Debug, Encodable, Decodable)]
     struct TestKey(u64);
 
-    impl DatabaseKeyPrefixConst for TestKey {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
-        type Key = Self;
-        type Value = TestVal;
-    }
-
     #[derive(Debug, Encodable, Decodable)]
     struct DbPrefixTestPrefix;
 
-    impl DatabaseKeyPrefixConst for DbPrefixTestPrefix {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
-        type Key = TestKey;
-        type Value = TestVal;
-    }
+    impl_db_prefix_const!(
+        key = TestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::Test,
+        key_prefix = DbPrefixTestPrefix
+    );
 
     #[derive(Debug, Encodable, Decodable)]
     struct AltTestKey(u64);
 
-    impl DatabaseKeyPrefixConst for AltTestKey {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
-        type Key = Self;
-        type Value = TestVal;
-    }
-
     #[derive(Debug, Encodable, Decodable)]
     struct AltDbPrefixTestPrefix;
 
-    impl DatabaseKeyPrefixConst for AltDbPrefixTestPrefix {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
-        type Key = AltTestKey;
-        type Value = TestVal;
-    }
+    impl_db_prefix_const!(
+        key = AltTestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::AltTest,
+        key_prefix = AltDbPrefixTestPrefix
+    );
 
     #[derive(Debug, Encodable, Decodable)]
     struct PercentTestKey(u64);
 
-    impl DatabaseKeyPrefixConst for PercentTestKey {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
-        type Key = Self;
-        type Value = TestVal;
-    }
-
     #[derive(Debug, Encodable, Decodable)]
     struct PercentPrefixTestPrefix;
 
-    impl DatabaseKeyPrefixConst for PercentPrefixTestPrefix {
-        const DB_PREFIX: u8 = TestDbKeyPrefix::PercentTestKey as u8;
-        type Key = PercentTestKey;
-        type Value = TestVal;
-    }
+    impl_db_prefix_const!(
+        key = PercentTestKey,
+        value = TestVal,
+        prefix = TestDbKeyPrefix::PercentTestKey,
+        key_prefix = PercentPrefixTestPrefix
+    );
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
