@@ -42,23 +42,19 @@ use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
 use fedimint_core::modules::wallet::common::WalletDecoder;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
-use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::legacy::Transaction as LegacyTransaction;
-use fedimint_core::{
-    modules::{
-        ln::{
-            contracts::{
-                incoming::{IncomingContract, IncomingContractOffer, OfferId},
-                Contract, ContractId, DecryptedPreimage, IdentifyableContract,
-                OutgoingContractOutcome, Preimage,
-            },
-            ContractOutput, LightningGateway, LightningOutput,
+use fedimint_core::modules::{
+    ln::{
+        contracts::{
+            incoming::{IncomingContract, IncomingContractOffer, OfferId},
+            Contract, ContractId, DecryptedPreimage, IdentifyableContract, OutgoingContractOutcome,
+            Preimage,
         },
-        mint::BlindNonce,
-        wallet::txoproof::TxOutProof,
+        ContractOutput, LightningGateway, LightningOutput,
     },
-    transaction::legacy::{Input, Output},
+    mint::BlindNonce,
+    wallet::txoproof::TxOutProof,
 };
+use fedimint_core::outcome::TransactionStatus;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
@@ -90,6 +86,8 @@ use crate::ln::LnClientError;
 use crate::logging::LOG_WALLET;
 use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
 use crate::mint::MintClientError;
+use crate::transaction::legacy::Transaction as LegacyTransaction;
+use crate::transaction::legacy::{Input, Output};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
@@ -1335,12 +1333,10 @@ impl Client<GatewayClientConfig> {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output = fedimint_core::transaction::legacy::Output::LN(
-            LightningOutput::Contract(ContractOutput {
-                amount: offer.amount,
-                contract: contract.clone(),
-            }),
-        );
+        let incoming_output = Output::LN(LightningOutput::Contract(ContractOutput {
+            amount: offer.amount,
+            contract: contract.clone(),
+        }));
 
         // Submit transaction
         builder.output(incoming_output);

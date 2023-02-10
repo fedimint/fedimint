@@ -50,7 +50,6 @@ use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
-use fedimint_server::transaction::legacy::Transaction;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
@@ -72,6 +71,7 @@ use ln_gateway::{
     LnGateway,
 };
 use mint_client::module_decode_stubs;
+use mint_client::transaction::legacy::Transaction;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::{
     api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
