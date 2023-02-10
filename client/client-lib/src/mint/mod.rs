@@ -13,6 +13,7 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
+use fedimint_core::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 use futures::{Future, StreamExt};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -20,13 +21,13 @@ use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature
 use thiserror::Error;
 use tracing::{debug, error, trace, warn};
 
-use crate::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
 use crate::modules::mint::config::MintClientConfig;
 use crate::modules::mint::{
     BlindNonce, Mint, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce,
     Note,
 };
+use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::{Input, Output, Transaction};
 use crate::utils::ClientContext;
 use crate::{ChildId, DerivableSecret, FuturesUnordered, MintDecoder};
@@ -470,8 +471,9 @@ impl MintClient {
         let bsig = self
             .context
             .api
-            .fetch_output_outcome::<MintOutputOutcome>(outpoint, &self.context.decoders)
+            .fetch_output_outcome::<OutputOutcome>(outpoint, &self.context.decoders)
             .await?
+            .try_into_variant::<MintOutputOutcome>()?
             .as_ref()
             .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
@@ -676,6 +678,7 @@ mod tests {
     use fedimint_api::db::Database;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
+    use fedimint_core::api::WsFederationApi;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_mint::common::MintDecoder;
     use fedimint_testing::FakeFed;
@@ -683,7 +686,6 @@ mod tests {
     use tokio::sync::Mutex;
 
     use crate::api::fake::FederationApiFaker;
-    use crate::api::WsFederationApi;
     use crate::mint::db::NextECashNoteIndexKey;
     use crate::mint::MintClient;
     use crate::modules::mint::config::MintClientConfig;

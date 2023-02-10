@@ -24,6 +24,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use fedimint_api::config::FederationId;
+use fedimint_core::api::WsFederationConnect;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
@@ -34,7 +35,6 @@ use ln_gateway::{
     },
     utils::retry,
 };
-use mint_client::api::WsFederationConnect;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 

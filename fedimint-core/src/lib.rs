@@ -1,9 +1,11 @@
 use thiserror::Error;
 
+pub mod api;
 /// Fedimint toplevel config
 pub mod config;
 pub mod epoch;
 pub mod outcome;
+pub mod query;
 pub mod transaction;
 pub mod util;
 

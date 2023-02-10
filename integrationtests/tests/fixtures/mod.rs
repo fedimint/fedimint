@@ -37,6 +37,7 @@ use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::api::WsFederationApi;
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
@@ -73,8 +74,7 @@ use mint_client::module_decode_stubs;
 use mint_client::transaction::legacy::Transaction;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::{
-    api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
-    UserClient, UserClientConfig,
+    mint::SpendableNote, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
