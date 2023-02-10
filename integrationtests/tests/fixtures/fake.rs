@@ -9,8 +9,16 @@ use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::Amount;
 use fedimint_ln::route_hints::RouteHint;
 use lightning::ln::PaymentSecret;
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use ln_gateway::ln::{LightningError, LnRpc};
+use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
+use ln_gateway::{
+    gatewayd::lnrpc_client::{GetRouteHintsResponse, HtlcStream, ILnRpcClient},
+    gatewaylnrpc::{
+        CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest,
+        PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    },
+    ln::{LightningError, LnRpc},
+    Result,
+};
 use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 
@@ -67,9 +75,10 @@ impl LightningTest for FakeLightningTest {
     }
 }
 
+/// Back compat for the old ln-gateway
 #[async_trait]
 impl LnRpc for FakeLightningTest {
-    async fn pubkey(&self) -> Result<PublicKey, LightningError> {
+    async fn pubkey(&self) -> std::result::Result<PublicKey, LightningError> {
         Ok(self.gateway_node_pub_key)
     }
 
@@ -78,13 +87,54 @@ impl LnRpc for FakeLightningTest {
         invoice: lightning_invoice::Invoice,
         _max_delay: u64,
         _max_fee_percent: f64,
-    ) -> Result<Preimage, LightningError> {
+    ) -> std::result::Result<Preimage, LightningError> {
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         Ok(self.preimage.clone())
     }
 
-    async fn route_hints(&self) -> Result<Vec<RouteHint>, Error> {
+    async fn route_hints(&self) -> std::result::Result<Vec<RouteHint>, Error> {
         Ok(vec![RouteHint(vec![])])
+    }
+}
+
+#[async_trait]
+impl ILnRpcClient for FakeLightningTest {
+    async fn pubkey(&self) -> Result<GetPubKeyResponse> {
+        Ok(GetPubKeyResponse {
+            pub_key: self.gateway_node_pub_key.serialize().to_vec(),
+        })
+    }
+
+    async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
+        Ok(GetRouteHintsResponse {
+            route_hints: vec![RouteHint(vec![])],
+        })
+    }
+
+    async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
+        let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
+        *self.amount_sent.lock().unwrap() += Invoice::from_signed(signed)
+            .unwrap()
+            .amount_milli_satoshis()
+            .unwrap();
+
+        Ok(PayInvoiceResponse {
+            preimage: self.preimage.0.to_vec(),
+        })
+    }
+
+    async fn subscribe_htlcs(
+        &self,
+        _subscription: SubscribeInterceptHtlcsRequest,
+    ) -> Result<HtlcStream> {
+        unimplemented!("TODO: mock subscribe_htlcs")
+    }
+
+    async fn complete_htlc(
+        &self,
+        _complete: CompleteHtlcsRequest,
+    ) -> Result<CompleteHtlcsResponse> {
+        Ok(CompleteHtlcsResponse {})
     }
 }
