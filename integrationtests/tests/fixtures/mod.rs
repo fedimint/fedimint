@@ -983,8 +983,8 @@ impl FederationTest {
 
     /// Runs `n` epochs in the federation (each guardian node)
     ///
-    /// Call in tests when new epoch conditions are already
-    /// in place, to trigger new epoch generation.
+    /// Call this method in tests when some conditions that trigger
+    /// new epoch(s) are already in place.
     ///
     /// Wallet chain height can trigger epoch randomly, but since
     /// they will be processed along-side any other epochs you
@@ -1021,13 +1021,13 @@ impl FederationTest {
     /// When conditions triggering proposals are already in place, calling this functions has
     /// the same effect as calling [`run_consensus_epochs`], as blocking conditions can't
     /// happen. However in that situation calling [`run_consensus_epochs`] is preferable, as
-    /// it will snappily panic, instead of handing in case of bugs.
+    /// it will snappily panic, instead of hanging indefinitely in case of a bug.
     ///
     /// When called concurrently with actions triggering new epochs, care must be taken
     /// as random epochs due to wallet module height changes can be triggered randomly,
     /// making the use of this function flaky. Typically `bitcoin.lock_exclusive()` should
     /// be called to avoid flakiness, but that makes the whole test run serially, which is
-    /// very undesierable. Prefer structuring your test to not require that (so you can use
+    /// very undesirable. Prefer structuring your test to not require that (so you can use
     /// `run_consensus_wait` instead).
     pub async fn run_consensus_epochs_wait(&self, epochs: usize) -> anyhow::Result<()> {
         for _ in 0..(epochs) {
@@ -1072,9 +1072,9 @@ impl FederationTest {
 
     /// Get the consensus items proposed by all the peers
     ///
-    /// Notably, unlike [`has_pending_epoch`] this does not take into account
-    /// pending transactions or ignore consensus items that do not trigger
-    /// epoch on its own.
+    /// Notably, unlike [`has_pending_epoch`] this does not return
+    /// pending transactions, neither does it ignore consensus items that actually
+    /// do not trigger epoch on their own.
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn get_pending_epoch_proposals(&self) -> Vec<ConsensusItem> {
         let mut proposals = vec![];
