@@ -101,7 +101,10 @@ jobs:
         continue-on-error: true
 
       - name: Build and run tests with Code Coverage
-        run: nix build -L .#debug.workspaceTestCov
+        run: nix build -L .#debug.workspaceCov
+
+      - name: Ensure lcov.info exists
+        run: test -f result/lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

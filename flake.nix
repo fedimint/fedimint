@@ -385,25 +385,22 @@
 
         # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
         workspaceDepsCov = craneLib.buildDepsOnly (commonArgs // {
-          pname = commonArgs.pname + "-lcov";
+          pnameSuffix = "-lcov-deps";
           src = filterWorkspaceDepsBuildFiles ./.;
-          cargoBuildCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE";
+          buildPhaseCargoCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE --no-report";
+          cargoBuildCommand = "dontuse";
+          cargoCheckCommand = "dontuse";
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
           doCheck = false;
         });
 
-        workspaceCov = craneLib.cargoBuild (commonArgs // {
-          pname = commonArgs.pname + "-lcov";
+        workspaceCov = craneLib.buildPackage (commonArgs // {
+          pnameSuffix = "-lcov";
           cargoArtifacts = workspaceDepsCov;
-          # TODO: as things are right now, the integration tests can't run in parallel
-          cargoBuildCommand = "mkdir -p $out ; env RUST_TEST_THREADS=1 cargo llvm-cov --profile $CARGO_PROFILE --workspace --lcov --output-path $out/lcov.info";
+          buildPhaseCargoCommand = "mkdir -p $out ; cargo llvm-cov --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
+          installPhaseCommand = "true";
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
           doCheck = false;
-        });
-
-        workspaceTestCov = craneLib.cargoTest (commonArgs // {
-          pname = commonArgs.pname + "-lcov";
-          cargoArtifacts = workspaceCov;
         });
 
         cliTestReconnect = craneLib.buildPackage (commonCliTestArgs // {
@@ -691,7 +688,6 @@
             workspaceTest
             workspaceDoc
             workspaceCov
-            workspaceTestCov
             workspaceAudit;
 
         };
