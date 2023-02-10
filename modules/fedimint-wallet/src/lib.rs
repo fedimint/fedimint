@@ -1544,22 +1544,12 @@ impl<'a> StatelessWallet<'a> {
             .enumerate()
         {
             let tweaked_secret = {
-                let tweak_pk_bytes = psbt_input
+                let tweak = psbt_input
                     .proprietary
                     .get(&proprietary_tweak_key())
                     .expect("Malformed PSBT: expected tweak");
-                let pub_key = secp256k1::PublicKey::from_secret_key(self.secp, self.secret_key);
 
-                let tweak = {
-                    let mut hasher = HmacEngine::<sha256::Hash>::new(&pub_key.serialize()[..]);
-                    hasher.input(&tweak_pk_bytes[..]);
-                    Hmac::from_engine(hasher).into_inner()
-                };
-
-                self.secret_key
-                    .add_tweak(&Scalar::from_be_bytes(tweak).expect("can't fail"))
-                    .expect("Tweaking priv key failed") // TODO: why could this
-                                                        // happen?
+                self.secret_key.tweak(tweak, self.secp)
             };
 
             let tx_hash = tx_hasher
