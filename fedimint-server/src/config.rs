@@ -16,10 +16,10 @@ use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnect
 use fedimint_api::task::{timeout, Elapsed, TaskGroup};
 use fedimint_api::{Amount, PeerId, Tiered};
 pub use fedimint_core::config::*;
-use fedimint_core::modules::mint::MintGenParams;
 use fedimint_wallet::WalletGenParams;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
+use mint_client::modules::mint::MintGenParams;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};

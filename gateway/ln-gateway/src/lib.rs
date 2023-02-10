@@ -27,8 +27,8 @@ use bitcoin::Address;
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
-use fedimint_server::modules::ln::contracts::Preimage;
-use fedimint_server::modules::ln::route_hints::RouteHint;
+use mint_client::modules::ln::contracts::Preimage;
+use mint_client::modules::ln::route_hints::RouteHint;
 use mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     GatewayClient,

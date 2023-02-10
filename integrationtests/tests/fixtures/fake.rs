@@ -8,10 +8,10 @@ use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::Amount;
 use fedimint_ln::route_hints::RouteHint;
-use fedimint_server::modules::ln::contracts::Preimage;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln_gateway::ln::{LightningError, LnRpc};
+use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 
 use crate::fixtures::LightningTest;

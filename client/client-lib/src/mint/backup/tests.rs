@@ -5,17 +5,14 @@ use fedimint_api::{
     core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT},
     msats, Amount, OutPoint, PeerId, Tiered, TieredMulti,
 };
-use fedimint_core::{
-    epoch::ConsensusItem,
-    modules::mint::{
-        BlindNonce, MintConsensusItem, MintInput, MintOutput, MintOutputSignatureShare,
-    },
-    transaction::Transaction,
-};
+use fedimint_core::{epoch::ConsensusItem, transaction::Transaction};
 use fedimint_derive_secret::DerivableSecret;
 use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare};
 
 use super::{EcashRecoveryTracker, PlaintextEcashBackup};
+use crate::modules::mint::{
+    BlindNonce, MintConsensusItem, MintInput, MintOutput, MintOutputSignatureShare,
+};
 use crate::{
     mint::{
         db::OutputFinalizationKey, MintClient, NoteIndex, NoteIssuanceRequest,

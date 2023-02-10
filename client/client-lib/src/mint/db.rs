@@ -1,11 +1,11 @@
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::impl_db_prefix_const;
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
-use fedimint_core::modules::mint::Nonce;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 use crate::mint::{NoteIssuanceRequests, SpendableNote};
+use crate::modules::mint::Nonce;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]

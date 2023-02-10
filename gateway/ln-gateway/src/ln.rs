@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use fedimint_server::modules::ln::contracts::Preimage;
-use fedimint_server::modules::ln::route_hints::RouteHint;
+use mint_client::modules::ln::contracts::Preimage;
+use mint_client::modules::ln::route_hints::RouteHint;
 use secp256k1::PublicKey;
 
 #[async_trait]

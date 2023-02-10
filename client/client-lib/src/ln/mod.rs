@@ -13,16 +13,6 @@ use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::Amount;
-use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::config::LightningClientConfig;
-use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
-use fedimint_core::modules::ln::contracts::{
-    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
-};
-use fedimint_core::modules::ln::{
-    ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
-};
 use futures::StreamExt;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -35,6 +25,16 @@ use crate::api::{FederationError, LnFederationApi, WalletFederationApi};
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
+use crate::modules::ln::common::LightningDecoder;
+use crate::modules::ln::config::LightningClientConfig;
+use crate::modules::ln::contracts::incoming::IncomingContractOffer;
+use crate::modules::ln::contracts::outgoing::OutgoingContract;
+use crate::modules::ln::contracts::{
+    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
+};
+use crate::modules::ln::{
+    ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
+};
 use crate::utils::ClientContext;
 
 #[derive(Debug)]
@@ -337,10 +337,6 @@ mod tests {
     use fedimint_api::db::Database;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::{Amount, OutPoint, TransactionId};
-    use fedimint_core::modules::ln::common::LightningDecoder;
-    use fedimint_core::modules::ln::config::LightningClientConfig;
-    use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use fedimint_core::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
@@ -349,6 +345,10 @@ mod tests {
 
     use crate::api::fake::FederationApiFaker;
     use crate::ln::LnClient;
+    use crate::modules::ln::common::LightningDecoder;
+    use crate::modules::ln::config::LightningClientConfig;
+    use crate::modules::ln::contracts::{ContractId, IdentifyableContract};
+    use crate::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
     use crate::{module_decode_stubs, ClientContext};
 
     type Fed = FakeFed<Lightning>;

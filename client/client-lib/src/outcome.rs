@@ -1,6 +1,3 @@
-
-
-
 pub mod legacy {
     use fedimint_api::core::{
         Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,

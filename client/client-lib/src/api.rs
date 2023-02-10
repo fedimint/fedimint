@@ -19,11 +19,7 @@ use fedimint_api::task::sleep;
 use fedimint_api::task::{RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-use fedimint_core::modules::ln::contracts::ContractId;
-use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-use fedimint_core::modules::wallet::PegOutFees;
-use fedimint_core::outcome::{TransactionStatus};
+use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::transaction::SerdeTransaction;
 use fedimint_core::CoreError;
 use fedimint_mint::db::ECashUserBackupSnapshot;
@@ -44,6 +40,10 @@ use threshold_crypto::PublicKey;
 use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
+use crate::modules::ln::contracts::incoming::IncomingContractOffer;
+use crate::modules::ln::contracts::ContractId;
+use crate::modules::ln::{ContractAccount, LightningGateway};
+use crate::modules::wallet::PegOutFees;
 use crate::outcome::legacy::TryIntoOutcome;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,

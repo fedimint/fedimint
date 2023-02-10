@@ -7,19 +7,19 @@ use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModule};
-use fedimint_core::modules::wallet::common::WalletDecoder;
-use fedimint_core::modules::wallet::config::WalletClientConfig;
-use fedimint_core::modules::wallet::tweakable::Tweakable;
-use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-use fedimint_core::modules::wallet::WalletInput;
-use fedimint_core::modules::wallet::WalletOutput;
-use fedimint_core::modules::wallet::{Wallet, WalletOutputOutcome};
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
 
 use crate::api::GlobalFederationApi;
 use crate::api::OutputOutcomeError;
+use crate::modules::wallet::common::WalletDecoder;
+use crate::modules::wallet::config::WalletClientConfig;
+use crate::modules::wallet::tweakable::Tweakable;
+use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+use crate::modules::wallet::WalletInput;
+use crate::modules::wallet::WalletOutput;
+use crate::modules::wallet::{Wallet, WalletOutputOutcome};
 use crate::utils::ClientContext;
 use crate::MemberError;
 
@@ -204,17 +204,17 @@ mod tests {
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::task::TaskGroup;
     use fedimint_api::{Feerate, OutPoint, TransactionId};
-    use fedimint_core::modules::wallet::common::WalletDecoder;
-    use fedimint_core::modules::wallet::config::WalletClientConfig;
-    use fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
-    };
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
     use tokio::sync::Mutex;
 
     use crate::api::fake::FederationApiFaker;
+    use crate::modules::wallet::common::WalletDecoder;
+    use crate::modules::wallet::config::WalletClientConfig;
+    use crate::modules::wallet::{
+        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
+    };
     use crate::wallet::WalletClient;
     use crate::{module_decode_stubs, ClientContext};
 

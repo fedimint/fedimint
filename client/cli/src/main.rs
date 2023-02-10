@@ -19,18 +19,18 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::config::load_from_file;
-use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::contracts::ContractId;
-use fedimint_core::modules::ln::LightningGen;
-use fedimint_core::modules::wallet::common::WalletDecoder;
-use fedimint_core::modules::wallet::txoproof::TxOutProof;
-use fedimint_core::modules::wallet::WalletGen;
 use fedimint_mint::common::MintDecoder;
 use fedimint_mint::MintGen;
 use mint_client::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
 };
 use mint_client::mint::SpendableNote;
+use mint_client::modules::ln::common::LightningDecoder;
+use mint_client::modules::ln::contracts::ContractId;
+use mint_client::modules::ln::LightningGen;
+use mint_client::modules::wallet::common::WalletDecoder;
+use mint_client::modules::wallet::txoproof::TxOutProof;
+use mint_client::modules::wallet::WalletGen;
 use mint_client::query::EventuallyConsistent;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,

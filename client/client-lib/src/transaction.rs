@@ -4,12 +4,12 @@ use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::Amount;
-use fedimint_core::modules::ln::contracts::ContractOutcome;
-use fedimint_core::modules::ln::LightningOutputOutcome;
 use fedimint_core::outcome::TransactionStatus;
 use rand::{CryptoRng, RngCore};
 use secp256k1::Secp256k1;
 
+use crate::modules::ln::contracts::ContractOutcome;
+use crate::modules::ln::LightningOutputOutcome;
 use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::{Input, Output, Transaction};
 use crate::{module_decode_stubs, Client, DecryptedPreimage, MintClient, MintOutputOutcome};

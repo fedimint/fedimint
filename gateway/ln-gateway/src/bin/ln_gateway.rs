@@ -9,21 +9,19 @@ use fedimint_api::{
     module::registry::ModuleDecoderRegistry,
     task::TaskGroup,
 };
-use fedimint_server::modules::ln::LightningGen;
-use fedimint_server::modules::mint::MintGen;
-use fedimint_server::modules::wallet::WalletGen;
-use fedimint_server::{
-    config::load_from_file,
-    modules::{
-        ln::common::LightningDecoder, mint::common::MintDecoder, wallet::common::WalletDecoder,
-    },
-};
+use fedimint_server::config::load_from_file;
 use ln_gateway::{
     client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
     cln::{build_cln_rpc, ClnRpcRef},
     config::GatewayConfig,
     rpc::{GatewayRequest, GatewayRpcSender},
     LnGateway,
+};
+use mint_client::modules::ln::LightningGen;
+use mint_client::modules::mint::MintGen;
+use mint_client::modules::wallet::WalletGen;
+use mint_client::modules::{
+    ln::common::LightningDecoder, mint::common::MintDecoder, wallet::common::WalletDecoder,
 };
 use tokio::sync::mpsc;
 use tracing::error;
