@@ -30,4 +30,4 @@ serde = { version = "1.0.149", features = ["derive"] }
 serde_json = "1.0.91"
 strum = "0.24"
 strum_macros = "0.24"
-tokio = "1.24.2"
+tokio = "1.25.0"

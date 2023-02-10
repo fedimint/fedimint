@@ -37,7 +37,7 @@ strum = "0.24"
 strum_macros = "0.24"
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.37"
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.25.0", features = ["full"] }
 tokio-stream = "0.1.11"
 tokio-rustls = "0.23.4"
 tokio-util = { version = "0.7.4", features = [ "codec" ] }
