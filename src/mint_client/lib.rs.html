@@ -1821,7 +1821,7 @@
 }
 
 <span class="comment">// TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
-</span><span class="kw">impl</span>&lt;T: AsRef&lt;ClientConfig&gt; + Clone&gt; Client&lt;T&gt; {
+</span><span class="kw">impl</span>&lt;T: AsRef&lt;ClientConfig&gt; + Clone + Send&gt; Client&lt;T&gt; {
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
         <span class="kw-2">&amp;</span><span class="self">self</span>.context.db
     }
