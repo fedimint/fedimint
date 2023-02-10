@@ -23,8 +23,7 @@ use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
 use fedimint_core::modules::wallet::PegOutFees;
-use fedimint_core::outcome::legacy::TryIntoOutcome;
-use fedimint_core::outcome::{self, TransactionStatus};
+use fedimint_core::outcome::{TransactionStatus};
 use fedimint_core::transaction::SerdeTransaction;
 use fedimint_core::CoreError;
 use fedimint_mint::db::ECashUserBackupSnapshot;
@@ -45,6 +44,7 @@ use threshold_crypto::PublicKey;
 use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
+use crate::outcome::legacy::TryIntoOutcome;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
     UnionResponsesSingle, ValidHistory,
@@ -482,7 +482,7 @@ where
                         out_idx: out_point.out_idx,
                     })
                     .and_then(|output| {
-                        let legacy_oo: outcome::legacy::OutputOutcome = output
+                        let legacy_oo: crate::outcome::legacy::OutputOutcome = output
                             .try_into_inner(decoders)
                             .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?
                             .into();

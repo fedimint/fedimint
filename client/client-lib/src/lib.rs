@@ -3,6 +3,7 @@ pub mod db;
 pub mod ln;
 pub mod logging;
 pub mod mint;
+pub mod outcome;
 pub mod query;
 pub mod transaction;
 pub mod utils;
