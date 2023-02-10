@@ -81,6 +81,8 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
+        info!(version = env!("GIT_HASH"), "Starting lightning gateway");
+
         let mut num_retries = 0;
         let route_hints = loop {
             let route_hints = ln_rpc
