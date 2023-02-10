@@ -31,8 +31,8 @@ use url::Url;
 use crate::distributedgen::{create_cert, parse_peer_params, run_dkg};
 use crate::encrypt::{encrypted_read, get_key};
 use crate::{
-    encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG,
-    SALT_FILE, TLS_PK,
+    configure_modules, encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT,
+    PRIVATE_CONFIG, SALT_FILE, TLS_PK,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -178,13 +178,11 @@ async fn post_guardians(
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
-                max_denomination,
                 params.federation_name,
                 connection_strings,
-                params.network,
-                params.finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 &mut dkg_task_group,
+                configure_modules(max_denomination, params.network, params.finality_delay),
             )
             .await;
 

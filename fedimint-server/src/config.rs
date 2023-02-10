@@ -14,12 +14,10 @@ use fedimint_api::config::{
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::{timeout, Elapsed, TaskGroup};
-use fedimint_api::{Amount, PeerId, Tiered};
+use fedimint_api::PeerId;
 pub use fedimint_core::config::*;
-use fedimint_wallet::WalletGenParams;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
-use mint_client::modules::mint::MintGenParams;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -607,17 +605,14 @@ impl ServerConfigParams {
     }
 
     /// Generates the parameters necessary for running server config generation
-    #[allow(clippy::too_many_arguments)]
     pub fn gen_params(
         bind_p2p: SocketAddr,
         bind_api: SocketAddr,
         key: rustls::PrivateKey,
         our_id: PeerId,
-        max_denomination: Amount,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        network: bitcoin::network::constants::Network,
-        finality_delay: u32,
+        modules: ConfigGenParams,
     ) -> ServerConfigParams {
         let peer_certs: HashMap<PeerId, rustls::Certificate> = peers
             .iter()
@@ -641,18 +636,7 @@ impl ServerConfigParams {
             fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
             federation_name,
-            modules: ConfigGenParams::new()
-                .attach(WalletGenParams {
-                    network,
-                    // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
-                    finality_delay,
-                })
-                .attach(MintGenParams {
-                    mint_amounts: Tiered::gen_denominations(max_denomination)
-                        .tiers()
-                        .cloned()
-                        .collect(),
-                }),
+            modules,
         }
     }
 
@@ -678,9 +662,9 @@ impl ServerConfigParams {
     /// config for servers running on different ports on a local network
     pub fn gen_local(
         peers: &[PeerId],
-        max_denomination: Amount,
         base_port: u16,
         federation_name: &str,
+        modules: ConfigGenParams,
     ) -> anyhow::Result<HashMap<PeerId, ServerConfigParams>> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
@@ -718,11 +702,9 @@ impl ServerConfigParams {
                     bind_api.parse().context("when parsing bind_api")?,
                     keys[peer].1.clone(),
                     *peer,
-                    max_denomination,
                     &peer_params,
                     federation_name.to_string(),
-                    bitcoin::network::constants::Network::Regtest,
-                    10,
+                    modules.clone(),
                 );
                 Ok((*peer, params))
             })

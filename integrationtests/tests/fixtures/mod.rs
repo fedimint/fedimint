@@ -174,7 +174,12 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let params = ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test").unwrap();
+    let modules = fedimintd::configure_modules(
+        sats(100000),
+        bitcoin::network::constants::Network::Regtest,
+        10,
+    );
+    let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_inits = ModuleGenRegistry::from(vec![

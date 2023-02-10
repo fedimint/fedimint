@@ -168,13 +168,11 @@ async fn main() -> anyhow::Result<()> {
                 bind_p2p,
                 bind_api,
                 &dir_out_path,
-                max_denomination,
                 federation_name,
                 certs,
-                network,
-                finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 &mut task_group,
+                configure_modules(max_denomination, network, finality_delay),
             )
             .await
             {
