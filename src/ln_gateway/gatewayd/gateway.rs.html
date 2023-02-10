@@ -416,6 +416,7 @@
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     sync::{
@@ -615,6 +616,7 @@
                 channel_id,
                 node_pub_key,
                 <span class="self">self</span>.config.announce_address.clone(),
+                <span class="self">self</span>.module_gens.clone(),
             )
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to create gateway client config&quot;</span>);

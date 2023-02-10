@@ -1619,13 +1619,6 @@
 <a href="#1619" id="1619">1619</a>
 <a href="#1620" id="1620">1620</a>
 <a href="#1621" id="1621">1621</a>
-<a href="#1622" id="1622">1622</a>
-<a href="#1623" id="1623">1623</a>
-<a href="#1624" id="1624">1624</a>
-<a href="#1625" id="1625">1625</a>
-<a href="#1626" id="1626">1626</a>
-<a href="#1627" id="1627">1627</a>
-<a href="#1628" id="1628">1628</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1890,11 +1883,17 @@
 
     <span class="doccomment">/// Verifies the config using the federation id
     </span><span class="kw">pub async fn </span>verify_config(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>config = <span class="self">self</span>.context.api.download_client_config().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>config = <span class="self">self
+            </span>.context
+            .api
+            .download_client_config(id, <span class="self">self</span>.context.module_gens.clone())
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| ClientError::ConfigVerify(ConfigVerifyError::InvalidSignature))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>api_hash = config
-            .client
             .consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.context.module_gens)
             .map_err(|<span class="kw">_</span>| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>self_hash = <span class="self">self
             </span>.config
             .as_ref()
@@ -1902,22 +1901,11 @@
             .map_err(|<span class="kw">_</span>| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>api_hash != self_hash {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::ConfigVerify(
+            <span class="prelude-val">Err</span>(ClientError::ConfigVerify(
                 ConfigVerifyError::MismatchingConfigs,
-            ));
-        }
-
-        <span class="kw">match </span>config.client_hash_signature {
-            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(ClientError::ConfigVerify(ConfigVerifyError::Unsigned)),
-            <span class="prelude-val">Some</span>(sig) =&gt; {
-                <span class="kw">if </span>id.<span class="number">0</span>.verify(<span class="kw-2">&amp;</span>sig, api_hash) {
-                    <span class="prelude-val">Ok</span>(())
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(ClientError::ConfigVerify(
-                        ConfigVerifyError::InvalidSignature,
-                    ))
-                }
-            }
+            ))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(())
         }
     }
 
@@ -3241,8 +3229,6 @@
 </span><span class="kw">pub enum </span>ConfigVerifyError {
     <span class="attr">#[error(<span class="string">&quot;Our hash doesn&#39;t match the federation&quot;</span>)]
     </span>MismatchingConfigs,
-    <span class="attr">#[error(<span class="string">&quot;Is unsigned&quot;</span>)]
-    </span>Unsigned,
     <span class="attr">#[error(<span class="string">&quot;Invalid signature&quot;</span>)]
     </span>InvalidSignature,
     <span class="attr">#[error(<span class="string">&quot;Cannot hash configs&quot;</span>)]

@@ -722,7 +722,6 @@
 <a href="#722" id="722">722</a>
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -1100,6 +1099,12 @@
             );
         };
     } <span class="kw">else </span>{
+        <span class="kw">let </span>module_gens = ModuleGenRegistry::from(<span class="macro">vec!</span>[
+            DynModuleGen::from(WalletGen),
+            DynModuleGen::from(MintGen),
+            DynModuleGen::from(LightningGen),
+        ]);
+
         <span class="kw">let </span>cli = Cli::parse();
         <span class="kw">if let </span>Command::JoinFederation { connect } = cli.command {
             <span class="kw">let </span>connect_obj: WsFederationConnect = serde_json::from_str(<span class="kw-2">&amp;</span>connect)
@@ -1107,13 +1112,12 @@
             <span class="kw">let </span>api = Arc::new(WsFederationApi::new(connect_obj.members))
                 <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
             <span class="kw">let </span>cfg: ClientConfig = api
-                .download_client_config()
+                .download_client_config(<span class="kw-2">&amp;</span>connect_obj.id, module_gens.clone())
                 .<span class="kw">await
                 </span>.or_terminate(
                     CliErrorKind::NetworkError,
                     <span class="string">&quot;couldn&#39;t download config from peer&quot;</span>,
-                )
-                .client;
+                );
             <span class="kw">let </span>cfg_path = cli.workdir.join(<span class="string">&quot;client.json&quot;</span>);
             std::fs::create_dir_all(<span class="kw-2">&amp;</span>cli.workdir)
                 .or_terminate(CliErrorKind::IOError, <span class="string">&quot;failed to create config directory&quot;</span>);
@@ -1141,12 +1145,6 @@
             (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
             (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
             (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
-        ]);
-
-        <span class="kw">let </span>module_gens = ModuleGenRegistry::from(<span class="macro">vec!</span>[
-            DynModuleGen::from(WalletGen),
-            DynModuleGen::from(MintGen),
-            DynModuleGen::from(LightningGen),
         ]);
 
         <span class="kw">let </span>client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).<span class="kw">await</span>;

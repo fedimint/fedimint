@@ -473,6 +473,7 @@
 <a href="#473" id="473">473</a>
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -689,6 +690,7 @@
                 channel_id,
                 node_pub_key,
                 <span class="self">self</span>.config.announce_address.clone(),
+                <span class="self">self</span>.module_gens.clone(),
             )
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to create gateway client config&quot;</span>);

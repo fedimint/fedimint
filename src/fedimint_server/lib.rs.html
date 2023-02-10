@@ -684,8 +684,8 @@
 
         <span class="kw">loop </span>{
             <span class="macro">info!</span>(<span class="string">&quot;Waiting for peers to agree on a consensus config hash&quot;</span>);
-            <span class="kw">match </span>server.api.download_client_config().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(response) <span class="kw">if </span>response.consensus_hash == consensus.consensus_hash =&gt; <span class="kw">break</span>,
+            <span class="kw">match </span>server.api.consensus_config_hash().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == consensus.consensus_hash =&gt; <span class="kw">break</span>,
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;ERROR {:?}&quot;</span>, e)

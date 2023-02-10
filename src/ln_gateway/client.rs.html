@@ -222,6 +222,8 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     fs::File,
@@ -230,7 +232,7 @@
 };
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::config::{ConfigResponse, FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_api::config::{FederationId, ModuleGenRegistry};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
@@ -313,6 +315,7 @@
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        module_gens: ModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt;;
 
     <span class="doccomment">/// Save and persist the configuration of the gateway federation client
@@ -369,11 +372,12 @@
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        module_gens: ModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
         <span class="kw">let </span>api: DynFederationApi = WsFederationApi::new(connect.members).into();
 
-        <span class="kw">let </span>response: ConfigResponse = api
-            .download_client_config()
+        <span class="kw">let </span>client_config = api
+            .download_client_config(<span class="kw-2">&amp;</span>connect.id, module_gens)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to get client config&quot;</span>);
 
@@ -383,7 +387,7 @@
 
         <span class="prelude-val">Ok</span>(GatewayClientConfig {
             mint_channel_id,
-            client_config: response.client,
+            client_config,
             redeem_key: kp_fed,
             timelock_delta: <span class="number">10</span>,
             node_pub_key: node_pubkey,
