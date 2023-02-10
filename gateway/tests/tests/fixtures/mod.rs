@@ -6,7 +6,10 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
-use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
+use fedimint_testing::{
+    btc::{fixtures::FakeBitcoinTest, BitcoinTest},
+    ln::fixtures::FakeLightningTest,
+};
 use ln_gateway::{
     client::{DynGatewayClientBuilder, MemDbFactory},
     config::GatewayConfig,
@@ -19,7 +22,6 @@ use tokio::sync::mpsc;
 
 pub mod client;
 pub mod fed;
-pub mod ln;
 
 pub struct Fixtures {
     pub bitcoin: Box<dyn BitcoinTest>,
@@ -30,7 +32,7 @@ pub struct Fixtures {
 pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
     let task_group = TaskGroup::new();
 
-    let ln_rpc = Arc::new(ln::MockLnRpc::new());
+    let ln_rpc = Arc::new(FakeLightningTest::new());
 
     let client_builder: DynGatewayClientBuilder =
         client::TestGatewayClientBuilder::new(MemDbFactory.into(), gw_cfg.announce_address.clone())
