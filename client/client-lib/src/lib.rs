@@ -4,7 +4,6 @@ pub mod ln;
 pub mod logging;
 pub mod mint;
 pub mod outcome;
-pub mod query;
 pub mod transaction;
 pub mod utils;
 pub mod wallet;
@@ -20,10 +19,7 @@ use std::iter::once;
 use std::sync::Arc;
 use std::time::Duration;
 
-use api::{
-    DynFederationApi, FederationError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
-    WalletFederationApi,
-};
+use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
@@ -40,6 +36,10 @@ use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::time::SystemTime;
 use fedimint_api::TieredMulti;
 use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_core::api::MemberError;
+use fedimint_core::api::{
+    DynFederationApi, FederationError, GlobalFederationApi, OutputOutcomeError, WsFederationApi,
+};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -84,22 +84,21 @@ use crate::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use crate::modules::{
     ln::{
         contracts::{
-            incoming::{IncomingContract, IncomingContractOffer, OfferId},
-            Contract, ContractId, DecryptedPreimage, IdentifyableContract, OutgoingContractOutcome,
-            Preimage,
+            incoming::{IncomingContract, IncomingContractOffer},
+            Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
         },
         ContractOutput, LightningGateway, LightningOutput,
     },
     mint::BlindNonce,
     wallet::txoproof::TxOutProof,
 };
+use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::Transaction as LegacyTransaction;
 use crate::transaction::legacy::{Input, Output};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
-    api::MemberError,
     ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableNote},
     wallet::WalletClient,
@@ -301,7 +300,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         db: Database,
         secp: Secp256k1<All>,
     ) -> Self {
-        let api = api::WsFederationApi::from_config(config.as_ref());
+        let api = WsFederationApi::from_config(config.as_ref());
         Self::new_with_api(config, decoders, module_gens, db, api.into(), secp).await
     }
 
@@ -382,7 +381,11 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         let mut dbtx = self.context.db.begin_transaction().await;
         let final_tx = tx.build(self, &mut dbtx, rng).await;
         dbtx.commit_tx().await.expect("DB Error");
-        let result = self.context.api.submit_transaction(final_tx).await?;
+        let result = self
+            .context
+            .api
+            .submit_transaction(final_tx.into_type_erased())
+            .await?;
 
         Ok(result)
     }
@@ -881,7 +884,7 @@ impl Client<UserClientConfig> {
     pub async fn await_outgoing_contract_acceptance(&self, outpoint: OutPoint) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<OutgoingContractOutcome>(
+            .await_output_outcome::<OutputOutcome>(
                 outpoint,
                 Duration::from_secs(30),
                 &self.context.decoders,
@@ -901,13 +904,18 @@ impl Client<UserClientConfig> {
                 let res = self
                     .context
                     .api
-                    .await_output_outcome::<MintOutputOutcome>(
+                    .await_output_outcome::<OutputOutcome>(
                         outpoint,
                         Duration::from_secs(30),
                         &self.context.decoders,
                     )
                     .await;
-                if res.is_ok() && res.unwrap().is_some() {
+                if res.is_ok()
+                    && res
+                        .unwrap()
+                        .try_into_variant::<MintOutputOutcome>()?
+                        .is_some()
+                {
                     return Ok(());
                 }
                 tracing::info!("Signature response not returned yet");
@@ -1056,7 +1064,7 @@ impl Client<UserClientConfig> {
         let outpoint = OutPoint { txid, out_idx: 0 };
         self.context
             .api
-            .await_output_outcome::<OfferId>(outpoint, timeout, &self.context.decoders)
+            .await_output_outcome::<OutputOutcome>(outpoint, timeout, &self.context.decoders)
             .await?;
         let confirmed = ConfirmedInvoice {
             invoice,
@@ -1263,7 +1271,10 @@ impl Client<GatewayClientConfig> {
         };
 
         // TODO: protect against crashes, but the timout being hit eventually anyway makes this less of an issue
-        self.context.api.submit_transaction(cancel_tx).await?;
+        self.context
+            .api
+            .submit_transaction(cancel_tx.into_type_erased())
+            .await?;
 
         Ok(())
     }
@@ -1393,12 +1404,13 @@ impl Client<GatewayClientConfig> {
         Ok(self
             .context
             .api
-            .await_output_outcome::<Preimage>(
+            .await_output_outcome::<OutputOutcome>(
                 outpoint,
                 Duration::from_secs(10),
                 &self.context.decoders,
             )
-            .await?)
+            .await?
+            .try_into_variant()?)
     }
 
     // TODO: improve error propagation on tx transmission
@@ -1411,7 +1423,7 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<MintOutputOutcome>(
+            .await_output_outcome::<OutputOutcome>(
                 outpoint,
                 Duration::from_secs(10),
                 &self.context.decoders,

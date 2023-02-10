@@ -7,9 +7,9 @@ use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{ParseAmountError, TieredMulti};
+use fedimint_core::api::DynFederationApi;
 use lightning_invoice::Currency;
 
-use crate::api::DynFederationApi;
 use crate::mint::SpendableNote;
 
 pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {

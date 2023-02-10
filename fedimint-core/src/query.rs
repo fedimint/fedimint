@@ -3,13 +3,14 @@ use std::fmt::Debug;
 use std::mem;
 
 use fedimint_api::PeerId;
-use fedimint_core::epoch::SignedEpochOutcome;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use threshold_crypto::PublicKey;
 use tracing::debug;
 
-use crate::{api, MemberError};
+use crate::api;
+use crate::api::MemberError;
+use crate::epoch::SignedEpochOutcome;
 
 /// Returns a result from the first responding peer
 pub struct TrustAllPeers;

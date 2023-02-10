@@ -7,12 +7,12 @@ use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModule};
+use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::OutputOutcomeError;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::api::GlobalFederationApi;
-use crate::api::OutputOutcomeError;
 use crate::modules::wallet::common::WalletDecoder;
 use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::tweakable::Tweakable;
@@ -20,6 +20,7 @@ use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 use crate::modules::wallet::WalletInput;
 use crate::modules::wallet::WalletOutput;
 use crate::modules::wallet::{Wallet, WalletOutputOutcome};
+use crate::outcome::legacy::OutputOutcome;
 use crate::utils::ClientContext;
 use crate::MemberError;
 
@@ -164,8 +165,9 @@ impl WalletClient {
         let outcome: WalletOutputOutcome = self
             .context
             .api
-            .await_output_outcome(out_point, timeout, &self.context.decoders)
-            .await?;
+            .await_output_outcome::<OutputOutcome>(out_point, timeout, &self.context.decoders)
+            .await?
+            .try_into_variant()?;
         Ok(outcome.0)
     }
 }

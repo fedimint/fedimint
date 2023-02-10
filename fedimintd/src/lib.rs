@@ -2,9 +2,13 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::format_err;
-use fedimint_api::config::ModuleGenRegistry;
+use bitcoin::Network;
+use fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
+use fedimint_api::{Amount, Tiered};
+use fedimint_core::api::WsFederationConnect;
+use fedimint_mint::MintGenParams;
 use fedimint_server::config::ServerConfig;
-use mint_client::api::WsFederationConnect;
+use fedimint_wallet::WalletGenParams;
 use ring::aead::LessSafeKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -47,6 +51,26 @@ pub const TLS_CERT: &str = "tls-cert";
 
 pub const JSON_EXT: &str = "json";
 const ENCRYPTED_EXT: &str = "encrypt";
+
+/// Generates the configuration for the modules configured in the server binary
+pub fn configure_modules(
+    max_denomination: Amount,
+    network: Network,
+    finality_delay: u32,
+) -> ConfigGenParams {
+    ConfigGenParams::new()
+        .attach(WalletGenParams {
+            network,
+            // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
+            finality_delay,
+        })
+        .attach(MintGenParams {
+            mint_amounts: Tiered::gen_denominations(max_denomination)
+                .tiers()
+                .cloned()
+                .collect(),
+        })
+}
 
 /// Reads the server from the local, private, and consensus cfg files (private file encrypted)
 pub fn read_server_configs(key: &LessSafeKey, path: PathBuf) -> anyhow::Result<ServerConfig> {

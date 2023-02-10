@@ -27,12 +27,10 @@ use bitcoin::Address;
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
+use fedimint_server::api::WsFederationConnect;
 use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::ln::route_hints::RouteHint;
-use mint_client::{
-    api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
-    GatewayClient,
-};
+use mint_client::{ln::PayInvoicePayload, mint::MintClientError, ClientError, GatewayClient};
 use rpc::{BackupPayload, RestorePayload};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};

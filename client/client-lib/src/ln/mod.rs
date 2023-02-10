@@ -13,6 +13,7 @@ use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
 use fedimint_api::Amount;
+use fedimint_core::api::FederationError;
 use futures::StreamExt;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -21,7 +22,7 @@ use thiserror::Error;
 
 use self::db::ConfirmedInvoiceKey;
 use self::incoming::ConfirmedInvoice;
-use crate::api::{FederationError, LnFederationApi, WalletFederationApi};
+use crate::api::{LnFederationApi, WalletFederationApi};
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};

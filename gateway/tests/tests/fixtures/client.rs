@@ -10,14 +10,12 @@ use fedimint_api::{
     module::registry::ModuleDecoderRegistry,
     PeerId,
 };
+use fedimint_core::api::{DynFederationApi, WsFederationConnect};
 use ln_gateway::{
     client::{DynDbFactory, IGatewayClientBuilder},
     LnGatewayError,
 };
-use mint_client::{
-    api::{DynFederationApi, WsFederationConnect},
-    module_decode_stubs, Client, GatewayClient, GatewayClientConfig,
-};
+use mint_client::{module_decode_stubs, Client, GatewayClient, GatewayClientConfig};
 use secp256k1::{PublicKey, Secp256k1};
 use url::Url;
 

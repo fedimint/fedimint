@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::ensure;
 use bitcoin::hashes::hex::{FromHex, ToHex};
+use fedimint_api::config::ConfigGenParams;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::task::TaskGroup;
-use fedimint_api::{Amount, PeerId};
+use fedimint_api::PeerId;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
@@ -41,13 +42,11 @@ pub async fn run_dkg(
     bind_p2p: SocketAddr,
     bind_api: SocketAddr,
     dir_out_path: &Path,
-    max_denomination: Amount,
     federation_name: String,
     certs: Vec<String>,
-    network: bitcoin::network::constants::Network,
-    finality_delay: u32,
     pk: rustls::PrivateKey,
     task_group: &mut TaskGroup,
+    modules: ConfigGenParams,
 ) -> anyhow::Result<ServerConfig> {
     let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
     for (idx, cert) in certs.into_iter().sorted().enumerate() {
@@ -68,12 +67,11 @@ pub async fn run_dkg(
         bind_api,
         pk,
         our_id,
-        max_denomination,
         &peers,
         federation_name,
-        network,
-        finality_delay,
+        modules,
     );
+
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
     let server_conn = fedimint_server::config::connect(
         params.fed_network.clone(),

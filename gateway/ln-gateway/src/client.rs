@@ -12,11 +12,12 @@ use fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define,
 };
+use fedimint_server::api::DynFederationApi;
+use fedimint_server::api::GlobalFederationApi;
+use fedimint_server::api::WsFederationApi;
+use fedimint_server::api::WsFederationConnect;
 use fedimint_server::config::load_from_file;
-use mint_client::{
-    api::{DynFederationApi, GlobalFederationApi, WsFederationApi, WsFederationConnect},
-    module_decode_stubs, Client, GatewayClientConfig,
-};
+use mint_client::{module_decode_stubs, Client, GatewayClientConfig};
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
 use url::Url;

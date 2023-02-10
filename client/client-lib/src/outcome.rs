@@ -1,10 +1,11 @@
 pub mod legacy {
     use fedimint_api::core::{
-        Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+        Decoder, DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN,
+        LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_api::encoding::{Decodable, Encodable};
     use fedimint_api::ServerModule;
+    use fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
     use fedimint_core::CoreError;
     use fedimint_ln::contracts::incoming::OfferId;
     use fedimint_ln::contracts::{
@@ -52,9 +53,15 @@ pub mod legacy {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError>;
     }
 
+    impl DynTryIntoOutcome for OutputOutcome {
+        fn try_into_outcome(outcome: DynOutputOutcome) -> Result<Self, CoreError> {
+            Ok(OutputOutcome::from(outcome))
+        }
+    }
+
     impl OutputOutcome {
-        pub fn try_into_variant<T: TryIntoOutcome>(self) -> Result<T, CoreError> {
-            T::try_into_outcome(self)
+        pub fn try_into_variant<T: TryIntoOutcome>(self) -> Result<T, OutputOutcomeError> {
+            T::try_into_outcome(self).map_err(OutputOutcomeError::from)
         }
     }
 

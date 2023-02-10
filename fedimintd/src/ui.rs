@@ -16,9 +16,9 @@ use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
+use fedimint_core::api::WsFederationConnect;
 use fedimint_core::util::SanitizedUrl;
 use http::StatusCode;
-use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
 use tokio::select;
@@ -31,8 +31,8 @@ use url::Url;
 use crate::distributedgen::{create_cert, parse_peer_params, run_dkg};
 use crate::encrypt::{encrypted_read, get_key};
 use crate::{
-    encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG,
-    SALT_FILE, TLS_PK,
+    configure_modules, encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT,
+    PRIVATE_CONFIG, SALT_FILE, TLS_PK,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -178,13 +178,11 @@ async fn post_guardians(
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
-                max_denomination,
                 params.federation_name,
                 connection_strings,
-                params.network,
-                params.finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 &mut dkg_task_group,
+                configure_modules(max_denomination, params.network, params.finality_delay),
             )
             .await;
 

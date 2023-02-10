@@ -37,6 +37,7 @@ use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::api::WsFederationApi;
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
@@ -73,8 +74,7 @@ use mint_client::module_decode_stubs;
 use mint_client::transaction::legacy::Transaction;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::{
-    api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
-    UserClient, UserClientConfig,
+    mint::SpendableNote, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -174,7 +174,12 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let params = ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test").unwrap();
+    let modules = fedimintd::configure_modules(
+        sats(100000),
+        bitcoin::network::constants::Network::Regtest,
+        10,
+    );
+    let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_inits = ModuleGenRegistry::from(vec![
