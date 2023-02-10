@@ -71,6 +71,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        _module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig, LnGatewayError> {
         // TODO: use the connect info urls to get the federation name?
         // Simulate clients in the same federation by seeding the generated `client_config`

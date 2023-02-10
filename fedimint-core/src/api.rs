@@ -6,7 +6,8 @@ use std::time::Duration;
 use std::{cmp, result};
 
 use async_trait::async_trait;
-use fedimint_api::config::{ClientConfig, ConfigResponse};
+use bitcoin_hashes::sha256;
+use fedimint_api::config::{ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry};
 use fedimint_api::core::DynOutputOutcome;
 use fedimint_api::fmt_utils::AbbreviateDebug;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -33,7 +34,8 @@ use url::Url;
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::outcome::TransactionStatus;
 use crate::query::{
-    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses, ValidHistory,
+    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
+    VerifiableResponse,
 };
 use crate::transaction::{SerdeTransaction, Transaction};
 use crate::CoreError;
@@ -54,6 +56,8 @@ pub enum MemberError {
     InvalidPeerId { peer_id: PeerId },
     #[error("Rpc error: {0}")]
     Rpc(#[from] JsonRpcError),
+    #[error("Invalid response: {0}")]
+    InvalidResponse(String),
 }
 
 impl MemberError {
@@ -67,6 +71,7 @@ impl MemberError {
                 JsonRpcError::Call(jsonrpsee_types::error::CallError::Custom(e)) => e.code() == 404,
                 _ => false,
             },
+            MemberError::InvalidResponse(_) => false,
         }
     }
 }
@@ -374,8 +379,15 @@ pub trait GlobalFederationApi {
         decoders: &ModuleDecoderRegistry,
     ) -> OutputOutcomeResult<R>;
 
-    /// Fetch verifiable client configuration info
-    async fn download_client_config(&self) -> FederationResult<ConfigResponse>;
+    /// Fetch client configuration info only if verified against a federation id
+    async fn download_client_config(
+        &self,
+        id: &FederationId,
+        module_gens: ModuleGenRegistry,
+    ) -> FederationResult<ClientConfig>;
+
+    /// Fetches the server consensus hash if enough peers agree on it
+    async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
 }
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
@@ -410,7 +422,7 @@ where
 
         struct ValidHistoryWrapper {
             decoders: ModuleDecoderRegistry,
-            strategy: ValidHistory,
+            strategy: VerifiableResponse<SignedEpochOutcome>,
         }
 
         impl QueryStrategy<SerdeEpochHistory, SignedEpochOutcome> for ValidHistoryWrapper {
@@ -435,7 +447,11 @@ where
 
         let qs = ValidHistoryWrapper {
             decoders,
-            strategy: ValidHistory::new(epoch_pk, self.all_members().one_honest()),
+            strategy: VerifiableResponse::new(
+                self.all_members().one_honest(),
+                true,
+                move |epoch: &SignedEpochOutcome| epoch.verify_sig(&epoch_pk).is_ok(),
+            ),
         };
 
         self.request_with_strategy::<SerdeEpochHistory, _>(
@@ -510,9 +526,35 @@ where
             .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 
-    async fn download_client_config(&self) -> FederationResult<ConfigResponse> {
+    async fn download_client_config(
+        &self,
+        id: &FederationId,
+        module_gens: ModuleGenRegistry,
+    ) -> FederationResult<ClientConfig> {
+        let id = id.clone();
+        let qs = VerifiableResponse::new(
+            self.all_members().total(),
+            false,
+            move |config: &ConfigResponse| {
+                let hash = config.client.consensus_hash(&module_gens).expect("Hashes");
+
+                if let Some(sig) = &config.client_hash_signature {
+                    id.0.verify(sig, hash)
+                } else {
+                    false
+                }
+            },
+        );
+
+        self.request_with_strategy(qs, "/config".to_owned(), erased_no_param())
+            .await
+            .map(|cfg| cfg.client)
+    }
+
+    async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
         self.request_current_consensus("/config".to_owned(), erased_no_param())
             .await
+            .map(|cfg: ConfigResponse| cfg.consensus_hash)
     }
 }
 
@@ -536,6 +578,7 @@ struct FederationMember<C> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WsFederationConnect {
     pub members: Vec<(PeerId, Url)>,
+    pub id: FederationId,
 }
 
 impl From<&ClientConfig> for WsFederationConnect {
@@ -550,7 +593,10 @@ impl From<&ClientConfig> for WsFederationConnect {
                 (peer_id, url)
             })
             .collect();
-        WsFederationConnect { members }
+        WsFederationConnect {
+            members,
+            id: config.federation_id.clone(),
+        }
     }
 }
 

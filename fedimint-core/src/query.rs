@@ -5,12 +5,10 @@ use std::mem;
 use fedimint_api::PeerId;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
-use threshold_crypto::PublicKey;
 use tracing::debug;
 
 use crate::api;
 use crate::api::MemberError;
-use crate::epoch::SignedEpochOutcome;
 
 /// Returns a result from the first responding peer
 pub struct TrustAllPeers;
@@ -24,30 +22,49 @@ impl<R> QueryStrategy<R> for TrustAllPeers {
     }
 }
 
-/// Returns first epoch with a valid sig, otherwise wait till `required` agree
-pub struct ValidHistory {
-    epoch_pk: PublicKey,
-    current: CurrentConsensus<SignedEpochOutcome>,
+/// Returns first response with a valid sig
+pub struct VerifiableResponse<R> {
+    verifier: Box<dyn Fn(&R) -> bool + Send + Sync>,
+    allow_consensus_fallback: bool,
+    current: CurrentConsensus<R>,
 }
 
-impl ValidHistory {
-    pub fn new(epoch_pk: PublicKey, required: usize) -> Self {
+impl<R> VerifiableResponse<R> {
+    /// Strategy for returning first response that is verifiable (typically with a signature)
+    ///
+    /// * `required`: How many responses until a failure or success is returned
+    /// * `allow_consensus_fallback`: Returns a success if cannot verify but `required` agree
+    /// * `verifier`: Function that verifies the data with the public key
+    pub fn new(
+        required: usize,
+        allow_consensus_fallback: bool,
+        verifier: impl Fn(&R) -> bool + Send + Sync + 'static,
+    ) -> Self {
         Self {
-            epoch_pk,
+            verifier: Box::new(verifier),
+            allow_consensus_fallback,
             current: CurrentConsensus::new(required),
         }
     }
 }
 
-impl QueryStrategy<SignedEpochOutcome> for ValidHistory {
-    fn process(
-        &mut self,
-        peer: PeerId,
-        result: api::MemberResult<SignedEpochOutcome>,
-    ) -> QueryStep<SignedEpochOutcome> {
+impl<R: Debug + Eq + Clone> QueryStrategy<R> for VerifiableResponse<R> {
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
         match result {
-            Ok(epoch) if epoch.verify_sig(&self.epoch_pk).is_ok() => QueryStep::Success(epoch),
-            result => self.current.process(peer, result),
+            Ok(result) if (self.verifier)(&result) => QueryStep::Success(result),
+            Ok(result) => {
+                if self.allow_consensus_fallback {
+                    self.current.process(peer, Ok(result))
+                } else {
+                    self.current.process(
+                        peer,
+                        Err(MemberError::InvalidResponse(
+                            "Invalid signature".to_string(),
+                        )),
+                    )
+                }
+            }
+            error => self.current.process(peer, error),
         }
     }
 }

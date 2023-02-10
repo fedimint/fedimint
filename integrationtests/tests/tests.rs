@@ -1175,7 +1175,9 @@ async fn verifies_client_configs() -> Result<()> {
         let res = user.client.verify_config(&id).await;
         assert_matches!(
             res,
-            Err(ClientError::ConfigVerify(ConfigVerifyError::Unsigned))
+            Err(ClientError::ConfigVerify(
+                ConfigVerifyError::InvalidSignature
+            ))
         );
 
         fed.run_consensus_epochs(1).await;
