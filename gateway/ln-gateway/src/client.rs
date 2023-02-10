@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use fedimint_api::config::{ConfigResponse, FederationId, ModuleGenRegistry};
+use fedimint_api::config::{FederationId, ModuleGenRegistry};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
@@ -89,6 +89,7 @@ pub trait IGatewayClientBuilder: Debug {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig>;
 
     /// Save and persist the configuration of the gateway federation client
@@ -145,11 +146,12 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig> {
         let api: DynFederationApi = WsFederationApi::new(connect.members).into();
 
-        let response: ConfigResponse = api
-            .download_client_config()
+        let client_config = api
+            .download_client_config(&connect.id, module_gens)
             .await
             .expect("Failed to get client config");
 
@@ -159,7 +161,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
         Ok(GatewayClientConfig {
             mint_channel_id,
-            client_config: response.client,
+            client_config,
             redeem_key: kp_fed,
             timelock_delta: 10,
             node_pub_key: node_pubkey,

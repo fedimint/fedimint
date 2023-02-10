@@ -262,11 +262,17 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
 
     /// Verifies the config using the federation id
     pub async fn verify_config(&self, id: &FederationId) -> Result<()> {
-        let config = self.context.api.download_client_config().await?;
+        let config = self
+            .context
+            .api
+            .download_client_config(id, self.context.module_gens.clone())
+            .await
+            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::InvalidSignature))?;
+
         let api_hash = config
-            .client
             .consensus_hash(&self.context.module_gens)
             .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
+
         let self_hash = self
             .config
             .as_ref()
@@ -274,22 +280,11 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
 
         if api_hash != self_hash {
-            return Err(ClientError::ConfigVerify(
+            Err(ClientError::ConfigVerify(
                 ConfigVerifyError::MismatchingConfigs,
-            ));
-        }
-
-        match config.client_hash_signature {
-            None => Err(ClientError::ConfigVerify(ConfigVerifyError::Unsigned)),
-            Some(sig) => {
-                if id.0.verify(&sig, api_hash) {
-                    Ok(())
-                } else {
-                    Err(ClientError::ConfigVerify(
-                        ConfigVerifyError::InvalidSignature,
-                    ))
-                }
-            }
+            ))
+        } else {
+            Ok(())
         }
     }
 
@@ -1613,8 +1608,6 @@ pub enum ClientError {
 pub enum ConfigVerifyError {
     #[error("Our hash doesn't match the federation")]
     MismatchingConfigs,
-    #[error("Is unsigned")]
-    Unsigned,
     #[error("Invalid signature")]
     InvalidSignature,
     #[error("Cannot hash configs")]

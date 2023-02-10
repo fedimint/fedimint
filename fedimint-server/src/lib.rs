@@ -127,8 +127,8 @@ impl FedimintServer {
 
         loop {
             info!("Waiting for peers to agree on a consensus config hash");
-            match server.api.download_client_config().await {
-                Ok(response) if response.consensus_hash == consensus.consensus_hash => break,
+            match server.api.consensus_config_hash().await {
+                Ok(consensus_hash) if consensus_hash == consensus.consensus_hash => break,
                 Ok(_) => bail!("Our consensus config doesn't match peers!"),
                 Err(e) => {
                     warn!(target: LOG_CONSENSUS, "ERROR {:?}", e)

@@ -375,6 +375,12 @@ async fn main() {
             );
         };
     } else {
+        let module_gens = ModuleGenRegistry::from(vec![
+            DynModuleGen::from(WalletGen),
+            DynModuleGen::from(MintGen),
+            DynModuleGen::from(LightningGen),
+        ]);
+
         let cli = Cli::parse();
         if let Command::JoinFederation { connect } = cli.command {
             let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
@@ -382,13 +388,12 @@ async fn main() {
             let api = Arc::new(WsFederationApi::new(connect_obj.members))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;
             let cfg: ClientConfig = api
-                .download_client_config()
+                .download_client_config(&connect_obj.id, module_gens.clone())
                 .await
                 .or_terminate(
                     CliErrorKind::NetworkError,
                     "couldn't download config from peer",
-                )
-                .client;
+                );
             let cfg_path = cli.workdir.join("client.json");
             std::fs::create_dir_all(&cli.workdir)
                 .or_terminate(CliErrorKind::IOError, "failed to create config directory");
@@ -416,12 +421,6 @@ async fn main() {
             (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
             (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
             (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
-        ]);
-
-        let module_gens = ModuleGenRegistry::from(vec![
-            DynModuleGen::from(WalletGen),
-            DynModuleGen::from(MintGen),
-            DynModuleGen::from(LightningGen),
         ]);
 
         let client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await;

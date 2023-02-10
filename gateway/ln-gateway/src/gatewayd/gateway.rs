@@ -197,6 +197,7 @@ impl Gateway {
                 channel_id,
                 node_pub_key,
                 self.config.announce_address.clone(),
+                self.module_gens.clone(),
             )
             .await
             .expect("Failed to create gateway client config");
