@@ -20,9 +20,6 @@ bincode = "1.3.1"
 bitcoin = "0.29.2"
 itertools = "0.10.5"
 fedimint-api = { path = "../fedimint-api" }
-fedimint-ln = { path = "../modules/fedimint-ln" }
-fedimint-mint = { path = "../modules/fedimint-mint" }
-fedimint-wallet = { path = "../modules/fedimint-wallet", default-features = false }
 rand = "0.8"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
 serde = { version = "1.0.149", features = [ "derive" ] }

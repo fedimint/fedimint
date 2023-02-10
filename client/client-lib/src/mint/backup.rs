@@ -20,16 +20,14 @@ use fedimint_api::{
     task::TaskGroup,
     NumPeers, PeerId,
 };
-use fedimint_core::{
-    epoch::{ConsensusItem, SignedEpochOutcome},
-    modules::mint::{MintConsensusItem, MintInput, MintOutput},
-};
+use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 use tracing::{error, info};
 
 use super::{db::NextECashNoteIndexKeyPrefix, *};
 use crate::api::{FederationError, GlobalFederationApi, MintFederationApi};
+use crate::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 
 impl MintClient {
     /// Prepare an encrypted backup and send it to federation for storing

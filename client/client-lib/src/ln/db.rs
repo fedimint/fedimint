@@ -1,13 +1,13 @@
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::impl_db_prefix_const;
-use fedimint_core::modules::ln::contracts::ContractId;
-use fedimint_core::modules::ln::LightningGateway;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
 use super::incoming::ConfirmedInvoice;
 use super::outgoing::OutgoingContractAccount;
 use crate::ln::outgoing::OutgoingContractData;
+use crate::modules::ln::contracts::ContractId;
+use crate::modules::ln::LightningGateway;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]

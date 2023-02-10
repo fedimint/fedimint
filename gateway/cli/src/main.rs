@@ -3,7 +3,6 @@ use std::{net::SocketAddr, path::PathBuf};
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_api::config::FederationId;
-use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{
@@ -11,6 +10,7 @@ use ln_gateway::{
         DepositAddressPayload, DepositPayload, RestorePayload, WithdrawPayload,
     },
 };
+use mint_client::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::from_hex;
 use url::Url;
 

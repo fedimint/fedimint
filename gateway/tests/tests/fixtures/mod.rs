@@ -4,7 +4,6 @@ use anyhow::Result;
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
-use fedimint_core::modules::wallet::WalletGen;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
@@ -15,6 +14,7 @@ use ln_gateway::{
     LnGateway,
 };
 use mint_client::module_decode_stubs;
+use mint_client::modules::wallet::WalletGen;
 use tokio::sync::mpsc;
 
 pub mod client;

@@ -3,10 +3,17 @@ pub mod db;
 pub mod ln;
 pub mod logging;
 pub mod mint;
+pub mod outcome;
 pub mod query;
 pub mod transaction;
 pub mod utils;
 pub mod wallet;
+
+pub mod modules {
+    pub use fedimint_ln as ln;
+    pub use fedimint_mint as mint;
+    pub use fedimint_wallet as wallet;
+}
 
 use std::fmt::{Debug, Formatter};
 use std::iter::once;
@@ -34,31 +41,7 @@ use fedimint_api::time::SystemTime;
 use fedimint_api::TieredMulti;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_core::epoch::SignedEpochOutcome;
-use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::config::LightningClientConfig;
-use fedimint_core::modules::mint::common::MintDecoder;
-use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
-use fedimint_core::modules::wallet::common::WalletDecoder;
-use fedimint_core::modules::wallet::config::WalletClientConfig;
-use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::legacy::Transaction as LegacyTransaction;
-use fedimint_core::{
-    modules::{
-        ln::{
-            contracts::{
-                incoming::{IncomingContract, IncomingContractOffer, OfferId},
-                Contract, ContractId, DecryptedPreimage, IdentifyableContract,
-                OutgoingContractOutcome, Preimage,
-            },
-            ContractOutput, LightningGateway, LightningOutput,
-        },
-        mint::BlindNonce,
-        wallet::txoproof::TxOutProof,
-    },
-    transaction::legacy::{Input, Output},
-};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
@@ -90,6 +73,28 @@ use crate::ln::LnClientError;
 use crate::logging::LOG_WALLET;
 use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
 use crate::mint::MintClientError;
+use crate::modules::ln::common::LightningDecoder;
+use crate::modules::ln::config::LightningClientConfig;
+use crate::modules::mint::common::MintDecoder;
+use crate::modules::mint::config::MintClientConfig;
+use crate::modules::mint::{MintOutput, MintOutputOutcome};
+use crate::modules::wallet::common::WalletDecoder;
+use crate::modules::wallet::config::WalletClientConfig;
+use crate::modules::wallet::{PegOut, WalletInput, WalletOutput};
+use crate::modules::{
+    ln::{
+        contracts::{
+            incoming::{IncomingContract, IncomingContractOffer, OfferId},
+            Contract, ContractId, DecryptedPreimage, IdentifyableContract, OutgoingContractOutcome,
+            Preimage,
+        },
+        ContractOutput, LightningGateway, LightningOutput,
+    },
+    mint::BlindNonce,
+    wallet::txoproof::TxOutProof,
+};
+use crate::transaction::legacy::Transaction as LegacyTransaction;
+use crate::transaction::legacy::{Input, Output};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
@@ -138,7 +143,7 @@ pub struct GatewayClientConfig {
 impl GatewayClientConfig {
     pub fn to_gateway_registration_info(
         &self,
-        route_hints: Vec<fedimint_core::modules::ln::route_hints::RouteHint>,
+        route_hints: Vec<modules::ln::route_hints::RouteHint>,
         time_to_live: Duration,
     ) -> LightningGateway {
         LightningGateway {
@@ -1335,12 +1340,10 @@ impl Client<GatewayClientConfig> {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output = fedimint_core::transaction::legacy::Output::LN(
-            LightningOutput::Contract(ContractOutput {
-                amount: offer.amount,
-                contract: contract.clone(),
-            }),
-        );
+        let incoming_output = Output::LN(LightningOutput::Contract(ContractOutput {
+            amount: offer.amount,
+            contract: contract.clone(),
+        }));
 
         // Submit transaction
         builder.output(incoming_output);

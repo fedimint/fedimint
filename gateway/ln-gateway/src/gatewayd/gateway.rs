@@ -14,7 +14,7 @@ use fedimint_api::{
     task::TaskGroup,
     Amount, TransactionId,
 };
-use fedimint_server::modules::ln::{contracts::Preimage, route_hints::RouteHint};
+use mint_client::modules::ln::{contracts::Preimage, route_hints::RouteHint};
 use mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info, warn};
