@@ -8,7 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
+use fedimint_api::net::peers::{DynPeerConnections, IMuxPeerConnections};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{sync::Mutex, time::sleep};
 use tracing::{debug, warn};
@@ -52,7 +52,7 @@ impl<MuxKey, Msg> Default for ModuleMultiplexerOutOfOrder<MuxKey, Msg> {
 /// Shared, mutable (wrapped in mutex) data of [`PeerConnectionMultiplexer`].
 struct ModuleMultiplexerInner<MuxKey, Msg> {
     /// Underlying connection pool
-    connections: Mutex<PeerConnections<ModuleMultiplexed<MuxKey, Msg>>>,
+    connections: Mutex<DynPeerConnections<ModuleMultiplexed<MuxKey, Msg>>>,
     /// Messages that arrived before an interested thread asked for them
     out_of_order: Mutex<ModuleMultiplexerOutOfOrder<MuxKey, Msg>>,
 }
@@ -73,7 +73,7 @@ where
     Msg: Serialize + DeserializeOwned + Unpin + Send + Debug,
     MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone,
 {
-    pub fn new(connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
+    pub fn new(connections: DynPeerConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
         Self {
             inner: Arc::new(ModuleMultiplexerInner {
                 connections: Mutex::new(connections),

@@ -1,9 +1,9 @@
-/// Fake (channel-based) implementation of [`super::PeerConnections`].
+/// Fake (channel-based) implementation of [`super::DynPeerConnections`].
 use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::net::peers::{IPeerConnections, PeerConnections};
+use fedimint_api::net::peers::{DynPeerConnections, IPeerConnections};
 use fedimint_api::task::TaskHandle;
 use fedimint_api::PeerId;
 use serde::de::DeserializeOwned;
@@ -60,7 +60,7 @@ pub fn make_fake_peer_connection<Msg>(
     peer2: PeerId,
     buf_size: usize,
     task_handle: TaskHandle,
-) -> (PeerConnections<Msg>, PeerConnections<Msg>)
+) -> (DynPeerConnections<Msg>, DynPeerConnections<Msg>)
 where
     Msg: Serialize + DeserializeOwned + Unpin + Send + 'static,
 {

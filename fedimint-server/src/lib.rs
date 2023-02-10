@@ -11,7 +11,7 @@ use config::ServerConfig;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::encoding::DecodeError;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::net::peers::PeerConnections;
+use fedimint_api::net::peers::DynPeerConnections;
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{
@@ -91,7 +91,7 @@ enum EpochTriggerEvent {
 pub struct FedimintServer {
     pub consensus: Arc<FedimintConsensus>,
     pub tx_receiver: Peekable<ReceiverStream<Transaction>>,
-    pub connections: PeerConnections<EpochMessage>,
+    pub connections: DynPeerConnections<EpochMessage>,
     pub cfg: ServerConfig,
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     pub api: DynFederationApi,

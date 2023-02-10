@@ -11,10 +11,10 @@ use crate::cancellable::Cancellable;
 #[cfg(not(target_family = "wasm"))]
 pub mod fake;
 
-/// Owned [`PeerConnections`] trait object type
-pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + Unpin + 'static>);
+/// Owned [`DynPeerConnections`] trait object type
+pub struct DynPeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + Unpin + 'static>);
 
-impl<Msg> Deref for PeerConnections<Msg> {
+impl<Msg> Deref for DynPeerConnections<Msg> {
     type Target = dyn IPeerConnections<Msg> + Send + Unpin + 'static;
 
     fn deref(&self) -> &Self::Target {
@@ -22,7 +22,7 @@ impl<Msg> Deref for PeerConnections<Msg> {
     }
 }
 
-impl<Msg> DerefMut for PeerConnections<Msg> {
+impl<Msg> DerefMut for DynPeerConnections<Msg> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.0
     }
@@ -38,7 +38,7 @@ impl<Msg> DerefMut for PeerConnections<Msg> {
 ///   avoids the need to rejoin the consensus, which is more tricky.
 ///
 /// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
-/// The thus disconnected peer will need to rejoin the consensus at a later time.  
+/// The thus disconnected peer will need to rejoin the consensus at a later time.
 #[async_trait]
 pub trait IPeerConnections<Msg>
 where
@@ -57,11 +57,11 @@ where
     async fn ban_peer(&mut self, peer: PeerId);
 
     /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> PeerConnections<Msg>
+    fn into_dyn(self) -> DynPeerConnections<Msg>
     where
         Self: Sized + Send + Unpin + 'static,
     {
-        PeerConnections(Box::new(self))
+        DynPeerConnections(Box::new(self))
     }
 }
 
