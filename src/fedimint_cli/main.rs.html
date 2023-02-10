@@ -744,18 +744,18 @@
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
-<span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
-<span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
-<span class="kw">use </span>fedimint_core::modules::ln::LightningGen;
-<span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
-<span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
-<span class="kw">use </span>fedimint_core::modules::wallet::WalletGen;
 <span class="kw">use </span>fedimint_mint::common::MintDecoder;
 <span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>mint_client::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
 };
 <span class="kw">use </span>mint_client::mint::SpendableNote;
+<span class="kw">use </span>mint_client::modules::ln::common::LightningDecoder;
+<span class="kw">use </span>mint_client::modules::ln::contracts::ContractId;
+<span class="kw">use </span>mint_client::modules::ln::LightningGen;
+<span class="kw">use </span>mint_client::modules::wallet::common::WalletDecoder;
+<span class="kw">use </span>mint_client::modules::wallet::txoproof::TxOutProof;
+<span class="kw">use </span>mint_client::modules::wallet::WalletGen;
 <span class="kw">use </span>mint_client::query::EventuallyConsistent;
 <span class="kw">use </span>mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,

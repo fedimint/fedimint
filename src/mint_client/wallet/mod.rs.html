@@ -413,19 +413,19 @@
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::{Amount, ServerModule};
-<span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
-<span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
-<span class="kw">use </span>fedimint_core::modules::wallet::tweakable::Tweakable;
-<span class="kw">use </span>fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-<span class="kw">use </span>fedimint_core::modules::wallet::WalletInput;
-<span class="kw">use </span>fedimint_core::modules::wallet::WalletOutput;
-<span class="kw">use </span>fedimint_core::modules::wallet::{Wallet, WalletOutputOutcome};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::GlobalFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::api::OutputOutcomeError;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::common::WalletDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::tweakable::Tweakable;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::WalletInput;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::WalletOutput;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{Wallet, WalletOutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span><span class="kw">crate</span>::MemberError;
 
@@ -610,17 +610,17 @@
     <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_api::task::TaskGroup;
     <span class="kw">use </span>fedimint_api::{Feerate, OutPoint, TransactionId};
-    <span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
-    <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
-    <span class="kw">use </span>fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
-    };
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>tokio::sync::Mutex;
 
     <span class="kw">use </span><span class="kw">crate</span>::api::fake::FederationApiFaker;
+    <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::common::WalletDecoder;
+    <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
+    <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{
+        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
+    };
     <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClient;
     <span class="kw">use crate</span>::{module_decode_stubs, ClientContext};
 

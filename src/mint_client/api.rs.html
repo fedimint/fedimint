@@ -1142,12 +1142,7 @@
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-<span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-<span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
-<span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-<span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
-<span class="kw">use </span>fedimint_core::outcome::legacy::TryIntoOutcome;
-<span class="kw">use </span>fedimint_core::outcome::{<span class="self">self</span>, TransactionStatus};
+<span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
 <span class="kw">use </span>fedimint_core::CoreError;
 <span class="kw">use </span>fedimint_mint::db::ECashUserBackupSnapshot;
@@ -1168,6 +1163,11 @@
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::incoming::IncomingContractOffer;
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::ContractId;
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::{ContractAccount, LightningGateway};
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::PegOutFees;
+<span class="kw">use </span><span class="kw">crate</span>::outcome::legacy::TryIntoOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
     UnionResponsesSingle, ValidHistory,
@@ -1605,7 +1605,7 @@
                         out_idx: out_point.out_idx,
                     })
                     .and_then(|output| {
-                        <span class="kw">let </span>legacy_oo: outcome::legacy::OutputOutcome = output
+                        <span class="kw">let </span>legacy_oo: <span class="kw">crate</span>::outcome::legacy::OutputOutcome = output
                             .try_into_inner(decoders)
                             .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))<span class="question-mark">?
                             </span>.into();

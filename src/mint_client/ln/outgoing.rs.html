@@ -34,14 +34,12 @@
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
-<a href="#37" id="37">37</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::Amount;
-<span class="kw">use </span>fedimint_core::modules::ln::contracts::{
-    outgoing::OutgoingContract, IdentifyableContract, Preimage,
-};
-<span class="kw">use </span>fedimint_core::modules::ln::LightningInput;
 <span class="kw">use </span>serde::Serialize;
+
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::{outgoing::OutgoingContract, IdentifyableContract, Preimage};
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::LightningInput;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>OutgoingContractData {

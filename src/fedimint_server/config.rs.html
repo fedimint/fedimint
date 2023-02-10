@@ -834,10 +834,10 @@
 <span class="kw">use </span>fedimint_api::task::{timeout, Elapsed, TaskGroup};
 <span class="kw">use </span>fedimint_api::{Amount, PeerId, Tiered};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
-<span class="kw">use </span>fedimint_core::modules::mint::MintGenParams;
 <span class="kw">use </span>fedimint_wallet::WalletGenParams;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>hbbft::NetworkInfo;
+<span class="kw">use </span>mint_client::modules::mint::MintGenParams;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};

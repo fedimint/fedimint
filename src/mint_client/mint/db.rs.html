@@ -85,11 +85,11 @@
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::impl_db_prefix_const;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
-<span class="kw">use </span>fedimint_core::modules::mint::Nonce;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::{NoteIssuanceRequests, SpendableNote};
+<span class="kw">use </span><span class="kw">crate</span>::modules::mint::Nonce;
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]

@@ -1611,15 +1611,25 @@
 <a href="#1611" id="1611">1611</a>
 <a href="#1612" id="1612">1612</a>
 <a href="#1613" id="1613">1613</a>
+<a href="#1614" id="1614">1614</a>
+<a href="#1615" id="1615">1615</a>
+<a href="#1616" id="1616">1616</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>logging;
 <span class="kw">pub mod </span>mint;
+<span class="kw">pub mod </span>outcome;
 <span class="kw">pub mod </span>query;
 <span class="kw">pub mod </span>transaction;
 <span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>wallet;
+
+<span class="kw">pub mod </span>modules {
+    <span class="kw">pub use </span>fedimint_ln <span class="kw">as </span>ln;
+    <span class="kw">pub use </span>fedimint_mint <span class="kw">as </span>mint;
+    <span class="kw">pub use </span>fedimint_wallet <span class="kw">as </span>wallet;
+}
 
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::iter::once;
@@ -1647,31 +1657,7 @@
 <span class="kw">use </span>fedimint_api::TieredMulti;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
-<span class="kw">use </span>fedimint_core::modules::ln::common::LightningDecoder;
-<span class="kw">use </span>fedimint_core::modules::ln::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::common::MintDecoder;
-<span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
-<span class="kw">use </span>fedimint_core::modules::wallet::common::WalletDecoder;
-<span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
-<span class="kw">use </span>fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
-<span class="kw">use </span>fedimint_core::transaction::legacy::Transaction <span class="kw">as </span>LegacyTransaction;
-<span class="kw">use </span>fedimint_core::{
-    modules::{
-        ln::{
-            contracts::{
-                incoming::{IncomingContract, IncomingContractOffer, OfferId},
-                Contract, ContractId, DecryptedPreimage, IdentifyableContract,
-                OutgoingContractOutcome, Preimage,
-            },
-            ContractOutput, LightningGateway, LightningOutput,
-        },
-        mint::BlindNonce,
-        wallet::txoproof::TxOutProof,
-    },
-    transaction::legacy::{Input, Output},
-};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>futures::stream::{<span class="self">self</span>, FuturesUnordered};
 <span class="kw">use </span>futures::StreamExt;
@@ -1703,6 +1689,28 @@
 <span class="kw">use </span><span class="kw">crate</span>::logging::LOG_WALLET;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NoteKey, PendingNotesKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::mint::MintClientError;
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::common::LightningDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::config::LightningClientConfig;
+<span class="kw">use </span><span class="kw">crate</span>::modules::mint::common::MintDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::modules::mint::config::MintClientConfig;
+<span class="kw">use </span><span class="kw">crate</span>::modules::mint::{MintOutput, MintOutputOutcome};
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::common::WalletDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{PegOut, WalletInput, WalletOutput};
+<span class="kw">use </span><span class="kw">crate</span>::modules::{
+    ln::{
+        contracts::{
+            incoming::{IncomingContract, IncomingContractOffer, OfferId},
+            Contract, ContractId, DecryptedPreimage, IdentifyableContract, OutgoingContractOutcome,
+            Preimage,
+        },
+        ContractOutput, LightningGateway, LightningOutput,
+    },
+    mint::BlindNonce,
+    wallet::txoproof::TxOutProof,
+};
+<span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::Transaction <span class="kw">as </span>LegacyTransaction;
+<span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::{Input, Output};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, ClientContext};
 <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
@@ -1751,7 +1759,7 @@
 <span class="kw">impl </span>GatewayClientConfig {
     <span class="kw">pub fn </span>to_gateway_registration_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        route_hints: Vec&lt;fedimint_core::modules::ln::route_hints::RouteHint&gt;,
+        route_hints: Vec&lt;modules::ln::route_hints::RouteHint&gt;,
         time_to_live: Duration,
     ) -&gt; LightningGateway {
         LightningGateway {
@@ -2948,12 +2956,10 @@
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        <span class="kw">let </span>incoming_output = fedimint_core::transaction::legacy::Output::LN(
-            LightningOutput::Contract(ContractOutput {
-                amount: offer.amount,
-                contract: contract.clone(),
-            }),
-        );
+        <span class="kw">let </span>incoming_output = Output::LN(LightningOutput::Contract(ContractOutput {
+            amount: offer.amount,
+            contract: contract.clone(),
+        }));
 
         <span class="comment">// Submit transaction
         </span>builder.output(incoming_output);

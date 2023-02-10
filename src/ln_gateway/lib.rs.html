@@ -504,8 +504,8 @@
 <span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_api::{task::TaskGroup, Amount, TransactionId};
-<span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
-<span class="kw">use </span>fedimint_server::modules::ln::route_hints::RouteHint;
+<span class="kw">use </span>mint_client::modules::ln::contracts::Preimage;
+<span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
 <span class="kw">use </span>mint_client::{
     api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
     GatewayClient,

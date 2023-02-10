@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"opaque":[["",""]],"struct":[["TransactionBuilder",""]],"trait":[["Final",""]]};
+window.SIDEBAR_ITEMS = {"mod":[["legacy","Old transaction definition used by old client."]],"opaque":[["",""]],"struct":[["TransactionBuilder",""]],"trait":[["Final",""]]};

@@ -850,8 +850,6 @@
 <a href="#850" id="850">850</a>
 <a href="#851" id="851">851</a>
 <a href="#852" id="852">852</a>
-<a href="#853" id="853">853</a>
-<a href="#854" id="854">854</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -874,16 +872,14 @@
     task::TaskGroup,
     NumPeers, PeerId,
 };
-<span class="kw">use </span>fedimint_core::{
-    epoch::{ConsensusItem, SignedEpochOutcome},
-    modules::mint::{MintConsensusItem, MintInput, MintOutput},
-};
+<span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_mint::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use super</span>::{db::NextECashNoteIndexKeyPrefix, <span class="kw-2">*</span>};
 <span class="kw">use </span><span class="kw">crate</span>::api::{FederationError, GlobalFederationApi, MintFederationApi};
+<span class="kw">use </span><span class="kw">crate</span>::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 
 <span class="kw">impl </span>MintClient {
     <span class="doccomment">/// Prepare an encrypted backup and send it to federation for storing

@@ -431,7 +431,7 @@
     task::TaskGroup,
     Amount, TransactionId,
 };
-<span class="kw">use </span>fedimint_server::modules::ln::{contracts::Preimage, route_hints::RouteHint};
+<span class="kw">use </span>mint_client::modules::ln::{contracts::Preimage, route_hints::RouteHint};
 <span class="kw">use </span>mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient};
 <span class="kw">use </span>tokio::sync::{mpsc, Mutex};
 <span class="kw">use </span>tracing::{error, info, warn};

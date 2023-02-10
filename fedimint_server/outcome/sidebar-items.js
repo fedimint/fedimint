@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["TransactionStatus",""]],"mod":[["legacy",""]],"type":[["SerdeOutputOutcome",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["TransactionStatus",""]],"type":[["SerdeOutputOutcome",""]]};
