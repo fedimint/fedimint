@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_api::dyn_newtype_define;
-use fedimint_server::modules::ln::route_hints::RouteHint;
+use mint_client::modules::ln::route_hints::RouteHint;
 use tonic::{
     transport::{Channel, Endpoint},
     Request, Streaming,

@@ -10,17 +10,17 @@ use fedimint_api::{
     module::{registry::ModuleDecoderRegistry, DynModuleGen},
     task::TaskGroup,
 };
-use fedimint_server::modules::{
-    ln::{common::LightningDecoder, LightningGen},
-    mint::{common::MintDecoder, MintGen},
-    wallet::{common::WalletDecoder, WalletGen},
-};
 use ln_gateway::{
     client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
     gatewayd::{
         gateway::Gateway,
         lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient},
     },
+};
+use mint_client::modules::{
+    ln::{common::LightningDecoder, LightningGen},
+    mint::{common::MintDecoder, MintGen},
+    wallet::{common::WalletDecoder, WalletGen},
 };
 use tracing::{error, info};
 use url::Url;

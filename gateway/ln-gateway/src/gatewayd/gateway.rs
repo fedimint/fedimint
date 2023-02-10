@@ -17,8 +17,10 @@ use fedimint_api::{
     Amount, TransactionId,
 };
 use fedimint_server::api::WsFederationConnect;
-use mint_client::modules::ln::{
-    contracts::Preimage, route_hints::RouteHint, GatewayClient, PayInvoicePayload,
+use mint_client::{
+    ln::PayInvoicePayload,
+    modules::ln::{contracts::Preimage, route_hints::RouteHint},
+    GatewayClient,
 };
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
