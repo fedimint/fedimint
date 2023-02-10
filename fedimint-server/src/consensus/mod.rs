@@ -396,8 +396,7 @@ impl FedimintConsensus {
             let span = info_span!("Processing transaction");
             async {
                 trace!(?transaction);
-                let mut tx_cache = self.tx_cache.lock().unwrap();
-                tx_cache.remove(&transaction);
+                self.tx_cache.lock().unwrap().remove(&transaction);
 
                 dbtx.set_tx_savepoint().await;
                 // TODO: use borrowed transaction
