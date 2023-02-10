@@ -880,7 +880,6 @@
                 cargo-llvm-cov
                 cargo-udeps
                 pkgs.parallel
-                pkgs.semgrep
                 pkgs.just
 
                 (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
@@ -899,6 +898,8 @@
                 pkgs.rnix-lsp
                 pkgs-unstable.convco
                 pkgs.nodePackages.bash-language-server
+              ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
+                pkgs.semgrep
               ] ++ cliTestsDeps;
               RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
