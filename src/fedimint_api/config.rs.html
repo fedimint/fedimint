@@ -1075,15 +1075,6 @@
 <a href="#1075" id="1075">1075</a>
 <a href="#1076" id="1076">1076</a>
 <a href="#1077" id="1077">1077</a>
-<a href="#1078" id="1078">1078</a>
-<a href="#1079" id="1079">1079</a>
-<a href="#1080" id="1080">1080</a>
-<a href="#1081" id="1081">1081</a>
-<a href="#1082" id="1082">1082</a>
-<a href="#1083" id="1083">1083</a>
-<a href="#1084" id="1084">1084</a>
-<a href="#1085" id="1085">1085</a>
-<a href="#1086" id="1086">1086</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -1091,8 +1082,8 @@
 <span class="kw">use </span>std::ops::Mul;
 <span class="kw">use </span>std::str::FromStr;
 
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>anyhow::{bail, ensure};
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::hex;
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
@@ -1120,6 +1111,7 @@
 <span class="kw">use </span>threshold_crypto::Signature;
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::module::DynModuleGen;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
@@ -1699,30 +1691,26 @@
     }
 
     <span class="doccomment">/// Runs a single step of the DKG algorithm, processing a `msg` from `peer`
-    </span><span class="kw">pub fn </span>step(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, msg: DkgMessage&lt;G&gt;) -&gt; anyhow::Result&lt;DkgStep&lt;G&gt;&gt; {
+    </span><span class="kw">pub fn </span>step(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, msg: DkgMessage&lt;G&gt;) -&gt; DkgStep&lt;G&gt; {
         <span class="kw">match </span>msg {
             DkgMessage::HashedCommit(hashed) =&gt; {
                 <span class="kw">match </span><span class="self">self</span>.hashed_commits.get(<span class="kw-2">&amp;</span>peer) {
-                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != hashed =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;{peer} sent us two hashes!&quot;</span>))
-                    }
+                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != hashed =&gt; <span class="macro">panic!</span>(<span class="string">&quot;{peer} sent us two hashes!&quot;</span>),
                     <span class="kw">_ </span>=&gt; <span class="self">self</span>.hashed_commits.insert(peer, hashed),
                 };
 
                 <span class="kw">if </span><span class="self">self</span>.hashed_commits.len() == <span class="self">self</span>.peers.len() {
                     <span class="kw">let </span>our_commit = <span class="self">self</span>.commitments[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id].clone();
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.broadcast(DkgMessage::Commit(our_commit)));
+                    <span class="kw">return </span><span class="self">self</span>.broadcast(DkgMessage::Commit(our_commit));
                 }
             }
             DkgMessage::Commit(commit) =&gt; {
                 <span class="kw">let </span>hash = <span class="self">self</span>.hash(commit.clone());
-                <span class="macro">ensure!</span>(<span class="self">self</span>.threshold == commit.len(), <span class="string">&quot;wrong degree from {peer}&quot;</span>);
-                <span class="macro">ensure!</span>(hash == <span class="self">self</span>.hashed_commits[<span class="kw-2">&amp;</span>peer], <span class="string">&quot;wrong hash from {peer}&quot;</span>);
+                <span class="macro">assert_eq!</span>(<span class="self">self</span>.threshold, commit.len(), <span class="string">&quot;wrong degree from {peer}&quot;</span>);
+                <span class="macro">assert_eq!</span>(hash, <span class="self">self</span>.hashed_commits[<span class="kw-2">&amp;</span>peer], <span class="string">&quot;wrong hash from {peer}&quot;</span>);
 
                 <span class="kw">match </span><span class="self">self</span>.commitments.get(<span class="kw-2">&amp;</span>peer) {
-                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != commit =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;{peer} sent us two commitments!&quot;</span>))
-                    }
+                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != commit =&gt; <span class="macro">panic!</span>(<span class="string">&quot;{peer} sent us two commitments!&quot;</span>),
                     <span class="kw">_ </span>=&gt; <span class="self">self</span>.commitments.insert(peer, commit),
                 };
 
@@ -1739,7 +1727,7 @@
                             messages.push((<span class="kw-2">*</span>peer, DkgMessage::Share(s1, s2)));
                         }
                     }
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(DkgStep::Messages(messages));
+                    <span class="kw">return </span>DkgStep::Messages(messages);
                 }
             }
             <span class="comment">// Pedersen-VSS verifies the shares match the commitments
@@ -1748,7 +1736,7 @@
                 <span class="kw">let </span>commitment = <span class="self">self
                     </span>.commitments
                     .get(<span class="kw-2">&amp;</span>peer)
-                    .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;{peer} sent share before commit&quot;</span>))<span class="question-mark">?</span>;
+                    .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;{peer} sent share before commit&quot;</span>));
                 <span class="kw">let </span>commit_product: G = commitment
                     .iter()
                     .enumerate()
@@ -1756,11 +1744,9 @@
                     .reduce(|a, b| a + b)
                     .expect(<span class="string">&quot;sums&quot;</span>);
 
-                <span class="macro">ensure!</span>(share_product == commit_product, <span class="string">&quot;bad commit from {peer}&quot;</span>);
+                <span class="macro">assert_eq!</span>(share_product, commit_product, <span class="string">&quot;bad commit from {peer}&quot;</span>);
                 <span class="kw">match </span><span class="self">self</span>.sk_shares.get(<span class="kw-2">&amp;</span>peer) {
-                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != s1 =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;{peer} sent us two shares!&quot;</span>))
-                    }
+                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != s1 =&gt; <span class="macro">panic!</span>(<span class="string">&quot;{peer} sent us two shares!&quot;</span>),
                     <span class="kw">_ </span>=&gt; <span class="self">self</span>.sk_shares.insert(peer, s1),
                 };
 
@@ -1772,7 +1758,7 @@
                         .collect();
 
                     <span class="self">self</span>.pk_shares.insert(<span class="self">self</span>.our_id, extract.clone());
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.broadcast(DkgMessage::Extract(extract)));
+                    <span class="kw">return </span><span class="self">self</span>.broadcast(DkgMessage::Extract(extract));
                 }
             }
             <span class="comment">// Feldman-VSS exposes the public key shares
@@ -1780,7 +1766,7 @@
                 <span class="kw">let </span>share = <span class="self">self
                     </span>.sk_shares
                     .get(<span class="kw-2">&amp;</span>peer)
-                    .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;{peer} sent extract before share&quot;</span>))<span class="question-mark">?</span>;
+                    .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;{peer} sent extract before share&quot;</span>));
                 <span class="kw">let </span>share_product = <span class="self">self</span>.gen_g * <span class="kw-2">*</span>share;
                 <span class="kw">let </span>extract_product: G = extract
                     .iter()
@@ -1789,12 +1775,10 @@
                     .reduce(|a, b| a + b)
                     .expect(<span class="string">&quot;sums&quot;</span>);
 
-                <span class="macro">ensure!</span>(share_product == extract_product, <span class="string">&quot;bad extract from {peer}&quot;</span>);
-                <span class="macro">ensure!</span>(<span class="self">self</span>.threshold == extract.len(), <span class="string">&quot;wrong degree from {peer}&quot;</span>);
+                <span class="macro">assert_eq!</span>(share_product, extract_product, <span class="string">&quot;bad extract from {peer}&quot;</span>);
+                <span class="macro">assert_eq!</span>(<span class="self">self</span>.threshold, extract.len(), <span class="string">&quot;wrong degree from {peer}&quot;</span>);
                 <span class="kw">match </span><span class="self">self</span>.pk_shares.get(<span class="kw-2">&amp;</span>peer) {
-                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != extract =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;{peer} sent us two extracts!&quot;</span>))
-                    }
+                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != extract =&gt; <span class="macro">panic!</span>(<span class="string">&quot;{peer} sent us two extracts!&quot;</span>),
                     <span class="kw">_ </span>=&gt; <span class="self">self</span>.pk_shares.insert(peer, extract),
                 };
 
@@ -1811,15 +1795,15 @@
                         })
                         .collect();
 
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(DkgStep::Result(DkgKeys {
+                    <span class="kw">return </span>DkgStep::Result(DkgKeys {
                         public_key_set: pks,
                         secret_key_share: sks,
-                    }));
+                    });
                 }
             }
         }
 
-        <span class="prelude-val">Ok</span>(DkgStep::Messages(<span class="macro">vec!</span>[]))
+        DkgStep::Messages(<span class="macro">vec!</span>[])
     }
 
     <span class="kw">fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>, poly: Vec&lt;G&gt;) -&gt; Sha256 {
@@ -1888,7 +1872,7 @@
         module_id: ModuleInstanceId,
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; anyhow::Result&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt; {
+    ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(module_id, G2Projective::generator(), connections, rng)
             .<span class="kw">await
     </span>}
@@ -1899,7 +1883,7 @@
         module_id: ModuleInstanceId,
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; anyhow::Result&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt; {
+    ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt; {
         <span class="self">self</span>.run(module_id, G1Projective::generator(), connections, rng)
             .<span class="kw">await
     </span>}
@@ -1911,7 +1895,7 @@
         group: G,
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
-    ) -&gt; anyhow::Result&lt;HashMap&lt;T, DkgKeys&lt;G&gt;&gt;&gt;
+    ) -&gt; Cancellable&lt;HashMap&lt;T, DkgKeys&lt;G&gt;&gt;&gt;
     <span class="kw">where
         </span>DkgMessage&lt;G&gt;: ISupportedDkgMessage,
     {
@@ -1945,17 +1929,15 @@
         </span><span class="kw">loop </span>{
             <span class="kw">let </span>(peer, msg) = connections.receive(module_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>parsed_msg = <span class="kw">match </span>msg {
-                DkgPeerMsg::DistributedGen(v) =&gt; <span class="prelude-val">Ok</span>(v),
-                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(
-                    <span class="string">&quot;Module {module_id} wrong message received: {msg:?}&quot;
-                </span>)),
+            <span class="kw">let </span>(key, message) = <span class="kw">if let </span>DkgPeerMsg::DistributedGen(v) = msg {
+                v
+            } <span class="kw">else </span>{
+                <span class="macro">panic!</span>(<span class="string">&quot;Module {module_id} wrong message received: {msg:?}&quot;</span>)
             };
 
-            <span class="kw">let </span>(key, message) = parsed_msg<span class="question-mark">?</span>;
             <span class="kw">let </span>key = serde_json::from_str(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;invalid key&quot;</span>);
             <span class="kw">let </span>message = ISupportedDkgMessage::from_msg(message).expect(<span class="string">&quot;invalid message&quot;</span>);
-            <span class="kw">let </span>step = dkgs.get_mut(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;exists&quot;</span>).step(peer, message)<span class="question-mark">?</span>;
+            <span class="kw">let </span>step = dkgs.get_mut(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;exists&quot;</span>).step(peer, message);
 
             <span class="kw">match </span>step {
                 DkgStep::Messages(messages) =&gt; {
@@ -2157,7 +2139,7 @@
                     <span class="kw">for </span>(receive_peer, msg) <span class="kw">in </span>messages {
                         <span class="kw">let </span>receive_dkg = dkgs.get_mut(<span class="kw-2">&amp;</span>receive_peer).unwrap();
                         <span class="kw">let </span>step = receive_dkg.step(peer, msg);
-                        steps.push_back((receive_peer, step.unwrap()));
+                        steps.push_back((receive_peer, step));
                     }
                 }
                 <span class="prelude-val">Some</span>((peer, DkgStep::Result(step_keys))) =&gt; {
