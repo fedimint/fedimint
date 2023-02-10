@@ -7,7 +7,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
 "fedimint_client":["",[],["lib.rs"]],\
-"fedimint_core":["",[],["config.rs","epoch.rs","lib.rs","outcome.rs","transaction.rs","util.rs"]],\
+"fedimint_core":["",[],["api.rs","config.rs","epoch.rs","lib.rs","outcome.rs","query.rs","transaction.rs","util.rs"]],\
 "fedimint_derive":["",[],["lib.rs"]],\
 "fedimint_derive_secret":["",[],["lib.rs"]],\
 "fedimint_dummy":["",[],["common.rs","config.rs","db.rs","lib.rs"]],\
@@ -23,7 +23,7 @@ var sourcesIndex = JSON.parse('{\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
 "ln_gateway":["",[["gatewayd",[],["actor.rs","gateway.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","cln.rs","config.rs","lib.rs","ln.rs","utils.rs"]],\
-"mint_client":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","logging.rs","outcome.rs","query.rs","transaction.rs","utils.rs"]],\
+"mint_client":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","logging.rs","outcome.rs","transaction.rs","utils.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
 }');
 createSourceSidebar();

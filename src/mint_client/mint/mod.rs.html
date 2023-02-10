@@ -985,6 +985,8 @@
 <a href="#985" id="985">985</a>
 <a href="#986" id="986">986</a>
 <a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -1000,6 +1002,7 @@
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
+<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 <span class="kw">use </span>futures::{Future, StreamExt};
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1007,13 +1010,13 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::config::MintClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::{
     BlindNonce, Mint, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce,
     Note,
 };
+<span class="kw">use </span><span class="kw">crate</span>::outcome::legacy::OutputOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::{Input, Output, Transaction};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use crate</span>::{ChildId, DerivableSecret, FuturesUnordered, MintDecoder};
@@ -1457,8 +1460,9 @@
         <span class="kw">let </span>bsig = <span class="self">self
             </span>.context
             .api
-            .fetch_output_outcome::&lt;MintOutputOutcome&gt;(outpoint, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
+            .fetch_output_outcome::&lt;OutputOutcome&gt;(outpoint, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
             .<span class="kw">await</span><span class="question-mark">?
+            </span>.try_into_variant::&lt;MintOutputOutcome&gt;()<span class="question-mark">?
             </span>.as_ref()
             .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?</span>;
@@ -1663,6 +1667,7 @@
     <span class="kw">use </span>fedimint_api::db::Database;
     <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
+    <span class="kw">use </span>fedimint_core::api::WsFederationApi;
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_mint::common::MintDecoder;
     <span class="kw">use </span>fedimint_testing::FakeFed;
@@ -1670,7 +1675,6 @@
     <span class="kw">use </span>tokio::sync::Mutex;
 
     <span class="kw">use </span><span class="kw">crate</span>::api::fake::FederationApiFaker;
-    <span class="kw">use </span><span class="kw">crate</span>::api::WsFederationApi;
     <span class="kw">use </span><span class="kw">crate</span>::mint::db::NextECashNoteIndexKey;
     <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
     <span class="kw">use </span><span class="kw">crate</span>::modules::mint::config::MintClientConfig;

@@ -113,13 +113,41 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
+<span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_api::{Amount, Tiered};
+<span class="kw">use </span>fedimint_core::api::WsFederationConnect;
+<span class="kw">use </span>fedimint_mint::MintGenParams;
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
-<span class="kw">use </span>mint_client::api::WsFederationConnect;
+<span class="kw">use </span>fedimint_wallet::WalletGenParams;
 <span class="kw">use </span>ring::aead::LessSafeKey;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
@@ -162,6 +190,26 @@
 
 <span class="kw">pub const </span>JSON_EXT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;json&quot;</span>;
 <span class="kw">const </span>ENCRYPTED_EXT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;encrypt&quot;</span>;
+
+<span class="doccomment">/// Generates the configuration for the modules configured in the server binary
+</span><span class="kw">pub fn </span>configure_modules(
+    max_denomination: Amount,
+    network: Network,
+    finality_delay: u32,
+) -&gt; ConfigGenParams {
+    ConfigGenParams::new()
+        .attach(WalletGenParams {
+            network,
+            <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit anyway
+            </span>finality_delay,
+        })
+        .attach(MintGenParams {
+            mint_amounts: Tiered::gen_denominations(max_denomination)
+                .tiers()
+                .cloned()
+                .collect(),
+        })
+}
 
 <span class="doccomment">/// Reads the server from the local, private, and consensus cfg files (private file encrypted)
 </span><span class="kw">pub fn </span>read_server_configs(key: <span class="kw-2">&amp;</span>LessSafeKey, path: PathBuf) -&gt; anyhow::Result&lt;ServerConfig&gt; {

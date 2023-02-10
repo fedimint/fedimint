@@ -415,6 +415,7 @@
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     sync::{
@@ -431,8 +432,9 @@
     task::TaskGroup,
     Amount, TransactionId,
 };
+<span class="kw">use </span>fedimint_server::api::WsFederationConnect;
 <span class="kw">use </span>mint_client::modules::ln::{contracts::Preimage, route_hints::RouteHint};
-<span class="kw">use </span>mint_client::{api::WsFederationConnect, ln::PayInvoicePayload, GatewayClient};
+<span class="kw">use </span>mint_client::{ln::PayInvoicePayload, GatewayClient};
 <span class="kw">use </span>tokio::sync::{mpsc, Mutex};
 <span class="kw">use </span>tracing::{error, info, warn};
 

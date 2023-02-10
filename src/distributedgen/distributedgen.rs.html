@@ -225,8 +225,6 @@
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -397,13 +395,11 @@
                 bind_p2p,
                 bind_api,
                 <span class="kw-2">&amp;</span>dir_out_path,
-                max_denomination,
                 federation_name,
                 certs,
-                network,
-                finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 <span class="kw-2">&amp;mut </span>task_group,
+                configure_modules(max_denomination, network, finality_delay),
             )
             .<span class="kw">await
             </span>{

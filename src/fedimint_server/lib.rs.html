@@ -571,6 +571,8 @@
 <span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
+<span class="kw">use </span>fedimint_core::api::WsFederationApi;
+<span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
@@ -582,8 +584,6 @@
 <span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 <span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>mint_client::api::WsFederationApi;
-<span class="kw">use </span>mint_client::api::{DynFederationApi, GlobalFederationApi};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};

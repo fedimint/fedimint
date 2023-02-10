@@ -1,0 +1,5 @@
+(function() {var implementors = {
+"fedimint_core":[],
+"fedimint_server":[],
+"mint_client":[["impl&lt;State&gt; IFederationApi for <a class=\"struct\" href=\"mint_client/api/fake/struct.FederationApiFaker.html\" title=\"struct mint_client::api::fake::FederationApiFaker\">FederationApiFaker</a>&lt;State&gt;<span class=\"where fmt-newline\">where\n    State: <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a>,</span>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

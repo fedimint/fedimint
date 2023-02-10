@@ -798,24 +798,6 @@
 <a href="#798" id="798">798</a>
 <a href="#799" id="799">799</a>
 <a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a>
-<a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
@@ -832,12 +814,10 @@
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_api::task::{timeout, Elapsed, TaskGroup};
-<span class="kw">use </span>fedimint_api::{Amount, PeerId, Tiered};
+<span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
-<span class="kw">use </span>fedimint_wallet::WalletGenParams;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>hbbft::NetworkInfo;
-<span class="kw">use </span>mint_client::modules::mint::MintGenParams;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1425,17 +1405,14 @@
     }
 
     <span class="doccomment">/// Generates the parameters necessary for running server config generation
-    </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>gen_params(
         bind_p2p: SocketAddr,
         bind_api: SocketAddr,
         key: rustls::PrivateKey,
         our_id: PeerId,
-        max_denomination: Amount,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
         federation_name: String,
-        network: bitcoin::network::constants::Network,
-        finality_delay: u32,
+        modules: ConfigGenParams,
     ) -&gt; ServerConfigParams {
         <span class="kw">let </span>peer_certs: HashMap&lt;PeerId, rustls::Certificate&gt; = peers
             .iter()
@@ -1459,18 +1436,7 @@
             fed_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, peers, |params| params.p2p_url),
             api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, peers, |params| params.api_url),
             federation_name,
-            modules: ConfigGenParams::new()
-                .attach(WalletGenParams {
-                    network,
-                    <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit anyway
-                    </span>finality_delay,
-                })
-                .attach(MintGenParams {
-                    mint_amounts: Tiered::gen_denominations(max_denomination)
-                        .tiers()
-                        .cloned()
-                        .collect(),
-                }),
+            modules,
         }
     }
 
@@ -1496,9 +1462,9 @@
     <span class="doccomment">/// config for servers running on different ports on a local network
     </span><span class="kw">pub fn </span>gen_local(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        max_denomination: Amount,
         base_port: u16,
         federation_name: <span class="kw-2">&amp;</span>str,
+        modules: ConfigGenParams,
     ) -&gt; anyhow::Result&lt;HashMap&lt;PeerId, ServerConfigParams&gt;&gt; {
         <span class="kw">let </span>keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers
             .iter()
@@ -1536,11 +1502,9 @@
                     bind_api.parse().context(<span class="string">&quot;when parsing bind_api&quot;</span>)<span class="question-mark">?</span>,
                     keys[peer].<span class="number">1</span>.clone(),
                     <span class="kw-2">*</span>peer,
-                    max_denomination,
                     <span class="kw-2">&amp;</span>peer_params,
                     federation_name.to_string(),
-                    bitcoin::network::constants::Network::Regtest,
-                    <span class="number">10</span>,
+                    modules.clone(),
                 );
                 <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))
             })

@@ -106,9 +106,9 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::{ParseAmountError, TieredMulti};
+<span class="kw">use </span>fedimint_core::api::DynFederationApi;
 <span class="kw">use </span>lightning_invoice::Currency;
 
-<span class="kw">use </span><span class="kw">crate</span>::api::DynFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::mint::SpendableNote;
 
 <span class="kw">pub fn </span>parse_ecash(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {

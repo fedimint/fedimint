@@ -473,8 +473,6 @@
 <a href="#473" id="473">473</a>
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -504,12 +502,10 @@
 <span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_api::{task::TaskGroup, Amount, TransactionId};
+<span class="kw">use </span>fedimint_server::api::WsFederationConnect;
 <span class="kw">use </span>mint_client::modules::ln::contracts::Preimage;
 <span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
-<span class="kw">use </span>mint_client::{
-    api::WsFederationConnect, ln::PayInvoicePayload, mint::MintClientError, ClientError,
-    GatewayClient,
-};
+<span class="kw">use </span>mint_client::{ln::PayInvoicePayload, mint::MintClientError, ClientError, GatewayClient};
 <span class="kw">use </span>rpc::{BackupPayload, RestorePayload};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::{mpsc, Mutex};

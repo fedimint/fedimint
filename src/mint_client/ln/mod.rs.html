@@ -547,6 +547,7 @@
 <a href="#547" id="547">547</a>
 <a href="#548" id="548">548</a>
 <a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -562,6 +563,7 @@
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::timeout;
 <span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::api::FederationError;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -570,7 +572,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::db::ConfirmedInvoiceKey;
 <span class="kw">use </span><span class="self">self</span>::incoming::ConfirmedInvoice;
-<span class="kw">use </span><span class="kw">crate</span>::api::{FederationError, LnFederationApi, WalletFederationApi};
+<span class="kw">use </span><span class="kw">crate</span>::api::{LnFederationApi, WalletFederationApi};
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::ln::incoming::IncomingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};

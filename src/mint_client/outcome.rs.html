@@ -146,13 +146,21 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>legacy {
     <span class="kw">use </span>fedimint_api::core::{
-        Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+        Decoder, DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN,
+        LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_api::ServerModule;
+    <span class="kw">use </span>fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
     <span class="kw">use </span>fedimint_core::CoreError;
     <span class="kw">use </span>fedimint_ln::contracts::incoming::OfferId;
     <span class="kw">use </span>fedimint_ln::contracts::{
@@ -200,9 +208,15 @@
         <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt;;
     }
 
+    <span class="kw">impl </span>DynTryIntoOutcome <span class="kw">for </span>OutputOutcome {
+        <span class="kw">fn </span>try_into_outcome(outcome: DynOutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
+            <span class="prelude-val">Ok</span>(OutputOutcome::from(outcome))
+        }
+    }
+
     <span class="kw">impl </span>OutputOutcome {
-        <span class="kw">pub fn </span>try_into_variant&lt;T: TryIntoOutcome&gt;(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;T, CoreError&gt; {
-            T::try_into_outcome(<span class="self">self</span>)
+        <span class="kw">pub fn </span>try_into_variant&lt;T: TryIntoOutcome&gt;(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;T, OutputOutcomeError&gt; {
+            T::try_into_outcome(<span class="self">self</span>).map_err(OutputOutcomeError::from)
         }
     }
 
