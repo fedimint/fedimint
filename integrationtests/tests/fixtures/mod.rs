@@ -854,26 +854,24 @@ impl FederationTest {
             .unwrap();
 
         for server in &self.servers {
-            block_on(async {
-                let svr = server.lock().await;
-                let mut dbtx = svr.database.begin_transaction().await;
+            let svr = server.lock().await;
+            let mut dbtx = svr.database.begin_transaction().await;
 
-                {
-                    let mut module_dbtx = dbtx.with_module_prefix(self.wallet_id);
-                    module_dbtx
-                        .insert_new_entry(
-                            &UTXOKey(input.outpoint()),
-                            &SpendableUTXO {
-                                tweak: input.tweak_contract_key().serialize(),
-                                amount: bitcoin::Amount::from_sat(input.tx_output().value),
-                            },
-                        )
-                        .await
-                        .expect("DB Error");
-                }
+            {
+                let mut module_dbtx = dbtx.with_module_prefix(self.wallet_id);
+                module_dbtx
+                    .insert_new_entry(
+                        &UTXOKey(input.outpoint()),
+                        &SpendableUTXO {
+                            tweak: input.tweak_contract_key().serialize(),
+                            amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                        },
+                    )
+                    .await
+                    .expect("DB Error");
+            }
 
-                dbtx.commit_tx().await.expect("DB Error");
-            });
+            dbtx.commit_tx().await.expect("DB Error");
         }
         bitcoin
             .mine_blocks(user.client.wallet_client().config.finality_delay as u64)
