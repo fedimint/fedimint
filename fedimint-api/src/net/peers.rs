@@ -65,13 +65,13 @@ where
     }
 }
 
-/// Owned [`MuxPeerConnections`] trait object type
+/// Owned [`DynMuxPeerConnections`] trait object type
 #[derive(Clone)]
-pub struct MuxPeerConnections<MuxKey, Msg>(
+pub struct DynMuxPeerConnections<MuxKey, Msg>(
     Arc<dyn IMuxPeerConnections<MuxKey, Msg> + Send + Sync + Unpin + 'static>,
 );
 
-impl<MuxKey, Msg> Deref for MuxPeerConnections<MuxKey, Msg> {
+impl<MuxKey, Msg> Deref for DynMuxPeerConnections<MuxKey, Msg> {
     type Target = dyn IMuxPeerConnections<MuxKey, Msg> + Send + Sync + Unpin + 'static;
 
     fn deref(&self) -> &Self::Target {
@@ -100,10 +100,10 @@ where
     async fn ban_peer(&self, peer: PeerId);
 
     /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> MuxPeerConnections<MuxKey, Msg>
+    fn into_dyn(self) -> DynMuxPeerConnections<MuxKey, Msg>
     where
         Self: Sized + Send + Sync + Unpin + 'static,
     {
-        MuxPeerConnections(Arc::new(self))
+        DynMuxPeerConnections(Arc::new(self))
     }
 }

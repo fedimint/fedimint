@@ -35,7 +35,7 @@ use threshold_crypto::Signature;
 use url::Url;
 
 use crate::module::DynModuleGen;
-use crate::net::peers::MuxPeerConnections;
+use crate::net::peers::DynMuxPeerConnections;
 use crate::PeerId;
 
 /// [`serde_json::Value`] that must contain `kind: String` field
@@ -800,7 +800,7 @@ where
     pub async fn run_g2(
         &mut self,
         module_id: ModuleInstanceId,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> anyhow::Result<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(module_id, G2Projective::generator(), connections, rng)
@@ -811,7 +811,7 @@ where
     pub async fn run_g1(
         &mut self,
         module_id: ModuleInstanceId,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> anyhow::Result<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(module_id, G1Projective::generator(), connections, rng)
@@ -823,7 +823,7 @@ where
         &mut self,
         module_id: ModuleInstanceId,
         group: G,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> anyhow::Result<HashMap<T, DkgKeys<G>>>
     where

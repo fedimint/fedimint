@@ -37,7 +37,7 @@ use fedimint_api::module::{
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
-use fedimint_api::net::peers::MuxPeerConnections;
+use fedimint_api::net::peers::DynMuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::time::SystemTime;
@@ -301,7 +301,7 @@ impl ModuleGen for LightningGen {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
         module_instance_id: ModuleInstanceId,
         peers: &[PeerId],

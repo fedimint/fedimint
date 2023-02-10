@@ -24,7 +24,7 @@ use crate::db::{Database, DatabaseTransaction};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
-use crate::net::peers::MuxPeerConnections;
+use crate::net::peers::DynMuxPeerConnections;
 use crate::server::{DynServerModule, VerificationCache};
 use crate::task::TaskGroup;
 use crate::{dyn_newtype_define, Amount, OutPoint, PeerId};
@@ -286,7 +286,7 @@ pub trait IModuleGen: Debug {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
         module_id: ModuleInstanceId,
         peers: &[PeerId],
@@ -419,7 +419,7 @@ pub trait ModuleGen: Debug + Sized {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
         module_id: ModuleInstanceId,
         peers: &[PeerId],
@@ -478,7 +478,7 @@ where
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
         module_id: ModuleInstanceId,
         peers: &[PeerId],

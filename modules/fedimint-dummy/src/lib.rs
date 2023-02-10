@@ -20,7 +20,7 @@ use fedimint_api::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
-use fedimint_api::net::peers::MuxPeerConnections;
+use fedimint_api::net::peers::DynMuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
@@ -104,7 +104,7 @@ impl ModuleGen for DummyConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        _connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        _connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         _our_id: &PeerId,
         _instance_id: ModuleInstanceId,
         _peers: &[PeerId],

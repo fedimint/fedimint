@@ -12,7 +12,7 @@ use fedimint_api::config::{
     ThresholdKeys, TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_api::net::peers::{DynPeerConnections, IPeerConnections, MuxPeerConnections};
+use fedimint_api::net::peers::{DynMuxPeerConnections, DynPeerConnections, IPeerConnections};
 use fedimint_api::task::{timeout, Elapsed, TaskGroup};
 use fedimint_api::{Amount, PeerId, Tiered};
 pub use fedimint_core::config::*;
@@ -401,7 +401,7 @@ impl ServerConfig {
     #[allow(clippy::too_many_arguments)]
     pub async fn distributed_gen(
         code_version: &str,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &DynMuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         our_id: &PeerId,
         peers: &[PeerId],
         params: &ServerConfigParams,
