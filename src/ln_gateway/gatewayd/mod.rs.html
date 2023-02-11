@@ -11,18 +11,20 @@
 <a href="#11" id="11">11</a>
 <a href="#12" id="12">12</a>
 <a href="#13" id="13">13</a>
-</pre><pre class="rust"><code><span class="comment">// ### Why make a fork of `LnGateway` : copy code of `../src/lib.rs` to `./gateway.rs` ?
-// - Note: `LnGateway` is renamed to `Gateway` in this new file
-// - so we can change the constructor signature of `LnGateway`
-// - so we can change how the gateway gets HTLC intercepts. `Gateway` in `src/gateway.rs` does not implement `handle_receive_payment`. Instead, actors directly subscribe to htlc intercepts on an entirely new pattern. More on this below
+<a href="#14" id="14">14</a>
+</pre><pre class="rust"><code><span class="doccomment">//! ### Why make a fork of `LnGateway` : copy code of `../src/lib.rs` to `./gateway.rs` ?
+//! - Note: `LnGateway` is renamed to `Gateway` in this new file
+//! - so we can change the constructor signature of `LnGateway`
+//! - so we can change how the gateway gets HTLC intercepts. `Gateway` in `src/gateway.rs` does not implement `handle_receive_payment`. Instead, actors directly subscribe to htlc intercepts on an entirely new pattern. More on this below
 
-// ### Why make a fork of `GatewayActor` : copy code of `../src/actor.rs` to `./actor.rs` ?
-// - So we can change constructor signature of `GatewayActor`. Have the new actor take a reference to lnrpc, which is
-// - So we can enable direct subscription to intercepted HTLCs using the owned lnrpc
-// - API signature of the `GatewayActor` changes because it owns a reference to lnrpc, rather than expec these to be passed in at api calls.
-// - Note: Changes incoming. You can preview them at #1337
+//! ### Why make a fork of `GatewayActor` : copy code of `../src/actor.rs` to `./actor.rs` ?
+//! - So we can change constructor signature of `GatewayActor`. Have the new actor take a reference to lnrpc, which is
+//! - So we can enable direct subscription to intercepted HTLCs using the owned lnrpc
+//! - API signature of the `GatewayActor` changes because it owns a reference to lnrpc, rather than expec these to be passed in at api calls.
+//! - Note: Changes incoming. You can preview them at #1337
 
 </span><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>gateway;
+<span class="kw">pub mod </span>lnrpc_client;
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (8996ea93b 2023-02-09)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (2773383a3 2023-02-10)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

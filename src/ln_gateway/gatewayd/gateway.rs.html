@@ -405,20 +405,9 @@
 <a href="#405" id="405">405</a>
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
+    net::SocketAddr,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -426,6 +415,7 @@
     time::{Duration, Instant},
 };
 
+<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_api::{
     config::{FederationId, ModuleGenRegistry},
@@ -434,16 +424,20 @@
     Amount, TransactionId,
 };
 <span class="kw">use </span>fedimint_server::api::WsFederationConnect;
-<span class="kw">use </span>mint_client::modules::ln::{contracts::Preimage, route_hints::RouteHint};
-<span class="kw">use </span>mint_client::{ln::PayInvoicePayload, GatewayClient};
+<span class="kw">use </span>mint_client::{
+    ln::PayInvoicePayload,
+    modules::ln::{contracts::Preimage, route_hints::RouteHint},
+    GatewayClient,
+};
+<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tokio::sync::{mpsc, Mutex};
 <span class="kw">use </span>tracing::{error, info, warn};
 
 <span class="kw">use </span><span class="kw">super</span>::actor::GatewayActor;
 <span class="kw">use crate</span>::{
     client::DynGatewayClientBuilder,
-    config::GatewayConfig,
-    ln::LnRpc,
+    gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse},
+    gatewaylnrpc::GetPubKeyResponse,
     rpc::{
         rpc_server::run_webserver, BackupPayload, BalancePayload, ConnectFedPayload,
         DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender,
@@ -456,14 +450,13 @@
 <span class="kw">const </span>ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(<span class="number">2</span>);
 
 <span class="kw">pub struct </span>Gateway {
-    config: GatewayConfig,
     decoders: ModuleDecoderRegistry,
     module_gens: ModuleGenRegistry,
+    lnrpc: DynLnRpcClient,
     actors: Mutex&lt;HashMap&lt;String, Arc&lt;GatewayActor&gt;&gt;&gt;,
-    ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
+    client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender&lt;GatewayRequest&gt;,
     receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
-    client_builder: DynGatewayClientBuilder,
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
 }
@@ -471,19 +464,19 @@
 <span class="kw">impl </span>Gateway {
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub async fn </span>new(
-        config: GatewayConfig,
+        lnrpc: DynLnRpcClient,
+        client_builder: DynGatewayClientBuilder,
         decoders: ModuleDecoderRegistry,
         module_gens: ModuleGenRegistry,
-        ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
-        client_builder: DynGatewayClientBuilder,
-        <span class="comment">// TODO: consider encapsulating message channel within LnGateway
-        </span>sender: mpsc::Sender&lt;GatewayRequest&gt;,
-        receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
         task_group: TaskGroup,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
+        <span class="comment">// Create message channels for the webserver
+        </span><span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;GatewayRequest&gt;(<span class="number">100</span>);
+
+        <span class="comment">// Source route hints form the LN node
+        </span><span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
         <span class="kw">let </span>route_hints = <span class="kw">loop </span>{
-            <span class="kw">let </span>route_hints = ln_rpc
+            <span class="kw">let </span>GetRouteHintsResponse { route_hints } = lnrpc
                 .route_hints()
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Could not feth route hints&quot;</span>);
@@ -501,10 +494,9 @@
             tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).<span class="kw">await</span>;
         };
 
-        <span class="kw">let </span>ln_gw = <span class="self">Self </span>{
-            config,
+        <span class="kw">let </span>gw = <span class="self">Self </span>{
+            lnrpc,
             actors: Mutex::new(HashMap::new()),
-            ln_rpc,
             sender,
             receiver,
             client_builder,
@@ -514,11 +506,10 @@
             module_gens: module_gens.clone(),
         };
 
-        ln_gw
-            .load_federation_actors(decoders, module_gens, route_hints)
+        gw.load_federation_actors(decoders, module_gens, route_hints)
             .<span class="kw">await</span>;
 
-        ln_gw
+        gw
     }
 
     <span class="kw">async fn </span>load_federation_actors(
@@ -564,33 +555,29 @@
             .ok_or(LnGatewayError::UnknownFederation)
     }
 
-    <span class="doccomment">/// Register a federation to the gateway.
-    ///
-    /// # Returns
-    ///
-    /// A `GatewayActor` that can be used to execute gateway functions for the federation
-    </span><span class="kw">pub async fn </span>connect_federation(
+    <span class="kw">pub async fn </span>connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client: Arc&lt;GatewayClient&gt;,
         route_hints: Vec&lt;RouteHint&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;GatewayActor&gt;&gt; {
         <span class="kw">let </span>actor = Arc::new(
-            GatewayActor::new(client.clone(), route_hints)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Failed to create actor&quot;</span>),
+            GatewayActor::new(
+                client.clone(),
+                <span class="self">self</span>.lnrpc.clone(),
+                route_hints,
+                <span class="self">self</span>.task_group.clone(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>,
         );
 
-        <span class="comment">// TODO: Subscribe for HTLC intercept on behalf of this federation
-
-        </span><span class="self">self</span>.actors.lock().<span class="kw">await</span>.insert(
+        <span class="self">self</span>.actors.lock().<span class="kw">await</span>.insert(
             client.config().client_config.federation_id.to_string(),
             actor.clone(),
         );
         <span class="prelude-val">Ok</span>(actor)
     }
 
-    <span class="comment">// Webserver handler for requests to register a federation
-    </span><span class="kw">async fn </span>handle_connect_federation(
+    <span class="kw">async fn </span>handle_connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: ConnectFedPayload,
         route_hints: Vec&lt;RouteHint&gt;,
@@ -599,11 +586,9 @@
             LnGatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid federation member string {}&quot;</span>, e))
         })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>node_pub_key = <span class="self">self
-            </span>.ln_rpc
-            .pubkey()
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Failed to get node pubkey from Lightning node&quot;</span>);
+        <span class="kw">let </span>GetPubKeyResponse { pub_key } = <span class="self">self</span>.lnrpc.pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
+            .map_err(|e| LnGatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid node pubkey {}&quot;</span>, e)))<span class="question-mark">?</span>;
 
         <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation connected.
         // TODO: explicitly handle the case where the channel id overflows
@@ -611,13 +596,7 @@
 
         <span class="kw">let </span>gw_client_cfg = <span class="self">self
             </span>.client_builder
-            .create_config(
-                connect,
-                channel_id,
-                node_pub_key,
-                <span class="self">self</span>.config.announce_address.clone(),
-                <span class="self">self</span>.module_gens.clone(),
-            )
+            .create_config(connect, channel_id, node_pub_key, <span class="self">self</span>.module_gens.clone())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to create gateway client config&quot;</span>);
 
@@ -676,7 +655,7 @@
         } = payload;
 
         <span class="kw">let </span>actor = <span class="self">self</span>.select_actor(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>outpoint = actor.pay_invoice(<span class="self">self</span>.ln_rpc.clone(), contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>outpoint = actor.pay_invoice(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -737,17 +716,12 @@
         <span class="self">self</span>.select_actor(federation_id).<span class="kw">await</span><span class="question-mark">?</span>.restore().<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, listen: SocketAddr, password: String) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>tg = <span class="self">self</span>.task_group.clone();
 
-        <span class="kw">let </span>cfg = <span class="self">self</span>.config.clone();
         <span class="kw">let </span>sender = GatewayRpcSender::new(<span class="self">self</span>.sender.clone());
         tg.spawn(<span class="string">&quot;Gateway Webserver&quot;</span>, <span class="kw">move </span>|server_ctrl| <span class="kw">async move </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>webserver = tokio::spawn(run_webserver(
-                cfg.password.clone(),
-                cfg.bind_address,
-                sender,
-            ));
+            <span class="kw">let </span><span class="kw-2">mut </span>webserver = tokio::spawn(run_webserver(password, listen, sender));
 
             <span class="comment">// Shut down webserver if requested
             </span><span class="kw">if </span>server_ctrl.is_shutting_down() {
@@ -775,14 +749,16 @@
                         inner.handle(|payload| <span class="self">self</span>.handle_get_info(payload)).<span class="kw">await</span>;
                     }
                     GatewayRequest::ConnectFederation(inner) =&gt; {
-                        <span class="kw">let </span>route_hints = <span class="self">self</span>.ln_rpc.route_hints().<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>GetRouteHintsResponse { route_hints } =
+                            <span class="self">self</span>.lnrpc.route_hints().<span class="kw">await</span><span class="question-mark">?</span>;
                         inner
                             .handle(|payload| {
                                 <span class="self">self</span>.handle_connect_federation(payload, route_hints.clone())
                             })
                             .<span class="kw">await</span>;
                     }
-                    GatewayRequest::ReceivePayment(inner) =&gt; {
+                    <span class="comment">// TODO: Remove this handler because Gateway uses lnrpc to intercept HTLCs
+                    </span>GatewayRequest::ReceivePayment(inner) =&gt; {
                         inner
                             .handle(|payload| <span class="self">self</span>.handle_receive_payment(payload))
                             .<span class="kw">await</span>;
@@ -837,4 +813,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (8996ea93b 2023-02-09)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (2773383a3 2023-02-10)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

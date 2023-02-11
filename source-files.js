@@ -21,8 +21,9 @@ var sourcesIndex = JSON.parse('{\
 "fedimintd":["",[],["distributedgen.rs","encrypt.rs","lib.rs","ui.rs"]],\
 "gateway_cli":["",[],["main.rs"]],\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
+"gatewayd":["",[],["gatewayd.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
-"ln_gateway":["",[["gatewayd",[],["actor.rs","gateway.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","cln.rs","config.rs","lib.rs","ln.rs","utils.rs"]],\
+"ln_gateway":["",[["gatewayd",[],["actor.rs","gateway.rs","lnrpc_client.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","cln.rs","config.rs","lib.rs","ln.rs","utils.rs"]],\
 "mint_client":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","logging.rs","outcome.rs","transaction.rs","utils.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
 }');

@@ -472,8 +472,6 @@
 <a href="#472" id="472">472</a>
 <a href="#473" id="473">473</a>
 <a href="#474" id="474">474</a>
-<a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -656,7 +654,9 @@
                 </span>.expect(<span class="string">&quot;Failed to create actor&quot;</span>),
         );
 
-        <span class="self">self</span>.actors.lock().<span class="kw">await</span>.insert(
+        <span class="comment">// TODO: Subscribe for HTLC intercept on behalf of this federation
+
+        </span><span class="self">self</span>.actors.lock().<span class="kw">await</span>.insert(
             client.config().client_config.federation_id.to_string(),
             actor.clone(),
         );
@@ -685,13 +685,7 @@
 
         <span class="kw">let </span>gw_client_cfg = <span class="self">self
             </span>.client_builder
-            .create_config(
-                connect,
-                channel_id,
-                node_pub_key,
-                <span class="self">self</span>.config.announce_address.clone(),
-                <span class="self">self</span>.module_gens.clone(),
-            )
+            .create_config(connect, channel_id, node_pub_key, <span class="self">self</span>.module_gens.clone())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to create gateway client config&quot;</span>);
 
@@ -933,6 +927,8 @@
 </span><span class="kw">pub enum </span>LnGatewayError {
     <span class="attr">#[error(<span class="string">&quot;Federation client operation error: {0:?}&quot;</span>)]
     </span>ClientError(<span class="attr">#[from] </span>ClientError),
+    <span class="attr">#[error(<span class="string">&quot;Lightning rpc operation error: {0:?}&quot;</span>)]
+    </span>LnRpcError(<span class="attr">#[from] </span>tonic::Status),
     <span class="attr">#[error(<span class="string">&quot;Our LN node could not route the payment: {0:?}&quot;</span>)]
     </span>CouldNotRoute(LightningError),
     <span class="attr">#[error(<span class="string">&quot;Mint client error: {0:?}&quot;</span>)]
@@ -951,4 +947,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (8996ea93b 2023-02-09)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (2773383a3 2023-02-10)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

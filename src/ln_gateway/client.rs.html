@@ -314,7 +314,6 @@
         connect: WsFederationConnect,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        announce_address: Url,
         module_gens: ModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt;;
 
@@ -335,13 +334,15 @@
 </span><span class="kw">pub struct </span>StandardGatewayClientBuilder {
     work_dir: PathBuf,
     db_factory: DynDbFactory,
+    gateway_api: Url,
 }
 
 <span class="kw">impl </span>StandardGatewayClientBuilder {
-    <span class="kw">pub fn </span>new(work_dir: PathBuf, db_factory: DynDbFactory) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(work_dir: PathBuf, db_factory: DynDbFactory, gateway_api: Url) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             work_dir,
             db_factory,
+            gateway_api,
         }
     }
 }
@@ -371,7 +372,6 @@
         connect: WsFederationConnect,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        announce_address: Url,
         module_gens: ModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
         <span class="kw">let </span>api: DynFederationApi = WsFederationApi::new(connect.members).into();
@@ -391,7 +391,7 @@
             redeem_key: kp_fed,
             timelock_delta: <span class="number">10</span>,
             node_pub_key: node_pubkey,
-            api: announce_address,
+            api: <span class="self">self</span>.gateway_api.clone(),
         })
     }
 
@@ -451,4 +451,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (8996ea93b 2023-02-09)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (2773383a3 2023-02-10)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
