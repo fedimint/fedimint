@@ -11,10 +11,10 @@ use fedimint_ln::route_hints::RouteHint;
 use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
-use ln_gateway::gatewayd::lnrpc_client::{GetRouteHintsResponse, HtlcStream, ILnRpcClient};
+use ln_gateway::gatewayd::lnrpc_client::{HtlcStream, ILnRpcClient};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest,
-    PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::ln::{LightningError, LnRpc};
 use mint_client::modules::ln::contracts::Preimage;

@@ -14,15 +14,10 @@ use url::Url;
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
 use crate::{LnGatewayError, Result};
-
-// TODO: Issue 1554: Define gatewaylnpc spec for getting route hints
-pub struct GetRouteHintsResponse {
-    pub route_hints: Vec<RouteHint>,
-}
 
 pub type HtlcStream<'a> =
     BoxStream<'a, std::result::Result<SubscribeInterceptHtlcsResponse, tonic::Status>>;
