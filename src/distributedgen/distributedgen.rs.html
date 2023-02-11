@@ -230,6 +230,7 @@
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
+<span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_key};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
 <span class="kw">use </span>fedimint_api::module::DynModuleGen;
@@ -239,7 +240,6 @@
 <span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>fedimint_wallet::WalletGen;
 <span class="kw">use </span>fedimintd::distributedgen::{create_cert, run_dkg};
-<span class="kw">use </span>fedimintd::encrypt::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimintd::<span class="kw-2">*</span>;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;

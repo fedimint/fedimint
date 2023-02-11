@@ -492,7 +492,7 @@
         ]);
 
         <span class="kw">let </span>salt_path = cfg_dir.join(SALT_FILE);
-        <span class="kw">let </span>key = fedimintd::encrypt::get_key(password, salt_path).unwrap();
+        <span class="kw">let </span>key = aead::get_key(password, salt_path).unwrap();
         <span class="kw">let </span>cfg = fedimintd::read_server_configs(<span class="kw-2">&amp;</span>key, cfg_dir).unwrap();
         <span class="kw">let </span>decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
         <span class="kw">let </span>dbtx = DatabaseTransaction::new(Box::new(read_only), decoders);

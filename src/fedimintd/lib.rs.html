@@ -135,11 +135,10 @@
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::PathBuf;
 
+<span class="kw">use </span>aead::{encrypted_read, encrypted_write};
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
@@ -152,10 +151,7 @@
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 
-<span class="kw">use </span><span class="kw">crate</span>::encrypt::{encrypted_read, encrypted_write};
-
 <span class="kw">pub mod </span>distributedgen;
-<span class="kw">pub mod </span>encrypt;
 <span class="kw">pub mod </span>ui;
 
 <span class="doccomment">/// Version of the server code (should be the same among peers)

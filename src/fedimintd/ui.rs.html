@@ -423,6 +423,7 @@
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>aead::{encrypted_read, get_key};
 <span class="kw">use </span>anyhow::{format_err, Error};
 <span class="kw">use </span>askama::Template;
 <span class="kw">use </span>axum::extract::Form;
@@ -450,7 +451,6 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::distributedgen::{create_cert, parse_peer_params, run_dkg};
-<span class="kw">use </span><span class="kw">crate</span>::encrypt::{encrypted_read, get_key};
 <span class="kw">use crate</span>::{
     configure_modules, encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT,
     PRIVATE_CONFIG, SALT_FILE, TLS_PK,
