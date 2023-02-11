@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
+use aead::{encrypted_read, encrypted_write, get_key};
 use clap::{Parser, Subcommand};
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::module::DynModuleGen;
@@ -12,7 +13,6 @@ use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_wallet::WalletGen;
 use fedimintd::distributedgen::{create_cert, run_dkg};
-use fedimintd::encrypt::*;
 use fedimintd::*;
 use tokio_rustls::rustls;
 use tracing::info;

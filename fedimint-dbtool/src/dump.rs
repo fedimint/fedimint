@@ -79,7 +79,7 @@ impl<'a> DatabaseDump<'a> {
         ]);
 
         let salt_path = cfg_dir.join(SALT_FILE);
-        let key = fedimintd::encrypt::get_key(password, salt_path).unwrap();
+        let key = aead::get_key(password, salt_path).unwrap();
         let cfg = fedimintd::read_server_configs(&key, cfg_dir).unwrap();
         let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
         let dbtx = DatabaseTransaction::new(Box::new(read_only), decoders);

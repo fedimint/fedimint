@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use aead::{encrypted_read, encrypted_write};
 use anyhow::format_err;
 use bitcoin::Network;
 use fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
@@ -13,10 +14,7 @@ use ring::aead::LessSafeKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::encrypt::{encrypted_read, encrypted_write};
-
 pub mod distributedgen;
-pub mod encrypt;
 pub mod ui;
 
 /// Version of the server code (should be the same among peers)

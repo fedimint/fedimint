@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use aead::{encrypted_read, get_key};
 use anyhow::{format_err, Error};
 use askama::Template;
 use axum::extract::Form;
@@ -29,7 +30,6 @@ use tracing::{debug, error};
 use url::Url;
 
 use crate::distributedgen::{create_cert, parse_peer_params, run_dkg};
-use crate::encrypt::{encrypted_read, get_key};
 use crate::{
     configure_modules, encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT,
     PRIVATE_CONFIG, SALT_FILE, TLS_PK,
