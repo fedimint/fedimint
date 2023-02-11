@@ -89,11 +89,6 @@ pub trait TypedApiEndpoint {
     ) -> Result<Self::Response, ApiError>;
 }
 
-#[doc(hidden)]
-pub mod __reexports {
-    pub use serde_json;
-}
-
 /// # Example
 ///
 /// ```rust
