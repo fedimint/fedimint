@@ -68,7 +68,7 @@ export -f check_dbg
 
 function check_semgrep() {
 
-  if ! command -v semgrep ; then
+  if ! command -v semgrep > /dev/null ; then
     >&2 echo "Skipping semgrep check"
     return 0
   fi
