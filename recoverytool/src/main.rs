@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use bitcoin::hashes::sha256::Hash;
 use bitcoin::OutPoint;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::Database;
 use fedimint_rocksdb::RocksDb;
@@ -14,14 +14,20 @@ use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet::keys::CompressedPublicKey;
 use fedimint_wallet::tweakable::Tweakable;
-use fedimint_wallet::SpendableUTXO;
+use fedimint_wallet::{PegInDescriptor, SpendableUTXO};
 use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
+use secp256k1::SecretKey;
 use serde::Serialize;
 use tracing_subscriber::EnvFilter;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
+#[command(group(
+    ArgGroup::new("keysource")
+        .required(true)
+        .args(["config", "descriptor"]),
+))]
 struct RecoveryTool {
     /// Extract UTXOs from a database without module partitioning
     #[arg(long = "legacy")]
@@ -31,10 +37,20 @@ struct RecoveryTool {
     db: PathBuf,
     /// Directory containing server config files
     #[arg(long = "cfg")]
-    config: PathBuf,
+    config: Option<PathBuf>,
     /// The password that encrypts the configs
-    #[arg(long = "password", env = "FM_PASSWORD")]
+    #[arg(long = "password", env = "FM_PASSWORD", requires = "config")]
     password: String,
+    /// Wallet descriptor, can be used instead of --cfg
+    #[arg(long = "descriptor")]
+    descriptor: Option<PegInDescriptor>,
+    /// Wallet secret key, can be used instead of config together with
+    /// --descriptor
+    #[arg(long = "key", requires = "descriptor")]
+    key: Option<SecretKey>,
+    /// Network to operate on, has to be specified if --cfg isn't present
+    #[arg(long = "network", default_value = "bitcoin", requires = "descriptor")]
+    network: bitcoin::network::constants::Network,
 }
 
 #[tokio::main]
@@ -49,10 +65,21 @@ async fn main() {
 
     let opts: RecoveryTool = RecoveryTool::parse();
 
-    let cfg = read_server_config(&opts.password, opts.config).expect("Could not read config file");
-    let wallet_cfg: WalletConfig = cfg
-        .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-        .expect("Malformed wallet config");
+    let (base_descriptor, base_key, network) = if let Some(config) = opts.config {
+        let cfg = read_server_config(&opts.password, config).expect("Could not read config file");
+        let wallet_cfg: WalletConfig = cfg
+            .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .expect("Malformed wallet config");
+        let base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
+        let base_key = wallet_cfg.private.peg_in_key;
+        let network = wallet_cfg.consensus.network;
+
+        (base_descriptor, base_key, network)
+    } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {
+        (descriptor, key, opts.network)
+    } else {
+        panic!("Either config or descriptor will be provided by clap");
+    };
 
     let db = Database::new(
         RocksDb::open(opts.db).expect("Error opening DB"),
@@ -66,8 +93,6 @@ async fn main() {
     };
 
     let ctx = secp256k1::Secp256k1::new();
-    let base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
-    let base_key = wallet_cfg.private.peg_in_key;
 
     let utxos: Vec<ImportableWallet> = db
         .begin_transaction()
@@ -84,7 +109,7 @@ async fn main() {
                 .translate_pk(&mut SecretKeyInjector {
                     secret: bitcoin::util::key::PrivateKey {
                         compressed: true,
-                        network: wallet_cfg.consensus.network,
+                        network,
                         inner: secret_key,
                     },
                     public: pub_key,
