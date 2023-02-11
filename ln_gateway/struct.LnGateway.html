@@ -22,28 +22,28 @@
     &amp;self,
     decoders: <a class="type" href="../fedimint_api/module/registry/type.ModuleDecoderRegistry.html" title="type fedimint_api::module::registry::ModuleDecoderRegistry">ModuleDecoderRegistry</a>,
     module_gens: <a class="struct" href="../fedimint_api/config/struct.ModuleGenRegistry.html" title="struct fedimint_api::config::ModuleGenRegistry">ModuleGenRegistry</a>,
-    route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../fedimint_ln/route_hints/struct.RouteHint.html" title="struct fedimint_ln::route_hints::RouteHint">RouteHint</a>&gt;
+    route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;RouteHint&gt;
 )</h4></section><section id="method.select_actor" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#158-165">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.select_actor" class="fn">select_actor</a>(
     &amp;self,
     federation_id: <a class="struct" href="../fedimint_api/config/struct.FederationId.html" title="struct fedimint_api::config::FederationId">FederationId</a>
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="actor/struct.GatewayActor.html" title="struct ln_gateway::actor::GatewayActor">GatewayActor</a>&gt;&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.connect_federation" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#172-190">source</a><h4 class="code-header">pub async fn <a href="#method.connect_federation" class="fn">connect_federation</a>(
     &amp;self,
     client: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="type" href="../mint_client/type.GatewayClient.html" title="type mint_client::GatewayClient">GatewayClient</a>&gt;,
-    route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../fedimint_ln/route_hints/struct.RouteHint.html" title="struct fedimint_ln::route_hints::RouteHint">RouteHint</a>&gt;
+    route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;RouteHint&gt;
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="actor/struct.GatewayActor.html" title="struct ln_gateway::actor::GatewayActor">GatewayActor</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Register a federation to the gateway.</p>
 <h5 id="returns"><a href="#returns">Returns</a></h5>
 <p>A <code>GatewayActor</code> that can be used to execute gateway functions for the federation</p>
 </div></details><section id="method.handle_connect_federation" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#193-241">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.handle_connect_federation" class="fn">handle_connect_federation</a>(
     &amp;self,
     payload: <a class="struct" href="rpc/struct.ConnectFedPayload.html" title="struct ln_gateway::rpc::ConnectFedPayload">ConnectFedPayload</a>,
-    route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../fedimint_ln/route_hints/struct.RouteHint.html" title="struct fedimint_ln::route_hints::RouteHint">RouteHint</a>&gt;
+    route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;RouteHint&gt;
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section><section id="method.handle_get_info" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#243-256">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.handle_get_info" class="fn">handle_get_info</a>(
     &amp;self,
     _payload: <a class="struct" href="rpc/struct.InfoPayload.html" title="struct ln_gateway::rpc::InfoPayload">InfoPayload</a>
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="rpc/struct.GatewayInfo.html" title="struct ln_gateway::rpc::GatewayInfo">GatewayInfo</a>&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.handle_receive_payment" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#260-282">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.handle_receive_payment" class="fn">handle_receive_payment</a>(
     &amp;self,
     payload: <a class="struct" href="rpc/struct.ReceivePaymentPayload.html" title="struct ln_gateway::rpc::ReceivePaymentPayload">ReceivePaymentPayload</a>
-) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="../fedimint_ln/contracts/struct.Preimage.html" title="struct fedimint_ln::contracts::Preimage">Preimage</a>&gt;</h4></section></summary><div class="docblock"><p>Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
+) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;Preimage&gt;</h4></section></summary><div class="docblock"><p>Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
 a federation user.</p>
 </div></details><section id="method.handle_pay_invoice_msg" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#284-296">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.handle_pay_invoice_msg" class="fn">handle_pay_invoice_msg</a>(
     &amp;self,
