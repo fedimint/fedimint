@@ -42,7 +42,7 @@ strum = "0.24"
 strum_macros = "0.24"
 tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.37"
-tokio = { version = "1.24.2", features = ["sync"] }
+tokio = { version = "1.25.0", features = ["sync"] }
 tracing = "0.1.37"
 jsonrpsee-types = "0.16.0"
 jsonrpsee-core = { version = "0.16.2", features = [ "client" ] }
@@ -58,7 +58,7 @@ jsonrpsee-wasm-client = "0.16.0"
 
 [dev-dependencies]
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.25.0", features = ["full"] }
 tempfile = "3.3.0"
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }

@@ -26,7 +26,7 @@ portpicker = "0.1.1"
 rand = "0.8"
 serde_json = "1.0.91"
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.25.0", features = ["full"] }
 tracing ="0.1.37"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 url = { version = "2.3.1", features = ["serde"] }

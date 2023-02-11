@@ -26,4 +26,4 @@ test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { version = "1.24.2", features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.25.0", features = ["rt", "rt-multi-thread", "sync", "time"] }

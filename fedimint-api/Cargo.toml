@@ -44,7 +44,7 @@ wasm-bindgen-futures = "0.4.33"
 js-sys = "0.3.61"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.25.0", features = ["full"] }
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
