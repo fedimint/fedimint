@@ -180,6 +180,8 @@ impl LnGateway {
                 .expect("Failed to create actor"),
         );
 
+        // TODO: Subscribe for HTLC intercept on behalf of this federation
+
         self.actors.lock().await.insert(
             client.config().client_config.federation_id.to_string(),
             actor.clone(),
@@ -209,13 +211,7 @@ impl LnGateway {
 
         let gw_client_cfg = self
             .client_builder
-            .create_config(
-                connect,
-                channel_id,
-                node_pub_key,
-                self.config.announce_address.clone(),
-                self.module_gens.clone(),
-            )
+            .create_config(connect, channel_id, node_pub_key, self.module_gens.clone())
             .await
             .expect("Failed to create gateway client config");
 
@@ -457,6 +453,8 @@ impl Drop for LnGateway {
 pub enum LnGatewayError {
     #[error("Federation client operation error: {0:?}")]
     ClientError(#[from] ClientError),
+    #[error("Lightning rpc operation error: {0:?}")]
+    LnRpcError(#[from] tonic::Status),
     #[error("Our LN node could not route the payment: {0:?}")]
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]

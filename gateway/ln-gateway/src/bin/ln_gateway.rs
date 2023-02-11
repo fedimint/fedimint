@@ -48,8 +48,12 @@ async fn main() -> Result<(), Error> {
     let gw_cfg: GatewayConfig = load_from_file(&gw_cfg_path).expect("Failed to parse config");
 
     // Create federation client builder
-    let client_builder: DynGatewayClientBuilder =
-        StandardGatewayClientBuilder::new(work_dir.clone(), RocksDbFactory.into()).into();
+    let client_builder: DynGatewayClientBuilder = StandardGatewayClientBuilder::new(
+        work_dir.clone(),
+        RocksDbFactory.into(),
+        gw_cfg.announce_address.clone(),
+    )
+    .into();
     let decoders = ModuleDecoderRegistry::from_iter([
         (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
         (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),

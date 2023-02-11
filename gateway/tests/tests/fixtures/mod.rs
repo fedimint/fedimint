@@ -33,7 +33,8 @@ pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
     let ln_rpc = Arc::new(ln::MockLnRpc::new());
 
     let client_builder: DynGatewayClientBuilder =
-        client::TestGatewayClientBuilder::new(MemDbFactory.into()).into();
+        client::TestGatewayClientBuilder::new(MemDbFactory.into(), gw_cfg.announce_address.clone())
+            .into();
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
     let decoders = module_decode_stubs();
     let module_gens = ModuleGenRegistry::from(vec![
