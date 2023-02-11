@@ -138,7 +138,7 @@ impl std::fmt::Display for LightningInput {
 pub enum LightningOutput {
     /// Fund contract
     Contract(ContractOutput),
-    /// Creat incoming contract offer
+    /// Create incoming contract offer
     Offer(contracts::incoming::IncomingContractOffer),
     /// Allow early refund of outgoing contract
     CancelOutgoing {
@@ -1129,7 +1129,7 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
 }
 
 // TODO: upstream serde support to LDK
-/// Hack to get a route hint that implements serde traits.
+/// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
     use fedimint_core::encoding::{Decodable, Encodable};
     use secp256k1::PublicKey;
@@ -1137,9 +1137,9 @@ pub mod route_hints {
 
     #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
     pub struct RouteHintHop {
-        /// The node_id of the non-target end of the route
+        /// The `node_id` of the non-target end of the route
         pub src_node_id: PublicKey,
-        /// The short_channel_id of this channel
+        /// The `short_channel_id` of this channel
         pub short_channel_id: u64,
         /// Flat routing fee in satoshis
         pub base_msat: u32,

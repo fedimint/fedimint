@@ -22,7 +22,7 @@ impl<R> QueryStrategy<R> for TrustAllPeers {
     }
 }
 
-/// Returns first response with a valid sig
+/// Returns first response with a valid signature
 pub struct VerifiableResponse<R> {
     verifier: Box<dyn Fn(&R) -> bool + Send + Sync>,
     allow_consensus_fallback: bool,
@@ -116,7 +116,7 @@ impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
 /// Returns the deduplicated union of `required` number of responses
 ///
 /// Unlike [`UnionResponses`], it works with single values, not `Vec`s.
-/// TODO: Should we make UnionResponses a wrapper around this one?
+/// TODO: Should we make `UnionResponses` a wrapper around this one?
 pub struct UnionResponsesSingle<R> {
     responses: HashSet<PeerId>,
     existing_results: Vec<R>,
@@ -296,7 +296,7 @@ pub enum QueryStep<R> {
     FailMembers(BTreeMap<PeerId, MemberError>),
     /// Do nothing yet, keep waiting for requests
     Continue,
-    /// Return the succsessful result
+    /// Return the successful result
     Success(R),
     /// Fail the whole request and remember errors from given members
     Failure(BTreeMap<PeerId, MemberError>),

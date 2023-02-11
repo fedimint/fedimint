@@ -48,7 +48,7 @@ impl Transaction {
         TransactionId::from_engine(engine)
     }
 
-    /// Validate the aggregated Schnorr Signature signed over the tx_hash
+    /// Validate the aggregated Schnorr Signature signed over the `tx_hash`
     pub fn validate_signature(
         &self,
         keys: impl Iterator<Item = XOnlyPublicKey>,

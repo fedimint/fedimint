@@ -9,7 +9,7 @@ use fedimint_wallet::txoproof::TxOutProof;
 #[async_trait]
 pub trait BitcoinTest {
     /// Make the underlying instance act as if it was exclusively available
-    /// for the existance of the returned guard.
+    /// for the existence of the returned guard.
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send>;
 
     /// Mines a given number of blocks

@@ -3,7 +3,7 @@ use std::io::Write;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, Hmac, HmacEngine};
 use secp256k1::{Scalar, Secp256k1, Verification};
 
-/// An object that can be used as a ricardian contract to tweak a key
+/// An object that can be used as a Ricardian contract to tweak a key
 pub trait Contract {
     /// Serialize the contract in a deterministic way to be used as a tweak
     fn encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()>;
