@@ -3,6 +3,7 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
+use aead::{encrypted_write, get_key};
 use anyhow::ensure;
 use bitcoin::hashes::hex::{FromHex, ToHex};
 use fedimint_api::config::ConfigGenParams;
@@ -21,7 +22,6 @@ use ring::aead::LessSafeKey;
 use tokio_rustls::rustls;
 use url::Url;
 
-use crate::encrypt::*;
 use crate::*;
 
 pub fn create_cert(

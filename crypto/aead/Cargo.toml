@@ -12,5 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.65"
+rpassword = "7.2.0"
 ring = "0.16.20"
+hex = "0.4.3"
 rand = "0.8"

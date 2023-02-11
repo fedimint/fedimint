@@ -13,8 +13,10 @@ name = "aead"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "hex",
  "rand",
  "ring",
+ "rpassword",
 ]
 
 [[package]]
@@ -1007,6 +1009,7 @@ dependencies = [
 name = "fedimint-dbtool"
 version = "0.1.0"
 dependencies = [
+ "aead",
  "anyhow",
  "bitcoin_hashes",
  "bytes",
@@ -1327,7 +1330,6 @@ dependencies = [
  "rayon",
  "rcgen",
  "ring",
- "rpassword",
  "secp256k1-zkp",
  "serde",
  "serde_json",

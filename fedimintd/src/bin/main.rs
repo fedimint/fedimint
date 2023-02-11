@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use aead::get_key;
 use clap::Parser;
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::db::Database;
@@ -12,7 +13,6 @@ use fedimint_mint::MintGen;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::WalletGen;
-use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
 use fedimintd::ui::UiMessage;
 use fedimintd::*;
