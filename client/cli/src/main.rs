@@ -625,7 +625,7 @@ async fn handle_command(
             )
         }
         Command::ConnectInfo => {
-            let info = WsClientConnectInfo::from(client.config().as_ref());
+            let info = WsClientConnectInfo::from_honest_peers(client.config().as_ref());
             Ok(CliOutput::ConnectInfo {
                 connect_info: (info),
             })

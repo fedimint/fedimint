@@ -110,7 +110,7 @@ pub fn write_nonprivate_configs(
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
     plaintext_json_write(
-        &WsClientConnectInfo::from(&client_config),
+        &WsClientConnectInfo::from_honest_peers(&client_config),
         path.join(CLIENT_CONNECT_FILE),
     )?;
     plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))

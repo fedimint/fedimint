@@ -75,7 +75,7 @@ async fn run_page(axum::extract::State(state): axum::extract::State<MutableState
                 match std::fs::File::open(path) {
                     Ok(file) => match serde_json::from_reader(file) {
                         Ok(cfg) => {
-                            let connect_info = WsClientConnectInfo::from(&cfg);
+                            let connect_info = WsClientConnectInfo::from_honest_peers(&cfg);
 
                             RunTemplateState::DkgDone(
                                 serde_json::to_string(&connect_info).expect("should deserialize"),
@@ -329,7 +329,7 @@ async fn qr(axum::extract::State(state): axum::extract::State<MutableState>) -> 
         Ok(file) => {
             let cfg: ClientConfig =
                 serde_json::from_reader(file).expect("Could not parse cfg file.");
-            let connect_info = WsClientConnectInfo::from(&cfg);
+            let connect_info = WsClientConnectInfo::from_honest_peers(&cfg);
             serde_json::to_string(&connect_info).expect("should deserialize")
         }
         Err(_) => "".into(),

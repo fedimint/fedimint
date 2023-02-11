@@ -7,7 +7,9 @@ use std::{cmp, result};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_api::config::{ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry};
+use fedimint_api::config::{
+    ApiEndpoint, ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry,
+};
 use fedimint_api::core::DynOutputOutcome;
 use fedimint_api::fmt_utils::AbbreviateDebug;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -585,13 +587,29 @@ pub struct WsClientConnectInfo {
     pub id: FederationId,
 }
 
+impl WsClientConnectInfo {
+    pub fn new(id: &FederationId, endpoints: &[ApiEndpoint]) -> Self {
+        Self {
+            urls: endpoints.iter().map(|node| node.url.clone()).collect(),
+            id: id.clone(),
+        }
+    }
+
+    /// Construct from a config using only a number of peers where one is expected to be honest
+    ///
+    /// Minimizes the serialized size of the connect info
+    pub fn from_honest_peers(config: &ClientConfig) -> Self {
+        let all = config.nodes.clone();
+        let num_honest = all.one_honest();
+        let honest: Vec<_> = all.into_iter().take(num_honest).collect();
+
+        WsClientConnectInfo::new(&config.federation_id, &honest)
+    }
+}
+
 impl From<&ClientConfig> for WsClientConnectInfo {
     fn from(config: &ClientConfig) -> Self {
-        let urls: Vec<Url> = config.nodes.iter().map(|node| node.url.clone()).collect();
-        WsClientConnectInfo {
-            urls,
-            id: config.federation_id.clone(),
-        }
+        WsClientConnectInfo::new(&config.federation_id, &config.nodes)
     }
 }
 
