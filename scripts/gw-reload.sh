@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Reload core-lightning gateway plugin
 
 set -euo pipefail
