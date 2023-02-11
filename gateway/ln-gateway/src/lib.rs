@@ -27,7 +27,7 @@ use bitcoin::Address;
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
 use fedimint_api::{task::TaskGroup, Amount, TransactionId};
-use fedimint_server::api::WsFederationConnect;
+use fedimint_server::api::WsClientConnectInfo;
 use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::ln::route_hints::RouteHint;
 use mint_client::{ln::PayInvoicePayload, mint::MintClientError, ClientError, GatewayClient};
@@ -195,7 +195,7 @@ impl LnGateway {
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
-        let connect: WsFederationConnect = serde_json::from_str(&payload.connect).map_err(|e| {
+        let connect: WsClientConnectInfo = serde_json::from_str(&payload.connect).map_err(|e| {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 

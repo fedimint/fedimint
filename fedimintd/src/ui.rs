@@ -16,7 +16,7 @@ use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
-use fedimint_core::api::WsFederationConnect;
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::util::SanitizedUrl;
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
@@ -75,7 +75,7 @@ async fn run_page(axum::extract::State(state): axum::extract::State<MutableState
                 match std::fs::File::open(path) {
                     Ok(file) => match serde_json::from_reader(file) {
                         Ok(cfg) => {
-                            let connect_info = WsFederationConnect::from(&cfg);
+                            let connect_info = WsClientConnectInfo::from(&cfg);
 
                             RunTemplateState::DkgDone(
                                 serde_json::to_string(&connect_info).expect("should deserialize"),
@@ -329,7 +329,7 @@ async fn qr(axum::extract::State(state): axum::extract::State<MutableState>) -> 
         Ok(file) => {
             let cfg: ClientConfig =
                 serde_json::from_reader(file).expect("Could not parse cfg file.");
-            let connect_info = WsFederationConnect::from(&cfg);
+            let connect_info = WsClientConnectInfo::from(&cfg);
             serde_json::to_string(&connect_info).expect("should deserialize")
         }
         Err(_) => "".into(),

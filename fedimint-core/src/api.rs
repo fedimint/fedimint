@@ -575,26 +575,21 @@ struct FederationMember<C> {
 }
 
 /// Information required for client to construct [`WsFederationApi`] instance
+///
+/// Can be used to download the configs and bootstrap a client
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WsFederationConnect {
-    pub members: Vec<(PeerId, Url)>,
+pub struct WsClientConnectInfo {
+    /// Urls that support the federation API (expected to be in PeerId order)
+    pub urls: Vec<Url>,
+    /// Authentication id for the federation
     pub id: FederationId,
 }
 
-impl From<&ClientConfig> for WsFederationConnect {
+impl From<&ClientConfig> for WsClientConnectInfo {
     fn from(config: &ClientConfig) -> Self {
-        let members: Vec<(PeerId, Url)> = config
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(id, node)| {
-                let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                let url = node.url.clone();
-                (peer_id, url)
-            })
-            .collect();
-        WsFederationConnect {
-            members,
+        let urls: Vec<Url> = config.nodes.iter().map(|node| node.url.clone()).collect();
+        WsClientConnectInfo {
+            urls,
             id: config.federation_id.clone(),
         }
     }
@@ -655,16 +650,22 @@ impl WsFederationApi<WsClient> {
         Self::new_with_client(members)
     }
 
+    /// Creates a new API client from a client config
     pub fn from_config(config: &ClientConfig) -> Self {
+        Self::from_urls(&config.into())
+    }
+
+    /// Creates a new API client from connection info
+    pub fn from_urls(connection: &WsClientConnectInfo) -> Self {
         Self::new(
-            config
-                .nodes
+            connection
+                .urls
                 .iter()
                 .enumerate()
-                .map(|(id, node)| {
-                    let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                    let url = node.url.clone();
-                    (peer_id, url)
+                .map(|(id, url)| {
+                    // FIXME: potentially wrong could download actual PeerId later, but doesn't matter in practice
+                    let peer_id = PeerId::from(id as u16);
+                    (peer_id, url.clone())
                 })
                 .collect(),
         )

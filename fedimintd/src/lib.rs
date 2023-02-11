@@ -5,7 +5,7 @@ use anyhow::format_err;
 use bitcoin::Network;
 use fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
 use fedimint_api::{Amount, Tiered};
-use fedimint_core::api::WsFederationConnect;
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_mint::MintGenParams;
 use fedimint_server::config::ServerConfig;
 use fedimint_wallet::WalletGenParams;
@@ -110,7 +110,7 @@ pub fn write_nonprivate_configs(
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
     plaintext_json_write(
-        &WsFederationConnect::from(&client_config),
+        &WsClientConnectInfo::from(&client_config),
         path.join(CLIENT_CONNECT_FILE),
     )?;
     plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))

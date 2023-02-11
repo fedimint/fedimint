@@ -19,7 +19,7 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::api::{
-    FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
+    FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::load_from_file;
 use fedimint_core::query::EventuallyConsistent;
@@ -108,7 +108,7 @@ enum CliOutput {
     },
 
     ConnectInfo {
-        connect_info: WsFederationConnect,
+        connect_info: WsClientConnectInfo,
     },
 
     JoinFederation {
@@ -383,9 +383,9 @@ async fn main() {
 
         let cli = Cli::parse();
         if let Command::JoinFederation { connect } = cli.command {
-            let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
+            let connect_obj: WsClientConnectInfo = serde_json::from_str(&connect)
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
-            let api = Arc::new(WsFederationApi::new(connect_obj.members))
+            let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;
             let cfg: ClientConfig = api
                 .download_client_config(&connect_obj.id, module_gens.clone())
@@ -625,7 +625,7 @@ async fn handle_command(
             )
         }
         Command::ConnectInfo => {
-            let info = WsFederationConnect::from(client.config().as_ref());
+            let info = WsClientConnectInfo::from(client.config().as_ref());
             Ok(CliOutput::ConnectInfo {
                 connect_info: (info),
             })
