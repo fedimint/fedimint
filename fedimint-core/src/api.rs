@@ -9,7 +9,6 @@ use std::time::Duration;
 use std::{cmp, result};
 
 use anyhow::ensure;
-use async_trait::async_trait;
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin::consensus::ReadExt;
@@ -20,8 +19,10 @@ use fedimint_core::config::{
 use fedimint_core::core::DynOutputOutcome;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{sleep, RwLock, RwLockWriteGuard};
-use fedimint_core::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+use fedimint_core::{
+    apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
+};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 #[cfg(not(target_family = "wasm"))]
@@ -136,9 +137,8 @@ impl OutputOutcomeError {
     }
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait IFederationApi: Debug {
+#[apply(async_trait_maybe_send!)]
+pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     /// List of all federation members for the purpose of iterating each member
     /// in the federation.
     ///
@@ -202,16 +202,15 @@ pub trait DynTryIntoOutcome: Sized {
     fn try_into_outcome(common_outcome: DynOutputOutcome) -> Result<Self, CoreError>;
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
 /// An extension trait allowing to making federation-wide API call on top
 /// [`IFederationApi`].
+#[apply(async_trait_maybe_send!)]
 pub trait FederationApiExt: IFederationApi {
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     async fn request_with_strategy<MemberRet: serde::de::DeserializeOwned, FedRet: Debug>(
         &self,
-        mut strategy: impl QueryStrategy<MemberRet, FedRet> + Send,
+        mut strategy: impl QueryStrategy<MemberRet, FedRet> + MaybeSend,
         method: String,
         params: Vec<Value>,
     ) -> FederationResult<FedRet> {
@@ -312,7 +311,7 @@ pub trait FederationApiExt: IFederationApi {
         params: Vec<Value>,
     ) -> FederationResult<Vec<Ret>>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
             UnionResponses::new(self.all_members().one_honest()),
@@ -328,7 +327,7 @@ pub trait FederationApiExt: IFederationApi {
         params: Vec<Value>,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
             CurrentConsensus::new(self.all_members().one_honest()),
@@ -344,7 +343,7 @@ pub trait FederationApiExt: IFederationApi {
         params: Vec<Value>,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
             EventuallyConsistent::new(self.all_members().one_honest()),
@@ -355,16 +354,14 @@ pub trait FederationApiExt: IFederationApi {
     }
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> FederationApiExt for T where T: IFederationApi {}
 
 dyn_newtype_define! {
     pub DynFederationApi(Arc<IFederationApi>)
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
     async fn fetch_tx_outcome(&self, txid: &TransactionId) -> FederationResult<TransactionStatus>;
@@ -384,9 +381,9 @@ pub trait GlobalFederationApi {
         decoders: &ModuleDecoderRegistry,
     ) -> OutputOutcomeResult<R>
     where
-        R: DynTryIntoOutcome + Send;
+        R: DynTryIntoOutcome + MaybeSend;
 
-    async fn await_output_outcome<R: DynTryIntoOutcome + Send>(
+    async fn await_output_outcome<R: DynTryIntoOutcome + MaybeSend>(
         &self,
         outpoint: OutPoint,
         timeout: Duration,
@@ -404,11 +401,10 @@ pub trait GlobalFederationApi {
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> GlobalFederationApi for T
 where
-    T: IFederationApi + Send + Sync + 'static,
+    T: IFederationApi + MaybeSend + MaybeSync + 'static,
 {
     /// Submit a transaction for inclusion
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
@@ -487,7 +483,7 @@ where
         decoders: &ModuleDecoderRegistry,
     ) -> OutputOutcomeResult<R>
     where
-        R: DynTryIntoOutcome + Send,
+        R: DynTryIntoOutcome + MaybeSend,
     {
         match self.fetch_tx_outcome(&out_point.txid).await? {
             TransactionStatus::Rejected(e) => Err(OutputOutcomeError::Rejected(e)),
@@ -513,7 +509,7 @@ where
     }
 
     // TODO should become part of the API
-    async fn await_output_outcome<R: DynTryIntoOutcome + Send>(
+    async fn await_output_outcome<R: DynTryIntoOutcome + MaybeSend>(
         &self,
         outpoint: OutPoint,
         timeout: Duration,
@@ -703,9 +699,8 @@ impl From<&ClientConfig> for WsClientConnectInfo {
     }
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<C> {
+#[apply(async_trait_maybe_send!)]
+impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync> IFederationApi for WsFederationApi<C> {
     fn all_members(&self) -> &BTreeSet<PeerId> {
         &self.peers
     }
@@ -726,13 +721,13 @@ impl<C: JsonRpcClient + Debug + Send + Sync> IFederationApi for WsFederationApi<
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait JsonRpcClient: ClientT + Sized {
     async fn connect(url: &Url) -> result::Result<Self, JsonRpcError>;
     fn is_connected(&self) -> bool;
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl JsonRpcClient for WsClient {
     async fn connect(url: &Url) -> result::Result<Self, JsonRpcError> {
         #[cfg(not(target_family = "wasm"))]
@@ -905,7 +900,7 @@ mod tests {
 
     type Result<T = ()> = std::result::Result<T, JsonRpcError>;
 
-    #[async_trait]
+    #[apply(async_trait_maybe_send!)]
     trait SimpleClient: Sized {
         async fn connect() -> Result<Self>;
         fn is_connected(&self) -> bool {
@@ -917,8 +912,8 @@ mod tests {
 
     struct Client<C: SimpleClient>(C);
 
-    #[async_trait]
-    impl<C: SimpleClient + Send + Sync> JsonRpcClient for Client<C> {
+    #[apply(async_trait_maybe_send!)]
+    impl<C: SimpleClient + MaybeSend + MaybeSync> JsonRpcClient for Client<C> {
         fn is_connected(&self) -> bool {
             self.0.is_connected()
         }
@@ -928,12 +923,12 @@ mod tests {
         }
     }
 
-    #[async_trait]
-    impl<C: SimpleClient + Send + Sync> ClientT for Client<C> {
+    #[apply(async_trait_maybe_send!)]
+    impl<C: SimpleClient + MaybeSend + MaybeSync> ClientT for Client<C> {
         async fn request<R, P>(&self, method: &str, _params: P) -> Result<R>
         where
             R: jsonrpsee_core::DeserializeOwned,
-            P: ToRpcParams + Send,
+            P: ToRpcParams + MaybeSend,
         {
             let json = self.0.request(method).await?;
             Ok(serde_json::from_str(&json).unwrap())
@@ -941,7 +936,7 @@ mod tests {
 
         async fn notification<P>(&self, _method: &str, _params: P) -> Result<()>
         where
-            P: ToRpcParams + Send,
+            P: ToRpcParams + MaybeSend,
         {
             unimplemented!()
         }
@@ -957,7 +952,7 @@ mod tests {
         }
     }
 
-    fn federation_member<C: SimpleClient + Send + Sync>() -> FederationMember<Client<C>> {
+    fn federation_member<C: SimpleClient + MaybeSend + MaybeSync>() -> FederationMember<Client<C>> {
         FederationMember {
             url: Url::from_str("http://127.0.0.1").expect("Could not parse"),
             peer_id: PeerId::from(0),
@@ -971,7 +966,7 @@ mod tests {
         static CONNECTED: AtomicBool = AtomicBool::new(true);
         struct Client;
 
-        #[async_trait]
+        #[apply(async_trait_maybe_send!)]
         impl SimpleClient for Client {
             async fn connect() -> Result<Self> {
                 CONNECTION_COUNT.fetch_add(1, Ordering::SeqCst);
@@ -1026,7 +1021,7 @@ mod tests {
 
         struct Client(usize);
 
-        #[async_trait]
+        #[apply(async_trait_maybe_send!)]
         impl SimpleClient for Client {
             async fn connect() -> Result<Self> {
                 tracing::error!("connect");

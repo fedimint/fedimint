@@ -6,12 +6,12 @@ use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::pin::Pin;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::Hash;
-use futures::future::BoxFuture;
+use futures::Future;
 use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -25,8 +25,11 @@ use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::{DynServerModule, VerificationCache};
-use crate::task::TaskGroup;
-use crate::{dyn_newtype_define, Amount, OutPoint, PeerId};
+use crate::task::{MaybeSend, TaskGroup};
+use crate::{
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
+    OutPoint, PeerId,
+};
 
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
@@ -71,7 +74,7 @@ impl ApiError {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait TypedApiEndpoint {
     type State: Sync;
 
@@ -114,7 +117,7 @@ macro_rules! __api_endpoint {
     ) => {{
         struct Endpoint;
 
-        #[async_trait::async_trait]
+        #[$crate::apply($crate::async_trait_maybe_send!)]
         impl $crate::module::TypedApiEndpoint for Endpoint {
             const PATH: &'static str = $path;
             type State = $state_ty;
@@ -139,16 +142,17 @@ use fedimint_core::config::{DkgResult, ModuleConfigResponse};
 
 use self::registry::ModuleDecoderRegistry;
 
-type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
+type HandlerFnReturn<'a> =
+    Pin<Box<maybe_add_send!(dyn Future<Output = Result<serde_json::Value, ApiError>> + 'a)>>;
 type HandlerFn<M> = Box<
-    dyn for<'a> Fn(
+    maybe_add_send_sync!(
+        dyn for<'a> Fn(
             &'a M,
             fedimint_core::db::DatabaseTransaction<'a>,
             serde_json::Value,
             Option<ModuleInstanceId>,
         ) -> HandlerFnReturn<'a>
-        + Send
-        + Sync,
+    ),
 >;
 
 /// Definition of an API endpoint defined by a module `M`.
@@ -168,7 +172,7 @@ pub struct ApiEndpoint<M> {
 impl ApiEndpoint<()> {
     pub fn from_typed<E: TypedApiEndpoint>() -> ApiEndpoint<E::State>
     where
-        <E as TypedApiEndpoint>::Response: std::marker::Send,
+        <E as TypedApiEndpoint>::Response: MaybeSend,
         E::Param: Debug,
         E::Response: Debug,
     {
@@ -265,7 +269,7 @@ where
 ///
 /// Once the module configuration is ready, the module can be instantiated via
 /// `[Self::init]`.
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait IModuleGen: Debug {
     fn decoder(&self) -> DynDecoder;
 
@@ -400,7 +404,7 @@ pub struct ApiVersion {
 ///
 /// For examples, take a look at one of the `MintConfigGenerator`,
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait ModuleGen: Debug + Sized {
     const KIND: ModuleKind;
 
@@ -474,7 +478,7 @@ pub trait ModuleGen: Debug + Sized {
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<T> IModuleGen for T
 where
     T: ModuleGen + 'static + Sync,
@@ -614,7 +618,7 @@ impl<CI> ConsensusProposal<CI> {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait ServerModule: Debug + Sized {
     type Gen: ModuleGen;
     type Decoder: Decoder;
@@ -659,7 +663,7 @@ pub trait ServerModule: Debug + Sized {
     /// constructing such lookup tables.
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a <Self::Decoder as Decoder>::Input> + Send,
+        inputs: impl Iterator<Item = &'a <Self::Decoder as Decoder>::Input> + MaybeSend,
     ) -> Self::VerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed

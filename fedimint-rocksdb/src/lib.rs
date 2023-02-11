@@ -1,3 +1,4 @@
+#![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 use std::path::Path;
 
 use anyhow::Result;

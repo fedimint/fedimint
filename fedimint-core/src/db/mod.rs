@@ -6,9 +6,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use async_trait::async_trait;
 use futures::future::BoxFuture;
 use futures::{stream, Stream, StreamExt};
+use macro_rules_attribute::apply;
 use serde::Serialize;
 use strum_macros::EnumIter;
 use thiserror::Error;
@@ -17,6 +17,8 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::core::ModuleInstanceId;
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
+use crate::task::{MaybeSend, MaybeSync};
+use crate::{async_trait_maybe_send, maybe_add_send};
 
 pub mod mem_impl;
 
@@ -66,10 +68,10 @@ pub trait DatabaseValue: Sized + Debug {
     fn to_bytes(&self) -> Vec<u8>;
 }
 
-pub type PrefixStream<'a> = Pin<Box<dyn Stream<Item = (Vec<u8>, Vec<u8>)> + Send + 'a>>;
+pub type PrefixStream<'a> = Pin<Box<maybe_add_send!(dyn Stream<Item = (Vec<u8>, Vec<u8>)> + 'a)>>;
 
-#[async_trait]
-pub trait IDatabase: Debug + Send + Sync {
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabase: Debug + MaybeSend + MaybeSync {
     async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>>;
 }
 
@@ -246,8 +248,8 @@ impl Database {
 /// | RocksDB  | Prevented          | Prevented  | Prevented           |
 /// Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
 /// | Prevented           | Prevented      | Prevented   |
-#[async_trait]
-pub trait IDatabaseTransaction<'a>: 'a + Send {
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
@@ -291,7 +293,7 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 /// database. This allows for wrapper structs to more easily borrow
 /// `ISingleUseDatabaseTransaction` without needing to make additional
 /// allocations.
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait ISingleUseDatabaseTransaction<'a>: 'a + Send {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
@@ -323,7 +325,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + Send> SingleUseDatabaseTransaction<'a, T
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<'a, Tx: IDatabaseTransaction<'a> + Send> ISingleUseDatabaseTransaction<'a>
     for SingleUseDatabaseTransaction<'a, Tx>
 {
@@ -434,7 +436,7 @@ impl<'a> ModuleDatabaseTransaction<'a> {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
@@ -513,7 +515,7 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<'isolated, 'parent, T: Send + Encodable + 'isolated> ISingleUseDatabaseTransaction<'isolated>
     for IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {

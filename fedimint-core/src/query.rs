@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Debug;
 use std::mem;
 
-use fedimint_core::PeerId;
+use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::{maybe_add_send_sync, PeerId};
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use tracing::debug;
@@ -24,7 +25,7 @@ impl<R> QueryStrategy<R> for TrustAllPeers {
 
 /// Returns first response with a valid signature
 pub struct VerifiableResponse<R> {
-    verifier: Box<dyn Fn(&R) -> bool + Send + Sync>,
+    verifier: Box<maybe_add_send_sync!(dyn Fn(&R) -> bool)>,
     allow_consensus_fallback: bool,
     current: CurrentConsensus<R>,
 }
@@ -40,7 +41,7 @@ impl<R> VerifiableResponse<R> {
     pub fn new(
         required: usize,
         allow_consensus_fallback: bool,
-        verifier: impl Fn(&R) -> bool + Send + Sync + 'static,
+        verifier: impl Fn(&R) -> bool + MaybeSend + MaybeSync + 'static,
     ) -> Self {
         Self {
             verifier: Box::new(verifier),

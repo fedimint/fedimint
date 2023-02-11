@@ -446,3 +446,110 @@ mod imp {
         }
     }
 }
+
+/// async trait that use MaybeSend
+///
+/// # Example
+///
+/// ```rust
+/// use fedimint_core::{apply, async_trait_maybe_send};
+/// #[apply(async_trait_maybe_send!)]
+/// trait Foo {
+///     // methods
+/// }
+///
+/// #[apply(async_trait_maybe_send!)]
+/// impl Foo for () {
+///     // methods
+/// }
+/// ```
+#[macro_export]
+macro_rules! async_trait_maybe_send {
+    ($($tt:tt)*) => {
+        #[cfg_attr(not(target_family = "wasm"), ::async_trait::async_trait)]
+        #[cfg_attr(target_family = "wasm", ::async_trait::async_trait(?Send))]
+        $($tt)*
+    };
+}
+
+/// MaybeSync can not be used in `dyn $Trait + MaybeSend`
+///
+/// # Example
+///
+/// ```rust
+/// type Foo = maybe_add_send!(dyn Any);
+/// ```
+#[cfg(not(target_family = "wasm"))]
+#[macro_export]
+macro_rules! maybe_add_send {
+    ($($tt:tt)*) => {
+        $($tt)* + Send
+    };
+}
+
+/// MaybeSync can not be used in `dyn $Trait + MaybeSend`
+///
+/// # Example
+///
+/// ```rust
+/// type Foo = maybe_add_send!(dyn Any);
+/// ```
+#[cfg(target_family = "wasm")]
+#[macro_export]
+macro_rules! maybe_add_send {
+    ($($tt:tt)*) => {
+        $($tt)*
+    };
+}
+
+/// See `maybe_add_send`
+#[cfg(not(target_family = "wasm"))]
+#[macro_export]
+macro_rules! maybe_add_send_sync {
+    ($($tt:tt)*) => {
+        $($tt)* + Send + Sync
+    };
+}
+
+/// See `maybe_add_send`
+#[cfg(target_family = "wasm")]
+#[macro_export]
+macro_rules! maybe_add_send_sync {
+    ($($tt:tt)*) => {
+        $($tt)*
+    };
+}
+
+/// `MaybeSend` is no-op on wasm and `Send` on non wasm.
+///
+/// On wasm, most types don't implement `Send` because JS types can not sent
+/// between workers directly.
+#[cfg(target_family = "wasm")]
+pub trait MaybeSend {}
+
+/// `MaybeSend` is no-op on wasm and `Send` on non wasm.
+///
+/// On wasm, most types don't implement `Send` because JS types can not sent
+/// between workers directly.
+#[cfg(not(target_family = "wasm"))]
+pub trait MaybeSend: Send {}
+
+#[cfg(not(target_family = "wasm"))]
+impl<T: Send> MaybeSend for T {}
+
+#[cfg(target_family = "wasm")]
+impl<T> MaybeSend for T {}
+
+/// `MaybeSync` is no-op on wasm and `Sync` on non wasm.
+#[cfg(target_family = "wasm")]
+pub trait MaybeSync {}
+
+/// `MaybeSync` is no-op on wasm and `Sync` on non wasm.
+#[cfg(not(target_family = "wasm"))]
+pub trait MaybeSync: Sync {}
+
+#[cfg(not(target_family = "wasm"))]
+impl<T: Sync> MaybeSync for T {}
+
+#[cfg(target_family = "wasm")]
+impl<T> MaybeSync for T {}
