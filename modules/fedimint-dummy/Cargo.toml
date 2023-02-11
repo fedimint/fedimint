@@ -20,6 +20,7 @@ fedimint-api = { path = "../../fedimint-api" }
 rand = "0.8"
 rayon = "1.6.1"
 serde = { version = "1.0.149", features = [ "derive" ] }
+serde_json = { version = "1.0.91", default-features = false }
 strum = "0.24"
 strum_macros = "0.24"
 impl-tools = "0.6.1"

@@ -8,7 +8,6 @@ use bitcoin::consensus::Encodable;
 use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
 use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_api::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
 use tracing::warn;

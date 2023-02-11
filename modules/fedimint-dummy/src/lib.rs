@@ -13,7 +13,6 @@ use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfi
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
@@ -25,10 +24,10 @@ use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::config::{DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
-use crate::serde_json::Value;
 
 pub mod common;
 pub mod config;

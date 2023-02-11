@@ -8,7 +8,6 @@ use fedimint_api::config::TypedServerModuleConfig;
 use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
 use fedimint_api::core::ModuleKind;
 use fedimint_api::encoding::Encodable;
-use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;

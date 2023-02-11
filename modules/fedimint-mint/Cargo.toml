@@ -26,6 +26,7 @@ rayon = "1.6.1"
 secp256k1 = "0.24.2"
 secp256k1-zkp = "0.7.0"
 serde = { version = "1.0.149", features = [ "derive" ] }
+serde_json = { version = "1.0.91", default-features = false }
 strum = "0.24"
 strum_macros = "0.24"
 tbs = { path = "../../crypto/tbs" }

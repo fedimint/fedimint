@@ -8,7 +8,6 @@ use fedimint_api::config::{
 };
 use fedimint_api::core::ModuleKind;
 use fedimint_api::encoding::Encodable;
-use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
