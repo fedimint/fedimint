@@ -439,12 +439,18 @@
         });
 
 
-        pkg = { name, dirs, defaultBin ? null }:
+        # Compile a group of packages together
+        #
+        # This unifies their cargo features and avoids building common dependencies mulitple
+        # times, but will produce a derivation with all listed packages.
+        pkgsBuild = { name, pkgs, dirs, defaultBin ? null }:
           let
+            # "--package x --package y" args passed to cargo
+            pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
             deps = craneLib.buildDepsOnly (commonArgs // {
               src = filterWorkspaceDepsBuildFiles ./.;
-              pname = "pkg-${name}-deps";
-              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --package ${name}";
+              pname = name;
+              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
               doCheck = false;
             });
 
@@ -452,24 +458,32 @@
 
           craneLib.buildPackage (commonArgs // {
             meta = { mainProgram = defaultBin; };
-            pname = "pkg-${name}";
+            pname = "${name}";
             cargoArtifacts = deps;
 
             src = filterModules dirs ./.;
-            cargoExtraArgs = "--package ${name}";
+            cargoExtraArgs = pkgsArgs;
 
             # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
           });
 
 
-        pkgCross = { name, dirs, target }:
+        # Cross-compile a group of packages together.
+        #
+        # This unifies their cargo features and avoids building common dependencies mulitple
+        # times, but will produce a derivation with all listed packages.
+        pkgsCrossBuild = { name, pkgs, dirs, target }:
           let
+            # "--package x --package y" args passed to cargo
+            pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
             craneLib = craneLibCross.${target.attr};
             deps = craneLib.buildDepsOnly (commonArgs // {
               src = filterWorkspaceDepsBuildFiles ./.;
-              pname = "pkg-${name}-${target.attr}-deps";
-              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} --package ${name}";
+              pname = "${name}-${target.attr}";
+              # workaround: on wasm, we can't compile all deps, so narrow dependency build
+              # to ones used by the client package only
+              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} ${pkgsArgs}";
               doCheck = false;
 
               preBuild = ''
@@ -481,11 +495,11 @@
 
           in
           craneLib.buildPackage (commonArgs // {
-            pname = "pkg-${name}-${target.attr}";
+            pname = "${name}-${target.attr}";
             cargoArtifacts = deps;
 
             src = filterModules dirs ./.;
-            cargoExtraArgs = "--target ${target.name} --package ${name}";
+            cargoExtraArgs = "--target ${target.name} ${pkgsArgs}";
 
             # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
@@ -496,11 +510,19 @@
             '' + target.extraEnvs;
           });
 
-        fedimintd = pkg {
-          name = "fedimintd";
+        fedimint-pkgs = pkgsBuild {
+          name = "fedimint-pkgs";
+
+          pkgs = {
+            fedimintd = { };
+            fedimint-cli = { };
+            fedimint-tests = { };
+          };
+
           defaultBin = "fedimintd";
           dirs = [
             "client/client-lib"
+            "client/cli"
             "crypto/aead"
             "crypto/derive-secret"
             "crypto/hkdf"
@@ -519,9 +541,15 @@
           ];
         };
 
-        ln-gateway = pkg {
-          name = "ln-gateway";
-          defaultBin = "ln-gateway";
+        ln-gateway-pkgs = pkgsBuild {
+          name = "ln-gateway-pkgs";
+
+          pkgs = {
+            ln-gateway = { };
+            gateway-cli = { };
+            gateway-tests = { };
+          };
+
           dirs = [
             "crypto/aead"
             "crypto/derive-secret"
@@ -538,59 +566,21 @@
             "fedimint-server"
             "fedimint-build"
             "gateway/ln-gateway"
-            "modules"
-          ];
-        };
-
-        gateway-cli = pkg {
-          name = "gateway-cli";
-          defaultBin = "gateway-cli";
-          dirs = [
-            "crypto/aead"
-            "crypto/derive-secret"
-            "crypto/tbs"
-            "crypto/hkdf"
-            "client/client-lib"
-            "modules/fedimint-ln"
-            "fedimint-api"
-            "fedimint-bitcoind"
-            "fedimint-core"
-            "fedimint-derive"
-            "fedimint-dbtool"
-            "fedimint-rocksdb"
-            "fedimint-server"
-            "fedimint-build"
             "gateway/cli"
-            "gateway/ln-gateway"
             "modules"
           ];
         };
 
-        fedimint-cli = pkg {
-          name = "fedimint-cli";
-          defaultBin = "fedimint-cli";
-          dirs = [
-            "client/client-lib"
-            "client/cli"
-            "crypto/derive-secret"
-            "crypto/aead"
-            "crypto/tbs"
-            "crypto/hkdf"
-            "fedimint-api"
-            "fedimint-bitcoind"
-            "fedimint-core"
-            "fedimint-derive"
-            "fedimint-dbtool"
-            "fedimint-rocksdb"
-            "fedimint-sqlite"
-            "fedimint-build"
-            "modules"
-          ];
-        };
-
-        mint-client = { target }: pkgCross {
-          name = "mint-client";
+        client-pkgs = { target }: pkgsCrossBuild {
+          name = "client-pkgs";
           inherit target;
+
+          pkgs = {
+            mint-client = { };
+          } // lib.optionalAttrs (target.name != "wasm32-unknown-unknown") {
+            # broken on wasm32
+            fedimint-sqlite = { };
+          };
           dirs = [
             "client/client-lib"
             "crypto/aead"
@@ -605,43 +595,6 @@
             "fedimint-rocksdb"
             "fedimint-sqlite"
             "modules"
-          ];
-        };
-
-        fedimint-sqlite = { target }: pkgCross {
-          name = "fedimint-sqlite";
-          inherit target;
-          dirs = [
-            "fedimint-sqlite"
-            "crypto"
-            "fedimint-api"
-            "fedimint-derive"
-          ];
-        };
-
-        fedimint-tests = pkg {
-          name = "fedimint-tests";
-          dirs = [
-            "client/cli"
-            "client/client-lib"
-            "crypto/aead"
-            "crypto/derive-secret"
-            "crypto/tbs"
-            "crypto/hkdf"
-            "gateway/ln-gateway"
-            "fedimint-api"
-            "fedimint-core"
-            "fedimint-derive"
-            "fedimint-server"
-            "integrationtests"
-            "modules"
-          ];
-        };
-
-        gateway-tests = pkg {
-          name = "gateway-tests";
-          dirs = [
-            "gateway/ln-gateway"
           ];
         };
 
@@ -693,9 +646,9 @@
         };
         # outputs that build a particular package
         outputsPackages = {
-          default = fedimintd;
+          default = fedimint-pkgs;
 
-          inherit fedimintd ln-gateway gateway-cli fedimint-cli fedimint-tests;
+          inherit fedimint-pkgs client-pkgs ln-gateway-pkgs;
 
         };
         packages = outputsWorkspace //
@@ -740,8 +693,7 @@
 
           cross = builtins.mapAttrs
             (attr: target: {
-              mint-client = mint-client { inherit target; };
-              fedimint-sqlite = fedimint-sqlite { inherit target; };
+              client-pkgs = client-pkgs { inherit target; };
             })
             crossTargets;
 
@@ -757,8 +709,7 @@
               fedimintd = pkgs.dockerTools.buildLayeredImage {
                 name = "fedimintd";
                 contents = [
-                  packages.fedimintd
-                  packages.fedimint-cli
+                  packages.fedimint-pkgs
                   pkgs.bash
                   pkgs.coreutils
                 ];
@@ -791,7 +742,7 @@
                 in
                 pkgs.dockerTools.buildLayeredImage {
                   name = "ln-gateway";
-                  contents = [ ln-gateway gateway-cli pkgs.bash pkgs.coreutils ];
+                  contents = [ ln-gateway-pkgs pkgs.bash pkgs.coreutils ];
                   config = {
                     Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
                     Entrypoint = [
@@ -819,7 +770,7 @@
                     rpc-file-mode=0660
                     log-timestamps=false
 
-                    plugin=${ln-gateway}/bin/ln_gateway
+                    plugin=${ln-gateway-pkgs}/bin/ln_gateway
                     fedimint-cfg=/var/fedimint/fedimint-gw
 
                     announce-addr=104.244.73.68:9735
@@ -832,10 +783,10 @@
                 in
                 pkgs.dockerTools.buildLayeredImage {
                   name = "ln-gateway-clightning";
-                  contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils gateway-cli ];
+                  contents = [ ln-gateway-pkgs clightning-dev pkgs.bash pkgs.coreutils ];
                   config = {
                     Cmd = [
-                      "${ln-gateway}/bin/ln_gateway"
+                      "${ln-gateway-pkgs}/bin/ln_gateway"
                     ];
                     ExposedPorts = {
                       "${builtins.toString 9735}/tcp" = { };
@@ -849,10 +800,10 @@
 
               fedimint-cli = pkgs.dockerTools.buildLayeredImage {
                 name = "fedimint-cli";
-                contents = [ fedimint-cli pkgs.bash pkgs.coreutils ];
+                contents = [ fedimint-pkgs pkgs.bash pkgs.coreutils ];
                 config = {
                   Cmd = [
-                    "${fedimint-cli}/bin/fedimint-cli"
+                    "${fedimint-pkgs}/bin/fedimint-cli"
                   ];
                 };
               };
