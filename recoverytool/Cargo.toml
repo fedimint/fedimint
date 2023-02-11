@@ -1,0 +1,29 @@
+[package]
+name = "recoverytool"
+version = "0.1.0"
+edition = "2021"
+authors = ["The Fedimint Developers"]
+description = "recoverytool allows retrieving on-chain funds from a offline federation"
+license = "MIT"
+
+[[bin]]
+name = "recoverytool"
+path = "src/main.rs"
+
+[dependencies]
+bitcoin = "0.29.2"
+clap = "4.1.4"
+fedimintd = { path = "../fedimintd" }
+aead = { path = "../crypto/aead" }
+fedimint-core = { path = "../fedimint-core" }
+fedimint-rocksdb = { path = "../fedimint-rocksdb" }
+fedimint-server = { path = "../fedimint-server" }
+fedimint-wallet = { path = "../modules/fedimint-wallet" }
+futures = "0.3.26"
+miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92" }
+secp256k1 = { version = "0.24.3", features = [ "serde", "global-context" ] }
+serde = { version = "1.0.152", features = [ "derive" ] }
+serde_json = "1.0.93"
+tokio = { version = "1.25.0", features = [ "rt-multi-thread", "macros" ] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
