@@ -10,6 +10,7 @@ use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::Amount;
 use fedimint_ln::route_hints::RouteHint;
+use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 use ln_gateway::{
@@ -126,11 +127,11 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn subscribe_htlcs(
+    async fn subscribe_htlcs<'a>(
         &self,
         _subscription: SubscribeInterceptHtlcsRequest,
-    ) -> Result<HtlcStream> {
-        unimplemented!("TODO: mock subscribe_htlcs")
+    ) -> Result<HtlcStream<'a>> {
+        Ok(Box::pin(stream::iter(vec![])))
     }
 
     async fn complete_htlc(

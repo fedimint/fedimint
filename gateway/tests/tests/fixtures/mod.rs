@@ -13,7 +13,6 @@ use ln_gateway::{
     gatewayd::{gateway::Gateway, lnrpc_client::DynLnRpcClient},
 };
 use mint_client::{module_decode_stubs, modules::wallet::WalletGen};
-use tokio::sync::mpsc;
 use url::Url;
 
 pub mod client;
