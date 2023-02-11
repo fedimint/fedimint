@@ -50,6 +50,12 @@ impl FakeLightningTest {
     }
 }
 
+impl Default for FakeLightningTest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl LightningTest for FakeLightningTest {
     async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
