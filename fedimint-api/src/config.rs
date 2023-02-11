@@ -5,15 +5,19 @@ use std::io::Write;
 use std::ops::Mul;
 use std::str::FromStr;
 
-use anyhow::bail;
 use anyhow::format_err;
+use anyhow::{bail, ensure};
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use fedimint_api::{BitcoinHash, Encodable};
+use fedimint_api::core::{
+    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
+    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
+use fedimint_api::{BitcoinHash, Encodable, ModuleDecoderRegistry};
 use hbbft::crypto::group::Curve;
 use hbbft::crypto::group::GroupEncoding;
 use hbbft::crypto::poly::Commitment;
@@ -27,10 +31,10 @@ use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
 use threshold_crypto::serde_impl::SerdeSecret;
+use threshold_crypto::Signature;
 use url::Url;
 
-use crate::cancellable::Cancellable;
-use crate::core::{ModuleInstanceId, ModuleKind};
+use crate::module::DynModuleGen;
 use crate::net::peers::MuxPeerConnections;
 use crate::PeerId;
 
@@ -70,7 +74,7 @@ impl JsonWithKind {
     /// TODO: In the future, we should have a typed and erased versions of
     /// module construction traits, and then we can try with and
     /// without the workaround to have both cases working.
-    /// See https://github.com/fedimint/fedimint/issues/1303
+    /// See <https://github.com/fedimint/fedimint/issues/1303>
     pub fn with_fixed_empty_value(self) -> Self {
         if let serde_json::Value::Object(ref o) = self.value {
             if o.is_empty() {
@@ -108,7 +112,7 @@ pub struct ApiEndpoint {
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable)]
 pub struct ClientConfig {
     /// name of the federation
     pub federation_name: String,
@@ -119,6 +123,7 @@ pub struct ClientConfig {
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules
+    #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
@@ -129,13 +134,15 @@ pub struct ConfigResponse {
     pub client: ClientConfig,
     /// Hash of the consensus config (for validating against peers)
     pub consensus_hash: sha256::Hash,
+    /// Auth key signature of the client config hash if it exists
+    pub client_hash_signature: Option<Signature>,
 }
 
 /// The federation id is a copy of the authentication threshold public key of the federation
 ///
 /// Stable id so long as guardians membership does not change
 /// Unique id so long as guardians do not all collude
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable)]
 pub struct FederationId(pub threshold_crypto::PublicKey);
 
 /// Display as a hex encoding
@@ -170,6 +177,36 @@ impl FromStr for FederationId {
 }
 
 impl ClientConfig {
+    /// Returns the consensus hash for a given client config
+    pub fn consensus_hash(
+        &self,
+        module_config_gens: &ModuleGenRegistry,
+    ) -> anyhow::Result<sha256::Hash> {
+        let modules: BTreeMap<ModuleInstanceId, sha256::Hash> = self
+            .modules
+            .iter()
+            .map(|(module_instance_id, v)| {
+                let kind = v.kind();
+                Ok((
+                    *module_instance_id,
+                    module_config_gens
+                        .get(kind)
+                        .ok_or_else(|| format_err!("module config gen not found: {kind}"))?
+                        .hash_client_module(v.value().clone())?,
+                ))
+            })
+            .collect::<anyhow::Result<_>>()?;
+
+        let mut engine = HashEngine::default();
+        self.consensus_encode(&mut engine)?;
+        for (k, v) in modules.iter() {
+            k.consensus_encode(&mut engine)?;
+            v.consensus_encode(&mut engine)?;
+        }
+
+        Ok(sha256::Hash::from_engine(engine))
+    }
+
     pub fn get_module<T: DeserializeOwned>(&self, id: ModuleInstanceId) -> anyhow::Result<T> {
         if let Some(client_cfg) = self.modules.get(&id) {
             Ok(serde_json::from_value(client_cfg.0.value().clone())?)
@@ -229,6 +266,104 @@ impl ConfigGenParams {
             .ok_or_else(|| anyhow::anyhow!("No params found for module {}", P::MODULE_NAME))?;
         serde_json::from_value(value.clone())
             .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ModuleGenRegistry(BTreeMap<ModuleKind, DynModuleGen>);
+
+impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
+    fn from(value: Vec<DynModuleGen>) -> Self {
+        Self(BTreeMap::from_iter(
+            value.into_iter().map(|i| (i.module_kind(), i)),
+        ))
+    }
+}
+
+impl ModuleGenRegistry {
+    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
+        self.0.get(k)
+    }
+
+    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
+    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
+        for hardcoded_module in ["mint", "ln", "wallet"] {
+            if !self
+                .0
+                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
+            {
+                panic!("Missing {hardcoded_module} module");
+            }
+        }
+
+        LegacyInitOrderIter {
+            next_id: 0,
+            rest: self.0.clone(),
+        }
+    }
+
+    pub fn decoders<'a>(
+        &self,
+        module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+    ) -> anyhow::Result<ModuleDecoderRegistry> {
+        let mut modules = BTreeMap::new();
+        for (id, kind) in module_kinds {
+            let Some(init) = self.0.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
+            };
+
+            modules.insert(id, init.decoder());
+        }
+        Ok(ModuleDecoderRegistry::from_iter(modules))
+    }
+}
+
+/// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
+/// Returning each `kind` exactly once, so that `LEGACY_HARDCODED_` constants
+/// correspond to correct module kind.
+///
+/// We would like to get rid of it eventually, but old client and test code assumes
+/// it in multiple places, and it will take work to fix it, while we want new code
+/// to not assume this 1:1 relationship.
+pub struct LegacyInitOrderIter {
+    /// Counter of what module id will this returned value get assigned
+    next_id: ModuleInstanceId,
+    rest: BTreeMap<ModuleKind, DynModuleGen>,
+}
+
+impl Iterator for LegacyInitOrderIter {
+    type Item = (ModuleKind, DynModuleGen);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = match self.next_id {
+            LEGACY_HARDCODED_INSTANCE_ID_LN => {
+                let kind = ModuleKind::from_static_str("ln");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
+                let kind = ModuleKind::from_static_str("mint");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
+                let kind = ModuleKind::from_static_str("wallet");
+                Some((
+                    kind.clone(),
+                    self.rest.remove(&kind).expect("checked in constructor"),
+                ))
+            }
+            _ => self.rest.pop_first(),
+        };
+
+        if ret.is_some() {
+            self.next_id += 1;
+        }
+        ret
     }
 }
 
@@ -478,26 +613,30 @@ impl<G: DkgGroup> Dkg<G> {
     }
 
     /// Runs a single step of the DKG algorithm, processing a `msg` from `peer`
-    pub fn step(&mut self, peer: PeerId, msg: DkgMessage<G>) -> DkgStep<G> {
+    pub fn step(&mut self, peer: PeerId, msg: DkgMessage<G>) -> anyhow::Result<DkgStep<G>> {
         match msg {
             DkgMessage::HashedCommit(hashed) => {
                 match self.hashed_commits.get(&peer) {
-                    Some(old) if *old != hashed => panic!("{} sent us two hashes!", peer),
+                    Some(old) if *old != hashed => {
+                        return Err(format_err!("{peer} sent us two hashes!"))
+                    }
                     _ => self.hashed_commits.insert(peer, hashed),
                 };
 
                 if self.hashed_commits.len() == self.peers.len() {
                     let our_commit = self.commitments[&self.our_id].clone();
-                    return self.broadcast(DkgMessage::Commit(our_commit));
+                    return Ok(self.broadcast(DkgMessage::Commit(our_commit)));
                 }
             }
             DkgMessage::Commit(commit) => {
                 let hash = self.hash(commit.clone());
-                assert_eq!(self.threshold, commit.len(), "wrong degree from {}", peer);
-                assert_eq!(hash, self.hashed_commits[&peer], "wrong hash from {}", peer);
+                ensure!(self.threshold == commit.len(), "wrong degree from {peer}");
+                ensure!(hash == self.hashed_commits[&peer], "wrong hash from {peer}");
 
                 match self.commitments.get(&peer) {
-                    Some(old) if *old != commit => panic!("{} sent us two commitments!", peer),
+                    Some(old) if *old != commit => {
+                        return Err(format_err!("{peer} sent us two commitments!"))
+                    }
                     _ => self.commitments.insert(peer, commit),
                 };
 
@@ -514,7 +653,7 @@ impl<G: DkgGroup> Dkg<G> {
                             messages.push((*peer, DkgMessage::Share(s1, s2)));
                         }
                     }
-                    return DkgStep::Messages(messages);
+                    return Ok(DkgStep::Messages(messages));
                 }
             }
             // Pedersen-VSS verifies the shares match the commitments
@@ -523,7 +662,7 @@ impl<G: DkgGroup> Dkg<G> {
                 let commitment = self
                     .commitments
                     .get(&peer)
-                    .unwrap_or_else(|| panic!("{} sent share before commit", peer));
+                    .ok_or_else(|| format_err!("{peer} sent share before commit"))?;
                 let commit_product: G = commitment
                     .iter()
                     .enumerate()
@@ -531,9 +670,11 @@ impl<G: DkgGroup> Dkg<G> {
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
-                assert_eq!(share_product, commit_product, "bad commit from {}", peer);
+                ensure!(share_product == commit_product, "bad commit from {peer}");
                 match self.sk_shares.get(&peer) {
-                    Some(old) if *old != s1 => panic!("{} sent us two shares!", peer),
+                    Some(old) if *old != s1 => {
+                        return Err(format_err!("{peer} sent us two shares!"))
+                    }
                     _ => self.sk_shares.insert(peer, s1),
                 };
 
@@ -545,7 +686,7 @@ impl<G: DkgGroup> Dkg<G> {
                         .collect();
 
                     self.pk_shares.insert(self.our_id, extract.clone());
-                    return self.broadcast(DkgMessage::Extract(extract));
+                    return Ok(self.broadcast(DkgMessage::Extract(extract)));
                 }
             }
             // Feldman-VSS exposes the public key shares
@@ -553,7 +694,7 @@ impl<G: DkgGroup> Dkg<G> {
                 let share = self
                     .sk_shares
                     .get(&peer)
-                    .unwrap_or_else(|| panic!("{} sent extract before share", peer));
+                    .ok_or_else(|| format_err!("{peer} sent extract before share"))?;
                 let share_product = self.gen_g * *share;
                 let extract_product: G = extract
                     .iter()
@@ -562,10 +703,12 @@ impl<G: DkgGroup> Dkg<G> {
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
-                assert_eq!(share_product, extract_product, "bad extract from {}", peer);
-                assert_eq!(self.threshold, extract.len(), "wrong degree from {}", peer);
+                ensure!(share_product == extract_product, "bad extract from {peer}");
+                ensure!(self.threshold == extract.len(), "wrong degree from {peer}");
                 match self.pk_shares.get(&peer) {
-                    Some(old) if *old != extract => panic!("{} sent us two extracts!", peer),
+                    Some(old) if *old != extract => {
+                        return Err(format_err!("{peer} sent us two extracts!"))
+                    }
                     _ => self.pk_shares.insert(peer, extract),
                 };
 
@@ -582,15 +725,15 @@ impl<G: DkgGroup> Dkg<G> {
                         })
                         .collect();
 
-                    return DkgStep::Result(DkgKeys {
+                    return Ok(DkgStep::Result(DkgKeys {
                         public_key_set: pks,
                         secret_key_share: sks,
-                    });
+                    }));
                 }
             }
         }
 
-        DkgStep::Messages(vec![])
+        Ok(DkgStep::Messages(vec![]))
     }
 
     fn hash(&self, poly: Vec<G>) -> Sha256 {
@@ -659,7 +802,7 @@ where
         module_id: ModuleInstanceId,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Cancellable<HashMap<T, DkgKeys<G2Projective>>> {
+    ) -> anyhow::Result<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(module_id, G2Projective::generator(), connections, rng)
             .await
     }
@@ -670,7 +813,7 @@ where
         module_id: ModuleInstanceId,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Cancellable<HashMap<T, DkgKeys<G1Projective>>> {
+    ) -> anyhow::Result<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(module_id, G1Projective::generator(), connections, rng)
             .await
     }
@@ -682,7 +825,7 @@ where
         group: G,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> Cancellable<HashMap<T, DkgKeys<G>>>
+    ) -> anyhow::Result<HashMap<T, DkgKeys<G>>>
     where
         DkgMessage<G>: ISupportedDkgMessage,
     {
@@ -716,15 +859,17 @@ where
         loop {
             let (peer, msg) = connections.receive(module_id).await?;
 
-            let (key, message) = if let DkgPeerMsg::DistributedGen(v) = msg {
-                v
-            } else {
-                panic!("Module {module_id} wrong message received: {msg:?}")
+            let parsed_msg = match msg {
+                DkgPeerMsg::DistributedGen(v) => Ok(v),
+                _ => Err(format_err!(
+                    "Module {module_id} wrong message received: {msg:?}"
+                )),
             };
 
+            let (key, message) = parsed_msg?;
             let key = serde_json::from_str(&key).expect("invalid key");
             let message = ISupportedDkgMessage::from_msg(message).expect("invalid message");
-            let step = dkgs.get_mut(&key).expect("exists").step(peer, message);
+            let step = dkgs.get_mut(&key).expect("exists").step(peer, message)?;
 
             match step {
                 DkgStep::Messages(messages) => {
@@ -926,7 +1071,7 @@ mod tests {
                     for (receive_peer, msg) in messages {
                         let receive_dkg = dkgs.get_mut(&receive_peer).unwrap();
                         let step = receive_dkg.step(peer, msg);
-                        steps.push_back((receive_peer, step));
+                        steps.push_back((receive_peer, step.unwrap()));
                     }
                 }
                 Some((peer, DkgStep::Result(step_keys))) => {

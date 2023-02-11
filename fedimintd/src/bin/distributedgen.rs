@@ -4,12 +4,12 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
-use fedimint_server::config::ModuleGenRegistry;
 use fedimint_wallet::WalletGen;
 use fedimintd::distributedgen::{create_cert, run_dkg};
 use fedimintd::encrypt::*;
@@ -149,7 +149,7 @@ async fn main() -> anyhow::Result<()> {
             password,
         } => {
             let config_str = create_cert(dir_out_path, p2p_url, api_url, name, password)?;
-            Ok(println!("{}", config_str))
+            Ok(println!("{config_str}"))
         }
         Command::Run {
             dir_out_path,
@@ -168,13 +168,11 @@ async fn main() -> anyhow::Result<()> {
                 bind_p2p,
                 bind_api,
                 &dir_out_path,
-                max_denomination,
                 federation_name,
                 certs,
-                network,
-                finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 &mut task_group,
+                configure_modules(max_denomination, network, finality_delay),
             )
             .await
             {
@@ -187,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
             encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
             write_nonprivate_configs(&server, dir_out_path, &module_config_gens)
         }
-        Command::VersionHash => Ok(println!("{}", CODE_VERSION)),
+        Command::VersionHash => Ok(println!("{CODE_VERSION}")),
         Command::ConfigDecrypt {
             in_file,
             out_file,

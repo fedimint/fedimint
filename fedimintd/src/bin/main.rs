@@ -1,13 +1,14 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::Parser;
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::db::Database;
 use fedimint_api::module::DynModuleGen;
-use fedimint_api::task::TaskGroup;
+use fedimint_api::task::{sleep, TaskGroup};
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
-use fedimint_server::config::ModuleGenRegistry;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet::WalletGen;
@@ -15,11 +16,17 @@ use fedimintd::encrypt::*;
 use fedimintd::ui::run_ui;
 use fedimintd::ui::UiMessage;
 use fedimintd::*;
+use futures::FutureExt;
+use tokio::select;
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 
 use crate::{JSON_EXT, LOCAL_CONFIG};
+
+/// Time we will wait before forcefully shutting down tasks
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Parser)]
 pub struct ServerOpts {
@@ -31,29 +38,39 @@ pub struct ServerOpts {
     /// Port to run admin UI on
     #[arg(long = "listen-ui", env = "FM_LISTEN_UI")]
     pub listen_ui: Option<SocketAddr>,
+    #[arg(long = "tokio-console-bind", env = "FM_TOKIO_CONSOLE_BIND")]
+    pub tokio_console_bind: Option<SocketAddr>,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     let mut args = std::env::args();
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
-            println!("{}", CODE_VERSION);
-            return Ok(());
+            println!("{CODE_VERSION}");
+            return;
         }
     }
+
+    info!("Starting fedimintd (version: {CODE_VERSION})");
+
     let opts: ServerOpts = ServerOpts::parse();
-    let fmt_layer = tracing_subscriber::fmt::layer();
     let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(filter_layer);
 
-    let registry = tracing_subscriber::registry()
-        .with(filter_layer)
-        .with(fmt_layer);
+    let console_opt = opts.tokio_console_bind.map(|l| {
+        console_subscriber::ConsoleLayer::builder()
+            .retention(Duration::from_secs(60))
+            .server_addr(l)
+            .spawn()
+            // tokio-console cares only about these layers, so we filter separately for it
+            .with_filter(EnvFilter::new("tokio=trace,runtime=trace"))
+    });
 
-    let telemetry_layer = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
+    let telemetry_layer_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
         #[cfg(feature = "telemetry")]
         if opts.with_telemetry {
             let tracer = opentelemetry_jaeger::new_pipeline()
@@ -66,13 +83,65 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    if let Some(layer) = telemetry_layer() {
-        registry.with(layer).init();
-    } else {
-        registry.init();
+    tracing_subscriber::registry()
+        .with(console_opt)
+        .with(fmt_layer)
+        .with(telemetry_layer_opt())
+        .init();
+
+    let mut root_task_group = TaskGroup::new();
+    root_task_group.install_kill_handler();
+
+    // DO NOT REMOVE, or spawn_local tasks won't run anymore
+    let local_task_set = tokio::task::LocalSet::new();
+    let _guard = local_task_set.enter();
+
+    let task_group = root_task_group.clone();
+    root_task_group
+        .spawn_local("main", move |_task_handle| async move {
+            match run(opts, task_group.clone()).await {
+                Ok(()) => {}
+                Err(e) => {
+                    error!(?e, "Main task returned error, shutting down");
+                    task_group.shutdown().await;
+                }
+            }
+        })
+        .await;
+
+    let shutdown_future = root_task_group
+        .make_handle()
+        .make_shutdown_rx()
+        .await
+        .then(|_| async {
+            let shutdown_seconds = SHUTDOWN_TIMEOUT.as_secs();
+            info!("Shutdown called, waiting {shutdown_seconds}s for main task to finish");
+            sleep(SHUTDOWN_TIMEOUT).await;
+        });
+
+    select! {
+        _ = shutdown_future => {
+            debug!("Terminating main task");
+        }
+        _ = local_task_set => {
+            warn!("local_task_set finished before shutdown was called");
+        }
     }
 
-    let mut task_group = TaskGroup::new();
+    if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
+        error!(?err, "Error while shutting down task group");
+    }
+
+    info!("Shutdown complete");
+
+    #[cfg(feature = "telemetry")]
+    opentelemetry::global::shutdown_tracer_provider();
+
+    // Should we ever shut down without an error code?
+    std::process::exit(-1);
+}
+
+async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> {
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
     let module_inits = ModuleGenRegistry::from(vec![
@@ -80,6 +149,8 @@ async fn main() -> anyhow::Result<()> {
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),
     ]);
+
+    info!("Starting pre-check");
 
     // Run admin UI if a socket address was given for it
     if let Some(listen_ui) = opts.listen_ui {
@@ -125,31 +196,23 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    info!("Starting consensus");
+
     let salt_path = opts.data_dir.join(SALT_FILE);
     let key = get_key(opts.password, salt_path)?;
     let cfg = read_server_configs(&key, opts.data_dir.clone())?;
 
-    let local_task_set = tokio::task::LocalSet::new();
-    let _guard = local_task_set.enter();
-
-    task_group.install_kill_handler();
-
     let decoders = module_inits.decoders(cfg.iter_module_instances())?;
 
-    let db =
-        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).expect("Error opening DB");
+    let db = Database::new(
+        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
+        decoders.clone(),
+    );
 
-    let db = Database::new(db, decoders.clone());
+    let (consensus, tx_receiver) =
+        FedimintConsensus::new(cfg.clone(), db, module_inits, &mut task_group).await?;
 
-    let consensus = FedimintConsensus::new(cfg.clone(), db, module_inits, &mut task_group).await?;
-
-    FedimintServer::run(cfg, consensus, decoders, &mut task_group).await?;
-
-    local_task_set.await;
-    task_group.join_all().await?;
-
-    #[cfg(feature = "telemetry")]
-    opentelemetry::global::shutdown_tracer_provider();
+    FedimintServer::run(cfg, consensus, tx_receiver, decoders, &mut task_group).await?;
 
     Ok(())
 }

@@ -20,9 +20,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
           override: true
 
       - name: Installs cargo-udeps

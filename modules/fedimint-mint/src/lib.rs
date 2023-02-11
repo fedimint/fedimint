@@ -7,7 +7,7 @@ use std::ops::Sub;
 use async_trait::async_trait;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
-use db::{ECashUserBackupSnapshot, EcashBackupKey};
+use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     scalar, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams, ServerModuleConfig,
@@ -21,7 +21,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -29,15 +30,17 @@ use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
-    plugin_types_trait_impl, Amount, NumPeers, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
-    TieredMultiZip,
+    plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
+    PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
+use futures::StreamExt;
 use impl_tools::autoimpl;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use secp256k1_zkp::SECP256K1;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use tbs::{
     combine_valid_shares, dealer_keygen, sign_blinded_msg, verify_blind_share, Aggregatable,
     AggregatePublicKey, PublicKeyShare, SecretKeyShare,
@@ -47,10 +50,11 @@ use threshold_crypto::group::Curve;
 use tracing::{debug, error, info, warn};
 
 use crate::common::MintDecoder;
-use crate::config::{MintConfig, MintConfigConsensus, MintConfigPrivate};
+use crate::config::{MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate};
 use crate::db::{
-    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
-    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
+    DbKeyPrefix, EcashBackupKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey,
+    OutputOutcomeKey, OutputOutcomeKeyPrefix, ProposedPartialSignatureKey,
+    ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
     ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
 };
 
@@ -146,6 +150,10 @@ impl ModuleGen for MintGen {
 
     fn decoder(&self) -> MintDecoder {
         MintDecoder
+    }
+
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
     }
 
     async fn init(
@@ -289,6 +297,83 @@ impl ModuleGen for MintGen {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<MintConfig>()?.validate_config(identity)
     }
+
+    fn hash_client_module(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
+        serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
+    }
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::NoteNonce => {
+                    push_db_key_items!(dbtx, NonceKeyPrefix, NonceKey, mint, "Used Coins");
+                }
+                DbKeyPrefix::MintAuditItem => {
+                    push_db_pair_items!(
+                        dbtx,
+                        MintAuditItemKeyPrefix,
+                        MintAuditItemKey,
+                        fedimint_api::Amount,
+                        mint,
+                        "Mint Audit Items"
+                    );
+                }
+                DbKeyPrefix::OutputOutcome => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OutputOutcomeKeyPrefix,
+                        OutputOutcomeKey,
+                        MintOutputBlindSignatures,
+                        mint,
+                        "Output Outcomes"
+                    );
+                }
+                DbKeyPrefix::ProposedPartialSig => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ProposedPartialSignaturesKeyPrefix,
+                        ProposedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        "Proposed Signature Shares"
+                    );
+                }
+                DbKeyPrefix::ReceivedPartialSig => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ReceivedPartialSignaturesKeyPrefix,
+                        ReceivedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        "Received Signature Shares"
+                    );
+                }
+                DbKeyPrefix::EcashBackup => {
+                    push_db_pair_items!(
+                        dbtx,
+                        EcashBackupKeyPrefix,
+                        EcashBackupKey,
+                        ECashUserBackupSnapshot,
+                        mint,
+                        "User Ecash Backup"
+                    );
+                }
+            }
+        }
+
+        Box::new(mint.into_iter())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -354,12 +439,8 @@ impl std::fmt::Display for MintConsensusItem {
 
 #[async_trait]
 impl ServerModule for Mint {
-    const KIND: ModuleKind = KIND;
+    type Gen = MintGen;
     type Decoder = MintDecoder;
-    type Input = MintInput;
-    type Output = MintOutput;
-    type OutputOutcome = MintOutputOutcome;
-    type ConsensusItem = MintConsensusItem;
     type VerificationCache = VerifiedNotes;
 
     fn decoder(&self) -> Self::Decoder {
@@ -367,31 +448,41 @@ impl ServerModule for Mint {
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        if self.consensus_proposal(dbtx).await.is_empty() {
+        if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
         }
+    }
+
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
     }
 
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
-        dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
-            .await
-            .map(|res| {
-                let (key, signatures) = res.expect("DB error");
-                MintConsensusItem {
-                    out_point: key.out_point,
-                    signatures,
-                }
-            })
-            .collect()
+    ) -> ConsensusProposal<MintConsensusItem> {
+        ConsensusProposal::new_auto_trigger(
+            dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
+                .await
+                .map(|res| {
+                    let (key, signatures) = res.expect("DB error");
+                    MintConsensusItem {
+                        out_point: key.out_point,
+                        signatures,
+                    }
+                })
+                .collect::<Vec<MintConsensusItem>>()
+                .await,
+        )
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, MintConsensusItem)>,
     ) {
         for (peer, consensus_item) in consensus_items {
             self.process_partial_signature(
@@ -406,7 +497,7 @@ impl ServerModule for Mint {
 
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a Self::Input> + Send,
+        inputs: impl Iterator<Item = &'a MintInput> + Send,
     ) -> Self::VerificationCache {
         // We build a lookup table for checking the validity of all notes for certain amounts. This
         // calculation can happen massively in parallel since verification is a pure function and
@@ -432,7 +523,7 @@ impl ServerModule for Mint {
         _interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a MintInput,
     ) -> Result<InputMeta, ModuleError> {
         for (amount, note) in input.iter_items() {
             let note_valid = verification_cache
@@ -471,7 +562,7 @@ impl ServerModule for Mint {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b MintInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let meta = self
@@ -492,7 +583,7 @@ impl ServerModule for Mint {
     async fn validate_output(
         &self,
         _dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &MintOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if output.longest_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
             return Err(MintError::ExceededMaxNotes(
@@ -522,7 +613,7 @@ impl ServerModule for Mint {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
@@ -569,6 +660,9 @@ impl ServerModule for Mint {
                 let (key, partial_sig) = entry_res.expect("DB error");
                 (key.request_id, (key.peer_id, partial_sig))
             })
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
             .into_group_map()
             .into_iter();
         let mut issuance_requests = Vec::new();
@@ -654,7 +748,8 @@ impl ServerModule for Mint {
                 }
                 key
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            .await;
 
         for key in remove_audit_keys {
             dbtx.remove_entry(&key).await.expect("DB Error");
@@ -674,7 +769,7 @@ impl ServerModule for Mint {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<MintOutputOutcome> {
         let we_proposed = dbtx
             .get_value(&ProposedPartialSignatureKey { out_point })
             .await
@@ -685,7 +780,8 @@ impl ServerModule for Mint {
                 request_id: out_point,
             })
             .await
-            .any(|res| res.is_ok());
+            .any(|res| async move { res.is_ok() })
+            .await;
 
         let final_sig = dbtx
             .get_value(&OutputOutcomeKey(out_point))
@@ -1184,7 +1280,7 @@ mod test {
         let nonce = Message::from_bytes(&b"test note"[..]);
         let bkey = BlindingKey::random();
         let bmsg = blind_message(nonce, bkey);
-        let blind_tokens = TieredMulti::new(
+        let blind_notes = TieredMulti::new(
             vec![(
                 Amount::from_sats(1),
                 vec![BlindNonce(bmsg), BlindNonce(bmsg)],
@@ -1199,7 +1295,7 @@ mod test {
             .map(move |(id, m)| {
                 (
                     PeerId::from(id as u16),
-                    m.blind_sign(blind_tokens.clone()).unwrap(),
+                    m.blind_sign(blind_notes.clone()).unwrap(),
                 )
             })
             .collect::<Vec<_>>();

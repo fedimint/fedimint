@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use fedimint_api::config::ModuleGenRegistry;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
+use fedimint_ln::LightningGen;
+use fedimint_mint::MintGen;
 use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use ln_gateway::{
     client::{DynGatewayClientBuilder, MemDbFactory},
@@ -10,6 +14,7 @@ use ln_gateway::{
     LnGateway,
 };
 use mint_client::module_decode_stubs;
+use mint_client::modules::wallet::WalletGen;
 use tokio::sync::mpsc;
 
 pub mod client;
@@ -31,10 +36,16 @@ pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
         client::TestGatewayClientBuilder::new(MemDbFactory.into()).into();
     let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
     let decoders = module_decode_stubs();
+    let module_gens = ModuleGenRegistry::from(vec![
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
+    ]);
 
     let gateway = LnGateway::new(
         gw_cfg,
         decoders,
+        module_gens,
         ln_rpc,
         client_builder,
         tx,

@@ -40,6 +40,7 @@ generate_epochs 1
 generate_epochs 1
 await_all_peers
 echo "Server 1 successfully rejoined!"
+mine_blocks 100
 
 ## now test what happens if consensus needs to be restarted
 kill_server $server2

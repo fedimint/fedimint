@@ -26,11 +26,11 @@ impl<'a> Display for SanitizedUrl<'a> {
         write!(f, "{}://", self.0.scheme())?;
 
         if let Some(host) = self.0.host_str() {
-            write!(f, "{}", host)?;
+            write!(f, "{host}")?;
         }
 
         if let Some(port) = self.0.port() {
-            write!(f, ":{}", port)?;
+            write!(f, ":{port}")?;
         }
 
         write!(f, "{}", self.0.path())?;
@@ -70,13 +70,13 @@ mod tests {
             let url = Url::parse(url_str).unwrap();
             let sanitized_url = SanitizedUrl::new_borrowed(&url);
 
-            let sanitized_display = format!("{}", sanitized_url);
+            let sanitized_display = format!("{sanitized_url}");
             assert_eq!(
                 sanitized_display, sanitized_display_expected,
                 "Display implementation out of spec"
             );
 
-            let sanitized_debug = format!("{:?}", sanitized_url);
+            let sanitized_debug = format!("{sanitized_url:?}");
             assert_eq!(
                 sanitized_debug, sanitized_debug_expected,
                 "Debug implementation out of spec"

@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 
+use futures::StreamExt;
+
 use crate::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
 
 #[derive(Default)]
@@ -34,11 +36,12 @@ impl Audit {
             .await
             .map(|res| {
                 let (key, value) = res.expect("DB error");
-                let name = format!("{:?}", key);
+                let name = format!("{key:?}");
                 let milli_sat = to_milli_sat(key, value);
                 AuditItem { name, milli_sat }
             })
-            .collect();
+            .collect::<Vec<AuditItem>>()
+            .await;
         self.items.append(&mut new_items);
     }
 }
@@ -47,7 +50,7 @@ impl Display for Audit {
     fn fmt(&self, formatter: &mut Formatter) -> std::fmt::Result {
         formatter.write_str("- Balance Sheet -")?;
         for item in &self.items {
-            formatter.write_fmt(format_args!("\n{}", item))?;
+            formatter.write_fmt(format_args!("\n{item}"))?;
         }
         formatter.write_fmt(format_args!("\n{}", self.sum()))
     }

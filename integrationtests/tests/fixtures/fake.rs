@@ -1,15 +1,17 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use anyhow::Error;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_api::Amount;
-use fedimint_server::modules::ln::contracts::Preimage;
+use fedimint_ln::route_hints::RouteHint;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln_gateway::ln::{LightningError, LnRpc};
+use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 
 use crate::fixtures::LightningTest;
@@ -59,6 +61,10 @@ impl LightningTest for FakeLightningTest {
     async fn amount_sent(&self) -> Amount {
         Amount::from_msats(*self.amount_sent.lock().unwrap())
     }
+
+    fn is_shared(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait]
@@ -76,5 +82,9 @@ impl LnRpc for FakeLightningTest {
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         Ok(self.preimage.clone())
+    }
+
+    async fn route_hints(&self) -> Result<Vec<RouteHint>, Error> {
+        Ok(vec![RouteHint(vec![])])
     }
 }

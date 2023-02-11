@@ -25,6 +25,7 @@ use tracing::{debug, error};
 
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
+use crate::logging::LOG_NET_API;
 use crate::transaction::SerdeTransaction;
 
 /// A state of fedimint server passed to each rpc handler callback
@@ -113,7 +114,10 @@ fn attach_endpoints(
                     .catch_unwind()
                     .await
                     .map_err(|_| {
-                        error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                        error!(
+                            target: LOG_NET_API,
+                            path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                        );
                         jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                             500,
                             "API handler panicked",
@@ -163,7 +167,10 @@ fn attach_endpoints_erased(
                 .catch_unwind()
                 .await
                 .map_err(|_| {
-                    error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                    error!(
+                        target: LOG_NET_API,
+                        path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                    );
                     jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                         500,
                         "API handler panicked",
@@ -215,15 +222,15 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
             }
         },
         api_endpoint! {
-            "/epoch",
+            "/fetch_epoch_count",
             async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> u64 {
-                Ok(fedimint.get_last_epoch().await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?)
+                Ok(fedimint.get_epoch_count().await)
             }
         },
         api_endpoint! {
             "/config",
-            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> ConfigResponse {
-                Ok(fedimint.cfg.consensus.to_config_response(&fedimint.module_inits))
+            async |fedimint: &FedimintConsensus, dbtx, _v: ()| -> ConfigResponse {
+                Ok(fedimint.get_config_with_sig(dbtx).await)
             }
         },
     ]

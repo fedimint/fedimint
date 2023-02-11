@@ -6,17 +6,18 @@ use std::{
 };
 
 use async_trait::async_trait;
-use fedimint_api::config::{ConfigResponse, FederationId};
+use fedimint_api::config::{FederationId, ModuleGenRegistry};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::{
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define,
 };
+use fedimint_server::api::DynFederationApi;
+use fedimint_server::api::GlobalFederationApi;
+use fedimint_server::api::WsFederationApi;
+use fedimint_server::api::WsFederationConnect;
 use fedimint_server::config::load_from_file;
-use mint_client::{
-    api::{DynFederationApi, GlobalFederationApi, WsFederationApi, WsFederationConnect},
-    module_decode_stubs, Client, GatewayClientConfig,
-};
+use mint_client::{module_decode_stubs, Client, GatewayClientConfig};
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
 use url::Url;
@@ -78,6 +79,7 @@ pub trait IGatewayClientBuilder: Debug {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>>;
 
     /// Create a new gateway federation client config from connect info
@@ -87,6 +89,7 @@ pub trait IGatewayClientBuilder: Debug {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig>;
 
     /// Save and persist the configuration of the gateway federation client
@@ -123,6 +126,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>> {
         let federation_id = config.client_config.federation_id.clone();
 
@@ -133,7 +137,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         )?;
         let ctx = secp256k1::Secp256k1::new();
 
-        Ok(Client::new(config, decoders, db, ctx).await)
+        Ok(Client::new(config, decoders, module_gens, db, ctx).await)
     }
 
     async fn create_config(
@@ -142,11 +146,12 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig> {
         let api: DynFederationApi = WsFederationApi::new(connect.members).into();
 
-        let response: ConfigResponse = api
-            .download_client_config()
+        let client_config = api
+            .download_client_config(&connect.id, module_gens)
             .await
             .expect("Failed to get client config");
 
@@ -156,7 +161,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
         Ok(GatewayClientConfig {
             mint_channel_id,
-            client_config: response.client,
+            client_config,
             redeem_key: kp_fed,
             timelock_delta: 10,
             node_pub_key: node_pubkey,
@@ -166,7 +171,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
     fn save_config(&self, config: GatewayClientConfig) -> Result<()> {
         let id = config.client_config.federation_id.to_string();
-        let path: PathBuf = self.work_dir.join(format!("{}.json", id));
+        let path: PathBuf = self.work_dir.join(format!("{id}.json"));
 
         if Path::new(&path).is_file() {
             if config

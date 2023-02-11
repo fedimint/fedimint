@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane?rev=98894bb39b03bfb379c5e10523cd61160e1ac782"; # https://github.com/ipetkov/crane/releases/tag/v0.11.0
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
@@ -18,12 +19,17 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, flake-compat, fenix, crane, advisory-db }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, flake-utils, flake-compat, fenix, crane, advisory-db }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
         };
+
+        pkgs-unstable = import nixpkgs-unstable {
+          inherit system;
+        };
+
         lib = pkgs.lib;
         stdenv = pkgs.stdenv;
 
@@ -379,25 +385,22 @@
 
         # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
         workspaceDepsCov = craneLib.buildDepsOnly (commonArgs // {
-          pname = commonArgs.pname + "-lcov";
+          pnameSuffix = "-lcov-deps";
           src = filterWorkspaceDepsBuildFiles ./.;
-          cargoBuildCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE";
+          buildPhaseCargoCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE --no-report";
+          cargoBuildCommand = "dontuse";
+          cargoCheckCommand = "dontuse";
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
           doCheck = false;
         });
 
-        workspaceCov = craneLib.cargoBuild (commonArgs // {
-          pname = commonArgs.pname + "-lcov";
+        workspaceCov = craneLib.buildPackage (commonArgs // {
+          pnameSuffix = "-lcov";
           cargoArtifacts = workspaceDepsCov;
-          # TODO: as things are right now, the integration tests can't run in parallel
-          cargoBuildCommand = "mkdir -p $out ; env RUST_TEST_THREADS=1 cargo llvm-cov --profile $CARGO_PROFILE --workspace --lcov --output-path $out/lcov.info";
+          buildPhaseCargoCommand = "mkdir -p $out ; cargo llvm-cov --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
+          installPhaseCommand = "true";
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
           doCheck = false;
-        });
-
-        workspaceTestCov = craneLib.cargoTest (commonArgs // {
-          pname = commonArgs.pname + "-lcov";
-          cargoArtifacts = workspaceCov;
         });
 
         cliTestReconnect = craneLib.buildPackage (commonCliTestArgs // {
@@ -508,7 +511,7 @@
             "fedimint-build"
             "fedimint-core"
             "fedimint-derive"
-            "fedimint-dbdump"
+            "fedimint-dbtool"
             "fedimint-rocksdb"
             "fedimint-server"
             "gateway/ln-gateway"
@@ -530,7 +533,7 @@
             "fedimint-bitcoind"
             "fedimint-core"
             "fedimint-derive"
-            "fedimint-dbdump"
+            "fedimint-dbtool"
             "fedimint-rocksdb"
             "fedimint-server"
             "fedimint-build"
@@ -553,7 +556,7 @@
             "fedimint-bitcoind"
             "fedimint-core"
             "fedimint-derive"
-            "fedimint-dbdump"
+            "fedimint-dbtool"
             "fedimint-rocksdb"
             "fedimint-server"
             "fedimint-build"
@@ -577,7 +580,7 @@
             "fedimint-bitcoind"
             "fedimint-core"
             "fedimint-derive"
-            "fedimint-dbdump"
+            "fedimint-dbtool"
             "fedimint-rocksdb"
             "fedimint-sqlite"
             "fedimint-build"
@@ -598,7 +601,7 @@
             "fedimint-bitcoind"
             "fedimint-core"
             "fedimint-derive"
-            "fedimint-dbdump"
+            "fedimint-dbtool"
             "fedimint-rocksdb"
             "fedimint-sqlite"
             "modules"
@@ -685,7 +688,6 @@
             workspaceTest
             workspaceDoc
             workspaceCov
-            workspaceTestCov
             workspaceAudit;
 
         };
@@ -873,6 +875,10 @@
                 fenixToolchainRustfmt
                 cargo-llvm-cov
                 cargo-udeps
+                pkgs.parallel
+                pkgs.just
+
+                (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
 
                 # This is required to prevent a mangled bash shell in nix develop
                 # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
@@ -880,12 +886,16 @@
                 tmux
                 tmuxinator
                 docker-compose
+                pkgs.tokio-console
 
                 # Nix
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.rnix-lsp
+                pkgs-unstable.convco
                 pkgs.nodePackages.bash-language-server
+              ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
+                pkgs.semgrep
               ] ++ cliTestsDeps;
               RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
@@ -914,6 +924,16 @@
                     >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
                   fi
                 fi
+
+                # if runing in direnv
+                if [ -n "''${DIRENV_IN_ENVRC:-}" ]; then
+                  # and not set DIRENV_LOG_FORMAT
+                  if [ -n "''${DIRENV_LOG_FORMAT:-}" ]; then
+                    >&2 echo "💡 Set 'DIRENV_LOG_FORMAT=\"\"' in your shell environment variables for a cleaner output of direnv"
+                  fi
+                fi
+
+                >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
               '';
             };
 
@@ -950,6 +970,8 @@
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.git
+                pkgs.parallel
+                pkgs.semgrep
               ];
             };
 
@@ -973,4 +995,6 @@
     extra-substituters = [ "https://fedimint.cachix.org" ];
     extra-trusted-public-keys = [ "fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=" ];
   };
+
+
 }

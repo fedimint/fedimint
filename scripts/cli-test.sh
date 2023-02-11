@@ -24,11 +24,16 @@ start_gateway
 
 #### BEGIN TESTS ####
 
+# test the fetching of client configs
+CONNECT_STRING=$(cat $FM_CFG_DIR/client-connect.json)
+rm $FM_CFG_DIR/client.json
+$FM_MINT_CLIENT join-federation "$CONNECT_STRING"
+
 # reissue
-TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.token')
+NOTES=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.note')
 [[ $($FM_MINT_CLIENT info | jq -e -r '.total_amount') = "9958000" ]]
-$FM_MINT_CLIENT validate $TOKENS
-$FM_MINT_CLIENT reissue $TOKENS
+$FM_MINT_CLIENT validate $NOTES
+$FM_MINT_CLIENT reissue $NOTES
 $FM_MINT_CLIENT fetch
 
 # peg out
@@ -54,6 +59,12 @@ LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -e -r '.balance_msat'
 [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
 INVOICE_RESULT="$($FM_LN2 waitinvoice test)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
+[[ "$INVOICE_STATUS" = "paid" ]]
+
+# test that LN1 can still receive directly even though running the plugin
+INVOICE="$($FM_LN1 invoice 42000 test test 1m | jq -e -r '.bolt11')"
+$FM_LN2 pay "$INVOICE"
+INVOICE_STATUS="$($FM_LN1 waitinvoice test | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
 # incoming lightning

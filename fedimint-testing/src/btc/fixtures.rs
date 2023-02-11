@@ -75,8 +75,15 @@ impl FakeBitcoinTest {
     }
 }
 
+#[async_trait]
 impl BitcoinTest for FakeBitcoinTest {
-    fn mine_blocks(&self, block_num: u64) {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send> {
+        // With  FakeBitcoinTest, every test spawns their own instance,
+        // so not need to lock anything
+        Box::new(self.clone())
+    }
+
+    async fn mine_blocks(&self, block_num: u64) {
         let mut blocks = self.blocks.lock().unwrap();
         let mut pending = self.pending.lock().unwrap();
 
@@ -85,7 +92,16 @@ impl BitcoinTest for FakeBitcoinTest {
         }
     }
 
-    fn send_and_mine_block(
+    async fn prepare_funding_wallet(&self) {
+        // In fake wallet this might not be technically neccessary,
+        // but it makes it behave more like the `RealBitcoinTest`.
+        let block_count = self.blocks.lock().unwrap().len() as u64;
+        if block_count < 100 {
+            self.mine_blocks(100 - block_count).await;
+        }
+    }
+
+    async fn send_and_mine_block(
         &self,
         address: &Address,
         amount: bitcoin::Amount,
@@ -113,15 +129,15 @@ impl BitcoinTest for FakeBitcoinTest {
         )
     }
 
-    fn get_new_address(&self) -> Address {
+    async fn get_new_address(&self) -> Address {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let (_, public_key) = ctx.generate_keypair(&mut OsRng);
 
         Address::p2wpkh(&bitcoin::PublicKey::new(public_key), Network::Regtest).unwrap()
     }
 
-    fn mine_block_and_get_received(&self, address: &Address) -> Amount {
-        self.mine_blocks(1);
+    async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
+        self.mine_blocks(1).await;
         let sats = self
             .blocks
             .lock()

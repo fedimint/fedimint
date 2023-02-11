@@ -1,3 +1,21 @@
+//! Integration test suite
+//!
+//! This crate contains integration tests that work be creating
+//! per-test federation, ln-gatewa and driving bitcoind and lightning
+//! nodes to exercise certain behaviors on it.
+//!
+//! We run them in two modes:
+//!
+//! * With mocks - fake implementations of Lightning and Bitcoin node
+//!   that only simulate the real behavior. These are instantiated
+//!   per test.
+//! * Without mocks - against real bitcoind and lightningd.
+//!
+//! When running against real bitcoind, the other tests might create
+//! new blocks and transactions, so the tests can't expect to have
+//! exclusive control over it. When it is really necessary, `lock_exclusive`
+//! can be used to achieve it, but that makes the given test run serially
+//! is thus udesireable.
 mod fixtures;
 
 use std::future::Future;
@@ -6,6 +24,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use fedimint_api::config::FederationId;
+use fedimint_core::api::WsFederationConnect;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
@@ -16,7 +35,6 @@ use ln_gateway::{
     },
     utils::retry,
 };
-use mint_client::api::WsFederationConnect;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
@@ -32,7 +50,7 @@ async fn test_gateway_authentication() -> Result<()> {
     let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
     let gw_bind_address = SocketAddr::from(([127, 0, 0, 1], gw_port));
     let gw_announce_address =
-        Url::parse(&format!("http://{}", gw_bind_address)).expect("Invalid gateway address");
+        Url::parse(&format!("http://{gw_bind_address}")).expect("Invalid gateway address");
     let federation_id = FederationId::dummy();
 
     let cfg = GatewayConfig {
@@ -61,7 +79,10 @@ async fn test_gateway_authentication() -> Result<()> {
     // *  `connect_federation` with correct password succeeds
     // *  `connect_federation` with incorrect password fails
     let payload = ConnectFedPayload {
-        connect: serde_json::to_string(&WsFederationConnect { members: vec![] })?,
+        connect: serde_json::to_string(&WsFederationConnect {
+            members: vec![],
+            id: FederationId::dummy(),
+        })?,
     };
     test_auth(&gw_password, move |pw| {
         client_ref.connect_federation(pw, payload.clone())
@@ -98,10 +119,12 @@ async fn test_gateway_authentication() -> Result<()> {
     // Test gateway authentication on `deposit` function
     // *  `deposit` with correct password succeeds
     // *  `deposit` with incorrect password fails
-    let (proof, tx) = bitcoin.send_and_mine_block(
-        &bitcoin.get_new_address(),
-        bitcoin::Amount::from_btc(1.0).unwrap(),
-    );
+    let (proof, tx) = bitcoin
+        .send_and_mine_block(
+            &bitcoin.get_new_address().await,
+            bitcoin::Amount::from_btc(1.0).unwrap(),
+        )
+        .await;
     let payload = DepositPayload {
         federation_id: federation_id.clone(),
         txout_proof: proof,
@@ -118,11 +141,11 @@ async fn test_gateway_authentication() -> Result<()> {
     let payload = WithdrawPayload {
         federation_id,
         amount: bitcoin::Amount::from_sat(100),
-        address: bitcoin.get_new_address(),
+        address: bitcoin.get_new_address().await,
     };
     test_auth(&gw_password, |pw| client_ref.withdraw(pw, payload.clone())).await?;
 
-    task_group.shutdown_join_all().await
+    task_group.shutdown_join_all(None).await
 }
 
 /// Test that a given endpoint/functionality of func fails with the wrong password but works with the correct one
@@ -134,7 +157,7 @@ where
         retry(
             "fn".to_string(),
             || async {
-                func(format!("foobar{}", gw_password))
+                func(format!("foobar{gw_password}"))
                     .await
                     .map_err(|e| anyhow::anyhow!(e))
             },

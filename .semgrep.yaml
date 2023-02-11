@@ -1,0 +1,12 @@
+rules:
+- id: use-log-targets
+  languages:
+    - rust
+  message: Log statements should have static target defined to aid filtering
+  patterns:
+    # semgrep struggles with finding boundries of rust macro invocation when elipsis (`...`) is used
+    # so matching this one with raw regexes instead
+    - pattern-regex: (error|warn)!\([^;]*?\);
+    - pattern-not-regex: '(error|warn)!\(\s*target: [^;]*?\);'
+
+  severity: WARNING

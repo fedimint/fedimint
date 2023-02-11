@@ -4,7 +4,7 @@
 {% block head %}
   {% match state %}
     {% when RunTemplateState::DkgInProgress %}
-      <meta http-equiv="refresh" content="5" />
+      <meta http-equiv="refresh" content="1" />
     {% when RunTemplateState::DkgNotStarted %}
       <meta http-equiv="refresh" content="1; url = /" />
     {% when _ %}
@@ -35,4 +35,13 @@
 {% endmatch %}
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelector("#copy-button").addEventListener("click", function (e) {
+        const config = document.getElementById("connection-string");
+        navigator.clipboard.writeText(config.value);
+    });
+</script>
 {% endblock %}

@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_trait::async_trait;
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
 use bitcoin::util::psbt::raw::ProprietaryKey;
@@ -19,6 +20,7 @@ use bitcoin::{
 };
 use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
+use db::DbKeyPrefix;
 use fedimint_api::bitcoin_rpc::{
     select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
     FM_ELECTRUM_RPC_ENV,
@@ -28,14 +30,15 @@ use fedimint_api::config::{
     ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
-use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, InputMeta, IntoModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
@@ -43,8 +46,12 @@ use fedimint_api::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_api::task::sleep;
 use fedimint_api::task::{TaskGroup, TaskHandle};
-use fedimint_api::{plugin_types_trait_impl, Feerate, NumPeers, OutPoint, PeerId, ServerModule};
+use fedimint_api::{
+    plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Feerate, NumPeers, OutPoint,
+    PeerId, ServerModule,
+};
 use fedimint_bitcoind::DynBitcoindRpc;
+use futures::{stream, StreamExt};
 use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
@@ -52,15 +59,17 @@ use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::common::WalletDecoder;
-use crate::config::WalletConfig;
+use crate::config::{WalletClientConfig, WalletConfig};
 use crate::db::{
-    BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
-    PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
-    UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+    BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
+    PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    UnsignedTransactionPrefixKey,
 };
 use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
@@ -153,7 +162,7 @@ impl Serialize for PendingTransaction {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(&bytes))
+            serializer.serialize_str(&bytes.to_hex())
         } else {
             serializer.serialize_bytes(&bytes)
         }
@@ -178,7 +187,7 @@ impl Serialize for UnsignedTransaction {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(&bytes))
+            serializer.serialize_str(&bytes.to_hex())
         } else {
             serializer.serialize_bytes(&bytes)
         }
@@ -231,6 +240,10 @@ impl ModuleGen for WalletGen {
 
     fn decoder(&self) -> WalletDecoder {
         WalletDecoder {}
+    }
+
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
     }
 
     async fn init(
@@ -354,6 +367,86 @@ impl ModuleGen for WalletGen {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<WalletConfig>()?.validate_config(identity)
     }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
+    }
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut wallet: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::BlockHash => {
+                    push_db_key_items!(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, "Blocks");
+                }
+                DbKeyPrefix::PegOutBitcoinOutPoint => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegOutBitcoinTransactionPrefix,
+                        PegOutBitcoinTransaction,
+                        WalletOutputOutcome,
+                        wallet,
+                        "Peg Out Bitcoin Transaction"
+                    );
+                }
+                DbKeyPrefix::PegOutTxSigCi => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegOutTxSignatureCIPrefix,
+                        PegOutTxSignatureCI,
+                        Vec<secp256k1::ecdsa::Signature>,
+                        wallet,
+                        "Peg Out Transaction Signatures"
+                    );
+                }
+                DbKeyPrefix::PendingTransaction => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PendingTransactionPrefixKey,
+                        PendingTransactionKey,
+                        PendingTransaction,
+                        wallet,
+                        "Pending Transactions"
+                    );
+                }
+                DbKeyPrefix::RoundConsensus => {
+                    let round_consensus = dbtx.get_value(&RoundConsensusKey).await.unwrap();
+                    if let Some(round_consensus) = round_consensus {
+                        wallet.insert("Round Consensus".to_string(), Box::new(round_consensus));
+                    }
+                }
+                DbKeyPrefix::UnsignedTransaction => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UnsignedTransactionPrefixKey,
+                        UnsignedTransactionKey,
+                        UnsignedTransaction,
+                        wallet,
+                        "Unsigned Transactions"
+                    );
+                }
+                DbKeyPrefix::Utxo => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UTXOPrefixKey,
+                        UTXOKey,
+                        SpendableUTXO,
+                        wallet,
+                        "UTXOs"
+                    );
+                }
+            }
+        }
+
+        Box::new(wallet.into_iter())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -395,38 +488,33 @@ pub struct WalletVerificationCache;
 
 #[async_trait]
 impl ServerModule for Wallet {
-    const KIND: ModuleKind = KIND;
-
+    type Gen = WalletGen;
     type Decoder = WalletDecoder;
-    type Input = WalletInput;
-    type Output = WalletOutput;
-    // TODO: implement outcome
-    type OutputOutcome = WalletOutputOutcome;
-    type ConsensusItem = WalletConsensusItem;
     type VerificationCache = WalletVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
         WalletDecoder
     }
 
-    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        let mut our_target_height = self.target_height().await;
-        let last_consensus_height = self.consensus_height(dbtx).await.unwrap_or(0);
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
+    }
 
-        if self.consensus_proposal(dbtx).await.len() == 1 {
-            while our_target_height <= last_consensus_height {
-                our_target_height = self.target_height().await;
-                // FIXME: remove after modularization finishes
-                #[cfg(not(target_family = "wasm"))]
-                sleep(Duration::from_millis(1000)).await;
-            }
+    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
+        while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
+            // FIXME: remove after modularization finishes
+            #[cfg(not(target_family = "wasm"))]
+            sleep(Duration::from_millis(1000)).await;
         }
     }
 
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
+    ) -> ConsensusProposal<WalletConsensusItem> {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
@@ -458,7 +546,8 @@ impl ServerModule for Wallet {
             randomness: OsRng.gen(),
         });
 
-        dbtx.find_by_prefix(&PegOutTxSignatureCIPrefix)
+        let items = dbtx
+            .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .await
             .map(|res| {
                 let (key, val) = res.expect("FB error");
@@ -467,14 +556,22 @@ impl ServerModule for Wallet {
                     signature: val,
                 })
             })
-            .chain(std::iter::once(round_ci))
-            .collect()
+            .chain(stream::once(async { round_ci }))
+            .collect::<Vec<WalletConsensusItem>>()
+            .await;
+
+        // We force new epochs only if height changed, or we have peg-outs (more than just round_ci item)
+        if last_consensus_height < proposed_height || 1 < items.len() {
+            ConsensusProposal::Trigger(items)
+        } else {
+            ConsensusProposal::Contribute(items)
+        }
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, WalletConsensusItem)>,
     ) {
         trace!(?consensus_items, "Received consensus proposals");
 
@@ -524,7 +621,7 @@ impl ServerModule for Wallet {
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::Input>,
+        _inputs: impl Iterator<Item = &'a WalletInput>,
     ) -> Self::VerificationCache {
         WalletVerificationCache
     }
@@ -534,7 +631,7 @@ impl ServerModule for Wallet {
         _interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a WalletInput,
     ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
@@ -567,7 +664,7 @@ impl ServerModule for Wallet {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b WalletInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let meta = self
@@ -591,7 +688,7 @@ impl ServerModule for Wallet {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &WalletOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if !is_address_valid_for_network(&output.recipient, self.cfg.consensus.network) {
             return Err(WalletError::WrongNetwork(
@@ -620,7 +717,7 @@ impl ServerModule for Wallet {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a WalletOutput,
         out_point: fedimint_api::OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
@@ -694,12 +791,19 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Sign and finalize any unsigned transactions that have signatures
-        let unsigned_txs: Vec<(UnsignedTransactionKey, UnsignedTransaction)> = dbtx
+        let unsigned_txs = dbtx
             .find_by_prefix(&UnsignedTransactionPrefixKey)
             .await
-            .map(|res| res.expect("DB error"))
-            .filter(|(_, unsigned)| !unsigned.signatures.is_empty())
-            .collect();
+            .map(|res| {
+                let (key, val) = res.expect("DB error");
+                (key, val)
+            })
+            .collect::<Vec<(UnsignedTransactionKey, UnsignedTransaction)>>()
+            .await;
+
+        let unsigned_txs = unsigned_txs
+            .into_iter()
+            .filter(|(_, unsigned)| !unsigned.signatures.is_empty());
 
         let mut drop_peers = Vec::<PeerId>::new();
         for (key, unsigned) in unsigned_txs {
@@ -753,7 +857,7 @@ impl ServerModule for Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<WalletOutputOutcome> {
         dbtx.get_value(&PegOutBitcoinTransaction(out_point))
             .await
             .expect("DB error")
@@ -893,7 +997,8 @@ impl Wallet {
                 let (key, val) = res.expect("DB error");
                 (key.0, val)
             })
-            .collect();
+            .collect()
+            .await;
 
         for (peer, sig) in signatures.into_iter() {
             match cache.get_mut(&sig.txid) {
@@ -1040,8 +1145,7 @@ impl Wallet {
                 .await;
         } else {
             panic!(
-                "Median proposed consensus block height shrunk from {} to {}, the federation is broken",
-                consensus_height, median_proposal
+                "Median proposed consensus block height shrunk from {consensus_height} to {median_proposal}, the federation is broken"
             );
         }
 
@@ -1118,7 +1222,8 @@ impl Wallet {
                     let (key, transaction) = res.expect("DB error");
                     (key.0, transaction)
                 })
-                .collect::<HashMap<_, _>>();
+                .collect::<HashMap<_, _>>()
+                .await;
 
             match self.btc_rpc.backend_type() {
                 BitcoinRpcBackendType::Bitcoind => {
@@ -1186,6 +1291,10 @@ impl Wallet {
                 )
                 .await
                 .expect("DB Error");
+
+                dbtx.remove_entry(&PendingTransactionKey(pending_tx.tx.txid()))
+                    .await
+                    .expect("DB error");
             }
         }
     }
@@ -1226,8 +1335,12 @@ impl Wallet {
     ) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .await
-            .collect::<Result<_, _>>()
-            .expect("DB error")
+            .map(|res| {
+                let (key, val) = res.expect("FB error");
+                (key, val)
+            })
+            .collect::<Vec<(UTXOKey, SpendableUTXO)>>()
+            .await
     }
 
     pub async fn get_wallet_value(&self, dbtx: &mut DatabaseTransaction<'_>) -> bitcoin::Amount {
@@ -1536,13 +1649,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 #[instrument(level = "debug", skip_all)]
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(
-            db.begin_transaction()
-                .await
-                .with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET),
-            &rpc,
-        )
-        .await;
+        broadcast_pending_tx(db.begin_transaction().await, &rpc).await;
         // FIXME: remove after modularization finishes
         #[cfg(not(target_family = "wasm"))]
         fedimint_api::task::sleep(Duration::from_secs(10)).await;
@@ -1553,8 +1660,12 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
     let pending_tx = dbtx
         .find_by_prefix(&PendingTransactionPrefixKey)
         .await
-        .collect::<Result<Vec<_>, _>>()
-        .expect("DB error");
+        .map(|res| {
+            let (key, val) = res.expect("DB Error");
+            (key, val)
+        })
+        .collect::<Vec<(_, _)>>()
+        .await;
 
     for (_, PendingTransaction { tx, .. }) in pending_tx {
         debug!(
@@ -1637,7 +1748,7 @@ pub enum ProcessPegOutSigError {
 /// **WARNING**: this is only intended to be used for testing
 impl PartialEq for WalletError {
     fn eq(&self, other: &Self) -> bool {
-        format!("{:?}", self) == format!("{:?}", other)
+        format!("{self:?}") == format!("{other:?}")
     }
 }
 

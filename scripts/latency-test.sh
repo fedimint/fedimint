@@ -20,8 +20,8 @@ time1=$(date +%s.%N)
 for i in $( seq 1 $ITERATIONS )
 do
   echo "REISSUE $i"
-  TOKENS=$($FM_MINT_CLIENT spend 50000 | jq -e -r '.token')
-  $FM_MINT_CLIENT reissue $TOKENS
+  NOTES=$($FM_MINT_CLIENT spend 50000 | jq -e -r '.note')
+  $FM_MINT_CLIENT reissue $NOTES
   $FM_MINT_CLIENT fetch
 done
 time2=$(date +%s.%N)

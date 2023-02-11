@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use fedimint_server::modules::ln::contracts::Preimage;
+use mint_client::modules::ln::contracts::Preimage;
+use mint_client::modules::ln::route_hints::RouteHint;
 use secp256k1::PublicKey;
 
 #[async_trait]
@@ -14,6 +15,9 @@ pub trait LnRpc: Send + Sync + 'static {
         max_delay: u64,
         max_fee_percent: f64,
     ) -> Result<Preimage, LightningError>;
+
+    /// List peer channels that should be used as route hints in invoices
+    async fn route_hints(&self) -> Result<Vec<RouteHint>, anyhow::Error>;
 }
 
 #[derive(Debug)]

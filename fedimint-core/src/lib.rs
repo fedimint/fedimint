@@ -1,15 +1,11 @@
 use thiserror::Error;
 
-pub mod modules {
-    pub use fedimint_ln as ln;
-    pub use fedimint_mint as mint;
-    pub use fedimint_wallet as wallet;
-}
-
+pub mod api;
 /// Fedimint toplevel config
 pub mod config;
 pub mod epoch;
 pub mod outcome;
+pub mod query;
 pub mod transaction;
 pub mod util;
 

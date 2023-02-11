@@ -1,26 +1,29 @@
 pub mod api;
 pub mod db;
 pub mod ln;
+pub mod logging;
 pub mod mint;
-pub mod query;
+pub mod outcome;
 pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
+pub mod modules {
+    pub use fedimint_ln as ln;
+    pub use fedimint_mint as mint;
+    pub use fedimint_wallet as wallet;
+}
+
 use std::fmt::{Debug, Formatter};
+use std::iter::once;
 use std::sync::Arc;
 use std::time::Duration;
-#[cfg(not(target_family = "wasm"))]
-use std::time::SystemTime;
 
-use api::{
-    DynFederationApi, FederationError, GlobalFederationApi, LnFederationApi, OutputOutcomeError,
-    WalletFederationApi,
-};
+use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_api::core::{
     DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -30,37 +33,19 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::time::SystemTime;
+use fedimint_api::TieredMulti;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_api::{ServerModule, TieredMulti};
-use fedimint_core::epoch::SignedEpochOutcome;
-use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::config::LightningClientConfig;
-use fedimint_core::modules::mint::common::MintDecoder;
-use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::{MintOutput, MintOutputOutcome};
-use fedimint_core::modules::wallet::common::WalletDecoder;
-use fedimint_core::modules::wallet::config::WalletClientConfig;
-use fedimint_core::modules::wallet::{PegOut, WalletInput, WalletOutput};
-use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::legacy::Transaction as LegacyTransaction;
-use fedimint_core::{
-    modules::{
-        ln::{
-            contracts::{
-                incoming::{IncomingContract, IncomingContractOffer, OfferId},
-                Contract, ContractId, DecryptedPreimage, IdentifyableContract,
-                OutgoingContractOutcome, Preimage,
-            },
-            ContractOutput, LightningGateway, LightningOutput,
-        },
-        mint::BlindNonce,
-        wallet::txoproof::TxOutProof,
-    },
-    transaction::legacy::{Input, Output},
+use fedimint_core::api::MemberError;
+use fedimint_core::api::{
+    DynFederationApi, FederationError, GlobalFederationApi, OutputOutcomeError, WsFederationApi,
 };
+use fedimint_core::epoch::SignedEpochOutcome;
+use fedimint_core::outcome::TransactionStatus;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use futures::stream::FuturesUnordered;
+use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
+use itertools::{Either, Itertools};
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
@@ -74,7 +59,8 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
-use tracing::debug;
+use tracing::trace;
+use tracing::{debug, info, instrument};
 use url::Url;
 
 use crate::db::ClientSecretKey;
@@ -84,13 +70,35 @@ use crate::ln::db::{
 };
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
-use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
+use crate::logging::LOG_WALLET;
+use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
 use crate::mint::MintClientError;
+use crate::modules::ln::common::LightningDecoder;
+use crate::modules::ln::config::LightningClientConfig;
+use crate::modules::mint::common::MintDecoder;
+use crate::modules::mint::config::MintClientConfig;
+use crate::modules::mint::{MintOutput, MintOutputOutcome};
+use crate::modules::wallet::common::WalletDecoder;
+use crate::modules::wallet::config::WalletClientConfig;
+use crate::modules::wallet::{PegOut, WalletInput, WalletOutput};
+use crate::modules::{
+    ln::{
+        contracts::{
+            incoming::{IncomingContract, IncomingContractOffer},
+            Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
+        },
+        ContractOutput, LightningGateway, LightningOutput,
+    },
+    mint::BlindNonce,
+    wallet::txoproof::TxOutProof,
+};
+use crate::outcome::legacy::OutputOutcome;
+use crate::transaction::legacy::Transaction as LegacyTransaction;
+use crate::transaction::legacy::{Input, Output};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
-    api::MemberError,
     ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableNote},
     wallet::WalletClient,
@@ -131,13 +139,19 @@ pub struct GatewayClientConfig {
     pub mint_channel_id: u64,
 }
 
-impl From<GatewayClientConfig> for LightningGateway {
-    fn from(config: GatewayClientConfig) -> Self {
+impl GatewayClientConfig {
+    pub fn to_gateway_registration_info(
+        &self,
+        route_hints: Vec<modules::ln::route_hints::RouteHint>,
+        time_to_live: Duration,
+    ) -> LightningGateway {
         LightningGateway {
-            mint_channel_id: config.mint_channel_id,
-            mint_pub_key: config.redeem_key.x_only_public_key().0,
-            node_pub_key: config.node_pub_key,
-            api: config.api,
+            mint_channel_id: self.mint_channel_id,
+            mint_pub_key: self.redeem_key.x_only_public_key().0,
+            node_pub_key: self.node_pub_key,
+            api: self.api.clone(),
+            route_hints,
+            valid_until: SystemTime::now() + time_to_live,
         }
     }
 }
@@ -152,6 +166,10 @@ pub struct Client<C> {
 impl<C> Client<C> {
     pub fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.context.decoders
+    }
+
+    pub fn module_gens(&self) -> &ModuleGenRegistry {
+        &self.context.module_gens
     }
 }
 
@@ -194,7 +212,7 @@ impl<T> Client<T> {
 }
 
 // TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
-impl<T: AsRef<ClientConfig> + Clone> Client<T> {
+impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     pub fn db(&self) -> &Database {
         &self.context.db
     }
@@ -242,19 +260,49 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.config.clone()
     }
 
+    /// Verifies the config using the federation id
+    pub async fn verify_config(&self, id: &FederationId) -> Result<()> {
+        let config = self
+            .context
+            .api
+            .download_client_config(id, self.context.module_gens.clone())
+            .await
+            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::InvalidSignature))?;
+
+        let api_hash = config
+            .consensus_hash(&self.context.module_gens)
+            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
+
+        let self_hash = self
+            .config
+            .as_ref()
+            .consensus_hash(&self.context.module_gens)
+            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
+
+        if api_hash != self_hash {
+            Err(ClientError::ConfigVerify(
+                ConfigVerifyError::MismatchingConfigs,
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     pub async fn new(
         config: T,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
         db: Database,
         secp: Secp256k1<All>,
     ) -> Self {
-        let api = api::WsFederationApi::from_config(config.as_ref());
-        Self::new_with_api(config, decoders, db, api.into(), secp).await
+        let api = WsFederationApi::from_config(config.as_ref());
+        Self::new_with_api(config, decoders, module_gens, db, api.into(), secp).await
     }
 
     pub async fn new_with_api(
         config: T,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
         db: Database,
         api: DynFederationApi,
         secp: Secp256k1<All>,
@@ -264,6 +312,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config,
             context: Arc::new(ClientContext {
                 decoders,
+                module_gens,
                 db,
                 api,
                 secp,
@@ -316,13 +365,24 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.submit_tx_with_change(tx, &mut rng).await
     }
 
-    async fn submit_tx_with_change<R: RngCore + CryptoRng>(
+    /// Submits a transaction to the fed, making change using our change module
+    ///
+    /// TODO: For safety, if the submission fails, the DB write still occurs.  We should instead ensure the state of the client and consensus are always the same.
+    pub async fn submit_tx_with_change<R: RngCore + CryptoRng>(
         &self,
         tx: TransactionBuilder,
         rng: R,
     ) -> Result<TransactionId> {
-        let final_tx = tx.build(self, rng).await;
-        Ok(self.context.api.submit_transaction(final_tx).await?)
+        let mut dbtx = self.context.db.begin_transaction().await;
+        let final_tx = tx.build(self, &mut dbtx, rng).await;
+        dbtx.commit_tx().await.expect("DB Error");
+        let result = self
+            .context
+            .api
+            .submit_transaction(final_tx.into_type_erased())
+            .await?;
+
+        Ok(result)
     }
 
     /// Spent some [`SpendableNote`]s to receive a freshly minted ones
@@ -331,9 +391,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// directly to us by another user as a payment. By spending them we can make sure
     /// they can no longer be potentially double-spent.
     ///
-    /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
-    /// easily poll the transaction status using [`MintClient::fetch_coins`] until it returns
-    /// `Ok(())`, indicating we received our newly issued e-cash tokens.
+    /// On success the out point of the newly issued e-cash notes is returned. It can be used to
+    /// easily poll the transaction status using [`MintClient::fetch_notes`] until it returns
+    /// `Ok(())`, indicating we received our newly issued e-cash notes.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
         notes: TieredMulti<SpendableNote>,
@@ -342,7 +402,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         // Ensure we have the notes in the DB (in case we received them from another user)
         let mut dbtx = self.context.db.begin_transaction().await;
         for (amount, note) in notes.clone() {
-            let key = CoinKey {
+            let key = NoteKey {
                 amount,
                 nonce: note.note.0,
             };
@@ -403,17 +463,17 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Receive e-cash directly from another user when online (vs. offline transfer)
     ///
-    /// Generates coins that another user will pay for and let us know the OutPoint in `create_tx`
+    /// Generates notes that another user will pay for and let us know the OutPoint in `create_tx`
     /// Payer can use the `pay_to_blind_nonces` function
     /// Allows transfer of e-cash without risk of double-spend or not having exact change
-    pub async fn receive_coins<F, Fut>(&self, amount: Amount, create_tx: F)
+    pub async fn receive_notes<F, Fut>(&self, amount: Amount, create_tx: F)
     where
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
         Fut: futures::Future<Output = OutPoint>,
     {
         let mut dbtx = self.context.db.begin_transaction().await;
         self.mint_client()
-            .receive_coins(amount, &mut dbtx, create_tx)
+            .receive_notes(amount, &mut dbtx, create_tx)
             .await;
         dbtx.commit_tx().await.expect("DB Error");
     }
@@ -492,34 +552,31 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         rng: R,
     ) -> Result<TieredMulti<SpendableNote>> {
         let notes = self.mint_client().select_notes(amount).await?;
+        let mut dbtx = self.context.db.begin_transaction().await;
 
         let final_notes = if notes.total_amount() == amount {
             notes
         } else {
             let mut tx = TransactionBuilder::default();
-            let change = vec![amount, notes.total_amount() - amount];
 
             let (mut keys, input) = MintClient::ecash_input(notes)?;
             tx.input(&mut keys, input);
-            let tx = tx
-                .build_with_change(self.mint_client(), rng, change, &self.context.secp)
-                .await;
+            let txid = self.submit_tx_with_change(tx, rng).await?;
+            let outpoint = OutPoint { txid, out_idx: 0 };
 
-            self.context.api.submit_transaction(tx).await?;
-            self.fetch_all_coins().await;
+            self.mint_client()
+                .await_fetch_notes(&mut dbtx, &outpoint)
+                .await?;
             self.mint_client().select_notes(amount).await?
         };
-        assert_eq!(
-            final_notes.total_amount(),
-            amount,
-            "should have exact change"
-        );
+        if final_notes.total_amount() != amount {
+            return Err(ClientError::SpendReusedNote);
+        }
 
-        let mut dbtx = self.context.db.begin_transaction().await;
-        for (amount, coin) in final_notes.iter_items() {
-            dbtx.remove_entry(&CoinKey {
+        for (amount, note) in final_notes.iter_items() {
+            dbtx.remove_entry(&NoteKey {
                 amount,
-                nonce: coin.note.0,
+                nonce: note.note.0,
             })
             .await
             .expect("DB Error");
@@ -529,26 +586,72 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(final_notes)
     }
 
-    /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
+    /// For tests only: Select notes of a given amount, and then remint them,
+    /// remove the amount of notes from the database and return it to the user.
+    ///
+    /// This is a respin of `spent_ecash` for tests, where it is neccessary
+    /// to process epochs after `self.submit_tx_with_change`. Then
+    /// `remint_ecash_await` can be called to do the rest.
+    ///
+    /// TODO: Like `spend_ecash`, I think this function works in tests mostly
+    /// by accident.
+    pub async fn remint_ecash<R: RngCore + CryptoRng>(&self, amount: Amount, rng: R) -> Result<()> {
+        let notes = self.mint_client().select_notes(amount).await?;
+
+        let mut tx = TransactionBuilder::default();
+
+        let (mut keys, input) = MintClient::ecash_input(notes)?;
+        tx.input(&mut keys, input);
+        self.submit_tx_with_change(tx, rng).await?;
+
+        Ok(())
+    }
+
+    /// Continuation of `remint_notes`
+    pub async fn remint_ecash_await(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
+        self.fetch_all_notes().await?;
+        let notes = self.mint_client().select_notes(amount).await?;
+        assert_eq!(notes.total_amount(), amount, "should have exact change");
+
+        let mut dbtx = self.context.db.begin_transaction().await;
+        for (amount, note) in notes.iter_items() {
+            dbtx.remove_entry(&NoteKey {
+                amount,
+                nonce: note.note.0,
+            })
+            .await
+            .expect("DB Error");
+        }
+        dbtx.commit_tx().await.expect("DB Error");
+
+        Ok(notes)
+    }
+
+    /// Tries to fetch e-cash notes from a certain out point. An error may just mean having queried
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
-    pub async fn fetch_coins<'a>(&self, outpoint: OutPoint) -> Result<()> {
+    pub async fn fetch_notes<'a>(&self, outpoint: OutPoint) -> Result<()> {
         let mut dbtx = self.context.db.begin_transaction().await;
-        self.mint_client().fetch_coins(&mut dbtx, outpoint).await?;
+        self.mint_client().fetch_notes(&mut dbtx, outpoint).await?;
         dbtx.commit_tx().await.expect("DB Error");
         Ok(())
     }
 
     /// Should be called after any transaction that might have failed in order to get any note
     /// inputs back.
+    #[instrument(skip_all, level = "debug")]
     pub async fn reissue_pending_notes<R: RngCore + CryptoRng>(&self, rng: R) -> Result<OutPoint> {
         let mut dbtx = self.context.db.begin_transaction().await;
-        let pending = dbtx
-            .find_by_prefix(&PendingCoinsKeyPrefix)
+        let pending: Vec<_> = dbtx
+            .find_by_prefix(&PendingNotesKeyPrefix)
             .await
-            .map(|res| res.expect("DB error"));
+            .map(|res| res.expect("DB error"))
+            .collect()
+            .await;
 
-        let stream = pending
+        debug!(target: LOG_WALLET, ?pending);
+
+        let stream = stream::iter(pending)
             .map(|(key, notes)| async move {
                 match self.context.api.fetch_tx_outcome(&key.0).await {
                     Ok(TransactionStatus::Rejected(_)) => Ok((key, notes)),
@@ -558,18 +661,22 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                     Err(err) => Err(err),
                 }
             })
-            .collect::<FuturesUnordered<_>>();
+            .collect::<FuturesUnordered<_>>()
+            .await;
 
         let mut dbtx = self.context.db.begin_transaction().await;
-        let mut all_notes = TieredMulti::<SpendableNote>::default();
+        let mut notes_to_reissue = TieredMulti::<SpendableNote>::default();
         for result in stream.collect::<Vec<_>>().await {
             let (key, notes) = result?;
-            all_notes.extend(notes);
+            notes_to_reissue.extend(notes);
             dbtx.remove_entry(&key).await.expect("DB Error");
         }
         dbtx.commit_tx().await.expect("DB Error");
 
-        self.reissue(all_notes, rng).await
+        debug!(target: LOG_WALLET, notes_to_reissue = ?notes_to_reissue.summary(), total = %notes_to_reissue.total_amount());
+        trace!(target: LOG_WALLET, ?notes_to_reissue, "foo");
+
+        self.reissue(notes_to_reissue, rng).await
     }
 
     pub async fn await_consensus_block_height(
@@ -591,13 +698,22 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         }
     }
 
-    pub async fn fetch_all_coins<'a>(&self) -> Vec<Result<OutPoint>> {
-        self.mint_client()
-            .fetch_all_coins()
+    pub async fn fetch_all_notes<'a>(&self) -> Result<Vec<OutPoint>> {
+        let (errors, outpoints): (Vec<_>, Vec<_>) = self
+            .mint_client()
+            .fetch_all_notes()
             .await
             .into_iter()
-            .map(|res| res.map_err(|e| e.into()))
-            .collect()
+            .partition_map(|result| match result {
+                Ok(outpoint) => Either::Right(outpoint),
+                Err(error) => Either::Left(error.into()),
+            });
+
+        if errors.is_empty() {
+            Ok(outpoints)
+        } else {
+            Err(ClientError::UnableToFetchAllNotes(errors, outpoints))
+        }
     }
 
     pub async fn notes(&self) -> TieredMulti<SpendableNote> {
@@ -625,7 +741,9 @@ impl Client<UserClientConfig> {
     pub async fn fetch_registered_gateways(&self) -> Result<Vec<LightningGateway>> {
         Ok(self.context.api.fetch_gateways().await?)
     }
+
     pub async fn fetch_active_gateway(&self) -> Result<LightningGateway> {
+        // FIXME: forgetting about old gws might not always be ideal. We assume that the gateway stays the same except for route hints for now.
         if let Some(gateway) = self
             .context
             .db
@@ -634,11 +752,12 @@ impl Client<UserClientConfig> {
             .get_value(&LightningGatewayKey)
             .await
             .expect("DB error")
+            .filter(|gw| gw.valid_until > SystemTime::now())
         {
-            Ok(gateway)
-        } else {
-            Ok(self.switch_active_gateway(None).await?)
+            return Ok(gateway);
         }
+
+        self.switch_active_gateway(None).await
     }
     /// Switches the clients active gateway to a registered gateway with the given node pubkey.
     /// If no pubkey is given (node_pub_key == None) the first available registered gateway is activated.
@@ -745,8 +864,7 @@ impl Client<UserClientConfig> {
             .ln_client()
             .create_refund_outgoing_contract_input(&contract_data);
         tx.input(&mut vec![*refund_key], Input::LN(refund_input));
-        let final_tx = tx.build(self, rng).await;
-        let txid = self.context.api.submit_transaction(final_tx).await?;
+        let txid = self.submit_tx_with_change(tx, rng).await?;
 
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
@@ -761,7 +879,7 @@ impl Client<UserClientConfig> {
     pub async fn await_outgoing_contract_acceptance(&self, outpoint: OutPoint) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<OutgoingContractOutcome>(
+            .await_output_outcome::<OutputOutcome>(
                 outpoint,
                 Duration::from_secs(30),
                 &self.context.decoders,
@@ -781,13 +899,18 @@ impl Client<UserClientConfig> {
                 let res = self
                     .context
                     .api
-                    .await_output_outcome::<MintOutputOutcome>(
+                    .await_output_outcome::<OutputOutcome>(
                         outpoint,
                         Duration::from_secs(30),
                         &self.context.decoders,
                     )
                     .await;
-                if res.is_ok() && res.unwrap().is_some() {
+                if res.is_ok()
+                    && res
+                        .unwrap()
+                        .try_into_variant::<MintOutputOutcome>()?
+                        .is_some()
+                {
                     return Ok(());
                 }
                 tracing::info!("Signature response not returned yet");
@@ -800,15 +923,49 @@ impl Client<UserClientConfig> {
             .map_err(|_| ClientError::Timeout)?
     }
 
-    pub async fn generate_invoice<R: RngCore + CryptoRng>(
+    pub async fn generate_confirmed_invoice<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
         description: String,
         mut rng: R,
         expiry_time: Option<u64>,
     ) -> Result<ConfirmedInvoice> {
-        let gateway = self.fetch_active_gateway().await?;
+        let (txid, invoice, payment_keypair) = self
+            .generate_unsigned_invoice_and_submit(amount, description, &mut rng, expiry_time)
+            .await?;
+
+        self.await_invoice_confirmation(txid, invoice, payment_keypair)
+            .await
+    }
+    pub async fn generate_unsigned_invoice_and_submit<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        description: String,
+        mut rng: R,
+        expiry_time: Option<u64>,
+    ) -> Result<(TransactionId, Invoice, KeyPair)> {
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
+        let (invoice, ln_output) = self
+            .generate_unsigned_invoice(amount, description, payment_keypair, &mut rng, expiry_time)
+            .await?;
+
+        // There is no input here because this is just an announcement
+        let mut tx = TransactionBuilder::default();
+        tx.output(ln_output);
+        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+
+        Ok((txid, invoice, payment_keypair))
+    }
+
+    pub async fn generate_unsigned_invoice<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        description: String,
+        payment_keypair: KeyPair,
+        mut rng: R,
+        expiry_time: Option<u64>,
+    ) -> Result<(Invoice, Output)> {
+        let gateway = self.fetch_active_gateway().await?;
         let raw_payment_secret: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
@@ -817,7 +974,7 @@ impl Client<UserClientConfig> {
         let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
 
         // Route hint instructing payer how to route to gateway
-        let gateway_route_hint = RouteHint(vec![RouteHintHop {
+        let route_hint_last_hop = RouteHintHop {
             src_node_id: gateway.node_pub_key,
             short_channel_id: gateway.mint_channel_id,
             fees: RoutingFees {
@@ -827,18 +984,31 @@ impl Client<UserClientConfig> {
             cltv_expiry_delta: 30,
             htlc_minimum_msat: None,
             htlc_maximum_msat: None,
-        }]);
+        };
+        let route_hints = if gateway.route_hints.is_empty() {
+            vec![RouteHint(vec![route_hint_last_hop])]
+        } else {
+            gateway
+                .route_hints
+                .iter()
+                .map(|rh| {
+                    RouteHint(
+                        rh.to_ldk_route_hint()
+                            .0
+                            .iter()
+                            .cloned()
+                            .chain(once(route_hint_last_hop.clone()))
+                            .collect(),
+                    )
+                })
+                .collect()
+        };
 
-        #[cfg(not(target_family = "wasm"))]
         let duration_since_epoch = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
-        #[cfg(target_family = "wasm")]
-        let duration_since_epoch =
-            Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
-
-        let invoice = InvoiceBuilder::new(network_to_currency(
+        let mut invoice_builder = InvoiceBuilder::new(network_to_currency(
             self.config
                 .0
                 .get_first_module_by_kind::<WalletClientConfig>("wallet")
@@ -853,11 +1023,15 @@ impl Client<UserClientConfig> {
         .duration_since_epoch(duration_since_epoch)
         .min_final_cltv_expiry(18)
         .payee_pub_key(node_public_key)
-        .private_route(gateway_route_hint)
         .expiry_time(Duration::from_secs(
             expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
-        ))
-        .build_signed(|hash| {
+        ));
+
+        for rh in route_hints {
+            invoice_builder = invoice_builder.private_route(rh);
+        }
+
+        let invoice = invoice_builder.build_signed(|hash| {
             self.context
                 .secp
                 .sign_ecdsa_recoverable(hash, &node_secret_key)
@@ -871,25 +1045,27 @@ impl Client<UserClientConfig> {
         );
         let ln_output = Output::LN(offer_output);
 
-        // There is no input here because this is just an announcement
-        let mut tx = TransactionBuilder::default();
-        tx.output(ln_output);
-        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+        Ok((invoice, ln_output))
+    }
 
+    pub async fn await_invoice_confirmation(
+        &self,
+        txid: TransactionId,
+        invoice: Invoice,
+        payment_keypair: KeyPair,
+    ) -> Result<ConfirmedInvoice> {
         // Await acceptance by the federation
         let timeout = std::time::Duration::from_secs(15);
         let outpoint = OutPoint { txid, out_idx: 0 };
         self.context
             .api
-            .await_output_outcome::<OfferId>(outpoint, timeout, &self.context.decoders)
+            .await_output_outcome::<OutputOutcome>(outpoint, timeout, &self.context.decoders)
             .await?;
-
         let confirmed = ConfirmedInvoice {
             invoice,
             keypair: payment_keypair,
         };
         self.ln_client().save_confirmed_invoice(&confirmed).await;
-
         Ok(confirmed)
     }
 
@@ -912,7 +1088,7 @@ impl Client<UserClientConfig> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
-    /// Notify gateway that we've escrowed tokens they can claim by routing our payment and wait
+    /// Notify gateway that we've escrowed notes they can claim by routing our payment and wait
     /// for them to do so
     pub async fn await_outgoing_contract_execution(
         &self,
@@ -979,6 +1155,10 @@ impl Client<GatewayClientConfig> {
     ) -> Result<PaymentParameters> {
         let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key).0;
 
+        if account.contract.cancelled {
+            return Err(ClientError::CancelledContract);
+        }
+
         if account.contract.gateway_key != our_pub_key {
             return Err(ClientError::NotOurKey);
         }
@@ -1016,7 +1196,7 @@ impl Client<GatewayClientConfig> {
         let maybe_route_hint_first_id = invoice
             .route_hints()
             .first()
-            .and_then(|rh| rh.0.first())
+            .and_then(|rh| rh.0.last())
             .map(|hop| hop.src_node_id);
 
         Some(self.config().node_pub_key) == maybe_route_hint_first_id
@@ -1049,10 +1229,12 @@ impl Client<GatewayClientConfig> {
             .await
             .map(|res| res.expect("DB error").1)
             .collect()
+            .await
     }
 
     /// Abort payment if our node can't route it and give money back to user
     pub async fn abort_outgoing_payment(&self, contract_id: ContractId) -> Result<()> {
+        // FIXME: needs outbox pattern
         let mut dbtx = self.context.db.begin_transaction().await;
         let contract_account = dbtx
             .remove_entry(&OutgoingContractAccountKey(contract_id))
@@ -1061,13 +1243,22 @@ impl Client<GatewayClientConfig> {
             .ok_or(ClientError::CancelUnknownOutgoingContract)?;
         dbtx.commit_tx().await.expect("DB Error");
 
+        self.cancel_outgoing_contract(contract_account).await
+    }
+
+    /// Cancel an outgoing contract we haven't accepted yet, possibly because it was underfunded
+    pub async fn cancel_outgoing_contract(
+        &self,
+        contract_account: OutgoingContractAccount,
+    ) -> Result<()> {
         let cancel_signature = self.context.secp.sign_schnorr(
             &contract_account.contract.cancellation_message().into(),
             &self.config.redeem_key,
         );
-        let cancel_output = self
-            .ln_client()
-            .create_cancel_outgoing_output(contract_id, cancel_signature);
+        let cancel_output = self.ln_client().create_cancel_outgoing_output(
+            contract_account.contract.contract_id(),
+            cancel_signature,
+        );
         let cancel_tx = LegacyTransaction {
             inputs: vec![],
             outputs: vec![Output::LN(cancel_output)],
@@ -1075,7 +1266,10 @@ impl Client<GatewayClientConfig> {
         };
 
         // TODO: protect against crashes, but the timout being hit eventually anyway makes this less of an issue
-        self.context.api.submit_transaction(cancel_tx).await?;
+        self.context
+            .api
+            .submit_transaction(cancel_tx.into_type_erased())
+            .await?;
 
         Ok(())
     }
@@ -1120,12 +1314,15 @@ impl Client<GatewayClientConfig> {
     ///     It is included inside a bolt11 invoice and should match the offer hash
     /// * `htlc_amount` - amount from the htlc the gateway wants to pay.
     ///     Should be less than or equal to the offer amount depending on gateway fee policy
+    #[instrument(name = "Client::buy_preimage_offer", skip(self, rng))]
     pub async fn buy_preimage_offer(
         &self,
         payment_hash: &bitcoin_hashes::sha256::Hash,
         htlc_amount: &Amount,
         rng: impl RngCore + CryptoRng,
     ) -> Result<(OutPoint, ContractId)> {
+        // first span to show the span start
+        info!("buy_preimage_offer");
         // Fetch offer for this payment hash
         let offer: IncomingContractOffer = self.ln_client().get_offer(*payment_hash).await?;
 
@@ -1149,12 +1346,10 @@ impl Client<GatewayClientConfig> {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output = fedimint_core::transaction::legacy::Output::LN(
-            LightningOutput::Contract(ContractOutput {
-                amount: offer.amount,
-                contract: contract.clone(),
-            }),
-        );
+        let incoming_output = Output::LN(LightningOutput::Contract(ContractOutput {
+            amount: offer.amount,
+            contract: contract.clone(),
+        }));
 
         // Submit transaction
         builder.output(incoming_output);
@@ -1166,6 +1361,7 @@ impl Client<GatewayClientConfig> {
     }
 
     /// Claw back funds after incoming contract that had invalid preimage
+    #[instrument(name = "Client::refund_incoming_contract", skip(self, rng))]
     pub async fn refund_incoming_contract(
         &self,
         contract_id: ContractId,
@@ -1195,6 +1391,7 @@ impl Client<GatewayClientConfig> {
             .await
             .map(|res| res.expect("DB error").0 .0)
             .collect()
+            .await
     }
 
     /// Wait for a lightning preimage gateway has purchased to be decrypted by the federation
@@ -1202,12 +1399,13 @@ impl Client<GatewayClientConfig> {
         Ok(self
             .context
             .api
-            .await_output_outcome::<Preimage>(
+            .await_output_outcome::<OutputOutcome>(
                 outpoint,
                 Duration::from_secs(10),
                 &self.context.decoders,
             )
-            .await?)
+            .await?
+            .try_into_variant()?)
     }
 
     // TODO: improve error propagation on tx transmission
@@ -1220,11 +1418,15 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<<fedimint_core::modules::mint::Mint as ServerModule>::OutputOutcome>(outpoint, Duration::from_secs(10), &self.context.decoders)
+            .await_output_outcome::<OutputOutcome>(
+                outpoint,
+                Duration::from_secs(10),
+                &self.context.decoders,
+            )
             .await?;
         // We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need
-        // to fetch the blind signatures for the newly issued tokens, but as long as the
+        // to fetch the blind signatures for the newly issued notes, but as long as the
         // federation is honest as a whole they will produce the signatures, so we don't
         // have to worry
         let mut dbtx = self.context.db.begin_transaction().await;
@@ -1235,7 +1437,7 @@ impl Client<GatewayClientConfig> {
         Ok(())
     }
 
-    pub async fn list_fetchable_coins(&self) -> Vec<OutPoint> {
+    pub async fn list_fetchable_notes(&self) -> Vec<OutPoint> {
         self.mint_client()
             .list_active_issuances()
             .await
@@ -1392,8 +1594,24 @@ pub enum ClientError {
     DeleteUnknownOutgoingContract,
     #[error("Timeout")]
     Timeout,
-    #[error("Failed to spend ecash, all spend attempts re-used an ecash note")]
+    #[error("Failed to spend ecash, we tried to double-spend an ecash note")]
     SpendReusedNote,
+    #[error("The contract is already cancelled and can't be processed by the gateway")]
+    CancelledContract,
+    #[error("The client config cannot be verified because {0:?}")]
+    ConfigVerify(ConfigVerifyError),
+    #[error("Failed to fetch notes we expected to be issued {0:?}")]
+    UnableToFetchAllNotes(Vec<ClientError>, Vec<OutPoint>),
+}
+
+#[derive(Debug, Error)]
+pub enum ConfigVerifyError {
+    #[error("Our hash doesn't match the federation")]
+    MismatchingConfigs,
+    #[error("Invalid signature")]
+    InvalidSignature,
+    #[error("Cannot hash configs")]
+    CannotHash,
 }
 
 impl From<InvalidAmountTierError> for ClientError {

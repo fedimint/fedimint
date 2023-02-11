@@ -8,26 +8,30 @@ use std::sync::Arc;
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::Database;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
-use fedimint_core::config::load_from_file;
-use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::contracts::ContractId;
-use fedimint_core::modules::wallet::common::WalletDecoder;
-use fedimint_core::modules::wallet::txoproof::TxOutProof;
-use fedimint_mint::common::MintDecoder;
-use mint_client::api::{
+use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
 };
+use fedimint_core::config::load_from_file;
+use fedimint_core::query::EventuallyConsistent;
+use fedimint_mint::common::MintDecoder;
+use fedimint_mint::MintGen;
 use mint_client::mint::SpendableNote;
-use mint_client::query::EventuallyConsistent;
+use mint_client::modules::ln::common::LightningDecoder;
+use mint_client::modules::ln::contracts::ContractId;
+use mint_client::modules::ln::LightningGen;
+use mint_client::modules::wallet::common::WalletDecoder;
+use mint_client::modules::wallet::txoproof::TxOutProof;
+use mint_client::modules::wallet::WalletGen;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     serialize_ecash,
@@ -67,7 +71,7 @@ enum CliOutput {
     },
 
     Spend {
-        token: String,
+        note: String,
     },
 
     PegOut {
@@ -221,7 +225,7 @@ enum Command {
         arg: String,
     },
 
-    /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
+    /// Issue notes in exchange for a peg-in proof
     PegIn {
         #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
@@ -229,16 +233,16 @@ enum Command {
         transaction: Transaction,
     },
 
-    /// Reissue tokens received from a third party to avoid double spends
+    /// Reissue notes received from a third party to avoid double spends
     Reissue {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
     },
 
-    /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
+    /// Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
     Validate {
         #[clap(value_parser = parse_ecash)]
-        coins: TieredMulti<SpendableNote>,
+        notes: TieredMulti<SpendableNote>,
     },
 
     /// Prepare notes to send to a third party as a payment
@@ -324,7 +328,7 @@ impl<T, E: Error + 'static> ErrorHandler<T, E> for Result<T, E> {
             Ok(v) => v,
             Err(e) => {
                 let cli_error = CliError::from(err, msg, Some(Box::new(e)));
-                eprintln!("{}", cli_error);
+                eprintln!("{cli_error}");
                 exit(1);
             }
         }
@@ -344,7 +348,7 @@ type CliResult = Result<CliOutput, CliError>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
-    coins: TieredMulti<SpendableNote>,
+    notes: TieredMulti<SpendableNote>,
     invoice: lightning_invoice::Invoice,
 }
 
@@ -371,16 +375,25 @@ async fn main() {
             );
         };
     } else {
+        let module_gens = ModuleGenRegistry::from(vec![
+            DynModuleGen::from(WalletGen),
+            DynModuleGen::from(MintGen),
+            DynModuleGen::from(LightningGen),
+        ]);
+
         let cli = Cli::parse();
         if let Command::JoinFederation { connect } = cli.command {
             let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
             let api = Arc::new(WsFederationApi::new(connect_obj.members))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;
-            let cfg: ClientConfig = api.get_client_config().await.or_terminate(
-                CliErrorKind::NetworkError,
-                "couldn't download config from peer",
-            );
+            let cfg: ClientConfig = api
+                .download_client_config(&connect_obj.id, module_gens.clone())
+                .await
+                .or_terminate(
+                    CliErrorKind::NetworkError,
+                    "couldn't download config from peer",
+                );
             let cfg_path = cli.workdir.join("client.json");
             std::fs::create_dir_all(&cli.workdir)
                 .or_terminate(CliErrorKind::IOError, "failed to create config directory");
@@ -410,16 +423,16 @@ async fn main() {
             (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
         ]);
 
-        let client = Client::new(cfg.clone(), decoders, db, Default::default()).await;
+        let client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await;
 
         let cli_result = handle_command(cli, client, rng).await;
 
         match cli_result {
             Ok(output) => {
-                println!("{}", output);
+                println!("{output}");
             }
             Err(err) => {
-                eprintln!("{}", err);
+                eprintln!("{err}");
                 exit(1);
             }
         }
@@ -476,11 +489,11 @@ async fn handle_command(
                 "could not reissue notes (no further information)",
             )
         }
-        Command::Validate { coins } => {
-            let validate_result = client.validate_note_signatures(&coins).await;
-            let details_vec = coins
+        Command::Validate { notes } => {
+            let validate_result = client.validate_note_signatures(&notes).await;
+            let details_vec = notes
                 .iter()
-                .map(|(amount, coins)| (amount.to_owned(), coins.len()))
+                .map(|(amount, notes)| (amount.to_owned(), notes.len()))
                 .collect();
 
             match validate_result {
@@ -496,44 +509,31 @@ async fn handle_command(
         }
         Command::Spend { amount } => client.spend_ecash(amount, rng).await.transform(
             |v| CliOutput::Spend {
-                token: (serialize_ecash(&v)),
+                note: (serialize_ecash(&v)),
             },
             CliErrorKind::GeneralFederationError,
             "failed to execute spend (no further information)",
         ),
-        Command::Fetch => {
-            let mut result = Vec::<OutPoint>::new();
-            let mut has_error = false;
-            for fetch_result in client.fetch_all_coins().await {
-                match fetch_result {
-                    Ok(v) => result.push(v),
-                    Err(_) => {
-                        has_error = true;
-                    }
-                }
-            }
-            if has_error {
-                Err(CliError::from(
-                    CliErrorKind::GeneralFederationError,
-                    "failed to fetch notes",
-                    None,
-                ))
-            } else {
-                Ok(CliOutput::Fetch { issuance: (result) })
-            }
-        }
+        Command::Fetch => match client.fetch_all_notes().await {
+            Ok(result) => Ok(CliOutput::Fetch { issuance: (result) }),
+            Err(error) => Err(CliError::from(
+                CliErrorKind::GeneralFederationError,
+                "failed to fetch notes",
+                Some(Box::new(error)),
+            )),
+        },
         Command::Info => {
-            let coins = client.notes().await;
-            let details_vec = coins
+            let notes = client.notes().await;
+            let details_vec = notes
                 .iter()
-                .map(|(amount, coins)| (amount.to_owned(), coins.len()))
+                .map(|(amount, notes)| (amount.to_owned(), notes.len()))
                 .collect();
             Ok(CliOutput::Info {
                 federation_id: client.config().as_ref().federation_id.to_string(),
                 federation_name: client.config().as_ref().federation_name.clone(),
                 network: client.wallet_client().config.network,
-                total_amount: (coins.total_amount()),
-                total_num_notes: (coins.count_items()),
+                total_amount: (notes.total_amount()),
+                total_num_notes: (notes.count_items()),
                 details: (details_vec),
             })
         }
@@ -595,7 +595,7 @@ async fn handle_command(
             description,
             expiry_time,
         } => client
-            .generate_invoice(amount, description, &mut rng, expiry_time)
+            .generate_confirmed_invoice(amount, description, &mut rng, expiry_time)
             .await
             .transform(
                 |confirmed_invoice| CliOutput::LnInvoice {

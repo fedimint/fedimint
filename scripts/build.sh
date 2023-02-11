@@ -65,7 +65,7 @@ done
 wait
 
 # Move the client config to root dir
-mv $FM_CFG_DIR/server-0/client.json $FM_CFG_DIR/
+mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 
 # Define clients
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"
@@ -74,17 +74,17 @@ export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin
 export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
 export FM_GATEWAY_CLI="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
-export FM_DB_DUMP="$FM_BIN_DIR/fedimint-dbdump"
+export FM_DB_TOOL="$FM_BIN_DIR/dbtool"
 export FM_DISTRIBUTEDGEN="$FM_BIN_DIR/distributedgen"
 
 # Alias clients
 alias ln1="\$FM_LN1"
 alias ln2="\$FM_LN2"
-alias btc_client="\$FM_BTC_CLIENT"
+alias bitcoin-cli="\$FM_BTC_CLIENT"
 alias mint_client="\$FM_MINT_CLIENT"
 alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 alias gateway-cli="\$FM_GATEWAY_CLI"
-alias fedimint-dbdump="\$FM_DB_DUMP"
+alias dbtool="\$FM_DB_TOOL"
 alias distributedgen="\$FM_DISTRIBUTEDGEN"
 
 trap kill_fedimint_processes EXIT

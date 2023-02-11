@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::future::Future;
@@ -6,25 +5,25 @@ use std::iter::repeat;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::rc::Rc;
-use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicI64, AtomicU16};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
-use cln_rpc::ClnRpc;
 use fake::FakeLightningTest;
 use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::core;
 use fedimint_api::core::{
-    DynModuleConsensusItem as PerModuleConsensusItem, ModuleConsensusItem,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    DynModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
+};
+use fedimint_api::core::{
+    ModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
@@ -38,10 +37,12 @@ use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
 use fedimint_api::{sats, Amount};
 use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::api::WsFederationApi;
 use fedimint_ln::{LightningGateway, LightningGen};
+use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
+use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{connect, ServerConfig};
-use fedimint_server::config::{ModuleGenRegistry, ServerConfigParams};
 use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
@@ -53,13 +54,15 @@ use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::Wallet;
-use fedimint_wallet::WalletConsensusItem;
 use fedimint_wallet::{SpendableUTXO, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
+use futures::FutureExt;
+use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
+use ln_gateway::cln::ClnRpc;
 use ln_gateway::{
     actor::GatewayActor,
     client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
@@ -68,15 +71,16 @@ use ln_gateway::{
     LnGateway,
 };
 use mint_client::module_decode_stubs;
+use mint_client::transaction::legacy::Transaction;
+use mint_client::transaction::TransactionBuilder;
 use mint_client::{
-    api::WsFederationApi, mint::SpendableNote, Client, GatewayClient, GatewayClientConfig,
-    UserClient, UserClientConfig,
+    mint::SpendableNote, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
 use tokio::sync::Mutex;
-use tracing::{debug, info};
+use tracing::info;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -139,7 +143,7 @@ where
         fixtures.lightning,
     )
     .await;
-    fixtures.task_group.shutdown_join_all().await
+    fixtures.task_group.shutdown_join_all(None).await
 }
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
@@ -170,7 +174,12 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let params = ServerConfigParams::gen_local(&peers, sats(100000), base_port, "test");
+    let modules = fedimintd::configure_modules(
+        sats(100000),
+        bitcoin::network::constants::Network::Regtest,
+        10,
+    );
+    let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_inits = ModuleGenRegistry::from(vec![
@@ -196,7 +205,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             .await
             .expect("distributed config should not be canceled");
             config_task_group
-                .shutdown_join_all()
+                .shutdown_join_all(None)
                 .await
                 .expect("Distributed config did not exit cleanly");
 
@@ -218,11 +227,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =
                 RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
-            let gateway_lightning_rpc = Mutex::new(
-                ClnRpc::new(socket_gateway.clone())
-                    .await
-                    .expect("connect to ln_socket"),
-            );
+            let gateway_lightning_rpc = ClnRpc::new(socket_gateway.clone());
             let lightning_rpc_adapter = LnRpcAdapter::new(Box::new(gateway_lightning_rpc));
 
             let connect_gen =
@@ -233,7 +238,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
-                module_inits,
+                module_inits.clone(),
                 |_cfg: ServerConfig, _db| Box::pin(async { BTreeMap::default() }),
                 &mut task_group,
             )
@@ -248,7 +253,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(Arc::new(
-                create_user_client(user_cfg, decoders.clone(), peers, user_db).await,
+                create_user_client(
+                    user_cfg,
+                    decoders.clone(),
+                    module_inits.clone(),
+                    peers,
+                    user_db,
+                )
+                .await,
             ));
             user.client.await_consensus_block_height(0).await?;
 
@@ -256,6 +268,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lightning_rpc_adapter,
                 client_config.clone(),
                 decoders,
+                module_inits,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -295,7 +308,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &bitcoin_rpc,
                 &connect_gen,
-                module_inits,
+                module_inits.clone(),
                 // the things dealing with async makes us do...
                 // if you know how to make it better, please do --dpc
                 |cfg: ServerConfig, db: Database| {
@@ -328,7 +341,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let user_db = Database::new(MemDatabase::new(), module_decode_stubs());
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(Arc::new(
-                create_user_client(user_cfg, decoders.clone(), peers, user_db).await,
+                create_user_client(
+                    user_cfg,
+                    decoders.clone(),
+                    module_inits.clone(),
+                    peers,
+                    user_db,
+                )
+                .await,
             ));
             user.client.await_consensus_block_height(0).await?;
 
@@ -336,10 +356,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 ln_rpc_adapter,
                 client_config.clone(),
                 decoders,
+                module_inits,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
             .await;
+
+            // Always be prepared to fund bitcoin wallet
+            bitcoin.prepare_funding_wallet().await;
 
             Fixtures {
                 fed,
@@ -372,6 +396,7 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
 pub async fn create_user_client(
     config: UserClientConfig,
     decoders: ModuleDecoderRegistry,
+    module_gens: ModuleGenRegistry,
     peers: Vec<PeerId>,
     db: Database,
 ) -> UserClient {
@@ -387,7 +412,7 @@ pub async fn create_user_client(
     )
     .into();
 
-    UserClient::new_with_api(config, decoders, db, api, Default::default()).await
+    UserClient::new_with_api(config, decoders, module_gens, db, api, Default::default()).await
 }
 
 async fn distributed_config(
@@ -453,7 +478,7 @@ fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
 }
 
 async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
-    let connection_string = format!("sqlite://{}/{}.db", dir, db_name);
+    let connection_string = format!("sqlite://{dir}/{db_name}.db");
     fedimint_sqlite::SqliteDb::open(connection_string.as_str())
         .await
         .unwrap()
@@ -466,6 +491,9 @@ pub trait LightningTest {
 
     /// Returns the amount that the gateway LN node has sent
     async fn amount_sent(&self) -> Amount;
+
+    /// Is this a LN instance shared with other tests
+    fn is_shared(&self) -> bool;
 }
 
 pub struct GatewayTest {
@@ -481,6 +509,7 @@ impl GatewayTest {
         ln_client_adapter: LnRpcAdapter,
         client_config: ClientConfig,
         decoders: ModuleDecoderRegistry,
+        module_gens: ModuleGenRegistry,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
     ) -> Self {
@@ -496,10 +525,12 @@ impl GatewayTest {
             node_pub_key,
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+            route_hints: vec![],
+            valid_until: SystemTime::now(),
         };
 
-        let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
-        let announce_addr = Url::parse(format!("http://{}", bind_addr).as_str())
+        let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();
+        let announce_addr = Url::parse(format!("http://{bind_addr}").as_str())
             .expect("Could not parse URL to generate GatewayClientConfig API endpoint");
         let gw_client_cfg = GatewayClientConfig {
             mint_channel_id,
@@ -527,6 +558,7 @@ impl GatewayTest {
         let gateway = LnGateway::new(
             gw_cfg,
             decoders.clone(),
+            module_gens.clone(),
             ln_rpc,
             client_builder.clone(),
             sender,
@@ -537,13 +569,13 @@ impl GatewayTest {
 
         let client = Arc::new(
             client_builder
-                .build(gw_client_cfg.clone(), decoders)
+                .build(gw_client_cfg.clone(), decoders, module_gens)
                 .await
                 .expect("Could not build gateway client"),
         );
 
         let actor = gateway
-            .connect_federation(client.clone())
+            .connect_federation(client.clone(), vec![])
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios
@@ -573,6 +605,7 @@ impl UserTest<UserClientConfig> {
         let user = create_user_client(
             self.config.clone(),
             self.client.decoders().clone(),
+            self.client.module_gens().clone(),
             peers,
             Database::new(MemDatabase::new(), module_decode_stubs()),
         )
@@ -581,10 +614,34 @@ impl UserTest<UserClientConfig> {
     }
 }
 
-impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
+impl<T: AsRef<ClientConfig> + Clone + Send> UserTest<T> {
     pub fn new(client: Arc<Client<T>>) -> Self {
         let config = client.config();
         UserTest { client, config }
+    }
+
+    /// Creates a transaction for testing submissions to the federation
+    pub async fn tx_with_change(&self, builder: TransactionBuilder, change: Amount) -> Transaction {
+        let mint = self.client.mint_client();
+        let mut dbtx = mint.start_dbtx().await;
+
+        builder
+            .build_with_change(
+                self.client.mint_client(),
+                &mut dbtx,
+                rng(),
+                vec![change],
+                &secp(),
+            )
+            .await
+    }
+
+    /// Helper for readability
+    pub async fn set_notes_per_denomination(&self, notes: u16) {
+        self.client
+            .mint_client()
+            .set_notes_per_denomination(notes)
+            .await;
     }
 
     /// Helper to simplify the peg_out method calls
@@ -598,39 +655,40 @@ impl<T: AsRef<ClientConfig> + Clone> UserTest<T> {
         (peg_out.fees.amount().into(), out_point)
     }
 
-    /// Returns the amount denominations of all notes from lowest to highest
-    pub async fn note_amounts(&self) -> Vec<Amount> {
-        self.client
-            .notes()
-            .await
-            .iter()
-            .flat_map(|(a, c)| repeat(*a).take(c.len()))
-            .sorted()
-            .collect::<Vec<Amount>>()
-    }
-
-    /// Returns sum total of all coins
-    pub async fn total_coins(&self) -> Amount {
+    /// Returns sum total of all notes
+    pub async fn total_notes(&self) -> Amount {
         self.client.notes().await.total_amount()
     }
 
-    pub async fn assert_total_coins(&self, amount: Amount) {
-        self.client.fetch_all_coins().await;
-        assert_eq!(self.total_coins().await, amount);
+    pub async fn assert_total_notes(&self, amount: Amount) {
+        self.client.fetch_all_notes().await.unwrap();
+        assert_eq!(self.total_notes().await, amount);
     }
-    pub async fn assert_note_amounts(&self, amounts: Vec<Amount>) {
-        self.client.fetch_all_coins().await;
-        assert_eq!(self.note_amounts().await, amounts);
+
+    /// Asserts the amounts are equal to the denominations held by the user
+    pub fn assert_note_amounts(&self, amounts: Vec<Amount>) {
+        block_on(self.client.fetch_all_notes()).unwrap();
+        let notes = block_on(self.client.notes());
+        let user_amounts = notes
+            .iter()
+            .flat_map(|(a, c)| repeat(*a).take(c.len()))
+            .sorted()
+            .collect::<Vec<Amount>>();
+
+        assert_eq!(user_amounts, amounts);
     }
 }
 
 pub struct FederationTest {
-    servers: Vec<Rc<RefCell<ServerTest>>>,
-    last_consensus: Rc<RefCell<HbbftConsensusOutcome>>,
-    max_balance_sheet: Rc<RefCell<i64>>,
+    servers: Vec<Arc<Mutex<ServerTest>>>,
+    last_consensus: Arc<Mutex<HbbftConsensusOutcome>>,
+    max_balance_sheet: Arc<AtomicI64>,
     pub wallet: WalletConfig,
     pub cfg: ServerConfig,
     decoders: ModuleDecoderRegistry,
+    pub mint_id: ModuleInstanceId,
+    pub ln_id: ModuleInstanceId,
+    pub wallet_id: ModuleInstanceId,
 }
 
 struct ServerTest {
@@ -644,31 +702,36 @@ struct ServerTest {
 
 /// Represents a collection of fedimint peer servers
 impl FederationTest {
-    /// Returns the outcome of the last consensus epoch
-    pub fn last_consensus(&self) -> HbbftConsensusOutcome {
-        self.last_consensus.borrow().clone()
-    }
-
-    /// Returns the items that were in the last consensus
-    /// Filters out redundant consensus rounds where the block height doesn't change
-    pub fn last_consensus_items(&self) -> Vec<ConsensusItem> {
-        self.last_consensus()
+    /// Returns the first item with the given module id from the last consensus outcome
+    pub async fn find_module_item(&self, id: ModuleInstanceId) -> Option<DynModuleConsensusItem> {
+        self.last_consensus
+            .lock()
+            .await
+            .clone()
             .contributions
             .values()
             .flat_map(|items| items.clone())
-            .collect()
+            .find_map(|ci| match ci {
+                ConsensusItem::Module(mci) if mci.module_instance_id() == id => Some(mci),
+                _ => None,
+            })
     }
 
     /// Sends a custom proposal, ignoring whatever is in FedimintConsensus
     /// Useful for simulating malicious federation nodes
-    pub fn override_proposal(&self, items: Vec<ConsensusItem>) {
+    pub async fn override_proposal(&self, items: Vec<ConsensusItem>) {
         for server in &self.servers {
-            let mut epoch_sig =
-                block_on(server.borrow().fedimint.consensus.get_consensus_proposal())
-                    .items
-                    .into_iter()
-                    .filter(|item| matches!(item, ConsensusItem::EpochOutcomeSignatureShare(_)))
-                    .collect();
+            let mut epoch_sig = server
+                .lock()
+                .await
+                .fedimint
+                .consensus
+                .get_consensus_proposal()
+                .await
+                .items
+                .into_iter()
+                .filter(|item| matches!(item, ConsensusItem::EpochOutcomeSignatureShare(_)))
+                .collect();
 
             let mut items = items.clone();
             items.append(&mut epoch_sig);
@@ -676,9 +739,11 @@ impl FederationTest {
             let proposal = ConsensusProposal {
                 items,
                 drop_peers: vec![],
+                // if we force it, we want to trigger an epoch
+                force_new_epoch: true,
             };
 
-            server.borrow_mut().override_proposal = Some(proposal.clone());
+            server.lock().await.override_proposal = Some(proposal.clone());
         }
     }
 
@@ -690,7 +755,8 @@ impl FederationTest {
     ) -> Result<(), TransactionSubmissionError> {
         for server in &self.servers {
             server
-                .borrow_mut()
+                .lock()
+                .await
                 .fedimint
                 .consensus
                 .submit_transaction(transaction.clone())
@@ -701,54 +767,49 @@ impl FederationTest {
 
     /// Returns a fixture that only calls on a subset of the peers.  Note that PeerIds are always
     /// starting at 0 in tests.
-    pub fn subset_peers(&self, peers: &[u16]) -> Self {
+    pub async fn subset_peers(&self, peers: &[u16]) -> Self {
         let peers = peers
             .iter()
             .map(|i| PeerId::from(*i))
             .collect::<Vec<PeerId>>();
 
         FederationTest {
-            servers: self
-                .servers
-                .iter()
-                .filter(|s| peers.contains(&s.as_ref().borrow().fedimint.cfg.local.identity))
-                .map(Rc::clone)
-                .collect(),
+            servers: futures::stream::iter(self.servers.iter())
+                .filter(|s| async { peers.contains(&s.lock().await.fedimint.cfg.local.identity) })
+                .map(Clone::clone)
+                .collect()
+                .await,
             wallet: self.wallet.clone(),
             cfg: self.cfg.clone(),
             last_consensus: self.last_consensus.clone(),
             max_balance_sheet: self.max_balance_sheet.clone(),
             decoders: self.decoders.clone(),
+            mint_id: self.mint_id,
+            ln_id: self.ln_id,
+            wallet_id: self.wallet_id,
         }
     }
 
     /// Helper to issue change for a user
-    pub async fn spend_ecash<C: AsRef<ClientConfig> + Clone>(
+    pub async fn spend_ecash<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
     ) -> TieredMulti<SpendableNote> {
-        let coins = user
-            .client
-            .mint_client()
-            .select_notes(amount)
-            .await
-            .unwrap();
-        if coins.total_amount() == amount {
+        // We mimic the logic in the spend_ecash function because we need to know whether we will
+        // be running 2 epochs for a reissue or not
+        let notes = user.client.mint_client().select_notes(amount).await;
+        if notes.unwrap().total_amount() == amount {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
         }
-
-        tokio::join!(
-            user.client.spend_ecash(amount, rng()),
-            self.await_consensus_epochs(2)
-        )
-        .0
-        .unwrap()
+        user.client.remint_ecash(amount, rng()).await.unwrap();
+        self.run_consensus_epochs(2).await;
+        user.client.remint_ecash_await(amount).await.unwrap()
     }
 
-    /// Mines a UTXO then mints coins for user, assuring that the balance sheet of the federation
+    /// Mines a UTXO then mints notes for user, assuring that the balance sheet of the federation
     /// nets out to zero.
-    pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone>(
+    pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         bitcoin: &dyn BitcoinTest,
@@ -757,30 +818,30 @@ impl FederationTest {
         assert_eq!(amount.msats % 1000, 0);
         let sats = bitcoin::Amount::from_sat(amount.msats / 1000);
         self.mine_spendable_utxo(user, bitcoin, sats).await;
-        self.mint_coins_for_user(user, amount).await;
+        self.mint_notes_for_user(user, amount).await;
     }
 
-    /// Inserts coins directly into the databases of federation nodes, runs consensus to sign them
-    /// then fetches the coins for the user client.
-    pub async fn mint_coins_for_user<C: AsRef<ClientConfig> + Clone>(
+    /// Inserts notes directly into the databases of federation nodes, runs consensus to sign them
+    /// then fetches the notes for the user client.
+    pub async fn mint_notes_for_user<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
     ) {
-        self.database_add_coins_for_user(user, amount).await;
+        self.database_add_notes_for_user(user, amount).await;
         self.run_consensus_epochs(1).await;
-        user.client.fetch_all_coins().await;
+        user.client.fetch_all_notes().await.unwrap();
     }
 
     /// Mines a UTXO owned by the federation.
-    pub async fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone>(
+    pub async fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         bitcoin: &dyn BitcoinTest,
         amount: bitcoin::Amount,
     ) {
         let address = user.client.get_new_pegin_address(rng()).await;
-        let (txout_proof, btc_transaction) = bitcoin.send_and_mine_block(&address, amount);
+        let (txout_proof, btc_transaction) = bitcoin.send_and_mine_block(&address, amount).await;
         let (_, input) = user
             .client
             .wallet_client()
@@ -790,12 +851,11 @@ impl FederationTest {
 
         for server in &self.servers {
             block_on(async {
-                let svr = server.borrow_mut();
+                let svr = server.lock().await;
                 let mut dbtx = svr.database.begin_transaction().await;
 
                 {
-                    let mut module_dbtx =
-                        dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
+                    let mut module_dbtx = dbtx.with_module_prefix(self.wallet_id);
                     module_dbtx
                         .insert_new_entry(
                             &UTXOKey(input.outpoint()),
@@ -811,19 +871,44 @@ impl FederationTest {
                 dbtx.commit_tx().await.expect("DB Error");
             });
         }
+        bitcoin
+            .mine_blocks(user.client.wallet_client().config.finality_delay as u64)
+            .await;
+    }
+
+    /// Removes the ecash nonces from the fed DB to simulate the fed losing track of what ecash
+    /// has already been spent
+    pub async fn clear_spent_mint_nonces(&self) {
+        for server in &self.servers {
+            block_on(async {
+                let svr = server.lock().await;
+                let mut dbtx = svr.database.begin_transaction().await;
+
+                {
+                    let mut module_dbtx = dbtx.with_module_prefix(self.mint_id);
+
+                    module_dbtx
+                        .remove_by_prefix(&NonceKeyPrefix)
+                        .await
+                        .expect("DB Error");
+                }
+
+                dbtx.commit_tx().await.expect("DB Error");
+            });
+        }
     }
 
     /// Returns the maximum the fed's balance sheet has reached during the test.
     pub fn max_balance_sheet(&self) -> u64 {
-        assert!(*self.max_balance_sheet.borrow() >= 0);
-        *self.max_balance_sheet.borrow() as u64
+        assert!(self.max_balance_sheet.load(Ordering::SeqCst) >= 0);
+        self.max_balance_sheet.load(Ordering::SeqCst) as u64
     }
 
     /// Returns true if all fed members have dropped this peer
-    pub fn has_dropped_peer(&self, peer: u16) -> bool {
+    pub async fn has_dropped_peer(&self, peer: u16) -> bool {
         for server in &self.servers {
-            let mut s = server.borrow_mut();
-            let proposal = block_on(s.fedimint.consensus.get_consensus_proposal());
+            let mut s = server.lock().await;
+            let proposal = s.fedimint.consensus.get_consensus_proposal().await;
             s.dropped_peers.append(&mut proposal.drop_peers.clone());
             if !s.dropped_peers.contains(&PeerId::from(peer)) {
                 return false;
@@ -832,8 +917,8 @@ impl FederationTest {
         true
     }
 
-    /// Inserts coins directly into the databases of federation nodes
-    pub async fn database_add_coins_for_user<C: AsRef<ClientConfig> + Clone>(
+    /// Inserts notes directly into the databases of federation nodes
+    pub async fn database_add_notes_for_user<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
         amount: Amount,
@@ -845,15 +930,15 @@ impl FederationTest {
         };
 
         user.client
-            .receive_coins(amount, |tokens| async move {
+            .receive_notes(amount, |notes| async move {
                 for server in &self.servers {
-                    let svr = server.borrow_mut();
+                    let svr = server.lock().await;
                     let mut dbtx = svr.database.begin_transaction().await;
                     let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![core::DynOutput::from_typed(
-                            LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                            MintOutput(tokens.clone()),
+                            self.mint_id,
+                            MintOutput(notes.clone()),
                         )],
                         signature: None,
                     };
@@ -871,13 +956,10 @@ impl FederationTest {
                     svr.fedimint
                         .consensus
                         .modules
-                        .get_expect(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+                        .get_expect(self.mint_id)
                         .apply_output(
-                            &mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_MINT),
-                            &core::DynOutput::from_typed(
-                                LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                                MintOutput(tokens.clone()),
-                            ),
+                            &mut dbtx.with_module_prefix(self.mint_id),
+                            &core::DynOutput::from_typed(self.mint_id, MintOutput(notes.clone())),
                             out_point,
                         )
                         .await
@@ -894,9 +976,9 @@ impl FederationTest {
     /// transactions will only get broadcast every 10 seconds.
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
-            let svr = server.borrow();
+            let svr = server.lock().await;
             let mut dbtx = block_on(svr.database.begin_transaction());
-            let module_dbtx = dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
+            let module_dbtx = dbtx.with_module_prefix(self.wallet_id);
             block_on(fedimint_wallet::broadcast_pending_tx(
                 module_dbtx,
                 &svr.bitcoin_rpc,
@@ -904,81 +986,124 @@ impl FederationTest {
         }
     }
 
-    /// Has every federation node send new consensus proposals then process the outcome.
-    /// If the epoch has empty proposals (no new information) then panic
+    /// Runs `n` epochs in the federation (each guardian node)
+    ///
+    /// Call this method in tests when some conditions that trigger
+    /// new epoch(s) are already in place.
+    ///
+    /// Wallet chain height can trigger epoch randomly, but since
+    /// they will be processed along-side any other epochs you
+    /// already expect, nothing is being done about it. It should
+    /// not matter, but is worth pointing out.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there's an empty proposal.
+    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
-            if self
-                .servers
-                .iter()
-                .all(|s| Self::empty_proposal(&s.borrow().fedimint))
-            {
+            if !self.has_pending_epoch().await {
                 panic!("Empty proposals, fed might wait forever");
             }
-
-            self.await_consensus_epochs(1).await.unwrap();
+            self.run_consensus_epochs_wait(1).await.unwrap();
         }
     }
 
-    /// Runs a consensus epoch
+    /// Runs consensus epochs even if the epochs are empty
+    pub async fn run_empty_epochs(&self, epochs: usize) {
+        for server in &self.servers {
+            server.lock().await.fedimint.run_empty_epochs = epochs as u64;
+        }
+
+        self.run_consensus_epochs_wait(epochs).await.unwrap();
+    }
+
+    /// Process n consensus epoch. Wait for events triggering them in case of empty proposals.
+    ///
     /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
-    /// it will wait forever
-    pub async fn await_consensus_epochs(&self, epochs: usize) -> Cancellable<()> {
+    /// it will wait forever.
+    ///
+    /// When conditions triggering proposals are already in place, calling this functions has
+    /// the same effect as calling [`run_consensus_epochs`], as blocking conditions can't
+    /// happen. However in that situation calling [`run_consensus_epochs`] is preferable, as
+    /// it will snappily panic, instead of hanging indefinitely in case of a bug.
+    ///
+    /// When called concurrently with actions triggering new epochs, care must be taken
+    /// as random epochs due to wallet module height changes can be triggered randomly,
+    /// making the use of this function flaky. Typically `bitcoin.lock_exclusive()` should
+    /// be called to avoid flakiness, but that makes the whole test run serially, which is
+    /// very undesirable. Prefer structuring your test to not require that (so you can use
+    /// `run_consensus_wait` instead).
+    pub async fn run_consensus_epochs_wait(&self, epochs: usize) -> anyhow::Result<()> {
         for _ in 0..(epochs) {
-            for maybe_cancelled in join_all(
-                self.servers
-                    .iter()
-                    .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
-            )
-            .await
-            {
-                maybe_cancelled?;
+            let mut task_group = TaskGroup::new();
+            for (i, server) in self.servers.iter().enumerate() {
+                let server = server.clone();
+                task_group
+                    .spawn(format!("server-{i}-consensu_epoch"), move |_| async {
+                        Self::consensus_epoch(server, Duration::from_millis(0)).await
+                    })
+                    .await;
             }
-            self.update_last_consensus();
+            task_group.join_all(None).await?;
+
+            self.update_last_consensus().await;
         }
         Ok(())
     }
 
-    /// Returns true if the fed would produce an empty epoch proposal (no new information)
-    fn empty_proposal(server: &FedimintServer) -> bool {
-        let wallet = server
-            .consensus
-            .modules
-            .get_expect(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-            .as_any()
-            .downcast_ref::<Wallet>()
-            .unwrap();
-        let mut dbtx = block_on(server.consensus.db.begin_transaction());
-        let mut module_dbtx = dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_WALLET);
-        let height = block_on(wallet.consensus_height(&mut module_dbtx)).unwrap_or(0);
-        let proposal = block_on(server.consensus.get_consensus_proposal());
+    /// Does any of the modules return consensus proposal that forces a new epoch
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn has_pending_epoch(&self) -> bool {
+        for server in &self.servers {
+            let mut server = server.lock().await;
+            let fedimint_server = &mut server.fedimint;
 
-        for item in proposal.items {
-            match item {
-                // ignore items that get automatically generated
-                ConsensusItem::Module(mci) => {
-                    if mci.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
-                        return false;
-                    }
+            // Pending transactions will trigger an epoch
+            if let Some(Some(_)) = Pin::new(&mut fedimint_server.tx_receiver)
+                .peek()
+                .now_or_never()
+            {
+                return true;
+            }
 
-                    let wci = assert_module_ci(&mci);
-                    if let WalletConsensusItem::RoundConsensus(rci) = wci {
-                        if rci.block_height == height {
-                            continue;
-                        }
-                    }
-                    return false;
-                }
-                ConsensusItem::EpochOutcomeSignatureShare(_) => continue,
-                _ => return false,
+            let consensus_proposal = fedimint_server.consensus.get_consensus_proposal().await;
+            if consensus_proposal.force_new_epoch {
+                return true;
             }
         }
-        true
+        false
+    }
+
+    /// Get the consensus items proposed by all the peers
+    ///
+    /// Notably, unlike [`has_pending_epoch`] this does not return
+    /// pending transactions, neither does it ignore consensus items that actually
+    /// do not trigger epoch on their own.
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn get_pending_epoch_proposals(&self) -> Vec<ConsensusItem> {
+        let mut proposals = vec![];
+        for server in &self.servers {
+            for item in server
+                .lock()
+                .await
+                .fedimint
+                .consensus
+                .get_consensus_proposal()
+                .await
+                .items
+            {
+                if !proposals.contains(&item) {
+                    proposals.push(item);
+                }
+            }
+        }
+        proposals
     }
 
     /// Runs consensus, but delay peers and only wait for one to complete.
     /// Useful for testing if a peer has become disconnected.
-    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) -> Cancellable<()> {
+    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) -> anyhow::Result<()> {
         assert_eq!(durations.len(), self.servers.len());
         // must drop `res` before calling `update_last_consensus`
         {
@@ -994,7 +1119,7 @@ impl FederationTest {
 
             res.0?;
         }
-        self.update_last_consensus();
+        self.update_last_consensus().await;
         Ok(())
     }
 
@@ -1002,7 +1127,7 @@ impl FederationTest {
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn rejoin_consensus(&self) -> Cancellable<()> {
         for server in &self.servers {
-            let mut s = server.borrow_mut();
+            let mut s = server.lock().await;
             while timeout(Duration::from_millis(500), s.fedimint.connections.receive())
                 .await
                 .is_ok()
@@ -1017,42 +1142,73 @@ impl FederationTest {
     // Necessary to allow servers to progress concurrently, should be fine since the same server
     // will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
-    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) -> Cancellable<()> {
+    async fn consensus_epoch(
+        server: Arc<Mutex<ServerTest>>,
+        delay: Duration,
+    ) -> anyhow::Result<()> {
         tokio::time::sleep(delay).await;
-        let mut s = server.borrow_mut();
-        let consensus = s.fedimint.consensus.clone();
+        let mut server = server.lock().await;
+        let consensus = server.fedimint.consensus.clone();
 
-        let overrider = s.override_proposal.clone();
+        let overrider = server.override_proposal.clone();
         let proposal = async { overrider.unwrap_or(consensus.get_consensus_proposal().await) };
-        s.dropped_peers
+        server
+            .dropped_peers
             .append(&mut consensus.get_consensus_proposal().await.drop_peers);
 
-        s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await?;
+        server.last_consensus = server
+            .fedimint
+            .run_consensus_epoch(proposal, &mut rng())
+            .await?;
 
-        for outcome in s.last_consensus.clone() {
-            s.fedimint.process_outcome(outcome).await.expect("failed");
+        for outcome in server.last_consensus.clone() {
+            server
+                .fedimint
+                .process_outcome(outcome)
+                .await
+                .expect("failed");
         }
 
         Ok(())
     }
 
-    fn update_last_consensus(&self) {
-        let new_consensus = self
-            .servers
-            .iter()
-            .flat_map(|s| s.borrow().last_consensus.clone())
-            .max_by_key(|c| c.epoch)
+    async fn update_last_consensus(&self) {
+        let new_consensus = futures::stream::iter(self.servers.iter())
+            .then(|s| s.lock())
+            .flat_map(|s| futures::stream::iter(s.last_consensus.clone()))
+            .fold(None, |prev: Option<HbbftConsensusOutcome>, c| async {
+                if let Some(prev) = prev {
+                    if prev.epoch <= c.epoch {
+                        Some(c)
+                    } else {
+                        Some(prev)
+                    }
+                } else {
+                    Some(c)
+                }
+            })
+            .await
             .unwrap();
-        let mut last_consensus = self.last_consensus.borrow_mut();
-        let current_consensus = &self.servers.first().unwrap().borrow().fedimint.consensus;
+        let mut last_consensus = self.last_consensus.lock().await;
+        let current_consensus = &self
+            .servers
+            .first()
+            .unwrap()
+            .lock()
+            .await
+            .fedimint
+            .consensus;
 
         let audit = block_on(current_consensus.audit());
 
         if last_consensus.is_empty() || last_consensus.epoch < new_consensus.epoch {
             info!("{}", consensus::debug::epoch_message(&new_consensus));
             info!("\n{}", audit);
-            let bs = std::cmp::max(*self.max_balance_sheet.borrow(), audit.sum().milli_sat);
-            *self.max_balance_sheet.borrow_mut() = bs;
+            let bs = std::cmp::max(
+                self.max_balance_sheet.load(Ordering::SeqCst),
+                audit.sum().milli_sat,
+            );
+            self.max_balance_sheet.store(bs, Ordering::SeqCst);
             *last_consensus = new_consensus;
         }
     }
@@ -1080,7 +1236,7 @@ impl FederationTest {
             let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
 
             let mut modules = BTreeMap::new();
-            let env_vars = ModuleGenRegistry::get_env_vars_map();
+            let env_vars = FedimintConsensus::get_env_vars_map();
 
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
@@ -1092,7 +1248,7 @@ impl FederationTest {
                     let module = gen
                         .init(
                             cfg.get_module_config(id).unwrap(),
-                            db.clone(),
+                            db.new_isolated(id),
                             &env_vars,
                             &mut task_group,
                         )
@@ -1102,7 +1258,7 @@ impl FederationTest {
                 }
             }
 
-            let consensus = FedimintConsensus::new_with_modules(
+            let (consensus, tx_receiver) = FedimintConsensus::new_with_modules(
                 cfg.clone(),
                 db.clone(),
                 module_inits.clone(),
@@ -1113,6 +1269,7 @@ impl FederationTest {
             let fedimint = FedimintServer::new_with(
                 cfg.clone(),
                 consensus,
+                tx_receiver,
                 connect_gen(cfg),
                 decoders,
                 &mut task_group,
@@ -1127,7 +1284,7 @@ impl FederationTest {
                 })
                 .await;
 
-            Rc::new(RefCell::new(ServerTest {
+            Arc::new(Mutex::new(ServerTest {
                 fedimint,
                 bitcoin_rpc: btc_rpc,
                 database: db,
@@ -1143,11 +1300,11 @@ impl FederationTest {
         let wallet = cfg
             .get_module_config_typed(cfg.get_module_id_by_kind("wallet").unwrap())
             .unwrap();
-        let last_consensus = Rc::new(RefCell::new(Batch {
+        let last_consensus = Arc::new(Mutex::new(Batch {
             epoch: 0,
             contributions: BTreeMap::new(),
         }));
-        let max_balance_sheet = Rc::new(RefCell::new(0));
+        let max_balance_sheet = Arc::new(AtomicI64::new(0));
 
         FederationTest {
             servers,
@@ -1156,22 +1313,19 @@ impl FederationTest {
             decoders: module_inits.decoders(cfg.iter_module_instances()).unwrap(),
             cfg,
             wallet,
+            mint_id: LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            ln_id: LEGACY_HARDCODED_INSTANCE_ID_LN,
+            wallet_id: LEGACY_HARDCODED_INSTANCE_ID_WALLET,
         }
     }
 }
 
-pub fn assert_ci<M: ModuleConsensusItem>(ci: &ConsensusItem) -> &M {
-    if let ConsensusItem::Module(mci) = ci {
-        assert_module_ci(mci)
-    } else {
-        panic!("Not a module consensus item");
-    }
-}
-
-pub fn assert_module_ci<M: ModuleConsensusItem>(mci: &PerModuleConsensusItem) -> &M {
-    debug!(
-        module_instance_id = mci.module_instance_id(),
-        "Checking module consensus item"
-    );
-    mci.as_any().downcast_ref().unwrap()
+/// Unwraps a dyn consensus item into a specific one for making assertions
+#[track_caller]
+pub fn unwrap_item<M: ModuleConsensusItem>(mci: &Option<DynModuleConsensusItem>) -> &M {
+    mci.as_ref()
+        .expect("Module item exists")
+        .as_any()
+        .downcast_ref()
+        .expect("Unexpected type found")
 }

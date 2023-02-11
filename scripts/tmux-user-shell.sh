@@ -11,7 +11,7 @@ await_cln_rpc | show_verbose_output
 await_fedimint_block_sync | show_verbose_output
 
 echo Setting up bitcoind ...
-btc_client createwallet default | show_verbose_output
+bitcoin-cli createwallet default | show_verbose_output
 mine_blocks 101 | show_verbose_output
 
 echo Setting up lightning channel ...
@@ -32,7 +32,7 @@ echo "This shell provides the following aliases:"
 echo ""
 echo "  fedimint-cli   - cli client to interact with the federation"
 echo "  ln1, ln2       - cli clients for the two lightning nodes (1 is gateway)"
-echo "  btc_client     - cli client for bitcoind"
+echo "  bitcoin-cli    - cli client for bitcoind"
 echo "  gateway-cli    - cli client for the gateway"
 echo
 echo "Use '--help' on each command for more information"

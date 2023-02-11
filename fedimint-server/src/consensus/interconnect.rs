@@ -35,6 +35,6 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
                 .await;
             }
         }
-        panic!("Module not registered: {}", id);
+        panic!("Module not registered: {id}");
     }
 }

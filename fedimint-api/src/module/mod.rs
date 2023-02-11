@@ -9,6 +9,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256;
+use bitcoin_hashes::sha256::Hash;
 use futures::future::BoxFuture;
 use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
@@ -17,10 +19,7 @@ use tracing::instrument;
 
 use crate::cancellable::Cancellable;
 use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
-use crate::core::{
-    Decoder, DynDecoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
-    OutputOutcome,
-};
+use crate::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
 use crate::db::{Database, DatabaseTransaction};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -261,6 +260,8 @@ where
 pub trait IModuleGen: Debug {
     fn decoder(&self) -> DynDecoder;
 
+    fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion>;
+
     fn module_kind(&self) -> ModuleKind;
 
     /// Initialize the [`DynServerModule`] instance from its config
@@ -291,13 +292,85 @@ pub trait IModuleGen: Debug {
     fn to_config_response(&self, config: serde_json::Value)
         -> anyhow::Result<ModuleConfigResponse>;
 
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
 dyn_newtype_define!(
     #[derive(Clone)]
     pub DynModuleGen(Arc<IModuleGen>)
 );
+
+/// Consensus version of a core server
+///
+/// Breaking changes in the Fedimint's core consensus require incrementing it.
+///
+/// See [`ModuleConsensusVersion`] for more details on how it interacts with
+/// module's consensus.
+#[derive(Debug, Copy, Clone)]
+pub struct CoreConsensusVersion(pub u32);
+
+/// Consensus version of a specific module instance
+///
+/// Any breaking change to the module's consensus rules require incrementing it.
+///
+/// A module instance can run only in one consensus version, which must be the
+/// same accross all corresponding instances on other nodes of the federation.
+///
+/// When [`CoreConsensusVersion`] changes, this can but is not requires to be
+/// a breaking change for each module's [`ModuleConsensusVersion`].
+///
+/// Incrementing the module's consensus version can be considered an in-place
+/// upgrade path, similar to a blockchain hard-fork consensus upgrade.
+///
+/// As of time of writting this comment there are no plans to support any kind
+/// of "soft-forks" which mean a consensus minor version. As the set of federation
+/// member's is closed and limited, it is always preferable to synchronize
+/// upgrade and avoid cross-version incompatibilities.
+///
+/// For many modules it might be preferable to implement a new [`ModuleKind`]
+/// "versions" (to be implemented at the time of writting this comment), and
+/// by running two instances of the module at the same time (each of different
+/// `ModuleKind` version), allow users to slowly migrate to a new one.
+/// This avoids complex and error-prone server-side consensus-migration logic.
+#[derive(Debug, Copy, Clone)]
+pub struct ModuleConsensusVersion(pub u32);
+
+/// Api version supported by a core server or a client/server module at a given [`ModuleConsensusVersion`]
+///
+/// Changing [`ModuleConsensusVersion`] implies resetting the api versioning.
+///
+/// For a client and server to be able to communicate with each other:
+///
+/// * The client needs API version support for the [`ModuleConsensusVersion`] that the server is currently
+///   running with.
+/// * Within that [`ModuleConsensusVersion`] during handshake negotation process client and server must find
+///   at least one `Api::major` version where client's `minor` is lower or equal server's `major` version.
+///
+/// A practical module implementation needs to implement large range of version backward compatibility
+/// on both client and server side to accomodate end user client devices receiving updates at a
+/// pace hard to control, and technical and coordination challanges of upgrading servers.
+#[derive(Debug, Copy, Clone)]
+pub struct ApiVersion {
+    /// Major API version
+    ///
+    /// Each time [`ModuleConsensusVersion`] is incremented, this number (and `minor` number as well) should be reset to `0`.
+    ///
+    /// Should be incremented each time the API was changed in a backward-incompatible ways (while resetting `minor` to `0`).
+    pub major: u32,
+    /// Minor API version
+    ///
+    /// * For clients this means *minimum* supported minor version of the `major` version required by client implementation
+    /// * For servers this means *maximum* supported minor version of the `major` version implemented by the server implementation
+    pub minor: u32,
+}
 
 /// Module Generation trait with associated types
 ///
@@ -312,6 +385,17 @@ pub trait ModuleGen: Debug + Sized {
     type Decoder: Decoder;
 
     fn decoder(&self) -> Self::Decoder;
+
+    /// Version of the module consensus supported by this implementation given a certain
+    /// [`CoreConsensusVersion`].
+    ///
+    /// Refer to [`ModuleConsensusVersion`] for more information about versioning.
+    ///
+    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can potentially
+    /// implement multiple versions of the consensus, and depending on the config module instance
+    /// config, instantiate the desired one. This method should expose all the available
+    /// versions, purely for information, setup UI and sanity checking purposes.
+    fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
 
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
@@ -342,6 +426,14 @@ pub trait ModuleGen: Debug + Sized {
         -> anyhow::Result<ModuleConfigResponse>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
 #[async_trait]
@@ -355,6 +447,10 @@ where
 
     fn module_kind(&self) -> ModuleKind {
         <Self as ModuleGen>::KIND
+    }
+
+    fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion> {
+        <Self as ModuleGen>::versions(self, core).to_vec()
     }
 
     async fn init(
@@ -403,28 +499,98 @@ where
         <Self as ModuleGen>::to_config_response(self, config)
     }
 
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<Hash> {
+        <Self as ModuleGen>::hash_client_module(self, config)
+    }
+
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         <Self as ModuleGen>::validate_config(self, identity, config)
+    }
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        <Self as ModuleGen>::dump_database(self, dbtx, prefix_names).await
+    }
+}
+
+pub enum ConsensusProposal<CI> {
+    /// Trigger new epoch immediately including these consensus items
+    Trigger(Vec<CI>),
+    /// Contribute consensus items if other module triggers an epoch
+    // TODO: turn into `(Vec<CI>, Update)` where `Updates` is a future
+    // that will return a new `ConsensusProposal` when updates are available.
+    // This wake we can get rid of `await_consensus_proposal`
+    Contribute(Vec<CI>),
+}
+
+impl<CI> ConsensusProposal<CI> {
+    pub fn empty() -> Self {
+        ConsensusProposal::Contribute(vec![])
+    }
+
+    /// Trigger new epoch if contains any elements, otherwise contribute nothing.
+    pub fn new_auto_trigger(ci: Vec<CI>) -> Self {
+        if ci.is_empty() {
+            Self::Contribute(vec![])
+        } else {
+            Self::Trigger(ci)
+        }
+    }
+
+    pub fn map<F, CIO>(self, f: F) -> ConsensusProposal<CIO>
+    where
+        F: FnMut(CI) -> CIO,
+    {
+        match self {
+            ConsensusProposal::Trigger(items) => {
+                ConsensusProposal::Trigger(items.into_iter().map(f).collect())
+            }
+            ConsensusProposal::Contribute(items) => {
+                ConsensusProposal::Contribute(items.into_iter().map(f).collect())
+            }
+        }
+    }
+
+    pub fn forces_new_epoch(&self) -> bool {
+        match self {
+            ConsensusProposal::Trigger(_) => true,
+            ConsensusProposal::Contribute(_) => false,
+        }
+    }
+
+    pub fn items(&self) -> &[CI] {
+        match self {
+            ConsensusProposal::Trigger(items) => items,
+            ConsensusProposal::Contribute(items) => items,
+        }
+    }
+
+    pub fn into_items(self) -> Vec<CI> {
+        match self {
+            ConsensusProposal::Trigger(items) => items,
+            ConsensusProposal::Contribute(items) => items,
+        }
     }
 }
 
 #[async_trait]
 pub trait ServerModule: Debug + Sized {
-    const KIND: ModuleKind;
-
+    type Gen: ModuleGen;
     type Decoder: Decoder;
-    type Input: Input;
-    type Output: Output;
-    type OutputOutcome: OutputOutcome;
-    type ConsensusItem: ModuleConsensusItem;
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't allocate
-        Self::KIND
+        Self::Gen::KIND
     }
 
     fn decoder(&self) -> Self::Decoder;
+
+    /// Module consensus version this module is running with and the API versions it supports in it
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut DatabaseTransaction<'_>);
@@ -433,16 +599,16 @@ pub trait ServerModule: Debug + Sized {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem>;
+    ) -> ConsensusProposal<<Self::Decoder as Decoder>::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The batch will be committed to the
-    /// database after all other modules ran `begin_consensus_epoch`, so the results are available
-    /// when processing transactions.
+    /// items of this round are supplied as `consensus_items`. The database transaction will be
+    /// committed to the database after all other modules ran `begin_consensus_epoch`,
+    /// so the results are available when processing transactions.
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, <Self::Decoder as Decoder>::ConsensusItem)>,
     );
 
     /// Some modules may have slow to verify inputs that would block transaction processing. If the
@@ -451,7 +617,7 @@ pub trait ServerModule: Debug + Sized {
     /// constructing such lookup tables.
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a Self::Input> + Send,
+        inputs: impl Iterator<Item = &'a <Self::Decoder as Decoder>::Input> + Send,
     ) -> Self::VerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
@@ -463,21 +629,21 @@ pub trait ServerModule: Debug + Sized {
         interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a <Self::Decoder as Decoder>::Input,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
-    /// take no effect.
+    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
+    /// the operation will take no effect.
     ///
     /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
+    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b <Self::Decoder as Decoder>::Input,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
@@ -488,12 +654,12 @@ pub trait ServerModule: Debug + Sized {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &<Self::Decoder as Decoder>::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
-    /// reset and the operation will take no effect.
+    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
+    /// database transaction is rolled back and the operation will take no effect.
     ///
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
     /// be used to retrieve its outcome later using `output_status`.
@@ -504,7 +670,7 @@ pub trait ServerModule: Debug + Sized {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a <Self::Decoder as Decoder>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -526,7 +692,7 @@ pub trait ServerModule: Debug + Sized {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome>;
+    ) -> Option<<Self::Decoder as Decoder>::OutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the module.
     ///

@@ -1,15 +1,17 @@
 pub mod rpc_client;
 pub mod rpc_server;
 
+use std::borrow::Cow;
 use std::io::Cursor;
 
 use anyhow::{anyhow, Error};
 use bitcoin::{Address, Transaction, XOnlyPublicKey};
+use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_api::config::FederationId;
 use fedimint_api::{Amount, TransactionId};
-use fedimint_server::{modules::ln::contracts::Preimage, modules::wallet::txoproof::TxOutProof};
 use futures::Future;
 use mint_client::ln::PayInvoicePayload;
+use mint_client::{modules::ln::contracts::Preimage, modules::wallet::txoproof::TxOutProof};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
@@ -68,6 +70,16 @@ pub struct ReceivePaymentPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfoPayload;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BackupPayload {
+    pub federation_id: FederationId,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RestorePayload {
+    pub federation_id: FederationId,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
@@ -119,6 +131,8 @@ pub enum GatewayRequest {
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
     Deposit(GatewayRequestInner<DepositPayload>),
     Withdraw(GatewayRequestInner<WithdrawPayload>),
+    Backup(GatewayRequestInner<BackupPayload>),
+    Restore(GatewayRequestInner<RestorePayload>),
 }
 
 #[derive(Debug)]
@@ -163,6 +177,8 @@ impl_gateway_request_trait!(
 );
 impl_gateway_request_trait!(DepositPayload, TransactionId, GatewayRequest::Deposit);
 impl_gateway_request_trait!(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
+impl_gateway_request_trait!(BackupPayload, (), GatewayRequest::Backup);
+impl_gateway_request_trait!(RestorePayload, (), GatewayRequest::Restore);
 
 impl<T> GatewayRequestInner<T>
 where
@@ -185,14 +201,12 @@ pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializ
     d: D,
 ) -> std::result::Result<T, D::Error> {
     if d.is_human_readable() {
-        let bytes = hex::decode::<String>(Deserialize::deserialize(d)?)
-            .map_err(serde::de::Error::custom)?;
-        T::consensus_decode(&mut Cursor::new(&bytes))
-            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+        let hex_str: Cow<str> = Deserialize::deserialize(d)?;
+        let bytes = Vec::from_hex(&hex_str).map_err(serde::de::Error::custom)?;
+        T::consensus_decode(&mut Cursor::new(&bytes)).map_err(serde::de::Error::custom)
     } else {
         let bytes: Vec<u8> = Deserialize::deserialize(d)?;
-        T::consensus_decode(&mut Cursor::new(&bytes))
-            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+        T::consensus_decode(&mut Cursor::new(&bytes)).map_err(serde::de::Error::custom)
     }
 }
 
@@ -204,7 +218,7 @@ pub fn serde_hex_serialize<T: bitcoin::consensus::Encodable, S: Serializer>(
     T::consensus_encode(t, &mut bytes).map_err(serde::ser::Error::custom)?;
 
     if s.is_human_readable() {
-        s.serialize_str(&hex::encode(bytes))
+        s.serialize_str(&bytes.to_hex())
     } else {
         s.serialize_bytes(&bytes)
     }

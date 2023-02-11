@@ -14,7 +14,10 @@ use fedimint_api::{
 };
 
 use super::*;
-use crate::module::{ApiEndpoint, InputMeta, ModuleError, ServerModule, TransactionItemAmount};
+use crate::module::{
+    ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, ModuleConsensusVersion, ModuleError,
+    ServerModule, TransactionItemAmount,
+};
 
 pub trait IVerificationCache: Debug {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
@@ -46,10 +49,12 @@ where
 /// Server side Fedimint module needs to implement this trait.
 #[async_trait]
 pub trait IServerModule: Debug {
+    fn as_any(&self) -> &dyn Any;
+
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> DynDecoder;
 
-    fn as_any(&self) -> &dyn Any;
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>);
@@ -59,12 +64,12 @@ pub trait IServerModule: Debug {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<DynModuleConsensusItem>;
+    ) -> ConsensusProposal<DynModuleConsensusItem>;
 
     /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The batch will be committed to the
-    /// database after all other modules ran `begin_consensus_epoch`, so the results are available
-    /// when processing transactions.
+    /// items of this round are supplied as `consensus_items`. The database transaction will be
+    /// committed to the database after all other modules ran `begin_consensus_epoch`,
+    /// so the results are available when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -90,12 +95,12 @@ pub trait IServerModule: Debug {
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
-    /// take no effect.
+    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
+    /// the operation will take no effect.
     ///
     /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
-    /// processed.
+    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
+    /// processed
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
@@ -115,8 +120,8 @@ pub trait IServerModule: Debug {
     ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
-    /// reset and the operation will take no effect.
+    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
+    /// database transaction is rolled back and the operation will take no effect.
     ///
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
     /// be used to retrieve its outcome later using `output_status`.
@@ -182,6 +187,10 @@ where
         self
     }
 
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        <Self as ServerModule>::versions(self)
+    }
+
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
         <Self as ServerModule>::await_consensus_proposal(self, dbtx).await
@@ -192,18 +201,16 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> Vec<DynModuleConsensusItem> {
+    ) -> ConsensusProposal<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
             .await
-            .into_iter()
             .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
-            .collect()
     }
 
     /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The batch will be committed to the
-    /// database after all other modules ran `begin_consensus_epoch`, so the results are available
-    /// when processing transactions.
+    /// items of this round are supplied as `consensus_items`. The database transaction will be
+    /// committed to the database after all other modules ran `begin_consensus_epoch`,
+    /// so the results are available when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -219,7 +226,7 @@ where
                         peer,
                         Clone::clone(
                             item.as_any()
-                                .downcast_ref::<<Self as ServerModule>::ConsensusItem>()
+                                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::ConsensusItem>()
                                 .expect("incorrect consensus item type passed to module plugin"),
                         ),
                     )
@@ -238,7 +245,7 @@ where
             self,
             inputs.iter().map(|i| {
                 i.as_any()
-                    .downcast_ref::<<Self as ServerModule>::Input>()
+                    .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
                     .expect("incorrect input type passed to module plugin")
             }),
         )
@@ -266,7 +273,7 @@ where
                 .expect("incorrect verification cache type passed to module plugin"),
             input
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Input>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
                 .expect("incorrect input type passed to module plugin"),
         )
         .await
@@ -274,12 +281,12 @@ where
     }
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
-    /// take no effect.
+    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
+    /// the operation will take no effect.
     ///
     /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
-    /// processed.
+    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
+    /// processed
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
@@ -293,7 +300,7 @@ where
             dbtx,
             input
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Input>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
                 .expect("incorrect input type passed to module plugin"),
             verification_cache
                 .as_any()
@@ -318,15 +325,15 @@ where
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Output>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Output>()
                 .expect("incorrect output type passed to module plugin"),
         )
         .await
     }
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
-    /// reset and the operation will take no effect.
+    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
+    /// database transaction is rolled back and the operation will take no effect.
     ///
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
     /// be used to retrieve its outcome later using `output_status`.
@@ -345,7 +352,7 @@ where
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<Self as ServerModule>::Output>()
+                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
         )

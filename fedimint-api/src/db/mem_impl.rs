@@ -5,9 +5,10 @@ use std::sync::Mutex;
 use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin_hashes::hex::ToHex;
+use futures::stream;
 
 use super::{IDatabase, IDatabaseTransaction};
-use crate::db::PrefixIter;
+use crate::db::PrefixStream;
 
 #[derive(Debug, Default)]
 pub struct DatabaseInsertOperation {
@@ -108,7 +109,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Ok(ret)
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
         let mut data = self
             .tx_data
             .range::<Vec<u8>, _>((key_prefix.to_vec())..)
@@ -117,7 +118,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
             .collect::<Vec<_>>();
         data.reverse();
 
-        Box::new(MemDbIter { data })
+        Box::pin(stream::iter(data))
     }
 
     async fn commit_tx(self: Box<Self>) -> Result<()> {
@@ -155,25 +156,18 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     }
 }
 
-struct MemDbIter {
-    data: Vec<(Vec<u8>, Vec<u8>)>,
-}
-
-impl Iterator for MemDbIter {
-    type Item = Result<(Vec<u8>, Vec<u8>)>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.data.pop().map(Result::Ok)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::MemDatabase;
-    use crate::{db::Database, module::registry::ModuleDecoderRegistry};
+    use crate::{core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry};
 
     fn database() -> Database {
         Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())
+    }
+
+    fn module_database(module_instance_id: ModuleInstanceId) -> Database {
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        db.new_isolated(module_instance_id)
     }
 
     #[test_log::test(tokio::test)]
@@ -234,5 +228,10 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_module_dbtx() {
         fedimint_api::db::verify_module_prefix(database()).await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_db() {
+        fedimint_api::db::verify_module_db(database(), module_database(1)).await;
     }
 }

@@ -15,7 +15,8 @@ use crate::transaction::Transaction;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
 pub enum ConsensusItem {
-    EpochOutcomeSignatureShare(EpochOutcomeSignatureShare),
+    ClientConfigSignatureShare(SerdeSignatureShare),
+    EpochOutcomeSignatureShare(SerdeSignatureShare),
     Transaction(Transaction),
     Module(ModuleConsensusItem),
 }
@@ -23,16 +24,16 @@ pub enum ConsensusItem {
 pub type SerdeConsensusItem = SerdeModuleEncoding<ConsensusItem>;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct EpochOutcomeSignatureShare(pub SignatureShare);
+pub struct SerdeSignatureShare(pub SignatureShare);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct EpochOutcomeSignature(pub Signature);
+pub struct SerdeSignature(pub Signature);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct SignedEpochOutcome {
     pub outcome: EpochOutcome,
     pub hash: Sha256,
-    pub signature: Option<EpochOutcomeSignature>,
+    pub signature: Option<SerdeSignature>,
 }
 
 pub type SerdeEpochHistory = SerdeModuleEncoding<SignedEpochOutcome>;
@@ -92,7 +93,7 @@ impl SignedEpochOutcome {
             .iter()
             .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
             .filter_map(|(peer, item)| match item {
-                ConsensusItem::EpochOutcomeSignatureShare(EpochOutcomeSignatureShare(sig)) => {
+                ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig)) => {
                     Some((peer, sig))
                 }
                 _ => None,
@@ -110,7 +111,7 @@ impl SignedEpochOutcome {
         if let Ok(final_sig) = pks.combine_signatures(sigs) {
             assert!(pks.public_key().verify(&final_sig, prev_epoch.hash));
 
-            prev_epoch.signature = Some(EpochOutcomeSignature(final_sig));
+            prev_epoch.signature = Some(SerdeSignature(final_sig));
             Ok(prev_epoch)
         } else {
             Err(EpochVerifyError::NotEnoughValidSigShares(
@@ -164,37 +165,37 @@ pub enum EpochVerifyError {
     NotEnoughValidSigShares(HashSet<PeerId>),
 }
 
-impl Encodable for EpochOutcomeSignature {
+impl Encodable for SerdeSignature {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.0.to_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for EpochOutcomeSignature {
+impl Decodable for SerdeSignature {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-        Ok(EpochOutcomeSignature(Signature::from_bytes(bytes).unwrap()))
+        Ok(SerdeSignature(Signature::from_bytes(bytes).unwrap()))
     }
 }
 
-impl Encodable for EpochOutcomeSignatureShare {
+impl Encodable for SerdeSignatureShare {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.0.to_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for EpochOutcomeSignatureShare {
+impl Decodable for SerdeSignatureShare {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-        Ok(EpochOutcomeSignatureShare(
+        Ok(SerdeSignatureShare(
             SignatureShare::from_bytes(bytes).unwrap(),
         ))
     }
@@ -210,8 +211,8 @@ mod tests {
     use rand::rngs::OsRng;
     use threshold_crypto::{SecretKey, SecretKeySet};
 
-    use crate::epoch::{ConsensusItem, EpochOutcomeSignatureShare, Sha256};
-    use crate::epoch::{EpochOutcome, EpochOutcomeSignature, EpochVerifyError, SignedEpochOutcome};
+    use crate::epoch::{ConsensusItem, SerdeSignatureShare, Sha256};
+    use crate::epoch::{EpochOutcome, EpochVerifyError, SerdeSignature, SignedEpochOutcome};
 
     fn signed_history(
         epoch: u16,
@@ -220,13 +221,13 @@ mod tests {
     ) -> SignedEpochOutcome {
         let missing_sig = history(epoch, prev_epoch, None);
         let signature = sk.sign(missing_sig.outcome.consensus_hash().expect("Hashes"));
-        history(epoch, prev_epoch, Some(EpochOutcomeSignature(signature)))
+        history(epoch, prev_epoch, Some(SerdeSignature(signature)))
     }
 
     fn history(
         epoch: u16,
         prev_epoch: &Option<SignedEpochOutcome>,
-        signature: Option<EpochOutcomeSignature>,
+        signature: Option<SerdeSignature>,
     ) -> SignedEpochOutcome {
         let items = vec![(PeerId::from(epoch), vec![])];
         let outcome = EpochOutcome {
@@ -261,7 +262,7 @@ mod tests {
                 (
                     peer,
                     vec![ConsensusItem::EpochOutcomeSignatureShare(
-                        EpochOutcomeSignatureShare(sig),
+                        SerdeSignatureShare(sig),
                     )],
                 )
             })
@@ -295,7 +296,7 @@ mod tests {
         let sk: SecretKey = SecretKey::random();
         let _pk = sk.public_key();
         let wrong_hash: Sha256 = Hash::hash(b"wrong");
-        let sig = EpochOutcomeSignature(sk.sign(wrong_hash));
+        let sig = SerdeSignature(sk.sign(wrong_hash));
 
         let epoch0 = history(0, &None, Some(sig));
         let epoch = SignedEpochOutcome {

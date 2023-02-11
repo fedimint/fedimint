@@ -1,11 +1,12 @@
 use bitcoin::secp256k1::KeyPair;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::Amount;
-use fedimint_core::modules::ln::contracts::incoming::IncomingContract;
-use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-use fedimint_core::modules::ln::LightningInput;
 use lightning_invoice::Invoice;
 use serde::Serialize;
+
+use crate::modules::ln::contracts::incoming::IncomingContract;
+use crate::modules::ln::contracts::{ContractId, IdentifyableContract};
+use crate::modules::ln::LightningInput;
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct IncomingContractAccount {

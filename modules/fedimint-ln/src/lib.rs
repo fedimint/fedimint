@@ -21,7 +21,7 @@ use std::ops::Sub;
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
-use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
+use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig, TypedServerModuleConfig,
@@ -33,23 +33,29 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, ApiError, InputMeta, IntoModuleError, ModuleError, ModuleGen,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
-use fedimint_api::{plugin_types_trait_impl, Amount, NumPeers, PeerId};
+use fedimint_api::time::SystemTime;
+use fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
 use fedimint_api::{OutPoint, ServerModule};
+use futures::StreamExt;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
 use crate::common::LightningDecoder;
-use crate::config::{LightningConfig, LightningConfigConsensus, LightningConfigPrivate};
+use crate::config::{
+    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
+};
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
@@ -57,8 +63,8 @@ use crate::contracts::{
 };
 use crate::db::{
     AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
-    ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
-    ProposeDecryptionShareKeyPrefix,
+    ContractUpdateKey, ContractUpdateKeyPrefix, OfferKey, OfferKeyPrefix,
+    ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 
 const KIND: ModuleKind = ModuleKind::from_static_str("ln");
@@ -118,7 +124,7 @@ impl std::fmt::Display for LightningInput {
 /// The offer type exists to register `IncomingContractOffer`s. Instead of patching in a second way
 /// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
 /// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
-/// to receive their fist tokens via LN without already having tokens.
+/// to receive their fist notes via LN without already having notes.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum LightningOutput {
     /// Fund contract
@@ -160,7 +166,7 @@ impl std::fmt::Display for LightningOutput {
                 write!(f, "LN offer for {} with hash {}", offer.amount, offer.hash)
             }
             LightningOutput::CancelOutgoing { contract, .. } => {
-                write!(f, "LN outgoing contract cancellation {}", contract)
+                write!(f, "LN outgoing contract cancellation {contract}")
             }
         }
     }
@@ -193,10 +199,10 @@ impl std::fmt::Display for LightningOutputOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LightningOutputOutcome::Contract { id, .. } => {
-                write!(f, "LN Contract {}", id)
+                write!(f, "LN Contract {id}")
             }
             LightningOutputOutcome::Offer { id } => {
-                write!(f, "LN Offer {}", id)
+                write!(f, "LN Offer {id}")
             }
         }
     }
@@ -211,6 +217,13 @@ pub struct LightningGateway {
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub api: Url,
+    /// Route hints to reach the LN node of the gateway.
+    ///
+    /// These will be appended with the route hint of the recipient's virtual channel. To keeps
+    /// invoices small these should be used sparingly.
+    pub route_hints: Vec<route_hints::RouteHint>,
+    /// Limits the validity of the announcement to allow updates
+    pub valid_until: SystemTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
@@ -238,6 +251,10 @@ impl ModuleGen for LightningGen {
 
     fn decoder(&self) -> LightningDecoder {
         LightningDecoder
+    }
+
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
     }
 
     async fn init(
@@ -333,25 +350,112 @@ impl ModuleGen for LightningGen {
             .to_typed::<LightningConfig>()?
             .validate_config(identity)
     }
+
+    fn hash_client_module(
+        &self,
+        config: serde_json::Value,
+    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
+        serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash()
+    }
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut lightning: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::AgreedDecryptionShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        AgreedDecryptionShareKeyPrefix,
+                        AgreedDecryptionShareKey,
+                        PreimageDecryptionShare,
+                        lightning,
+                        "Accepted Decryption Shares"
+                    );
+                }
+                DbKeyPrefix::Contract => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ContractKeyPrefix,
+                        ContractKey,
+                        ContractAccount,
+                        lightning,
+                        "Contracts"
+                    );
+                }
+                DbKeyPrefix::ContractUpdate => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ContractUpdateKeyPrefix,
+                        ContractUpdateKey,
+                        LightningOutputOutcome,
+                        lightning,
+                        "Contract Updates"
+                    );
+                }
+                DbKeyPrefix::LightningGateway => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LightningGatewayKeyPrefix,
+                        LightningGatewayKey,
+                        LightningGateway,
+                        lightning,
+                        "Lightning Gateways"
+                    );
+                }
+                DbKeyPrefix::Offer => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OfferKeyPrefix,
+                        OfferKey,
+                        IncomingContractOffer,
+                        lightning,
+                        "Offers"
+                    );
+                }
+                DbKeyPrefix::ProposeDecryptionShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ProposeDecryptionShareKeyPrefix,
+                        ProposeDecryptionShareKey,
+                        PreimageDecryptionShare,
+                        lightning,
+                        "Proposed Decryption Shares"
+                    );
+                }
+            }
+        }
+
+        Box::new(lightning.into_iter())
+    }
 }
 
 #[async_trait]
 impl ServerModule for Lightning {
-    const KIND: ModuleKind = KIND;
-
+    type Gen = LightningGen;
     type Decoder = LightningDecoder;
-    type Input = LightningInput;
-    type Output = LightningOutput;
-    type OutputOutcome = LightningOutputOutcome;
-    type ConsensusItem = LightningConsensusItem;
     type VerificationCache = LightningVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
         LightningDecoder
     }
 
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
+    }
+
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        if self.consensus_proposal(dbtx).await.is_empty() {
+        if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
         }
     }
@@ -359,20 +463,23 @@ impl ServerModule for Lightning {
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
-        dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
-            .await
-            .map(|res| {
-                let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
-                LightningConsensusItem { contract_id, share }
-            })
-            .collect()
+    ) -> ConsensusProposal<LightningConsensusItem> {
+        ConsensusProposal::new_auto_trigger(
+            dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
+                .await
+                .map(|res| {
+                    let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
+                    LightningConsensusItem { contract_id, share }
+                })
+                .collect::<Vec<LightningConsensusItem>>()
+                .await,
+        )
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, LightningConsensusItem)>,
     ) {
         for (peer, decryption_share) in consensus_items.into_iter() {
             let span = info_span!("process decryption share", %peer);
@@ -389,7 +496,7 @@ impl ServerModule for Lightning {
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::Input>,
+        _inputs: impl Iterator<Item = &'a LightningInput>,
     ) -> Self::VerificationCache {
         LightningVerificationCache
     }
@@ -399,7 +506,7 @@ impl ServerModule for Lightning {
         interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
-        input: &'a Self::Input,
+        input: &'a LightningInput,
     ) -> Result<InputMeta, ModuleError> {
         let account: ContractAccount = self
             .get_contract_account(dbtx, input.contract_id)
@@ -471,7 +578,7 @@ impl ServerModule for Lightning {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::Input,
+        input: &'b LightningInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let meta = self
@@ -495,7 +602,7 @@ impl ServerModule for Lightning {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &Self::Output,
+        output: &LightningOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         match output {
             LightningOutput::Contract(contract) => {
@@ -569,7 +676,7 @@ impl ServerModule for Lightning {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::Output,
+        output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
@@ -682,6 +789,9 @@ impl ServerModule for Lightning {
                 let (key, value) = res.expect("DB error");
                 (key.0, (key.1, value))
             })
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
             .into_group_map();
 
         let mut bad_peers = vec![];
@@ -840,7 +950,7 @@ impl ServerModule for Lightning {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<LightningOutputOutcome> {
         dbtx.get_value(&ContractUpdateKey(out_point))
             .await
             .expect("DB error")
@@ -861,12 +971,6 @@ impl ServerModule for Lightning {
                         .get_contract_account(dbtx, contract_id)
                         .await
                         .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
-                }
-            },
-            api_endpoint! {
-                "/offers",
-                async |module: &Lightning, dbtx, _params: ()| -> Vec<IncomingContractOffer> {
-                    Ok(module.get_offers(dbtx).await)
                 }
             },
             api_endpoint! {
@@ -933,7 +1037,8 @@ impl Lightning {
         dbtx.find_by_prefix(&OfferKeyPrefix)
             .await
             .map(|res| res.expect("DB error").1)
-            .collect()
+            .collect::<Vec<IncomingContractOffer>>()
+            .await
     }
 
     pub async fn get_contract_account(
@@ -947,10 +1052,19 @@ impl Lightning {
     }
 
     pub async fn list_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<LightningGateway> {
-        dbtx.find_by_prefix(&LightningGatewayKeyPrefix)
+        let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
+        stream
+            .filter_map(|res| async {
+                let gw = res.expect("DB error").1;
+                // FIXME: actually remove from DB
+                if gw.valid_until > SystemTime::now() {
+                    Some(gw)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<LightningGateway>>()
             .await
-            .map(|res| res.expect("DB error").1)
-            .collect()
     }
 
     pub async fn register_gateway(
@@ -986,6 +1100,58 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
         .expect("Wallet module not present or malfunctioning!");
 
     serde_json::from_value(body).expect("Malformed block height response from wallet module!")
+}
+
+// TODO: upstream serde support to LDK
+/// Hack to get a route hint that implements serde traits.
+pub mod route_hints {
+    use fedimint_api::encoding::{Decodable, Encodable};
+    use secp256k1::PublicKey;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    pub struct RouteHintHop {
+        /// The node_id of the non-target end of the route
+        pub src_node_id: PublicKey,
+        /// The short_channel_id of this channel
+        pub short_channel_id: u64,
+        /// Flat routing fee in satoshis
+        pub base_msat: u32,
+        /// Liquidity-based routing fee in millionths of a routed amount.
+        /// In other words, 10000 is 1%.
+        pub proportional_millionths: u32,
+        /// The difference in CLTV values between this node and the next node.
+        pub cltv_expiry_delta: u16,
+        /// The minimum value, in msat, which must be relayed to the next hop.
+        pub htlc_minimum_msat: Option<u64>,
+        /// The maximum value in msat available for routing with a single HTLC.
+        pub htlc_maximum_msat: Option<u64>,
+    }
+
+    /// A list of hops along a payment path terminating with a channel to the recipient.
+    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    pub struct RouteHint(pub Vec<RouteHintHop>);
+
+    impl RouteHint {
+        pub fn to_ldk_route_hint(&self) -> lightning::routing::router::RouteHint {
+            lightning::routing::router::RouteHint(
+                self.0
+                    .iter()
+                    .map(|hop| lightning::routing::router::RouteHintHop {
+                        src_node_id: hop.src_node_id,
+                        short_channel_id: hop.short_channel_id,
+                        fees: lightning::routing::gossip::RoutingFees {
+                            base_msat: hop.base_msat,
+                            proportional_millionths: hop.proportional_millionths,
+                        },
+                        cltv_expiry_delta: hop.cltv_expiry_delta,
+                        htlc_minimum_msat: hop.htlc_minimum_msat,
+                        htlc_maximum_msat: hop.htlc_maximum_msat,
+                    })
+                    .collect(),
+            )
+        }
+    }
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]

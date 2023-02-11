@@ -60,14 +60,14 @@ $ fedimint-cli info
 ```
 
 The `spend` subcommand allows sending notes to another client. This will select the smallest possible set of the client's notes that represents a given amount.
-The notes are base64 encoded into a token and printed as the `token` field.
+The notes are base64 encoded into a note and printed as the `note` field.
 
 ```shell
 $ fedimint-cli spend 400000
 
 {
   "spend": {
-    "token": "AQAAAAAAAACAlpgAAAAAAAEAA..."
+    "note": "AQAAAAAAAACAlpgAAAAAAAEAA..."
   }
 }
 ```
@@ -107,7 +107,7 @@ $ fedimint-cli fetch
 
 ### Using the Gateway
 
-First let's have the gateway execute a peg-in so it has an ecash token balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
+First let's have the gateway execute a peg-in so it has an ecash note balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
 
 ```shell
 $ ./scripts/pegin.sh 10000 1
@@ -115,7 +115,7 @@ $ ./scripts/pegin.sh 10000 1
 
 Make a note of the federation id from the previous step, or run `gateway-cli info` and copy the federation id.
 
-Now we can use `gateway-cli` of the node where the gateway plugin is running to get our ecash token balance:
+Now we can use `gateway-cli` of the node where the gateway plugin is running to get our ecash note balance:
 
 ```shell
 $ gateway-cli balance <FEDERATION-ID>
@@ -216,7 +216,7 @@ SUBCOMMANDS:
     peg-out           Withdraw funds from the federation
     reissue           Reissue notes received from a third party to avoid double spends
     spend             Prepare notes to send to a third party as a payment
-    validate          Validate tokens without claiming them (only checks if signatures valid,
+    validate          Validate notes without claiming them (only checks if signatures valid,
                           does not check if nonce unspent)
     wait-block-height Wait for the fed to reach a consensus block height
     wait-invoice      Wait for incoming invoice to be paid

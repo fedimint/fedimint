@@ -7,17 +7,20 @@ use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModule};
-use fedimint_core::modules::wallet::common::WalletDecoder;
-use fedimint_core::modules::wallet::config::WalletClientConfig;
-use fedimint_core::modules::wallet::tweakable::Tweakable;
-use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-use fedimint_core::modules::wallet::{Wallet, WalletOutputOutcome};
+use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::OutputOutcomeError;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::api::GlobalFederationApi;
-use crate::api::OutputOutcomeError;
+use crate::modules::wallet::common::WalletDecoder;
+use crate::modules::wallet::config::WalletClientConfig;
+use crate::modules::wallet::tweakable::Tweakable;
+use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+use crate::modules::wallet::WalletInput;
+use crate::modules::wallet::WalletOutput;
+use crate::modules::wallet::{Wallet, WalletOutputOutcome};
+use crate::outcome::legacy::OutputOutcome;
 use crate::utils::ClientContext;
 use crate::MemberError;
 
@@ -40,17 +43,14 @@ impl ClientModule for WalletClient {
         WalletDecoder
     }
 
-    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
+    fn input_amount(&self, input: &WalletInput) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: Amount::from_sats(input.tx_output().value),
             fee: self.config.fee_consensus.peg_in_abs,
         }
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Module as ServerModule>::Output,
-    ) -> TransactionItemAmount {
+    fn output_amount(&self, output: &WalletOutput) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
             fee: self.config.fee_consensus.peg_out_abs,
@@ -165,8 +165,9 @@ impl WalletClient {
         let outcome: WalletOutputOutcome = self
             .context
             .api
-            .await_output_outcome(out_point, timeout, &self.context.decoders)
-            .await?;
+            .await_output_outcome::<OutputOutcome>(out_point, timeout, &self.context.decoders)
+            .await?
+            .try_into_variant()?;
         Ok(outcome.0)
     }
 }
@@ -205,17 +206,17 @@ mod tests {
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::task::TaskGroup;
     use fedimint_api::{Feerate, OutPoint, TransactionId};
-    use fedimint_core::modules::wallet::common::WalletDecoder;
-    use fedimint_core::modules::wallet::config::WalletClientConfig;
-    use fedimint_core::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
-    };
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
     use tokio::sync::Mutex;
 
     use crate::api::fake::FederationApiFaker;
+    use crate::modules::wallet::common::WalletDecoder;
+    use crate::modules::wallet::config::WalletClientConfig;
+    use crate::modules::wallet::{
+        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
+    };
     use crate::wallet::WalletClient;
     use crate::{module_decode_stubs, ClientContext};
 
@@ -274,7 +275,7 @@ mod tests {
                     async move {
                         Ok(Wallet::new_with_bitcoind(
                             cfg.to_typed().unwrap(),
-                            db,
+                            db.new_isolated(module_id),
                             btc_rpc_clone.clone().into(),
                             &mut task_group,
                         )
@@ -297,6 +298,7 @@ mod tests {
 
         let client = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(module_id, WalletDecoder.into())]),
+            module_gens: Default::default(),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),

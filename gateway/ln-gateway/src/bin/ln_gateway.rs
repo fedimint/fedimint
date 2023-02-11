@@ -1,4 +1,6 @@
 use cln_plugin::Error;
+use fedimint_api::config::ModuleGenRegistry;
+use fedimint_api::module::DynModuleGen;
 use fedimint_api::{
     core::{
         LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -7,12 +9,7 @@ use fedimint_api::{
     module::registry::ModuleDecoderRegistry,
     task::TaskGroup,
 };
-use fedimint_server::{
-    config::load_from_file,
-    modules::{
-        ln::common::LightningDecoder, mint::common::MintDecoder, wallet::common::WalletDecoder,
-    },
-};
+use fedimint_server::config::load_from_file;
 use ln_gateway::{
     client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
     cln::{build_cln_rpc, ClnRpcRef},
@@ -20,12 +17,18 @@ use ln_gateway::{
     rpc::{GatewayRequest, GatewayRpcSender},
     LnGateway,
 };
+use mint_client::modules::ln::LightningGen;
+use mint_client::modules::mint::MintGen;
+use mint_client::modules::wallet::WalletGen;
+use mint_client::modules::{
+    ln::common::LightningDecoder, mint::common::MintDecoder, wallet::common::WalletDecoder,
+};
 use tokio::sync::mpsc;
 use tracing::error;
 
 /// Fedimint gateway packaged as a CLN plugin
+// Use CLN_PLUGIN_LOG=<log-level> to enable debug logging from within cln-plugin
 #[tokio::main]
-#[deprecated(note = "Prefer to use `gateway-cln-extension` binary instead")]
 async fn main() -> Result<(), Error> {
     let mut args = std::env::args();
 
@@ -52,12 +55,18 @@ async fn main() -> Result<(), Error> {
         (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
         (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
     ]);
+    let module_gens = ModuleGenRegistry::from(vec![
+        DynModuleGen::from(WalletGen),
+        DynModuleGen::from(MintGen),
+        DynModuleGen::from(LightningGen),
+    ]);
 
     // Create gateway instance
     let task_group = TaskGroup::new();
     let gateway = LnGateway::new(
         gw_cfg,
         decoders,
+        module_gens,
         ln_rpc,
         client_builder,
         tx,
@@ -67,7 +76,7 @@ async fn main() -> Result<(), Error> {
     .await;
 
     if let Err(e) = gateway.run().await {
-        task_group.shutdown_join_all().await?;
+        task_group.shutdown_join_all(None).await?;
 
         error!("Gateway stopped with error: {}", e);
         return Err(e.into());

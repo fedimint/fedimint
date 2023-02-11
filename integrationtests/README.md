@@ -4,7 +4,7 @@ The Rust integration tests allow developers to test the interactions between the
 [Scripts](../scripts/README.md) exist for running the integration tests manually or as part of GitHub actions.
 
 ## Writing tests
-Tests cases begin by initializing test fixtures with the number of federation nodes and the coin denomination tiers:
+Tests cases begin by initializing test fixtures with the number of federation nodes and the note denomination tiers:
 
 ```rust
 let (fed, user, bitcoin, gateway, ln) = fixtures(2, &[sats(100), sats(1000)]).await;
@@ -41,7 +41,7 @@ When integration tests run they will output a debug log for each epoch:
 - Epoch: 1 -
   Peer 0: Transaction
     Input: Wallet PegIn with TxId dd482519fcb1955732cbf55e730e65d6f9987e758f5a19a754732b595705a3fc
-    Output: Mint Coins 5000000 msat
+    Output: Mint Notes 5000000 msat
 
 - Balance Sheet -
       -5000.000|IssuanceTotal

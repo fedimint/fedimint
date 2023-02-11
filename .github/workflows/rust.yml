@@ -38,10 +38,9 @@ jobs:
         # is not supported and workarounds are very gnarly
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         with:
-          toolchain: stable
           target: ${{ matrix.target }}
           default: true
           profile: minimal
@@ -56,16 +55,8 @@ jobs:
 
       - name: Build
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: ${{ matrix.extra-build-args }}
-          use-cross: ${{ matrix.use-cross }}
+        run: cargo build
 
       - name: Clippy
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: ${{ matrix.extra-build-args }} -- --deny warnings
-          use-cross: ${{ matrix.use-cross }}
+        run: cargo clippy -- --deny warnings

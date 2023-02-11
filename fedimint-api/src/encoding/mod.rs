@@ -327,12 +327,7 @@ impl Decodable for String {
 impl Encodable for SystemTime {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let duration = self.duration_since(UNIX_EPOCH).expect("valid duration");
-
-        let mut count = 0;
-        count += duration.as_secs().consensus_encode(writer)?;
-        count += duration.subsec_nanos().consensus_encode(writer)?;
-
-        Ok(count)
+        duration.consensus_encode_dyn(writer)
     }
 }
 
@@ -341,9 +336,29 @@ impl Decodable for SystemTime {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
+        let duration = Duration::consensus_decode(d, modules)?;
+        Ok(UNIX_EPOCH + duration)
+    }
+}
+
+impl Encodable for Duration {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut count = 0;
+        count += self.as_secs().consensus_encode(writer)?;
+        count += self.subsec_nanos().consensus_encode(writer)?;
+
+        Ok(count)
+    }
+}
+
+impl Decodable for Duration {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
         let secs = Decodable::consensus_decode(d, modules)?;
         let nsecs = Decodable::consensus_decode(d, modules)?;
-        Ok(UNIX_EPOCH + Duration::new(secs, nsecs))
+        Ok(Duration::new(secs, nsecs))
     }
 }
 

@@ -1,11 +1,15 @@
 #![cfg_attr(target_family = "wasm", allow(dead_code))]
+
+use std::collections::VecDeque;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::anyhow;
+#[cfg(target_family = "wasm")]
+use futures::channel::oneshot;
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 pub use imp::*;
@@ -14,8 +18,8 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::JoinHandle;
-use tracing::debug;
-use tracing::info;
+use tracing::{debug, error, info, warn};
+
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
 
@@ -29,7 +33,7 @@ struct TaskGroupInner {
     is_shutting_down: AtomicBool,
     #[allow(clippy::type_complexity)]
     on_shutdown: Mutex<Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send + 'static>>>,
-    join: Mutex<Vec<(String, JoinHandle<()>)>>,
+    join: Mutex<VecDeque<(String, JoinHandle<()>)>>,
 }
 
 impl TaskGroupInner {
@@ -107,9 +111,12 @@ impl TaskGroup {
         self.inner.shutdown().await
     }
 
-    pub async fn shutdown_join_all(self) -> anyhow::Result<()> {
+    pub async fn shutdown_join_all(
+        self,
+        join_timeout: Option<Duration>,
+    ) -> Result<(), anyhow::Error> {
         self.shutdown().await;
-        self.join_all().await
+        self.join_all(join_timeout).await
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -150,12 +157,14 @@ impl TaskGroup {
     }
 
     #[cfg(not(target_family = "wasm"))]
-    pub async fn spawn<Fut>(
+    pub async fn spawn<Fut, R>(
         &mut self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + Send + 'static,
-    ) where
-        Fut: Future<Output = ()> + Send + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + Send + 'static,
+        R: Send + 'static,
     {
         let name = name.into();
         let mut guard = TaskPanicGuard {
@@ -165,12 +174,16 @@ impl TaskGroup {
         };
         let handle = self.make_handle();
 
+        let (tx, rx) = oneshot::channel();
         if let Some(handle) = self::imp::spawn(async move {
-            f(handle).await;
+            // if receiver is not interested, just drop the message
+            let _ = tx.send(f(handle).await);
         }) {
-            self.inner.join.lock().await.push((name, handle));
+            self.inner.join.lock().await.push_back((name, handle));
         }
         guard.completed = true;
+
+        rx
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -192,18 +205,20 @@ impl TaskGroup {
         if let Some(handle) = self::imp::spawn_local(async move {
             f(handle).await;
         }) {
-            self.inner.join.lock().await.push((name, handle));
+            self.inner.join.lock().await.push_back((name, handle));
         }
         guard.completed = true;
     }
     // TODO: Send vs lack of Send bound; do something about it
     #[cfg(target_family = "wasm")]
-    pub async fn spawn<Fut>(
+    pub async fn spawn<Fut, R>(
         &mut self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + 'static,
-    ) where
-        Fut: Future<Output = ()> + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + 'static,
+        R: 'static,
     {
         let name = name.into();
         let mut guard = TaskPanicGuard {
@@ -213,22 +228,60 @@ impl TaskGroup {
         };
         let handle = self.make_handle();
 
+        let (tx, rx) = oneshot::channel();
         if let Some(handle) = self::imp::spawn(async move {
-            f(handle).await;
+            let _ = tx.send(f(handle).await);
         }) {
-            self.inner.join.lock().await.push((name, handle));
+            self.inner.join.lock().await.push_back((name, handle));
         }
         guard.completed = true;
+
+        rx
     }
 
-    pub async fn join_all(self) -> anyhow::Result<()> {
-        for (name, join) in self.inner.join.lock().await.drain(..) {
+    pub async fn join_all(self, join_timeout: Option<Duration>) -> Result<(), anyhow::Error> {
+        let mut errors = vec![];
+        while let Some((name, join)) = self.inner.join.lock().await.pop_front() {
             debug!("Waiting for {name} task to finish");
-            join.await
-                .map_err(|e| anyhow!("Thread {name} panicked with: {e}"))?;
-            debug!("{name} task finished.");
+
+            #[cfg(not(target_family = "wasm"))]
+            let join_future: Pin<Box<dyn Future<Output = _> + Send>> =
+                if let Some(join_timeout) = join_timeout {
+                    Box::pin(timeout(join_timeout, join))
+                } else {
+                    Box::pin(async move { Ok(join.await) })
+                };
+
+            #[cfg(target_family = "wasm")]
+            let join_future: Pin<Box<dyn Future<Output = _>>> =
+                if let Some(join_timeout) = join_timeout {
+                    Box::pin(timeout(join_timeout, join))
+                } else {
+                    Box::pin(async move { Ok(join.await) })
+                };
+
+            match join_future.await {
+                Ok(Ok(())) => {
+                    info!("{name} task finished");
+                }
+                Ok(Err(e)) => {
+                    error!("Thread {name} panicked with: {e}");
+                    errors.push(e);
+                }
+                Err(Elapsed) => {
+                    warn!("{name} task hit timeout while shutting down")
+                }
+            }
         }
-        Ok(())
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            let num_errors = errors.len();
+            Err(anyhow::Error::msg(format!(
+                "{num_errors} tasks did not finish cleanly: {errors:?}"
+            )))
+        }
     }
 }
 

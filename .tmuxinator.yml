@@ -5,11 +5,12 @@ pre_window:
   - source .tmpenv
   - alias ln1="\$FM_LN1"
   - alias ln2="\$FM_LN2"
-  - alias btc_client="\$FM_BTC_CLIENT"
+  - alias bitcoin-cli="\$FM_BTC_CLIENT"
   - alias fedimint-cli="\$FM_MINT_CLIENT"
   - alias gateway-cli="\$FM_GATEWAY_CLI"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
-  - alias fedimint-dbdump="\$FM_DB_DUMP"
+  - alias dbtool="\$FM_DB_TOOL"
+  - alias restart="./scripts/restart-tmux.sh"
 tmux_detached: false
 windows:
   - main:
@@ -33,7 +34,7 @@ windows:
           - fg
         - ln2:
           - sleep 5 # wait for bitcoind and federation
-          # - export GW_CLN_EXTENSION_LISTEN_ADDRESS=127.0.0.1:10001
+          - export GW_CLN_EXTENSION_LISTEN_ADDRESS=127.0.0.1:10001
           - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 --plugin=$FM_BIN_DIR/gateway-cln-extension &
           - echo $! >> $FM_PID_FILE
           - fg

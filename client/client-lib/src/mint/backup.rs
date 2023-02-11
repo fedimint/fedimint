@@ -10,27 +10,25 @@
 use std::{
     cmp::{max, Reverse},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::RangeInclusive,
+    ops::Range,
 };
 
 use anyhow::Result;
 use fedimint_api::{
     cancellable::{Cancellable, Cancelled},
     core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    task::{TaskGroup, TaskHandle},
+    task::TaskGroup,
     NumPeers, PeerId,
 };
-use fedimint_core::{
-    epoch::{ConsensusItem, SignedEpochOutcome},
-    modules::mint::{MintConsensusItem, MintInput, MintOutput},
-};
+use fedimint_core::api::{FederationError, GlobalFederationApi};
+use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
-use tokio::sync::mpsc;
 use tracing::{error, info};
 
 use super::{db::NextECashNoteIndexKeyPrefix, *};
-use crate::api::{self, GlobalFederationApi, MintFederationApi};
+use crate::api::MintFederationApi;
+use crate::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 
 impl MintClient {
     /// Prepare an encrypted backup and send it to federation for storing
@@ -67,7 +65,7 @@ impl MintClient {
             Err(Cancelled) => return Ok(Err(Cancelled)),
         };
 
-        task_group.join_all().await?;
+        task_group.join_all(None).await?;
 
         info!("Writting out the recovered state to the database");
 
@@ -76,7 +74,7 @@ impl MintClient {
         Self::wipe_notes_static(&mut dbtx).await?;
 
         for (amount, note) in snapshot.spendable_notes {
-            let key = CoinKey {
+            let key = NoteKey {
                 amount,
                 nonce: note.note.0,
             };
@@ -110,7 +108,7 @@ impl MintClient {
     ///
     /// Useful for cleaning previous data before restoring data recovered from backup.
     async fn wipe_notes_static(dbtx: &mut DatabaseTransaction<'_>) -> Result<()> {
-        dbtx.remove_by_prefix(&CoinKeyPrefix).await?;
+        dbtx.remove_by_prefix(&NoteKeyPrefix).await?;
         dbtx.remove_by_prefix(&OutputFinalizationKeyPrefix).await?;
         dbtx.remove_by_prefix(&NextECashNoteIndexKeyPrefix).await?;
         Ok(())
@@ -139,7 +137,7 @@ impl MintClient {
             .collect();
 
         // Use the newest (highest epoch)
-        responses.sort_by_key(|backup| Reverse(backup.epoch));
+        responses.sort_by_key(|backup| Reverse(backup.epoch_count));
 
         Ok(responses.into_iter().next())
     }
@@ -171,7 +169,7 @@ impl MintClient {
 
     async fn prepare_plaintext_ecash_backup(&self) -> Result<PlaintextEcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning
-        let epoch = self.context.api.fetch_last_epoch().await?;
+        let epoch_count = self.context.api.fetch_epoch_count().await?;
 
         let mut dbtx = self.start_dbtx().await;
         let notes = self.get_available_notes(&mut dbtx).await;
@@ -180,7 +178,8 @@ impl MintClient {
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .await
             .map(|res| res.expect("DB error"))
-            .collect();
+            .collect()
+            .await;
 
         let mut idxes = vec![];
         for &amount in self.config.tbs_pks.tiers() {
@@ -192,7 +191,7 @@ impl MintClient {
             notes,
             pending_notes,
             next_note_idx,
-            epoch,
+            epoch_count,
         })
     }
 
@@ -216,41 +215,29 @@ impl MintClient {
     /// errors via `sender` itself.
     ///
     /// TODO: could be internal to recovery_loop?
-    async fn fetch_epochs(
+    fn fetch_epochs_stream(
         &self,
-        epoch_range: RangeInclusive<u64>,
-        sender: mpsc::Sender<api::FederationResult<SignedEpochOutcome>>,
-        task_handle: &TaskHandle,
-    ) {
-        for epoch in epoch_range {
-            if task_handle.is_shutting_down() {
-                break;
-            }
-
-            info!(epoch, "Fetching epoch");
-
-            match self
-                .context
-                .api
-                .fetch_epoch_history(epoch, self.epoch_pk, &self.context.decoders)
-                .await
-            {
-                Ok(epoch_history) => {
-                    assert_eq!(epoch_history.outcome.epoch, epoch);
-                    // If the other side disconnected (probably due to an error),
-                    // we don't need to keep trying
-                    if sender.send(Ok(epoch_history)).await.is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    // TODO: retry?
-                    if sender.send(Err(e)).await.is_err() {
-                        break;
-                    }
-                }
-            }
-        }
+        epoch_range: Range<u64>,
+    ) -> impl futures::Stream<
+        Item = (
+            u64,
+            std::result::Result<SignedEpochOutcome, FederationError>,
+        ),
+    > + '_ {
+        futures::stream::iter(epoch_range)
+            .map(move |epoch| {
+                Box::pin(async move {
+                    info!(epoch, "Fetching epoch");
+                    (
+                        epoch,
+                        self.context
+                            .api
+                            .fetch_epoch_history(epoch, self.epoch_pk, &self.context.decoders)
+                            .await,
+                    )
+                })
+            })
+            .buffered(8)
     }
 
     pub async fn restore_current_state_from_backup(
@@ -259,32 +246,17 @@ impl MintClient {
         backup: PlaintextEcashBackup,
         gap_limit: usize,
     ) -> Result<Cancellable<EcashRecoveryFinalState>> {
-        let end_epoch = match self.context.api.fetch_last_epoch().await {
+        let current_epoch_count = match self.context.api.fetch_epoch_count().await {
             Ok(v) => v,
             Err(e) => {
                 return Err(e.into());
             }
         };
-        let epoch_range = backup.epoch..=end_epoch;
+        // TODO: This -1 is probably not necessary, as it should be enough to start from the exact epoch the snapshot was taken, but it is harmless to start from any epoch in the past, and starting a bit earlier makes it more robust in face of some inconsistency that we've missed.
+        let start_epoch = backup.epoch_count.saturating_sub(1);
+        let epoch_range = start_epoch..current_epoch_count;
 
-        info!(
-            start_epoch = backup.epoch,
-            end_epoch, "Recovering from snapshot"
-        );
-
-        // Since fetching epochs will be slow, we start a dedicated task to do it
-        let (tx, mut rx) = mpsc::channel(10);
-        let self_clone = self.clone();
-        task_group
-            .spawn("fetch epochs", {
-                let epoch_range = epoch_range.clone();
-                |task_handle| async move {
-                    self_clone
-                        .fetch_epochs(epoch_range, tx, &task_handle)
-                        .await
-                }
-            })
-            .await;
+        info!(start_epoch, current_epoch_count, "Recovering from snapshot");
 
         let mut tracker = EcashRecoveryTracker::from_backup(
             backup,
@@ -293,16 +265,17 @@ impl MintClient {
             self.config.tbs_pks.clone(),
             self.config.peer_tbs_pks.clone(),
         );
+        let task_handle = task_group.make_handle();
 
-        for epoch in epoch_range {
+        let mut epoch_stream = self.fetch_epochs_stream(epoch_range);
+        while let Some((epoch, epoch_res)) = epoch_stream.next().await {
+            if task_handle.is_shutting_down() {
+                return Ok(Err(Cancelled));
+            }
             // if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
             info!(epoch, "Awaiting epoch");
-            let epoch_history = match rx.recv().await {
-                Some(Ok(o)) => o,
-                Some(Err(e)) => return Err(e.into()),
-                None => return Ok(Err(Cancelled)),
-            };
+            let epoch_history = epoch_res?;
             assert_eq!(epoch_history.outcome.epoch, epoch);
 
             info!(epoch, "Processing epoch");
@@ -332,7 +305,7 @@ impl MintClient {
 pub struct PlaintextEcashBackup {
     notes: TieredMulti<SpendableNote>,
     pending_notes: Vec<(OutputFinalizationKey, NoteIssuanceRequests)>,
-    epoch: u64,
+    epoch_count: u64,
     next_note_idx: Tiered<NoteIndex>,
 }
 
@@ -342,7 +315,7 @@ impl PlaintextEcashBackup {
         Self {
             notes: TieredMulti::default(),
             pending_notes: vec![],
-            epoch: 0,
+            epoch_count: 0,
             next_note_idx: Tiered::default(),
         }
     }
@@ -502,7 +475,7 @@ impl EcashRecoveryTracker {
                         finalization_key.0,
                         (
                             issuance_requests
-                                .coins
+                                .notes
                                 .iter_items()
                                 .map(|(amount, iss_req)| {
                                     (amount, (iss_req.recover_blind_nonce().0, Some(*iss_req)))
@@ -566,7 +539,7 @@ impl EcashRecoveryTracker {
 
     pub fn handle_output(&mut self, out_point: OutPoint, output: &MintOutput) {
         // There is nothing preventing other users from creating valid transactions
-        // mining coins to our own blind nonce, possibly even racing with us.
+        // mining notes to our own blind nonce, possibly even racing with us.
         // Including amount in blind nonce derivation helps us avoid accidentally using
         // a nonce mined for as smaller amount, but it doesn't eliminate completely
         // the possibility that we might use a note mined in a different transaction,
@@ -784,6 +757,7 @@ impl EcashRecoveryTracker {
         rejected_txs: &BTreeSet<TransactionId>,
     ) {
         match item {
+            ConsensusItem::ClientConfigSignatureShare(_) => {}
             ConsensusItem::EpochOutcomeSignatureShare(_) => {}
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();
@@ -856,7 +830,7 @@ impl EcashRecoveryTracker {
                     (
                         out_point,
                         NoteIssuanceRequests {
-                            coins: TieredMulti::from_iter(data.0.into_iter_items().filter_map(
+                            notes: TieredMulti::from_iter(data.0.into_iter_items().filter_map(
                                 |(amount, (_bn, opt_note_iss_req))| {
                                     opt_note_iss_req.map(|iss_req| (amount, iss_req))
                                 },

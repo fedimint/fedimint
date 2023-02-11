@@ -4,9 +4,12 @@ pub mod debug;
 mod interconnect;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ffi::OsString;
 use std::iter::FromIterator;
-use std::sync::Arc;
+use std::os::unix::prelude::OsStrExt;
+use std::sync::Mutex;
 
+use fedimint_api::config::{ConfigResponse, ModuleGenRegistry};
 use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -19,23 +22,30 @@ use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
 use fedimint_core::outcome::TransactionStatus;
 use futures::future::select_all;
+use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use thiserror::Error;
-use tokio::sync::Notify;
-use tracing::{debug, error, info_span, instrument, trace, warn, Instrument};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
-use crate::config::{ModuleGenRegistry, ServerConfig};
+use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
+use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
-    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
-    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
+    AcceptedTransactionKey, ClientConfigSignatureKey, DropPeerKey, DropPeerKeyPrefix,
+    EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
 };
+use crate::logging::LOG_CONSENSUS;
 use crate::transaction::{Transaction, TransactionError};
 
 pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
 pub type HbbftConsensusOutcome = hbbft::honey_badger::Batch<Vec<ConsensusItem>, PeerId>;
 pub type HbbftMessage = hbbft::honey_badger::Message<PeerId>;
+
+/// How many txs can be stored in memory before blocking the API
+const TRANSACTION_BUFFER_SIZE: usize = 1000;
 
 // TODO remove HBBFT `Batch` from `ConsensusOutcome`
 #[derive(Debug, Clone)]
@@ -61,6 +71,7 @@ impl From<EpochOutcome> for ConsensusOutcomeConversion {
 pub struct ConsensusProposal {
     pub items: Vec<ConsensusItem>,
     pub drop_peers: Vec<PeerId>,
+    pub force_new_epoch: bool,
 }
 
 // TODO: we should make other fields private and get rid of this
@@ -69,14 +80,21 @@ pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
+    /// Cached client config response to be returned with `Self::get_config_with_sig`
+    client_cfg: ConfigResponse,
+
     pub module_inits: ModuleGenRegistry,
 
     pub modules: ServerModuleRegistry,
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
 
-    /// Notifies tasks when there is a new transaction
-    pub transaction_notify: Arc<Notify>,
+    /// For sending new transactions to consensus
+    pub tx_sender: Sender<Transaction>,
+
+    /// Cache of transactions to include in a proposal
+    // TODO should be able to eventually remove this Mutex
+    pub tx_cache: Mutex<HashSet<Transaction>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -97,19 +115,60 @@ struct FundingVerifier {
 }
 
 impl FedimintConsensus {
+    pub fn get_env_vars_map() -> BTreeMap<OsString, OsString> {
+        std::env::vars_os()
+            // We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
+            .collect()
+    }
+
+    /// Returns a new consensus with a receiver for handling submitted transactions
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
         module_inits: ModuleGenRegistry,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
-            modules: module_inits.init_all(&cfg, &db, task_group).await?,
-            cfg,
-            module_inits,
-            db,
-            transaction_notify: Arc::new(Notify::new()),
-        })
+    ) -> anyhow::Result<(Self, Receiver<Transaction>)> {
+        let mut modules = BTreeMap::new();
+
+        let env = Self::get_env_vars_map();
+
+        for (module_id, module_cfg) in &cfg.consensus.modules {
+            let kind = module_cfg.kind();
+
+            let Some(init) = module_inits.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
+            };
+            info!(module_instance_id = *module_id, kind = %kind, "Init module");
+
+            let module = init
+                .init(
+                    cfg.get_module_config(*module_id)?,
+                    db.new_isolated(*module_id),
+                    &env,
+                    task_group,
+                )
+                .await?;
+            modules.insert(*module_id, module);
+        }
+
+        let (tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+        let client_cfg = cfg.consensus.to_config_response(&module_inits);
+
+        Ok((
+            Self {
+                modules: ModuleRegistry::from(modules),
+                cfg,
+                client_cfg,
+                module_inits,
+                db,
+                tx_sender,
+                tx_cache: Default::default(),
+            },
+            tx_receiver,
+        ))
     }
 
     /// Like [`Self::new`], but when you want to initialize modules separately.
@@ -118,14 +177,22 @@ impl FedimintConsensus {
         db: Database,
         module_inits: ModuleGenRegistry,
         modules: ModuleRegistry<DynServerModule>,
-    ) -> Self {
-        Self {
-            modules,
-            cfg,
-            module_inits,
-            db,
-            transaction_notify: Arc::new(Notify::new()),
-        }
+    ) -> (Self, Receiver<Transaction>) {
+        let (tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+        let client_cfg = cfg.consensus.to_config_response(&module_inits);
+
+        (
+            Self {
+                modules,
+                cfg,
+                client_cfg,
+                module_inits,
+                db,
+                tx_sender,
+                tx_cache: Default::default(),
+            },
+            tx_receiver,
+        )
     }
 }
 
@@ -156,7 +223,7 @@ impl FedimintConsensus {
             .await
             .is_some()
         {
-            return Ok(());
+            return Err(TransactionReplayError(transaction.tx_hash()));
         }
 
         let tx_hash = transaction.tx_hash();
@@ -204,17 +271,10 @@ impl FedimintConsensus {
 
         funding_verifier.verify_funding()?;
 
-        let new = dbtx
-            .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
+        self.tx_sender
+            .send(transaction)
             .await
-            .expect("DB error");
-        dbtx.commit_tx().await.expect("DB Error");
-
-        if new.is_some() {
-            warn!("Added consensus item was already in consensus queue");
-        }
-
-        self.transaction_notify.notify_one();
+            .map_err(|_e| TransactionSubmissionError::TxChannelError)?;
         Ok(())
     }
 
@@ -245,6 +305,7 @@ impl FedimintConsensus {
 
                         let UnzipConsensusItem {
                             epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
+                            client_config_signature_share: _client_config_signature_share_cis,
                             transaction: transaction_cis,
                             module: module_cis,
                         } = consensus_outcome
@@ -266,8 +327,7 @@ impl FedimintConsensus {
                             // implementations.
                             assert_eq!(
                                 reference_rejected_txs, &rejected_txs,
-                                "rejected_txs mismatch: reference = {:?} != {:?}",
-                                reference_rejected_txs, rejected_txs
+                                "rejected_txs mismatch: reference = {reference_rejected_txs:?} != {rejected_txs:?}"
                             );
                         }
 
@@ -284,10 +344,7 @@ impl FedimintConsensus {
 
         let audit = self.audit().await;
         if audit.sum().milli_sat < 0 {
-            panic!(
-                "Balance sheet of the fed has gone negative, this should never happen! {}",
-                audit
-            )
+            panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
         }
 
         epoch_history
@@ -339,9 +396,7 @@ impl FedimintConsensus {
             let span = info_span!("Processing transaction");
             async {
                 trace!(?transaction);
-                dbtx.remove_entry(&ProposedTransactionKey(txid))
-                    .await
-                    .expect("DB Error");
+                self.tx_cache.lock().unwrap().remove(&transaction);
 
                 dbtx.set_tx_savepoint().await;
                 // TODO: use borrowed transaction
@@ -360,8 +415,8 @@ impl FedimintConsensus {
                     Err(error) => {
                         rejected_txs.insert(txid);
                         dbtx.rollback_tx_to_savepoint().await;
-                        warn!(%error, "Transaction failed");
-                        dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{:?}", error))
+                        warn!(target: LOG_CONSENSUS, %error, "Transaction failed");
+                        dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{error:?}"))
                             .await
                             .expect("DB Error");
                     }
@@ -386,6 +441,9 @@ impl FedimintConsensus {
 
         let mut drop_peers = Vec::<PeerId>::new();
 
+        self.save_client_config_sig(dbtx, &outcome, &mut drop_peers)
+            .await;
+
         let epoch_history = self
             .save_epoch_history(outcome.clone(), dbtx, &mut drop_peers, rejected_txs)
             .await;
@@ -406,14 +464,81 @@ impl FedimintConsensus {
         epoch_history
     }
 
-    pub async fn get_last_epoch(&self) -> Option<u64> {
+    /// If the client config hash isn't already signed, aggregate signature shares from peers
+    /// dropping those that don't contribute.
+    async fn save_client_config_sig(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        outcome: &HbbftConsensusOutcome,
+        drop_peers: &mut Vec<PeerId>,
+    ) {
+        let config = self.get_config_with_sig(dbtx).await;
+
+        if config.client_hash_signature.is_none() {
+            let maybe_client_hash = config.client.consensus_hash(&self.module_inits);
+            let client_hash = maybe_client_hash.expect("hashes");
+            let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
+            let mut contributing_peers = HashSet::new();
+            let pks = self.cfg.consensus.auth_pk_set.clone();
+
+            let shares: BTreeMap<_, _> = outcome
+                .contributions
+                .iter()
+                .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
+                .filter_map(|(peer, item)| match item {
+                    ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig)) => {
+                        Some((peer, sig))
+                    }
+                    _ => None,
+                })
+                .filter(|(peer, sig)| {
+                    let pub_key = pks.public_key_share(peer.to_usize());
+                    pub_key.verify(sig, client_hash)
+                })
+                .map(|(peer, sig)| {
+                    contributing_peers.insert(peer);
+                    (peer.to_usize(), sig)
+                })
+                .collect();
+
+            if let Ok(final_sig) = pks.combine_signatures(shares) {
+                assert!(pks.public_key().verify(&final_sig, client_hash));
+                let serde_sig = SerdeSignature(final_sig);
+                let tx = dbtx.insert_entry(&ClientConfigSignatureKey, &serde_sig);
+                tx.await.expect("DB Error");
+            } else {
+                warn!(
+                    target: LOG_CONSENSUS,
+                    "Did not receive enough valid client config sig shares"
+                )
+            }
+
+            for peer in peers {
+                if !contributing_peers.contains(&peer) {
+                    drop_peers.push(peer);
+                }
+            }
+        }
+    }
+
+    pub async fn get_config_with_sig(&self, dbtx: &mut DatabaseTransaction<'_>) -> ConfigResponse {
+        let mut client = self.client_cfg.clone();
+        let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
+        if let Ok(Some(SerdeSignature(sig))) = maybe_sig {
+            client.client_hash_signature = Some(sig);
+        }
+        client
+    }
+
+    pub async fn get_epoch_count(&self) -> u64 {
         self.db
             .begin_transaction()
             .await
             .get_value(&LastEpochKey)
             .await
             .expect("db query must not fail")
-            .map(|e| e.0)
+            .map(|ep_hist_key| ep_hist_key.0 + 1)
+            .unwrap_or(0)
     }
 
     pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
@@ -454,10 +579,16 @@ impl FedimintConsensus {
                         .expect("DB Error");
                 }
                 Err(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) => {
-                    warn!("Unable to sign epoch {}", prev_epoch_key.0);
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        "Unable to sign epoch {}", prev_epoch_key.0
+                    );
                     for peer in peers {
                         if !contributing_peers.contains(&peer) {
-                            warn!("Dropping {} for not contributing valid epoch sigs.", peer);
+                            warn!(
+                                target: LOG_CONSENSUS,
+                                "Dropping {} for not contributing valid epoch sigs.", peer
+                            );
                             drop_peers.push(peer);
                         }
                     }
@@ -502,22 +633,30 @@ impl FedimintConsensus {
                 let key = res.expect("DB error").0;
                 key.0
             })
-            .collect();
+            .collect()
+            .await;
 
-        let mut items: Vec<ConsensusItem> = dbtx
-            .find_by_prefix(&ProposedTransactionKeyPrefix)
-            .await
-            .map(|res| {
-                let (_key, value) = res.expect("DB error");
-                ConsensusItem::Transaction(value)
-            })
+        let mut items: Vec<ConsensusItem> = self
+            .tx_cache
+            .lock()
+            .unwrap()
+            .iter()
+            .cloned()
+            .map(ConsensusItem::Transaction)
             .collect();
+        let mut force_new_epoch = false;
 
         for (instance_id, module) in self.modules.iter_modules() {
+            let consensus_proposal = module
+                .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
+                .await;
+            if consensus_proposal.forces_new_epoch() {
+                force_new_epoch = true;
+            }
+
             items.extend(
-                module
-                    .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
-                    .await
+                consensus_proposal
+                    .into_items()
                     .into_iter()
                     .map(ConsensusItem::Module),
             );
@@ -526,11 +665,25 @@ impl FedimintConsensus {
         if let Some(epoch) = dbtx.get_value(&LastEpochKey).await.unwrap() {
             let last_epoch = dbtx.get_value(&epoch).await.unwrap().unwrap();
             let sig = self.cfg.private.epoch_sks.0.sign(last_epoch.hash);
-            let item = ConsensusItem::EpochOutcomeSignatureShare(EpochOutcomeSignatureShare(sig));
+            let item = ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig));
             items.push(item);
         };
 
-        ConsensusProposal { items, drop_peers }
+        // Add a signature share for the client config hash if we don't have it signed yet
+        let client = self.get_config_with_sig(&mut dbtx).await;
+        if client.client_hash_signature.is_none() {
+            let maybe_client_hash = client.client.consensus_hash(&self.module_inits);
+            let client_hash = maybe_client_hash.expect("Client config hashes");
+            let sig = self.cfg.private.auth_sks.0.sign(client_hash);
+            let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig));
+            items.push(item);
+        }
+
+        ConsensusProposal {
+            items,
+            drop_peers,
+            force_new_epoch,
+        }
     }
 
     async fn process_transaction<'a>(
@@ -542,6 +695,15 @@ impl FedimintConsensus {
         let mut funding_verifier = FundingVerifier::default();
 
         let tx_hash = transaction.tx_hash();
+
+        if dbtx
+            .get_value(&AcceptedTransactionKey(tx_hash))
+            .await
+            .expect("DB Error")
+            .is_some()
+        {
+            return Err(TransactionReplayError(tx_hash));
+        }
 
         let mut pub_keys = Vec::new();
         for input in transaction.inputs.iter() {
@@ -713,6 +875,8 @@ pub enum TransactionSubmissionError {
     TransactionError(#[from] TransactionError),
     #[error("Module input or output error in tx {0}: {1}")]
     ModuleError(TransactionId, ModuleError),
-    #[error("Transaction conflict error")]
-    TransactionConflictError,
+    #[error("Transaction channel was closed")]
+    TxChannelError,
+    #[error("Transaction was already successfully processed: {0}")]
+    TransactionReplayError(TransactionId),
 }

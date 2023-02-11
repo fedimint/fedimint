@@ -5,17 +5,14 @@ use fedimint_api::{
     core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT},
     msats, Amount, OutPoint, PeerId, Tiered, TieredMulti,
 };
-use fedimint_core::{
-    epoch::ConsensusItem,
-    modules::mint::{
-        BlindNonce, MintConsensusItem, MintInput, MintOutput, MintOutputSignatureShare,
-    },
-    transaction::Transaction,
-};
+use fedimint_core::{epoch::ConsensusItem, transaction::Transaction};
 use fedimint_derive_secret::DerivableSecret;
 use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare};
 
 use super::{EcashRecoveryTracker, PlaintextEcashBackup};
+use crate::modules::mint::{
+    BlindNonce, MintConsensusItem, MintInput, MintOutput, MintOutputSignatureShare,
+};
 use crate::{
     mint::{
         db::OutputFinalizationKey, MintClient, NoteIndex, NoteIssuanceRequest,
@@ -67,12 +64,12 @@ impl MicroMintClient {
                     (
                         OutputFinalizationKey(out_point),
                         NoteIssuanceRequests {
-                            coins: TieredMulti::from_iter(iss_reqs),
+                            notes: TieredMulti::from_iter(iss_reqs),
                         },
                     )
                 })
                 .collect(),
-            epoch: 0,
+            epoch_count: 0,
             next_note_idx: self.next_note_idx.clone(),
         }
     }
@@ -270,7 +267,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
         next_note_idx: Tiered::from_iter(
             [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
         ),
-        epoch: 0,
+        epoch_count: 0,
     };
 
     let encoded = orig.encode()?;
@@ -288,7 +285,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
         next_note_idx: Tiered::from_iter(
             [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
         ),
-        epoch: 1,
+        epoch_count: 1,
     };
 
     let secret = DerivableSecret::new_root(&[1; 32], &[1, 32]);

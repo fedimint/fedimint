@@ -11,8 +11,9 @@ use fedimint_api::cancellable::Cancellable;
 use fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{sync::Mutex, time::sleep};
-use tracing::{debug, error};
+use tracing::{debug, warn};
 
+use crate::logging::LOG_NET_PEER;
 use crate::PeerId;
 
 /// TODO: Use proper ModuleId after modularization is complete
@@ -153,7 +154,7 @@ where
                         .or_default()
                         .push_back((peer, new_msg.msg));
                 } else {
-                    error!("Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Droping new message.");
+                    warn!(target: LOG_NET_PEER, "Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Droping new message.");
                 }
             } else {
                 drop(out_of_order);
@@ -245,7 +246,7 @@ pub mod test {
             drop(conn1);
             drop(conn2);
 
-            task_group.join_all().await.expect("no failures");
+            task_group.join_all(None).await.expect("no failures");
         }
     }
 }

@@ -2,7 +2,13 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::format_err;
-use fedimint_server::config::{ModuleGenRegistry, ServerConfig};
+use bitcoin::Network;
+use fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
+use fedimint_api::{Amount, Tiered};
+use fedimint_core::api::WsFederationConnect;
+use fedimint_mint::MintGenParams;
+use fedimint_server::config::ServerConfig;
+use fedimint_wallet::WalletGenParams;
 use ring::aead::LessSafeKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -28,6 +34,9 @@ pub const LOCAL_CONFIG: &str = "local";
 /// Server consensus-only configurable file
 pub const CONSENSUS_CONFIG: &str = "consensus";
 
+/// Client connection string file
+pub const CLIENT_CONNECT_FILE: &str = "client-connect";
+
 /// Salt backup for combining with the private key
 pub const SALT_FILE: &str = "private.salt";
 
@@ -42,6 +51,26 @@ pub const TLS_CERT: &str = "tls-cert";
 
 pub const JSON_EXT: &str = "json";
 const ENCRYPTED_EXT: &str = "encrypt";
+
+/// Generates the configuration for the modules configured in the server binary
+pub fn configure_modules(
+    max_denomination: Amount,
+    network: Network,
+    finality_delay: u32,
+) -> ConfigGenParams {
+    ConfigGenParams::new()
+        .attach(WalletGenParams {
+            network,
+            // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
+            finality_delay,
+        })
+        .attach(MintGenParams {
+            mint_amounts: Tiered::gen_denominations(max_denomination)
+                .tiers()
+                .cloned()
+                .collect(),
+        })
+}
 
 /// Reads the server from the local, private, and consensus cfg files (private file encrypted)
 pub fn read_server_configs(key: &LessSafeKey, path: PathBuf) -> anyhow::Result<ServerConfig> {
@@ -74,15 +103,17 @@ pub fn write_nonprivate_configs(
     path: PathBuf,
     module_config_gens: &ModuleGenRegistry,
 ) -> anyhow::Result<()> {
+    let client_config = server
+        .consensus
+        .to_config_response(module_config_gens)
+        .client;
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
     plaintext_json_write(
-        &server
-            .consensus
-            .to_config_response(module_config_gens)
-            .client,
-        path.join(CLIENT_CONFIG),
-    )
+        &WsFederationConnect::from(&client_config),
+        path.join(CLIENT_CONNECT_FILE),
+    )?;
+    plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))
 }
 
 /// Writes struct into a plaintext json file

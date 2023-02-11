@@ -1,5 +1,5 @@
-use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::impl_db_prefix_const;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -13,15 +13,15 @@ pub enum DbKeyPrefix {
 
 impl std::fmt::Display for DbKeyPrefix {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientSecretKey;
 
-impl DatabaseKeyPrefixConst for ClientSecretKey {
-    const DB_PREFIX: u8 = DbKeyPrefix::ClientSecret as u8;
-    type Key = ClientSecretKey;
-    type Value = ClientSecret;
-}
+impl_db_prefix_const!(
+    key = ClientSecretKey,
+    value = ClientSecret,
+    prefix = DbKeyPrefix::ClientSecret
+);

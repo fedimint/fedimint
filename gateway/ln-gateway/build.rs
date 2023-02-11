@@ -9,6 +9,6 @@ fn main() {
         .build_server(true)
         .build_client(true)
         .compile(&[proto_path], &[include_path])
-        .unwrap_or_else(|e| panic!("failed to compile gateway proto files: {}", e));
+        .unwrap_or_else(|e| panic!("failed to compile gateway proto files: {e}"));
     fedimint_build::print_git_hash();
 }

@@ -13,24 +13,27 @@ path = "tests/tests.rs"
 [dev-dependencies]
 anyhow = "1.0.66"
 assert_matches = "1.5.0"
-async-trait = "0.1.59"
+async-trait = "0.1.64"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 cln-rpc = "0.1.1"
 futures = "0.3.24"
 itertools = "0.10.5"
+lazy_static = "1.4.0"
 lightning-invoice = "0.21.0"
 ln-gateway = { path = "../gateway/ln-gateway" }
 lightning = "0.0.113"
 fedimint-server = { path = "../fedimint-server" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-api = { path = "../fedimint-api" }
+fedimint-core = { path = "../fedimint-core" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
 fedimint-mint = { path = "../modules/fedimint-mint" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-sqlite = { path = "../fedimint-sqlite" }
 fedimint-testing = { path = "../fedimint-testing" }
 fedimint-wallet = { path = "../modules/fedimint-wallet" }
+fedimintd = { path = "../fedimintd" }
 mint-client = { path = "../client/client-lib" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }

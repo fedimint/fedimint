@@ -13,25 +13,26 @@ use axum::{
 use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_api::config::ClientConfig;
+use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
+use fedimint_core::api::WsFederationConnect;
 use fedimint_core::util::SanitizedUrl;
-use fedimint_server::config::ModuleGenRegistry;
 use http::StatusCode;
-use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
+use tokio::select;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
+use tracing::{debug, error};
 use url::Url;
 
 use crate::distributedgen::{create_cert, parse_peer_params, run_dkg};
 use crate::encrypt::{encrypted_read, get_key};
 use crate::{
-    encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG,
-    SALT_FILE, TLS_PK,
+    configure_modules, encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT,
+    PRIVATE_CONFIG, SALT_FILE, TLS_PK,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -158,7 +159,7 @@ async fn post_guardians(
     if let Some(dkg_task_group) = state.dkg_task_group.clone() {
         tracing::info!("killing dkg task group");
         dkg_task_group
-            .shutdown_join_all()
+            .shutdown_join_all(None)
             .await
             .expect("couldn't shut down dkg task group");
         state_copy.lock().await.dkg_state = None;
@@ -177,13 +178,11 @@ async fn post_guardians(
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
-                max_denomination,
                 params.federation_name,
                 connection_strings,
-                params.network,
-                params.finality_delay,
                 rustls::PrivateKey(pk_bytes),
                 &mut dkg_task_group,
+                configure_modules(max_denomination, params.network, params.finality_delay),
             )
             .await;
 
@@ -197,7 +196,7 @@ async fn post_guardians(
                     tracing::info!("DKG succeeded");
                     // Shut down DKG to prevent port collisions
                     dkg_task_group
-                        .shutdown_join_all()
+                        .shutdown_join_all(None)
                         .await
                         .expect("couldn't shut down DKG task group");
                     // Tell this route that DKG succeeded
@@ -268,7 +267,7 @@ pub struct ParamsForm {
     network: Network,
     /// The number of confirmations a deposit transaction requires before accepted by the
     /// federation
-    finality_delay: u32,
+    block_confirmations: u32,
 }
 
 #[debug_handler]
@@ -300,7 +299,8 @@ async fn post_federation_params(
             name: form.guardian_name,
             tls_connect_string,
         },
-        finality_delay: form.finality_delay,
+        // finality delay is always one less than required block confirmations
+        finality_delay: form.block_confirmations.saturating_sub(1),
         network: form.network,
     });
 
@@ -389,7 +389,7 @@ pub async fn run_ui(
         data_dir,
         sender,
         password,
-        task_group,
+        task_group: task_group.clone(),
         dkg_task_group: None,
         module_gens,
         dkg_state: None,
@@ -405,8 +405,17 @@ pub async fn run_ui(
         .route("/qr", get(qr))
         .with_state(state);
 
-    axum::Server::bind(&bind_addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let shutdown_future = task_group.make_handle().make_shutdown_rx().await;
+    let server_future = axum::Server::bind(&bind_addr).serve(app.into_make_service());
+
+    debug!("Starting setup UI server");
+    select! {
+        _ = shutdown_future => {
+            debug!("Setup UI server shutting down");
+        },
+        Err(err) = server_future => {
+            error!(?err, "Setup UI server encountered an error");
+            panic!("Setup UI server crashed");
+        }
+    }
 }

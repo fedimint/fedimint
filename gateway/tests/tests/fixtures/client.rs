@@ -1,21 +1,21 @@
+use std::default::Default;
 use std::{collections::BTreeSet, path::PathBuf};
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
+use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::{
     config::{ClientConfig, FederationId},
     core::LEGACY_HARDCODED_INSTANCE_ID_LN,
     module::registry::ModuleDecoderRegistry,
     PeerId,
 };
+use fedimint_core::api::{DynFederationApi, WsFederationConnect};
 use ln_gateway::{
     client::{DynDbFactory, IGatewayClientBuilder},
     LnGatewayError,
 };
-use mint_client::{
-    api::{DynFederationApi, WsFederationConnect},
-    module_decode_stubs, Client, GatewayClient, GatewayClientConfig,
-};
+use mint_client::{module_decode_stubs, Client, GatewayClient, GatewayClientConfig};
 use secp256k1::{PublicKey, Secp256k1};
 use url::Url;
 
@@ -38,6 +38,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
+        _module_gens: ModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>, LnGatewayError> {
         let federation_id = config.client_config.federation_id.clone();
         // Ignore `config`s, hardcode one peer.
@@ -53,7 +54,15 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
             module_decode_stubs(),
         )?;
 
-        Ok(GatewayClient::new_with_api(config, decoders, db, api, Default::default()).await)
+        Ok(GatewayClient::new_with_api(
+            config,
+            decoders,
+            Default::default(),
+            db,
+            api,
+            Default::default(),
+        )
+        .await)
     }
 
     async fn create_config(
@@ -62,6 +71,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         announce_address: Url,
+        _module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig, LnGatewayError> {
         // TODO: use the connect info urls to get the federation name?
         // Simulate clients in the same federation by seeding the generated `client_config`

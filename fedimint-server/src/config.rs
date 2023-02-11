@@ -1,32 +1,21 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
 use std::net::SocketAddr;
-use std::os::unix::prelude::OsStrExt;
 use std::time::Duration;
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
     ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, DkgRunner,
-    FederationId, JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ThresholdKeys,
-    TypedServerModuleConfig,
+    FederationId, JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
+    ThresholdKeys, TypedServerModuleConfig,
 };
-use fedimint_api::core::{
-    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-    MODULE_INSTANCE_ID_GLOBAL,
-};
-use fedimint_api::db::Database;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_api::module::DynModuleGen;
+use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
 use fedimint_api::task::{timeout, Elapsed, TaskGroup};
-use fedimint_api::{Amount, PeerId};
+use fedimint_api::PeerId;
 pub use fedimint_core::config::*;
-use fedimint_core::modules::mint::MintGenParams;
-use fedimint_wallet::WalletGenParams;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
@@ -39,6 +28,7 @@ use url::Url;
 use crate::fedimint_api::encoding::Encodable;
 use crate::fedimint_api::BitcoinHash;
 use crate::fedimint_api::NumPeers;
+use crate::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use crate::net::connect::TlsConfig;
 use crate::net::connect::{parse_host_port, Connector};
 use crate::net::peers::NetworkConfig;
@@ -106,14 +96,6 @@ pub struct ServerConfigConsensus {
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
-impl ServerConfigConsensus {
-    pub fn iter_module_instances(
-        &self,
-    ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
-        self.modules.iter().map(|(k, v)| (*k, v.kind()))
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
     /// Network addresses and certs for all p2p connections
@@ -155,6 +137,12 @@ pub struct ServerConfigParams {
 }
 
 impl ServerConfigConsensus {
+    pub fn iter_module_instances(
+        &self,
+    ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
+        self.modules.iter().map(|(k, v)| (*k, v.kind()))
+    }
+
     /// encodes the fields into a sha256 hash for comparison
     /// TODO use the derive macro to automatically pick up new fields here
     fn try_to_config_response(
@@ -195,150 +183,13 @@ impl ServerConfigConsensus {
         Ok(ConfigResponse {
             client,
             consensus_hash,
+            client_hash_signature: None,
         })
     }
 
     pub fn to_config_response(&self, module_config_gens: &ModuleGenRegistry) -> ConfigResponse {
         self.try_to_config_response(module_config_gens)
             .expect("configuration mismatch")
-    }
-}
-
-#[derive(Clone)]
-pub struct ModuleGenRegistry(BTreeMap<ModuleKind, DynModuleGen>);
-
-impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
-    fn from(value: Vec<DynModuleGen>) -> Self {
-        Self(BTreeMap::from_iter(
-            value.into_iter().map(|i| (i.module_kind(), i)),
-        ))
-    }
-}
-
-impl ModuleGenRegistry {
-    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
-        self.0.get(k)
-    }
-
-    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
-    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
-        for hardcoded_module in ["mint", "ln", "wallet"] {
-            if !self
-                .0
-                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
-            {
-                panic!("Missing {hardcoded_module} module");
-            }
-        }
-
-        LegacyInitOrderIter {
-            next_id: 0,
-            rest: self.0.clone(),
-        }
-    }
-
-    pub fn decoders<'a>(
-        &self,
-        module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
-        let mut modules = BTreeMap::new();
-        for (id, kind) in module_kinds {
-            let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
-            };
-
-            modules.insert(id, init.decoder());
-        }
-        Ok(ModuleDecoderRegistry::from_iter(modules))
-    }
-
-    pub fn get_env_vars_map() -> BTreeMap<OsString, OsString> {
-        std::env::vars_os()
-            // We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
-            .collect()
-    }
-
-    pub async fn init_all(
-        &self,
-        cfg: &ServerConfig,
-        db: &Database,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ModuleRegistry<fedimint_api::server::DynServerModule>> {
-        let mut modules = BTreeMap::new();
-
-        let env = ModuleGenRegistry::get_env_vars_map();
-
-        for (module_id, module_cfg) in &cfg.consensus.modules {
-            let kind = module_cfg.kind();
-
-            let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
-            };
-            info!(module_instance_id = *module_id, kind = %kind, "Init module");
-
-            let module = init
-                .init(
-                    cfg.get_module_config(*module_id)?,
-                    db.clone(),
-                    &env,
-                    task_group,
-                )
-                .await?;
-            modules.insert(*module_id, module);
-        }
-        Ok(ModuleRegistry::from(modules))
-    }
-}
-
-/// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
-/// Returning each `kind` exactly once, so that `LEGACY_HARDCODED_` constants
-/// correspond to correct module kind.
-///
-/// We would like to get rid of it eventually, but old client and test code assumes
-/// it in multiple places, and it will take work to fix it, while we want new code
-/// to not assume this 1:1 relationship.
-pub struct LegacyInitOrderIter {
-    /// Counter of what module id will this returned value get assigned
-    next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, DynModuleGen>,
-}
-
-impl Iterator for LegacyInitOrderIter {
-    type Item = (ModuleKind, DynModuleGen);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let ret = match self.next_id {
-            LEGACY_HARDCODED_INSTANCE_ID_LN => {
-                let kind = ModuleKind::from_static_str("ln");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
-                let kind = ModuleKind::from_static_str("mint");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
-                let kind = ModuleKind::from_static_str("wallet");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            _ => self.rest.pop_first(),
-        };
-
-        if ret.is_some() {
-            self.next_id += 1;
-        }
-        ret
     }
 }
 
@@ -636,7 +487,7 @@ impl ServerConfig {
                         done_peers.insert(peer_id);
                     },
                     Ok((peer_id, msg)) => {
-                        error!(%peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
+                        error!(target: LOG_NET_PEER_DKG, %peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
                     },
                     Err(Cancelled) => {/* ignore shutdown for time being, we'll timeout soon anyway */},
                 }
@@ -644,7 +495,7 @@ impl ServerConfig {
         })
         .await
         {
-            error!("Timeout waiting for dkg completion confirmation from other peers");
+            error!(target: LOG_NET_PEER_DKG, "Timeout waiting for dkg completion confirmation from other peers");
         };
 
         let server = ServerConfig::from(
@@ -657,7 +508,10 @@ impl ServerConfig {
             module_cfgs,
         );
 
-        info!("Distributed key generation has completed successfully!");
+        info!(
+            target: LOG_NET_PEER,
+            "Distributed key generation has completed successfully!"
+        );
 
         Ok(Ok(server))
     }
@@ -718,19 +572,6 @@ pub struct PeerServerParams {
 }
 
 impl ServerConfigParams {
-    /// Generates denominations as powers of 2 until a `max`
-    pub fn gen_denominations(max: Amount) -> Vec<Amount> {
-        let mut amounts = vec![];
-
-        let mut denomination = Amount::from_msats(1);
-        while denomination < max {
-            amounts.push(denomination);
-            denomination = denomination * 2;
-        }
-
-        amounts
-    }
-
     pub fn peers(&self) -> BTreeMap<PeerId, PeerEndpoint> {
         self.fed_network
             .peers
@@ -764,17 +605,14 @@ impl ServerConfigParams {
     }
 
     /// Generates the parameters necessary for running server config generation
-    #[allow(clippy::too_many_arguments)]
     pub fn gen_params(
         bind_p2p: SocketAddr,
         bind_api: SocketAddr,
         key: rustls::PrivateKey,
         our_id: PeerId,
-        max_denomination: Amount,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        network: bitcoin::network::constants::Network,
-        finality_delay: u32,
+        modules: ConfigGenParams,
     ) -> ServerConfigParams {
         let peer_certs: HashMap<PeerId, rustls::Certificate> = peers
             .iter()
@@ -798,15 +636,7 @@ impl ServerConfigParams {
             fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
             federation_name,
-            modules: ConfigGenParams::new()
-                .attach(WalletGenParams {
-                    network,
-                    // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
-                    finality_delay,
-                })
-                .attach(MintGenParams {
-                    mint_amounts: ServerConfigParams::gen_denominations(max_denomination),
-                }),
+            modules,
         }
     }
 
@@ -832,10 +662,10 @@ impl ServerConfigParams {
     /// config for servers running on different ports on a local network
     pub fn gen_local(
         peers: &[PeerId],
-        max_denomination: Amount,
         base_port: u16,
         federation_name: &str,
-    ) -> HashMap<PeerId, ServerConfigParams> {
+        modules: ConfigGenParams,
+    ) -> anyhow::Result<HashMap<PeerId, ServerConfigParams>> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
             .map(|peer| {
@@ -848,7 +678,7 @@ impl ServerConfigParams {
             .iter()
             .map(|peer| {
                 let peer_port = base_port + u16::from(*peer) * 10;
-                let p2p_url = format!("ws://127.0.0.1:{}", peer_port);
+                let p2p_url = format!("ws://127.0.0.1:{peer_port}");
                 let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
                 let params: PeerServerParams = PeerServerParams {
@@ -864,23 +694,21 @@ impl ServerConfigParams {
         peers
             .iter()
             .map(|peer| {
-                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url);
-                let bind_api = parse_host_port(peer_params[peer].clone().api_url);
+                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url)?;
+                let bind_api = parse_host_port(peer_params[peer].clone().api_url)?;
 
                 let params: ServerConfigParams = Self::gen_params(
-                    bind_p2p.parse().expect("Should parse"),
-                    bind_api.parse().expect("Should parse"),
+                    bind_p2p.parse().context("when parsing bind_p2p")?,
+                    bind_api.parse().context("when parsing bind_api")?,
                     keys[peer].1.clone(),
                     *peer,
-                    max_denomination,
                     &peer_params,
                     federation_name.to_string(),
-                    bitcoin::network::constants::Network::Regtest,
-                    10,
+                    modules.clone(),
                 );
-                (*peer, params)
+                Ok((*peer, params))
             })
-            .collect()
+            .collect::<anyhow::Result<HashMap<_, _>>>()
     }
 }
 
@@ -923,6 +751,7 @@ pub fn gen_cert_and_key(
 mod serde_tls_cert {
     use std::borrow::Cow;
 
+    use bitcoin_hashes::hex::{FromHex, ToHex};
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use tokio_rustls::rustls;
@@ -931,7 +760,7 @@ mod serde_tls_cert {
     where
         S: Serializer,
     {
-        let hex_str = hex::encode(&cert.0);
+        let hex_str = cert.0.to_hex();
         Serialize::serialize(&hex_str, serializer)
     }
 
@@ -940,7 +769,7 @@ mod serde_tls_cert {
         D: Deserializer<'de>,
     {
         let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-        let bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom("Invalid hex"))?;
+        let bytes = Vec::from_hex(&hex_str).map_err(D::Error::custom)?;
         Ok(rustls::Certificate(bytes))
     }
 }
@@ -948,7 +777,7 @@ mod serde_tls_cert {
 mod serde_tls_key {
     use std::borrow::Cow;
 
-    use serde::de::Error;
+    use bitcoin_hashes::hex::{FromHex, ToHex};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use tokio_rustls::rustls;
 
@@ -956,7 +785,7 @@ mod serde_tls_key {
     where
         S: Serializer,
     {
-        let hex_str = hex::encode(&key.0);
+        let hex_str = key.0.to_hex();
         Serialize::serialize(&hex_str, serializer)
     }
 
@@ -965,7 +794,7 @@ mod serde_tls_key {
         D: Deserializer<'de>,
     {
         let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-        let bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom("Invalid hex"))?;
+        let bytes = Vec::from_hex(&hex_str).map_err(serde::de::Error::custom)?;
         Ok(rustls::PrivateKey(bytes))
     }
 }

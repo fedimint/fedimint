@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::fmt;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256;
 use common::DummyDecoder;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{
@@ -16,7 +17,8 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiEndpoint, InputMeta, ModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
@@ -25,7 +27,8 @@ use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::config::{DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+use crate::config::{DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+use crate::serde_json::Value;
 
 pub mod common;
 pub mod config;
@@ -40,7 +43,7 @@ pub struct Dummy {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct DummyOutputConfirmation;
+pub struct DummyConsensusItem;
 
 #[derive(Debug, Clone)]
 pub struct DummyVerificationCache;
@@ -55,6 +58,10 @@ impl ModuleGen for DummyConfigGenerator {
 
     fn decoder(&self) -> DummyDecoder {
         DummyDecoder
+    }
+
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        &[ModuleConsensusVersion(0)]
     }
 
     async fn init(
@@ -133,6 +140,18 @@ impl ModuleGen for DummyConfigGenerator {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<DummyConfig>()?.validate_config(identity)
     }
+
+    fn hash_client_module(&self, config: Value) -> anyhow::Result<sha256::Hash> {
+        serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash()
+    }
+
+    async fn dump_database(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        Box::new(BTreeMap::new().into_iter())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,7 +193,7 @@ impl fmt::Display for DummyOutputOutcome {
     }
 }
 
-impl fmt::Display for DummyOutputConfirmation {
+impl fmt::Display for DummyConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DummyOutputConfirmation")
     }
@@ -182,38 +201,42 @@ impl fmt::Display for DummyOutputConfirmation {
 
 #[async_trait]
 impl ServerModule for Dummy {
-    const KIND: ModuleKind = KIND;
-
+    type Gen = DummyConfigGenerator;
     type Decoder = DummyDecoder;
-    type Input = DummyInput;
-    type Output = DummyOutput;
-    type OutputOutcome = DummyOutputOutcome;
-    type ConsensusItem = DummyOutputConfirmation;
     type VerificationCache = DummyVerificationCache;
 
     fn decoder(&self) -> Self::Decoder {
         DummyDecoder
     }
 
-    async fn await_consensus_proposal(&self, _dbtx: &mut DatabaseTransaction<'_>) {}
+    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
+        (
+            ModuleConsensusVersion(0),
+            &[ApiVersion { major: 0, minor: 0 }],
+        )
+    }
+
+    async fn await_consensus_proposal(&self, _dbtx: &mut DatabaseTransaction<'_>) {
+        std::future::pending().await
+    }
 
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<Self::ConsensusItem> {
-        vec![]
+    ) -> ConsensusProposal<DummyConsensusItem> {
+        ConsensusProposal::empty()
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         _dbtx: &mut DatabaseTransaction<'b>,
-        _consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        _consensus_items: Vec<(PeerId, DummyConsensusItem)>,
     ) {
     }
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::Input> + Send,
+        _inputs: impl Iterator<Item = &'a DummyInput> + Send,
     ) -> Self::VerificationCache {
         DummyVerificationCache
     }
@@ -223,7 +246,7 @@ impl ServerModule for Dummy {
         _interconnect: &dyn ModuleInterconect,
         _dbtx: &mut DatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
-        _input: &'a Self::Input,
+        _input: &'a DummyInput,
     ) -> Result<InputMeta, ModuleError> {
         unimplemented!()
     }
@@ -232,7 +255,7 @@ impl ServerModule for Dummy {
         &'a self,
         _interconnect: &'a dyn ModuleInterconect,
         _dbtx: &mut DatabaseTransaction<'c>,
-        _input: &'b Self::Input,
+        _input: &'b DummyInput,
         _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         unimplemented!()
@@ -241,7 +264,7 @@ impl ServerModule for Dummy {
     async fn validate_output(
         &self,
         _dbtx: &mut DatabaseTransaction,
-        _output: &Self::Output,
+        _output: &DummyOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         unimplemented!()
     }
@@ -249,7 +272,7 @@ impl ServerModule for Dummy {
     async fn apply_output<'a, 'b>(
         &'a self,
         _dbtx: &mut DatabaseTransaction<'b>,
-        _output: &'a Self::Output,
+        _output: &'a DummyOutput,
         _out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         unimplemented!()
@@ -267,7 +290,7 @@ impl ServerModule for Dummy {
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
         _out_point: OutPoint,
-    ) -> Option<Self::OutputOutcome> {
+    ) -> Option<DummyOutputOutcome> {
         None
     }
 
@@ -298,7 +321,7 @@ plugin_types_trait_impl!(
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
-    DummyOutputConfirmation,
+    DummyConsensusItem,
     DummyVerificationCache
 );
 

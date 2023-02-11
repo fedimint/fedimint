@@ -18,6 +18,7 @@ use std::num::NonZeroU32;
 use std::path::PathBuf;
 
 use anyhow::format_err;
+use bitcoin::hashes::hex::{FromHex, ToHex};
 use ring::aead::{LessSafeKey, UnboundKey};
 use ring::{digest, pbkdf2};
 
@@ -27,7 +28,7 @@ const ITERATIONS_DEBUG: Option<NonZeroU32> = NonZeroU32::new(1);
 /// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
 pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> anyhow::Result<()> {
     let bytes = aead::encrypt(data, key)?;
-    fs::write(file.clone(), hex::encode(bytes))
+    fs::write(file.clone(), bytes.to_hex())
         .map_err(|_| format_err!("Unable to write file {:?}", file))?;
     Ok(())
 }
@@ -36,7 +37,7 @@ pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> anyho
 pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> anyhow::Result<Vec<u8>> {
     tracing::warn!("READ {:?}", file);
     let hex = fs::read_to_string(file)?;
-    let mut bytes = hex::decode(hex)?;
+    let mut bytes = Vec::from_hex(&hex)?;
 
     Ok(aead::decrypt(&mut bytes, key)?.to_vec())
 }
@@ -49,7 +50,7 @@ pub fn get_key(password: Option<String>, salt_path: PathBuf) -> anyhow::Result<L
     };
 
     let salt_str = fs::read_to_string(salt_path)?;
-    let salt = hex::decode(salt_str)?;
+    let salt = Vec::from_hex(&salt_str)?;
     let mut key = [0u8; digest::SHA256_OUTPUT_LEN];
     let algo = pbkdf2::PBKDF2_HMAC_SHA256;
     pbkdf2::derive(

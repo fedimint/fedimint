@@ -2,7 +2,8 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixIter};
+use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+use futures::stream;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{ConnectOptions, Error, Executor, Row, Sqlite, SqlitePool, Transaction};
@@ -22,7 +23,7 @@ impl SqliteDb {
             info!("Creating new sqlite database: {:?}", connection_string);
             match Sqlite::create_database(connection_string).await {
                 Ok(_) => {}
-                Err(error) => panic!("Could not create SQLite Database: {}", error),
+                Err(error) => panic!("Could not create SQLite Database: {error}"),
             }
         }
 
@@ -98,10 +99,10 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         Ok(None)
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixIter<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
         let mut str_prefix = "".to_string();
         for prefix in key_prefix {
-            str_prefix = format!("{}{:02X?}", str_prefix, prefix);
+            str_prefix = format!("{str_prefix}{prefix:02X?}");
         }
         str_prefix = format!("{}{}", str_prefix, "%");
         let query = "SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY value DESC";
@@ -110,23 +111,23 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
 
         if results.is_err() {
             warn!("sqlite find_by_prefix failed to retrieve key range. Returning empty iterator");
-            return Box::new(Vec::new().into_iter());
+            return Box::pin(stream::iter(Vec::new()));
         }
 
         let rows = results.unwrap().into_iter().map(|row| {
-            Ok((
+            (
                 row.get::<Vec<u8>, &str>("key"),
                 row.get::<Vec<u8>, &str>("value"),
-            ))
+            )
         });
 
-        Box::new(rows)
+        Box::pin(stream::iter(rows))
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let mut str_prefix = "".to_string();
         for prefix in key_prefix {
-            str_prefix = format!("{}{:02X?}", str_prefix, prefix);
+            str_prefix = format!("{str_prefix}{prefix:02X?}");
         }
         str_prefix = format!("{}{}", str_prefix, "%");
         let query = "DELETE FROM kv WHERE hex(key) LIKE ?";
@@ -154,7 +155,9 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
 mod fedimint_sqlite_tests {
     use std::fs;
 
-    use fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+    use fedimint_api::{
+        core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry,
+    };
     use rand::{rngs::OsRng, RngCore};
 
     use crate::SqliteDb;
@@ -167,6 +170,17 @@ mod fedimint_sqlite_tests {
             SqliteDb::open(connection_string.as_str()).await.unwrap(),
             ModuleDecoderRegistry::default(),
         )
+    }
+
+    async fn open_temp_module_db(db_name: &str, module_instance_id: ModuleInstanceId) -> Database {
+        let dir = format!("/tmp/sqlite-{}/{}", db_name, OsRng.next_u64());
+        fs::create_dir_all(&dir).expect("Error creating temporary directory for SQLite");
+        let connection_string = format!("sqlite://{}/sqlite-{}.db", dir.as_str(), db_name);
+        Database::new(
+            SqliteDb::open(connection_string.as_str()).await.unwrap(),
+            ModuleDecoderRegistry::default(),
+        )
+        .new_isolated(module_instance_id)
     }
 
     #[test_log::test(tokio::test)]
@@ -243,5 +257,14 @@ mod fedimint_sqlite_tests {
     #[test_log::test(tokio::test)]
     async fn test_module_dbtx() {
         fedimint_api::db::verify_module_prefix(open_temp_db("verify-module-prefix").await).await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_module_db() {
+        fedimint_api::db::verify_module_db(
+            open_temp_db("verify-module-db1").await,
+            open_temp_module_db("verify-module-db2", 1).await,
+        )
+        .await;
     }
 }

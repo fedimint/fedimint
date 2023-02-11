@@ -12,17 +12,9 @@ use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
-use fedimint_api::{Amount, ServerModule};
-use fedimint_core::modules::ln::common::LightningDecoder;
-use fedimint_core::modules::ln::config::LightningClientConfig;
-use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
-use fedimint_core::modules::ln::contracts::{
-    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
-};
-use fedimint_core::modules::ln::{
-    ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
-};
+use fedimint_api::Amount;
+use fedimint_core::api::FederationError;
+use futures::StreamExt;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -30,10 +22,20 @@ use thiserror::Error;
 
 use self::db::ConfirmedInvoiceKey;
 use self::incoming::ConfirmedInvoice;
-use crate::api::{FederationError, LnFederationApi, WalletFederationApi};
+use crate::api::{LnFederationApi, WalletFederationApi};
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
+use crate::modules::ln::common::LightningDecoder;
+use crate::modules::ln::config::LightningClientConfig;
+use crate::modules::ln::contracts::incoming::IncomingContractOffer;
+use crate::modules::ln::contracts::outgoing::OutgoingContract;
+use crate::modules::ln::contracts::{
+    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
+};
+use crate::modules::ln::{
+    ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
+};
 use crate::utils::ClientContext;
 
 #[derive(Debug)]
@@ -44,24 +46,21 @@ pub struct LnClient {
 
 impl ClientModule for LnClient {
     const KIND: &'static str = "ln";
-    type Decoder = <Lightning as ServerModule>::Decoder;
+    type Decoder = LightningDecoder;
     type Module = Lightning;
 
     fn decoder(&self) -> Self::Decoder {
         LightningDecoder
     }
 
-    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount {
+    fn input_amount(&self, input: &LightningInput) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.amount,
             fee: self.config.fee_consensus.contract_input,
         }
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Module as ServerModule>::Output,
-    ) -> TransactionItemAmount {
+    fn output_amount(&self, output: &LightningOutput) -> TransactionItemAmount {
         match output {
             LightningOutput::Contract(account_output) => TransactionItemAmount {
                 amount: account_output.amount,
@@ -132,7 +131,7 @@ impl LnClient {
     }
 
     pub async fn get_contract_account(&self, id: ContractId) -> Result<ContractAccount> {
-        timeout(Duration::from_secs(10), self.context.api.fetch_contract(id))
+        timeout(Duration::from_secs(30), self.context.api.fetch_contract(id))
             .await
             .map_err(|_e| LnClientError::Timeout)?
             .map_err(LnClientError::ApiError)
@@ -201,7 +200,7 @@ impl LnClient {
             .await
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .await
-            .filter_map(|res| {
+            .filter_map(|res| async {
                 let (_key, outgoing_data) = res.expect("DB error");
                 let cancelled = outgoing_data.contract_account.contract.cancelled;
                 let timed_out =
@@ -212,7 +211,8 @@ impl LnClient {
                     None
                 }
             })
-            .collect()
+            .collect::<Vec<OutgoingContractData>>()
+            .await
     }
 
     pub fn create_refund_outgoing_contract_input<'a>(
@@ -329,6 +329,7 @@ pub enum LnClientError {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::SystemTime;
 
     use bitcoin::hashes::{sha256, Hash};
     use fedimint_api::config::ConfigGenParams;
@@ -337,10 +338,6 @@ mod tests {
     use fedimint_api::db::Database;
     use fedimint_api::module::registry::ModuleDecoderRegistry;
     use fedimint_api::{Amount, OutPoint, TransactionId};
-    use fedimint_core::modules::ln::common::LightningDecoder;
-    use fedimint_core::modules::ln::config::LightningClientConfig;
-    use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use fedimint_core::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
@@ -349,6 +346,10 @@ mod tests {
 
     use crate::api::fake::FederationApiFaker;
     use crate::ln::LnClient;
+    use crate::modules::ln::common::LightningDecoder;
+    use crate::modules::ln::config::LightningClientConfig;
+    use crate::modules::ln::contracts::{ContractId, IdentifyableContract};
+    use crate::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
     use crate::{module_decode_stubs, ClientContext};
 
     type Fed = FakeFed<Lightning>;
@@ -385,7 +386,7 @@ mod tests {
                 },
             )
             .with(
-                format!("/module/{}/account", module_id),
+                format!("/module/{module_id}/account"),
                 |mint: Arc<Mutex<FakeFed<Lightning>>>, contract: ContractId| async move {
                     Ok(mint
                         .lock()
@@ -431,6 +432,7 @@ mod tests {
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
                 LightningDecoder.into(),
             )]),
+            module_gens: Default::default(),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
@@ -473,6 +475,8 @@ mod tests {
                 node_pub_key,
                 api: Url::parse("http://example.com")
                     .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+                route_hints: vec![],
+                valid_until: SystemTime::now(),
             }
         };
         let timelock = 42;
