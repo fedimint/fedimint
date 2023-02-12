@@ -14,8 +14,8 @@ use fedimint_api::{
 };
 use fedimint_server::api::DynFederationApi;
 use fedimint_server::api::GlobalFederationApi;
+use fedimint_server::api::WsClientConnectInfo;
 use fedimint_server::api::WsFederationApi;
-use fedimint_server::api::WsFederationConnect;
 use fedimint_server::config::load_from_file;
 use mint_client::{module_decode_stubs, Client, GatewayClientConfig};
 use secp256k1::{KeyPair, PublicKey};
@@ -85,7 +85,7 @@ pub trait IGatewayClientBuilder: Debug {
     /// Create a new gateway federation client config from connect info
     async fn create_config(
         &self,
-        connect: WsFederationConnect,
+        connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         module_gens: ModuleGenRegistry,
@@ -143,12 +143,12 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
     async fn create_config(
         &self,
-        connect: WsFederationConnect,
+        connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig> {
-        let api: DynFederationApi = WsFederationApi::new(connect.members).into();
+        let api: DynFederationApi = WsFederationApi::from_urls(&connect).into();
 
         let client_config = api
             .download_client_config(&connect.id, module_gens)

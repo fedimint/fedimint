@@ -10,7 +10,7 @@ use fedimint_api::{
     module::registry::ModuleDecoderRegistry,
     PeerId,
 };
-use fedimint_core::api::{DynFederationApi, WsFederationConnect};
+use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
 use ln_gateway::{
     client::{DynDbFactory, IGatewayClientBuilder},
     LnGatewayError,
@@ -71,7 +71,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
 
     async fn create_config(
         &self,
-        _connect: WsFederationConnect,
+        _connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         _module_gens: ModuleGenRegistry,

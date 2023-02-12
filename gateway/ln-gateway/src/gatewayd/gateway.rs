@@ -16,7 +16,7 @@ use fedimint_api::{
     task::TaskGroup,
     Amount, TransactionId,
 };
-use fedimint_server::api::WsFederationConnect;
+use fedimint_server::api::WsClientConnectInfo;
 use mint_client::{
     ln::PayInvoicePayload,
     modules::ln::{contracts::Preimage, route_hints::RouteHint},
@@ -175,7 +175,7 @@ impl Gateway {
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
-        let connect: WsFederationConnect = serde_json::from_str(&payload.connect).map_err(|e| {
+        let connect: WsClientConnectInfo = serde_json::from_str(&payload.connect).map_err(|e| {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 

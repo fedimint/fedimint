@@ -24,7 +24,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use fedimint_api::config::FederationId;
-use fedimint_core::api::WsFederationConnect;
+use fedimint_core::api::WsClientConnectInfo;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
@@ -79,8 +79,8 @@ async fn test_gateway_authentication() -> Result<()> {
     // *  `connect_federation` with correct password succeeds
     // *  `connect_federation` with incorrect password fails
     let payload = ConnectFedPayload {
-        connect: serde_json::to_string(&WsFederationConnect {
-            members: vec![],
+        connect: serde_json::to_string(&WsClientConnectInfo {
+            urls: vec![],
             id: FederationId::dummy(),
         })?,
     };

@@ -7,7 +7,9 @@ use std::{cmp, result};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_api::config::{ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry};
+use fedimint_api::config::{
+    ApiEndpoint, ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry,
+};
 use fedimint_api::core::DynOutputOutcome;
 use fedimint_api::fmt_utils::AbbreviateDebug;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -575,28 +577,39 @@ struct FederationMember<C> {
 }
 
 /// Information required for client to construct [`WsFederationApi`] instance
+///
+/// Can be used to download the configs and bootstrap a client
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WsFederationConnect {
-    pub members: Vec<(PeerId, Url)>,
+pub struct WsClientConnectInfo {
+    /// Urls that support the federation API (expected to be in PeerId order)
+    pub urls: Vec<Url>,
+    /// Authentication id for the federation
     pub id: FederationId,
 }
 
-impl From<&ClientConfig> for WsFederationConnect {
-    fn from(config: &ClientConfig) -> Self {
-        let members: Vec<(PeerId, Url)> = config
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(id, node)| {
-                let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                let url = node.url.clone();
-                (peer_id, url)
-            })
-            .collect();
-        WsFederationConnect {
-            members,
-            id: config.federation_id.clone(),
+impl WsClientConnectInfo {
+    pub fn new(id: &FederationId, endpoints: &[ApiEndpoint]) -> Self {
+        Self {
+            urls: endpoints.iter().map(|node| node.url.clone()).collect(),
+            id: id.clone(),
         }
+    }
+
+    /// Construct from a config using only a number of peers where one is expected to be honest
+    ///
+    /// Minimizes the serialized size of the connect info
+    pub fn from_honest_peers(config: &ClientConfig) -> Self {
+        let all = config.nodes.clone();
+        let num_honest = all.one_honest();
+        let honest: Vec<_> = all.into_iter().take(num_honest).collect();
+
+        WsClientConnectInfo::new(&config.federation_id, &honest)
+    }
+}
+
+impl From<&ClientConfig> for WsClientConnectInfo {
+    fn from(config: &ClientConfig) -> Self {
+        WsClientConnectInfo::new(&config.federation_id, &config.nodes)
     }
 }
 
@@ -655,16 +668,22 @@ impl WsFederationApi<WsClient> {
         Self::new_with_client(members)
     }
 
+    /// Creates a new API client from a client config
     pub fn from_config(config: &ClientConfig) -> Self {
+        Self::from_urls(&config.into())
+    }
+
+    /// Creates a new API client from connection info
+    pub fn from_urls(connection: &WsClientConnectInfo) -> Self {
         Self::new(
-            config
-                .nodes
+            connection
+                .urls
                 .iter()
                 .enumerate()
-                .map(|(id, node)| {
-                    let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                    let url = node.url.clone();
-                    (peer_id, url)
+                .map(|(id, url)| {
+                    // FIXME: potentially wrong could download actual PeerId later, but doesn't matter in practice
+                    let peer_id = PeerId::from(id as u16);
+                    (peer_id, url.clone())
                 })
                 .collect(),
         )
