@@ -4,11 +4,12 @@ use std::fmt::{Debug, Display, Formatter};
 use url::Url;
 
 // TODO: make fully RFC1738 conformant
-/// Wrapper for `Url` that only prints the scheme, domain, port and path portion of a `Url` in its
-/// `Display` implementation. This is useful to hide private information like user names and
-/// passwords in logs or UIs.
+/// Wrapper for `Url` that only prints the scheme, domain, port and path portion
+/// of a `Url` in its `Display` implementation. This is useful to hide private
+/// information like user names and passwords in logs or UIs.
 ///
-/// The output is not fully RFC1738 conformant but good enough for our current purposes.
+/// The output is not fully RFC1738 conformant but good enough for our current
+/// purposes.
 pub struct SanitizedUrl<'a>(Cow<'a, Url>);
 
 impl<'a> SanitizedUrl<'a> {

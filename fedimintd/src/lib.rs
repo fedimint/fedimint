@@ -59,7 +59,8 @@ pub fn configure_modules(
     ConfigGenParams::new()
         .attach(WalletGenParams {
             network,
-            // TODO this is not very elegant, but I'm planning to get rid of it in a next commit anyway
+            // TODO this is not very elegant, but I'm planning to get rid of it in a next commit
+            // anyway
             finality_delay,
         })
         .attach(MintGenParams {
@@ -70,7 +71,8 @@ pub fn configure_modules(
         })
 }
 
-/// Reads the server from the local, private, and consensus cfg files (private file encrypted)
+/// Reads the server from the local, private, and consensus cfg files (private
+/// file encrypted)
 pub fn read_server_configs(key: &LessSafeKey, path: PathBuf) -> anyhow::Result<ServerConfig> {
     Ok(ServerConfig {
         consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))?,
@@ -95,7 +97,8 @@ pub fn encrypted_json_read<T: Serialize + DeserializeOwned>(
     Ok(serde_json::from_str(&string)?)
 }
 
-/// Writes the server into plaintext json configuration files (private keys not serialized)
+/// Writes the server into plaintext json configuration files (private keys not
+/// serialized)
 pub fn write_nonprivate_configs(
     server: &ServerConfig,
     path: PathBuf,

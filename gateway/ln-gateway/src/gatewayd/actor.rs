@@ -125,9 +125,11 @@ impl GatewayActor {
                         break;
                     }
 
-                    // TODO: Assert short channel id matches the one we subscribed to, or cancel processing of intercepted HTLC
-                    // TODO: Assert the offered fee derived from invoice amount and outgoing amount is acceptable or cancel processing of intercepted HTLC
-                    // TODO: Assert the HTLC expiry or cancel processing of intercepted HTLC
+                    // TODO: Assert short channel id matches the one we subscribed to, or cancel
+                    // processing of intercepted HTLC TODO: Assert the offered
+                    // fee derived from invoice amount and outgoing amount is acceptable or cancel
+                    // processing of intercepted HTLC TODO: Assert the HTLC
+                    // expiry or cancel processing of intercepted HTLC
 
                     let hash = match sha256::Hash::from_slice(&payment_hash) {
                         Ok(hash) => hash,
@@ -162,8 +164,10 @@ impl GatewayActor {
                                 .await
                             {
                                 error!("Failed to complete HTLC: {:?}", e);
-                                // Note: To prevent loss of funds for the gateway,
-                                // we should either retry completing the htlc or reclaim funds from the federation
+                                // Note: To prevent loss of funds for the
+                                // gateway,
+                                // we should either retry completing the htlc or
+                                // reclaim funds from the federation
                             };
                         }
                         Err(e) => {

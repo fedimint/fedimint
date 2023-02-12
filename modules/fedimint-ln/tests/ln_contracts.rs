@@ -226,7 +226,8 @@ async fn test_incoming() {
     let contract = Contract::Incoming(IncomingContract {
         hash, // TODO: check unknown hash
         encrypted_preimage: offer.encrypted_preimage,
-        decrypted_preimage: DecryptedPreimage::Pending, // TODO: check what happens if this is not pending
+        decrypted_preimage: DecryptedPreimage::Pending, /* TODO: check what happens if this is
+                                                         * not pending */
         gateway_key: gw_pk,
     });
     let incoming_output = LightningOutput::Contract(ContractOutput {

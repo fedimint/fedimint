@@ -1,7 +1,7 @@
 //! # Threshold Blind Signatures
 //!
-//! This library implements an ad-hoc threshold blind signature scheme based on BLS signatures using
-//! the (unrelated) BLS12-381 curve.
+//! This library implements an ad-hoc threshold blind signature scheme based on
+//! BLS signatures using the (unrelated) BLS12-381 curve.
 
 use std::hash::Hasher;
 
@@ -160,10 +160,12 @@ pub fn sign_blinded_msg(msg: BlindedMessage, sks: SecretKeyShare) -> BlindedSign
     BlindedSignatureShare(sig.to_affine())
 }
 
-/// Combines a sufficent amount of valid blinded signature shares to a blinded signature. The
-/// responsibility of verifying the supplied shares lies with the caller.
+/// Combines a sufficent amount of valid blinded signature shares to a blinded
+/// signature. The responsibility of verifying the supplied shares lies with the
+/// caller.
 ///
-/// * `sig_shares`: an iterator yielding pairs of key indices and signature shares from said key
+/// * `sig_shares`: an iterator yielding pairs of key indices and signature
+///   shares from said key
 /// * `threshold`: number of shares needed to combine a signature
 ///
 /// # Panics

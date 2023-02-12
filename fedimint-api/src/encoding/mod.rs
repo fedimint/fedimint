@@ -1,6 +1,6 @@
-//! This module defines a binary encoding interface which is more suitable for consensus critical
-//! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
-//! be migrated to this interface.
+//! This module defines a binary encoding interface which is more suitable for
+//! consensus critical encoding thant e.g. `bincode`. Over time all structs that
+//! need to be encoded to binary will be migrated to this interface.
 
 mod btc;
 mod secp256k1;
@@ -73,7 +73,8 @@ pub trait Encodable {
 
     /// Generate a SHA256 hash of the consensus encoding
     ///
-    /// Can be used to validate all federation members agree on state without revealing the object
+    /// Can be used to validate all federation members agree on state without
+    /// revealing the object
     fn consensus_hash(&self) -> anyhow::Result<sha256::Hash> {
         let mut engine = HashEngine::default();
         self.consensus_encode(&mut engine)?;
@@ -530,7 +531,8 @@ where
         self.inner.flush()
     }
 }
-/// Wrappers for `T` that are `De-Serializable`, while we need them in `Encodable` contex
+/// Wrappers for `T` that are `De-Serializable`, while we need them in
+/// `Encodable` contex
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct SerdeEncodable<T>(pub T);
 

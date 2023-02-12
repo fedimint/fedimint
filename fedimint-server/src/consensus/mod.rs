@@ -80,13 +80,15 @@ pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
-    /// Cached client config response to be returned with `Self::get_config_with_sig`
+    /// Cached client config response to be returned with
+    /// `Self::get_config_with_sig`
     client_cfg: ConfigResponse,
 
     pub module_inits: ModuleGenRegistry,
 
     pub modules: ServerModuleRegistry,
-    /// KV Database into which all state is persisted to recover from in case of a crash
+    /// KV Database into which all state is persisted to recover from in case of
+    /// a crash
     pub db: Database,
 
     /// For sending new transactions to consensus
@@ -124,7 +126,8 @@ impl FedimintConsensus {
             .collect()
     }
 
-    /// Returns a new consensus with a receiver for handling submitted transactions
+    /// Returns a new consensus with a receiver for handling submitted
+    /// transactions
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
@@ -280,12 +283,14 @@ impl FedimintConsensus {
 
     /// Calculate the result of the `consensus_outcome` and save it/them.
     ///
-    /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is coming from a
-    /// a reference (already signed) `OutcomeHistory`, that contains `rejected_txs`,
-    /// so we can check it against our own `rejected_txs` we calculate in this function.
+    /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is
+    /// coming from a a reference (already signed) `OutcomeHistory`, that
+    /// contains `rejected_txs`, so we can check it against our own
+    /// `rejected_txs` we calculate in this function.
     ///
-    /// **Note**: `reference_rejected_txs` **must** come from a validated/trustworthy
-    /// source and be correct, or it can cause a panic.
+    /// **Note**: `reference_rejected_txs` **must** come from a
+    /// validated/trustworthy source and be correct, or it can cause a
+    /// panic.
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     pub async fn process_consensus_outcome(
         &self,
@@ -350,7 +355,8 @@ impl FedimintConsensus {
         epoch_history
     }
 
-    /// Calls `begin_consensus_epoch` on all modules, dispatching their consensus items
+    /// Calls `begin_consensus_epoch` on all modules, dispatching their
+    /// consensus items
     async fn process_module_consensus_items(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -372,8 +378,9 @@ impl FedimintConsensus {
         }
     }
 
-    /// Applies all valid fedimint transactions to the database transaction `dbtx` and returns a set
-    /// of invalid transactions that were filtered out
+    /// Applies all valid fedimint transactions to the database transaction
+    /// `dbtx` and returns a set of invalid transactions that were filtered
+    /// out
     async fn process_transactions(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -429,8 +436,8 @@ impl FedimintConsensus {
         rejected_txs
     }
 
-    /// Saves the epoch history, calls `end_consensus_epoch` on all modules and bans misbehaving
-    /// peers
+    /// Saves the epoch history, calls `end_consensus_epoch` on all modules and
+    /// bans misbehaving peers
     async fn finalize_process_epoch(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -464,8 +471,8 @@ impl FedimintConsensus {
         epoch_history
     }
 
-    /// If the client config hash isn't already signed, aggregate signature shares from peers
-    /// dropping those that don't contribute.
+    /// If the client config hash isn't already signed, aggregate signature
+    /// shares from peers dropping those that don't contribute.
     async fn save_client_config_sig(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -669,7 +676,8 @@ impl FedimintConsensus {
             items.push(item);
         };
 
-        // Add a signature share for the client config hash if we don't have it signed yet
+        // Add a signature share for the client config hash if we don't have it signed
+        // yet
         let client = self.get_config_with_sig(&mut dbtx).await;
         if client.client_hash_signature.is_none() {
             let maybe_client_hash = client.client.consensus_hash(&self.module_inits);
@@ -807,7 +815,8 @@ impl FedimintConsensus {
             .cloned()
             .into_group_map_by(|input| input.module_instance_id());
 
-        // TODO: should probably run in parallel, but currently only the mint does anything at all
+        // TODO: should probably run in parallel, but currently only the mint does
+        // anything at all
         let caches = module_inputs
             .into_iter()
             .map(|(module_key, inputs)| {

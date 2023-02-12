@@ -12,9 +12,10 @@ use crate::{Amount, Tiered};
 
 /// Represents notes of different denominations.
 ///
-/// **Attention:** care has to be taken when constructing this to avoid overflow when calculating
-/// the total amount represented. As it is prudent to limit both the maximum note amount and maximum
-/// note count per transaction this shouldn't be a problem in practice though.
+/// **Attention:** care has to be taken when constructing this to avoid overflow
+/// when calculating the total amount represented. As it is prudent to limit
+/// both the maximum note amount and maximum note count per transaction this
+/// shouldn't be a problem in practice though.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct TieredMulti<T>(BTreeMap<Amount, Vec<T>>);
 
@@ -99,10 +100,11 @@ impl<T> TieredMulti<T> {
     /// Returns an iterator over every `(Amount, &T)`
     ///
     /// Note: The order of the elements is important:
-    /// from the lowest tier to the highest, then in order of elements in the Vec
+    /// from the lowest tier to the highest, then in order of elements in the
+    /// Vec
     pub fn iter_items(&self) -> impl Iterator<Item = (Amount, &T)> + DoubleEndedIterator {
-        // Note: If you change the method implementation, make sure that the returned order of the
-        // elements stays consistent.
+        // Note: If you change the method implementation, make sure that the returned
+        // order of the elements stays consistent.
         self.0
             .iter()
             .flat_map(|(amt, notes)| notes.iter().map(move |c| (*amt, c)))
@@ -111,10 +113,11 @@ impl<T> TieredMulti<T> {
     /// Returns an consuming iterator over every `(Amount, T)`
     ///
     /// Note: The order of the elements is important:
-    /// from the lowest tier to the highest, then in order of elements in the Vec
+    /// from the lowest tier to the highest, then in order of elements in the
+    /// Vec
     pub fn into_iter_items(self) -> impl Iterator<Item = (Amount, T)> + DoubleEndedIterator {
-        // Note: If you change the method implementation, make sure that the returned order of the
-        // elements stays consistent.
+        // Note: If you change the method implementation, make sure that the returned
+        // order of the elements stays consistent.
         self.0
             .into_iter()
             .flat_map(|(amt, notes)| notes.into_iter().map(move |c| (amt, c)))
@@ -125,7 +128,8 @@ impl<T> TieredMulti<T> {
         self.0.values().map(|notes| notes.len()).max().unwrap_or(0)
     }
 
-    /// Verifies that all keys in `self` are present in the keys of the given parameter `Tiered`
+    /// Verifies that all keys in `self` are present in the keys of the given
+    /// parameter `Tiered`
     pub fn all_tiers_exist_in<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
         match self.0.keys().find(|&amt| keys.get(*amt).is_none()) {
             Some(amt) => Err(InvalidAmountTierError(*amt)),
@@ -138,7 +142,8 @@ impl<T> TieredMulti<T> {
         self.0.get(&amt)
     }
 
-    // TODO: Get rid of it. It might be used to break useful invariants (like making sure there are no empty `Vec`s after removal)
+    // TODO: Get rid of it. It might be used to break useful invariants (like making
+    // sure there are no empty `Vec`s after removal)
     pub fn get_mut(&mut self, amt: Amount) -> Option<&mut Vec<T>> {
         self.0.get_mut(&amt)
     }
@@ -148,9 +153,9 @@ impl<C> TieredMulti<C>
 where
     C: Clone,
 {
-    /// Select notes with total amount of *at least* `amount`. If more than requested amount of notes
-    /// are returned it was because exact change couldn't be made, and the next smallest amount will be
-    /// returned.
+    /// Select notes with total amount of *at least* `amount`. If more than
+    /// requested amount of notes are returned it was because exact change
+    /// couldn't be made, and the next smallest amount will be returned.
     ///
     /// The caller can request change from the federation.
     // TODO: move somewhere else?
@@ -182,8 +187,9 @@ where
 impl TieredMulti<()> {
     /// Determines the denominations to use when representing an amount
     ///
-    /// Algorithm tries to leave the user with a target number of `denomination_sets` starting
-    /// at the lowest denomination.  `self` gives the denominations that the user already has.
+    /// Algorithm tries to leave the user with a target number of
+    /// `denomination_sets` starting at the lowest denomination.  `self`
+    /// gives the denominations that the user already has.
     pub fn represent_amount<K, V>(
         amount: Amount,
         current_denominations: &TieredMulti<V>,
@@ -291,8 +297,9 @@ where
 }
 
 impl<'a, I, C> TieredMultiZip<'a, I, C> {
-    /// Creates a new MultiZip Iterator from `Notes` iterators. These have to be checked for
-    /// structural equality! There also has to be at least one iterator in the `iter` vector.
+    /// Creates a new MultiZip Iterator from `Notes` iterators. These have to be
+    /// checked for structural equality! There also has to be at least one
+    /// iterator in the `iter` vector.
     pub fn new(iters: Vec<I>) -> Self {
         assert!(!iters.is_empty());
 

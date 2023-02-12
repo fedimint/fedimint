@@ -29,7 +29,8 @@ struct Cli {
 enum Command {
     /// Print the latest git commit hash this bin. was build with
     VersionHash,
-    /// Creates a connection cert string that must be shared with all other peers
+    /// Creates a connection cert string that must be shared with all other
+    /// peers
     CreateCert {
         /// Directory to output all the generated config files
         #[arg(long = "out-dir", env = "FM_DATA_DIR")]
@@ -51,7 +52,8 @@ enum Command {
         #[arg(env = "FM_PASSWORD")]
         password: Option<String>,
     },
-    /// All peers must run distributed key gen at the same time to create configs
+    /// All peers must run distributed key gen at the same time to create
+    /// configs
     Run {
         /// Directory to output all the generated config files
         #[arg(long = "out-dir")]
@@ -69,7 +71,8 @@ enum Command {
         #[arg(long = "federation-name", default_value = "Hals_trusty_mint")]
         federation_name: String,
 
-        /// Comma-separated list of connection certs from all peers (including ours)
+        /// Comma-separated list of connection certs from all peers (including
+        /// ours)
         #[arg(long = "certs", value_delimiter = ',')]
         certs: Vec<String>,
 
@@ -82,8 +85,8 @@ enum Command {
         #[arg(long = "network", default_value = "regtest")]
         network: bitcoin::network::constants::Network,
 
-        /// The number of confirmations a deposit transaction requires before accepted by the
-        /// federation
+        /// The number of confirmations a deposit transaction requires before
+        /// accepted by the federation
         #[arg(long = "finalty", default_value = "10")]
         finality_delay: u32,
 
@@ -99,7 +102,8 @@ enum Command {
         /// Plaintext config file output
         #[arg(long = "out-file")]
         out_file: PathBuf,
-        /// Encryption salt file, otherwise defaults to the salt file from the in_file directory
+        /// Encryption salt file, otherwise defaults to the salt file from the
+        /// in_file directory
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs, will prompt if not passed in
@@ -114,7 +118,8 @@ enum Command {
         /// Encrypted config file output
         #[arg(long = "out-file")]
         out_file: PathBuf,
-        /// Encryption salt file, otherwise defaults to the salt file from the out_file directory
+        /// Encryption salt file, otherwise defaults to the salt file from the
+        /// out_file directory
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs, will prompt if not passed in

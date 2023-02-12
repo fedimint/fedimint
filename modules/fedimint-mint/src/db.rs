@@ -89,7 +89,8 @@ impl_db_prefix_const!(
     key_prefix = OutputOutcomeKeyPrefix
 );
 
-/// Represents the amounts of issued (signed) and redeemed (verified) notes for auditing
+/// Represents the amounts of issued (signed) and redeemed (verified) notes for
+/// auditing
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub enum MintAuditItemKey {
     Issuance(OutPoint),

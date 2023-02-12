@@ -33,8 +33,9 @@ pub struct ClnExtensionOpts {
     pub listen: SocketAddr,
 }
 
-// Note: Once this binary is stable, we should be able to remove current 'ln_gateway'
-// Use CLN_PLUGIN_LOG=<log-level> to enable debug logging from within cln-plugin
+// Note: Once this binary is stable, we should be able to remove current
+// 'ln_gateway' Use CLN_PLUGIN_LOG=<log-level> to enable debug logging from
+// within cln-plugin
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let (service, listen) = ClnRpcService::new()
@@ -55,7 +56,8 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
+/// The core-lightning `htlc_accepted` event's `amount` field has a "msat"
+/// suffix
 fn as_fedimint_amount<'de, D>(amount: D) -> Result<Amount, D::Error>
 where
     D: Deserializer<'de>,
@@ -108,8 +110,9 @@ impl ClnRpcService {
         if let Some(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
                 "listen",
-                // Set an invalid default address in the extension to force the extension plugin user
-                // to supply a valid address via an environment variable or cln plugin config option.
+                // Set an invalid default address in the extension to force the extension plugin
+                // user to supply a valid address via an environment variable or
+                // cln plugin config option.
                 options::Value::String("default-dont-use".into()),
                 "gateway cln extension address",
             ))
@@ -298,7 +301,8 @@ impl GatewayLightning for ClnRpcService {
                 }
             };
 
-            // Send translated response to the HTLC interceptor for submission to the cln rpc
+            // Send translated response to the HTLC interceptor for submission to the cln
+            // rpc
             match outcome.send(htlca_res) {
                 Ok(_) => {
                     return Ok(tonic::Response::new(CompleteHtlcsResponse {}));
@@ -335,7 +339,8 @@ pub enum ClnExtensionError {
 // BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
 // 16399 error code reports unknown payment details.
 //
-// TODO: We should probably use a more specific error code based on htlc processing fail reason
+// TODO: We should probably use a more specific error code based on htlc
+// processing fail reason
 fn htlc_processing_failure() -> serde_json::Value {
     serde_json::json!({
         "result": "fail",
@@ -376,8 +381,8 @@ impl ClnHtlcInterceptor {
         if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
             let payment_hash = payload.htlc.payment_hash.to_vec();
 
-            // This has a chance of collission since payment_hashes are not guaranteed to be unique
-            // TODO: generate unique id for each intercepted HTLC
+            // This has a chance of collission since payment_hashes are not guaranteed to be
+            // unique TODO: generate unique id for each intercepted HTLC
             let intercepted_htlc_id = sha256::Hash::hash(&payment_hash);
 
             match subscription

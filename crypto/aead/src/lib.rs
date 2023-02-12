@@ -52,7 +52,8 @@ pub fn decrypt<'c>(ciphertext: &'c mut [u8], key: &LessSafeKey) -> Result<&'c [u
     Ok(&encrypted_bytes[..encrypted_bytes.len() - key.algorithm().tag_len()])
 }
 
-/// Write `data` encrypted to a `file` with a random `nonce` that will be encoded in the file
+/// Write `data` encrypted to a `file` with a random `nonce` that will be
+/// encoded in the file
 pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> Result<()> {
     let bytes = encrypt(data, key)?;
     fs::write(file.clone(), hex::encode(bytes))
@@ -68,21 +69,24 @@ pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Result<Vec<u8>> {
     Ok(decrypt(&mut bytes, key)?.to_vec())
 }
 
-/// Key used to encrypt and authenticate data stored on the filesystem with a user password.
+/// Key used to encrypt and authenticate data stored on the filesystem with a
+/// user password.
 ///
-/// We encrypt certain configs to prevent attackers from learning the private keys if they gain
-/// file access.  We authenticate the configs to prevent attackers from manipulating the
-/// encrypted files.
+/// We encrypt certain configs to prevent attackers from learning the private
+/// keys if they gain file access.  We authenticate the configs to prevent
+/// attackers from manipulating the encrypted files.
 ///
-/// Users can safely back-up config and salt files on other media the attacker accesses if they do
-/// not learn the password and the password has enough entropy to prevent brute-forcing (e.g.
-/// 6 random words).  Switching to a memory-hard algorithm like Argon2 would be more future-proof
-/// and safe for weaker passwords.
+/// Users can safely back-up config and salt files on other media the attacker
+/// accesses if they do not learn the password and the password has enough
+/// entropy to prevent brute-forcing (e.g. 6 random words).  Switching to a
+/// memory-hard algorithm like Argon2 would be more future-proof and safe for
+/// weaker passwords.
 ///
-/// We use the ChaCha20 stream cipher with Poly1305 message authentication standardized
-/// in IETF RFC 8439.  PBKDF2 with 1M iterations is used for key stretching along with a 128-bit
-/// salt that is randomly generated to discourage rainbow attacks.  HMAC-SHA256 is used for the
-/// authentication code.  All crypto is from the widely-used `ring` crate we also use for TLS.
+/// We use the ChaCha20 stream cipher with Poly1305 message authentication
+/// standardized in IETF RFC 8439.  PBKDF2 with 1M iterations is used for key
+/// stretching along with a 128-bit salt that is randomly generated to
+/// discourage rainbow attacks.  HMAC-SHA256 is used for the authentication
+/// code.  All crypto is from the widely-used `ring` crate we also use for TLS.
 pub fn get_key(password: Option<String>, salt_path: PathBuf) -> Result<LessSafeKey> {
     let password = match password {
         None => rpassword::prompt_password("Enter a password to encrypt configs: ").unwrap(),

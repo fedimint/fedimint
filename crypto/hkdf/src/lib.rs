@@ -1,4 +1,5 @@
-//! This crate implements the [RFC5869] hash based key derivation function using [`bitcoin_hashes`].
+//! This crate implements the [RFC5869] hash based key derivation function using
+//! [`bitcoin_hashes`].
 //!
 //! [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
 //! [`bitcoin_hashes`]: https://docs.rs/bitcoin_hashes/latest/bitcoin_hashes/
@@ -19,7 +20,8 @@ pub mod hashes {
     pub use bitcoin_hashes::siphash24::Hash as Siphash24;
 }
 
-/// Implements the [RFC5869] hash based key derivation function using the hash function `H`.
+/// Implements the [RFC5869] hash based key derivation function using the hash
+/// function `H`.
 ///
 /// [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
 #[derive(Clone)]
@@ -28,12 +30,14 @@ pub struct Hkdf<H: BitcoinHash> {
 }
 
 impl<H: BitcoinHash> Hkdf<H> {
-    /// Run HKDF-extract and keep the resulting pseudo random key as internal state
+    /// Run HKDF-extract and keep the resulting pseudo random key as internal
+    /// state
     ///
     /// ## Inputs
-    /// * `ikm`: Input keying material, secret key material our keys will be derived from
-    /// * `salt`: Optional salt value, if not required set to `&[0; H::LEN]`. As noted in the RFC
-    ///   the salt value can also be a secret.
+    /// * `ikm`: Input keying material, secret key material our keys will be
+    ///   derived from
+    /// * `salt`: Optional salt value, if not required set to `&[0; H::LEN]`. As
+    ///   noted in the RFC the salt value can also be a secret.
     pub fn new(ikm: &[u8], salt: Option<&[u8]>) -> Self {
         let mut engine = HmacEngine::new(salt.unwrap_or(&vec![0x00; H::LEN]));
         engine.input(ikm);
@@ -43,9 +47,10 @@ impl<H: BitcoinHash> Hkdf<H> {
         }
     }
 
-    /// Construct the HKDF from a pseudo random key that has the correct distribution and length
-    /// already (e.g. because it's the output of a previous HKDF round), skipping the HKDF-extract
-    /// step. **If in doubt, please use `Hkdf::new` instead!**
+    /// Construct the HKDF from a pseudo random key that has the correct
+    /// distribution and length already (e.g. because it's the output of a
+    /// previous HKDF round), skipping the HKDF-extract step. **If in doubt,
+    /// please use `Hkdf::new` instead!**
     ///
     /// See also [`Hkdf::derive_hmac`].
     pub fn from_prk(prk: Hmac<H>) -> Self {
@@ -55,9 +60,10 @@ impl<H: BitcoinHash> Hkdf<H> {
     /// Run HKDF-expand to generate new key material
     ///
     /// ## Inputs
-    /// * `info`: Defines which key to derive. Different values lead to different keys.
-    /// * `LEN`: Defines the length of the key material to generate in octets. Note that
-    ///   `LEN <= H::LEN * 255` has to be true.
+    /// * `info`: Defines which key to derive. Different values lead to
+    ///   different keys.
+    /// * `LEN`: Defines the length of the key material to generate in octets.
+    ///   Note that `LEN <= H::LEN * 255` has to be true.
     ///
     /// ## Panics
     /// If `LEN > H::LEN * 255`.

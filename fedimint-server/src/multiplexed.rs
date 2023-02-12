@@ -57,10 +57,11 @@ struct ModuleMultiplexerInner<MuxKey, Msg> {
     out_of_order: Mutex<ModuleMultiplexerOutOfOrder<MuxKey, Msg>>,
 }
 
-/// A wrapper around `AnyPeerConnections` multiplexing communication between multiple modules over it
+/// A wrapper around `AnyPeerConnections` multiplexing communication between
+/// multiple modules over it
 ///
-/// This works by addressing each module when sending, and handling buffering messages received
-/// out of order until they are requested.
+/// This works by addressing each module when sending, and handling buffering
+/// messages received out of order until they are requested.
 ///
 /// This type is thread-safe and can be cheaply cloned.
 #[derive(Clone)]

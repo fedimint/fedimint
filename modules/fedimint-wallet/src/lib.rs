@@ -113,7 +113,8 @@ impl std::fmt::Display for WalletConsensusItem {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RoundConsensusItem {
-    pub block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
+    pub block_height: u32, /* FIXME: use block hash instead, but needs more complicated
+                            * verification logic */
     pub fee_rate: Feerate,
     pub randomness: [u8; 32],
 }
@@ -169,7 +170,8 @@ impl Serialize for PendingTransaction {
     }
 }
 
-/// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`
+/// A PSBT that is awaiting enough signatures from the federation to becoming a
+/// `PendingTransaction`
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UnsignedTransaction {
     pub psbt: PartiallySignedTransaction,
@@ -220,7 +222,8 @@ pub struct PegOut {
     pub fees: PegOutFees,
 }
 
-/// Contains the Bitcoin transaction id of the transaction created by the withdraw request
+/// Contains the Bitcoin transaction id of the transaction created by the
+/// withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletOutputOutcome(pub bitcoin::Txid);
 
@@ -518,8 +521,8 @@ impl ServerModule for Wallet {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
-        // In case the wallet just got created the height is not committed to the DB yet but will
-        // be set to 0 first, so we can assume that here.
+        // In case the wallet just got created the height is not committed to the DB yet
+        // but will be set to 0 first, so we can assume that here.
         let last_consensus_height = self.consensus_height(dbtx).await.unwrap_or(0);
 
         let proposed_height = if our_target_height >= last_consensus_height {
@@ -560,7 +563,8 @@ impl ServerModule for Wallet {
             .collect::<Vec<WalletConsensusItem>>()
             .await;
 
-        // We force new epochs only if height changed, or we have peg-outs (more than just round_ci item)
+        // We force new epochs only if height changed, or we have peg-outs (more than
+        // just round_ci item)
         if last_consensus_height < proposed_height || 1 < items.len() {
             ConsensusProposal::Trigger(items)
         } else {
@@ -575,8 +579,9 @@ impl ServerModule for Wallet {
     ) {
         trace!(?consensus_items, "Received consensus proposals");
 
-        // Separate round consensus items from signatures for peg-out tx. While signatures can be
-        // processed separately, all round consensus items need to be available at once.
+        // Separate round consensus items from signatures for peg-out tx. While
+        // signatures can be processed separately, all round consensus items
+        // need to be available at once.
         let UnzipWalletConsensusItem {
             peg_out_signature: peg_out_signatures,
             round_consensus,
@@ -834,9 +839,10 @@ impl ServerModule for Wallet {
 
             match self.finalize_peg_out_psbt(&mut psbt, change) {
                 Ok(pending_tx) => {
-                    // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
-                    // extracted tx for periodic transmission and to accept the change into our wallet
-                    // eventually once it confirms.
+                    // We were able to finalize the transaction, so we will delete the PSBT and
+                    // instead keep the extracted tx for periodic transmission
+                    // and to accept the change into our wallet eventually once
+                    // it confirms.
                     dbtx.insert_new_entry(&PendingTransactionKey(key.0), &pending_tx)
                         .await
                         .expect("DB Error");
@@ -1088,9 +1094,10 @@ impl Wallet {
         psbt: &mut PartiallySignedTransaction,
         change: Amount,
     ) -> Result<PendingTransaction, ProcessPegOutSigError> {
-        // We need to save the change output's tweak key to be able to access the funds later on.
-        // The tweak is extracted here because the psbt is moved next and not available anymore
-        // when the tweak is actually needed in the end to be put into the batch on success.
+        // We need to save the change output's tweak key to be able to access the funds
+        // later on. The tweak is extracted here because the psbt is moved next
+        // and not available anymore when the tweak is actually needed in the
+        // end to be put into the batch on success.
         let change_tweak: [u8; 32] = psbt
             .outputs
             .iter()
@@ -1264,8 +1271,8 @@ impl Wallet {
         }
     }
 
-    /// Add a change UTXO to our spendable UTXO database after it was included in a block that we
-    /// got consensus on.
+    /// Add a change UTXO to our spendable UTXO database after it was included
+    /// in a block that we got consensus on.
     async fn recognize_change_utxo<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -1375,9 +1382,11 @@ impl<'a> StatelessWallet<'a> {
     ) -> Option<UnsignedTransaction> {
         // When building a transaction we need to take care of two things:
         //  * We need enough input amount to fund all outputs
-        //  * We need to keep an eye on the tx weight so we can factor the fees into out calculation
-        // We then go on to calculate the base size of the transaction `total_weight` and the
-        // maximum weight per added input which we will add every time we select an input.
+        //  * We need to keep an eye on the tx weight so we can factor the fees into out
+        //    calculation
+        // We then go on to calculate the base size of the transaction `total_weight`
+        // and the maximum weight per added input which we will add every time
+        // we select an input.
         let change_script = self.derive_script(change_tweak);
         let out_weight = (destination.len() * 4 + 1 + 32
             // Add change script weight, it's very likely to be needed if not we just overpay in fees
@@ -1416,7 +1425,8 @@ impl<'a> StatelessWallet<'a> {
             }
         }
 
-        // We always pay ourselves change back to ensure that we don't lose anything due to dust
+        // We always pay ourselves change back to ensure that we don't lose anything due
+        // to dust
         let change = total_selected_value - fees - peg_out_amount;
         let output: Vec<TxOut> = vec![
             TxOut {
@@ -1459,7 +1469,8 @@ impl<'a> StatelessWallet<'a> {
         };
         info!(txid = %transaction.txid(), "Creating peg-out tx");
 
-        // FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization
+        // FIXME: use custom data structure that guarantees more invariants and only
+        // convert to PSBT for finalization
         let psbt = PartiallySignedTransaction {
             unsigned_tx: transaction,
             version: 0,
@@ -1546,7 +1557,8 @@ impl<'a> StatelessWallet<'a> {
 
                 self.secret_key
                     .add_tweak(&Scalar::from_be_bytes(tweak).expect("can't fail"))
-                    .expect("Tweaking priv key failed") // TODO: why could this happen?
+                    .expect("Tweaking priv key failed") // TODO: why could this
+                                                        // happen?
             };
 
             let tx_hash = tx_hasher

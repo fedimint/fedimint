@@ -13,7 +13,8 @@ use crate::KIND;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
-    /// Contains all configuration that will be encrypted such as private key material
+    /// Contains all configuration that will be encrypted such as private key
+    /// material
     pub private: LightningConfigPrivate,
     /// Contains all configuration that needs to be the same for every server
     pub consensus: LightningConfigConsensus,

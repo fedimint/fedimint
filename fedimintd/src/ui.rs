@@ -265,8 +265,8 @@ pub struct ParamsForm {
     guardians_count: u32,
     /// Which bitcoin network the federation is using
     network: Network,
-    /// The number of confirmations a deposit transaction requires before accepted by the
-    /// federation
+    /// The number of confirmations a deposit transaction requires before
+    /// accepted by the federation
     block_confirmations: u32,
 }
 

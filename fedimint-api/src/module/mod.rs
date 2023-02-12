@@ -36,7 +36,8 @@ pub struct InputMeta {
 
 /// Information about the amount represented by an input or output.
 ///
-/// * For **inputs** the amount is funding the transaction while the fee is consuming funding
+/// * For **inputs** the amount is funding the transaction while the fee is
+///   consuming funding
 /// * For **outputs** the amount and the fee consume funding
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct TransactionItemAmount {
@@ -153,9 +154,10 @@ type HandlerFn<M> = Box<
 
 /// Definition of an API endpoint defined by a module `M`.
 pub struct ApiEndpoint<M> {
-    /// Path under which the API endpoint can be reached. It should start with a `/`
-    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module/module_instance_id/transaction`
-    /// depending on the module name returned by `[FedertionModule::api_base_name]`.
+    /// Path under which the API endpoint can be reached. It should start with a
+    /// `/` e.g. `/transaction`. E.g. this API endpoint would be reachable
+    /// under `/module/module_instance_id/transaction` depending on the
+    /// module name returned by `[FedertionModule::api_base_name]`.
     pub path: &'static str,
     /// Handler for the API call that takes the following arguments:
     ///   * Reference to the module which defined it
@@ -230,11 +232,13 @@ pub enum ModuleError {
     Other(#[from] anyhow::Error),
 }
 
-/// Extension trait with a function to map `Result`s used by modules to `ModuleError`
+/// Extension trait with a function to map `Result`s used by modules to
+/// `ModuleError`
 ///
-/// Currently each module defined it's own `enum XyzError { ... }` and is not using
-/// `anyhow::Error`. For `?` to work seamlessly two conversion would have to be made:
-/// `enum-Error -> anyhow::Error -> enum-Error`, while `Into`/`From` can only do one.
+/// Currently each module defined it's own `enum XyzError { ... }` and is not
+/// using `anyhow::Error`. For `?` to work seamlessly two conversion would have
+/// to be made: `enum-Error -> anyhow::Error -> enum-Error`, while `Into`/`From`
+/// can only do one.
 ///
 /// To avoid the boilerplate, this trait defines an easy conversion method.
 pub trait IntoModuleError {
@@ -260,7 +264,8 @@ where
 /// - config generation
 /// - config validation
 ///
-/// Once the module configuration is ready, the module can be instantiated via `[Self::init]`.
+/// Once the module configuration is ready, the module can be instantiated via
+/// `[Self::init]`.
 #[async_trait]
 pub trait IModuleGen: Debug {
     fn decoder(&self) -> DynDecoder;
@@ -336,9 +341,9 @@ pub struct CoreConsensusVersion(pub u32);
 /// upgrade path, similar to a blockchain hard-fork consensus upgrade.
 ///
 /// As of time of writting this comment there are no plans to support any kind
-/// of "soft-forks" which mean a consensus minor version. As the set of federation
-/// member's is closed and limited, it is always preferable to synchronize
-/// upgrade and avoid cross-version incompatibilities.
+/// of "soft-forks" which mean a consensus minor version. As the set of
+/// federation member's is closed and limited, it is always preferable to
+/// synchronize upgrade and avoid cross-version incompatibilities.
 ///
 /// For many modules it might be preferable to implement a new [`ModuleKind`]
 /// "versions" (to be implemented at the time of writting this comment), and
@@ -348,32 +353,39 @@ pub struct CoreConsensusVersion(pub u32);
 #[derive(Debug, Copy, Clone)]
 pub struct ModuleConsensusVersion(pub u32);
 
-/// Api version supported by a core server or a client/server module at a given [`ModuleConsensusVersion`]
+/// Api version supported by a core server or a client/server module at a given
+/// [`ModuleConsensusVersion`]
 ///
 /// Changing [`ModuleConsensusVersion`] implies resetting the api versioning.
 ///
 /// For a client and server to be able to communicate with each other:
 ///
-/// * The client needs API version support for the [`ModuleConsensusVersion`] that the server is currently
-///   running with.
-/// * Within that [`ModuleConsensusVersion`] during handshake negotation process client and server must find
-///   at least one `Api::major` version where client's `minor` is lower or equal server's `major` version.
+/// * The client needs API version support for the [`ModuleConsensusVersion`]
+///   that the server is currently running with.
+/// * Within that [`ModuleConsensusVersion`] during handshake negotation process
+///   client and server must find at least one `Api::major` version where
+///   client's `minor` is lower or equal server's `major` version.
 ///
-/// A practical module implementation needs to implement large range of version backward compatibility
-/// on both client and server side to accomodate end user client devices receiving updates at a
-/// pace hard to control, and technical and coordination challanges of upgrading servers.
+/// A practical module implementation needs to implement large range of version
+/// backward compatibility on both client and server side to accomodate end user
+/// client devices receiving updates at a pace hard to control, and technical
+/// and coordination challanges of upgrading servers.
 #[derive(Debug, Copy, Clone)]
 pub struct ApiVersion {
     /// Major API version
     ///
-    /// Each time [`ModuleConsensusVersion`] is incremented, this number (and `minor` number as well) should be reset to `0`.
+    /// Each time [`ModuleConsensusVersion`] is incremented, this number (and
+    /// `minor` number as well) should be reset to `0`.
     ///
-    /// Should be incremented each time the API was changed in a backward-incompatible ways (while resetting `minor` to `0`).
+    /// Should be incremented each time the API was changed in a
+    /// backward-incompatible ways (while resetting `minor` to `0`).
     pub major: u32,
     /// Minor API version
     ///
-    /// * For clients this means *minimum* supported minor version of the `major` version required by client implementation
-    /// * For servers this means *maximum* supported minor version of the `major` version implemented by the server implementation
+    /// * For clients this means *minimum* supported minor version of the
+    ///   `major` version required by client implementation
+    /// * For servers this means *maximum* supported minor version of the
+    ///   `major` version implemented by the server implementation
     pub minor: u32,
 }
 
@@ -381,8 +393,8 @@ pub struct ApiVersion {
 ///
 /// Needs to be implemented by module generation type
 ///
-/// For examples, take a look at one of the `MintConfigGenerator`, `WalletConfigGenerator`, or
-/// `LightningConfigGenerator` structs.
+/// For examples, take a look at one of the `MintConfigGenerator`,
+/// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[async_trait]
 pub trait ModuleGen: Debug + Sized {
     const KIND: ModuleKind;
@@ -391,14 +403,16 @@ pub trait ModuleGen: Debug + Sized {
 
     fn decoder(&self) -> Self::Decoder;
 
-    /// Version of the module consensus supported by this implementation given a certain
-    /// [`CoreConsensusVersion`].
+    /// Version of the module consensus supported by this implementation given a
+    /// certain [`CoreConsensusVersion`].
     ///
-    /// Refer to [`ModuleConsensusVersion`] for more information about versioning.
+    /// Refer to [`ModuleConsensusVersion`] for more information about
+    /// versioning.
     ///
-    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can potentially
-    /// implement multiple versions of the consensus, and depending on the config module instance
-    /// config, instantiate the desired one. This method should expose all the available
+    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can
+    /// potentially implement multiple versions of the consensus, and
+    /// depending on the config module instance config, instantiate the
+    /// desired one. This method should expose all the available
     /// versions, purely for information, setup UI and sanity checking purposes.
     fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
 
@@ -536,7 +550,8 @@ impl<CI> ConsensusProposal<CI> {
         ConsensusProposal::Contribute(vec![])
     }
 
-    /// Trigger new epoch if contains any elements, otherwise contribute nothing.
+    /// Trigger new epoch if contains any elements, otherwise contribute
+    /// nothing.
     pub fn new_auto_trigger(ci: Vec<CI>) -> Self {
         if ci.is_empty() {
             Self::Contribute(vec![])
@@ -588,13 +603,15 @@ pub trait ServerModule: Debug + Sized {
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
-        // Note: All modules should define kinds as &'static str, so this doesn't allocate
+        // Note: All modules should define kinds as &'static str, so this doesn't
+        // allocate
         Self::Gen::KIND
     }
 
     fn decoder(&self) -> Self::Decoder;
 
-    /// Module consensus version this module is running with and the API versions it supports in it
+    /// Module consensus version this module is running with and the API
+    /// versions it supports in it
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
     /// Blocks until a new `consensus_proposal` is available.
@@ -606,29 +623,32 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> ConsensusProposal<<Self::Decoder as Decoder>::ConsensusItem>;
 
-    /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The database transaction will be
-    /// committed to the database after all other modules ran `begin_consensus_epoch`,
-    /// so the results are available when processing transactions.
+    /// This function is called once before transaction processing starts. All
+    /// module consensus items of this round are supplied as
+    /// `consensus_items`. The database transaction will be committed to the
+    /// database after all other modules ran `begin_consensus_epoch`, so the
+    /// results are available when processing transactions.
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, <Self::Decoder as Decoder>::ConsensusItem)>,
     );
 
-    /// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
+    /// Some modules may have slow to verify inputs that would block transaction
+    /// processing. If the slow part of verification can be modeled as a
+    /// pure function not involving any system state we can build a lookup
+    /// table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
     fn build_verification_cache<'a>(
         &'a self,
         inputs: impl Iterator<Item = &'a <Self::Decoder as Decoder>::Input> + Send,
     ) -> Self::VerificationCache;
 
-    /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    /// Validate a transaction input before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     async fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
@@ -637,13 +657,14 @@ pub trait ServerModule: Debug + Sized {
         input: &'a <Self::Decoder as Decoder>::Input,
     ) -> Result<InputMeta, ModuleError>;
 
-    /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
-    /// the operation will take no effect.
+    /// Try to spend a transaction input. On success all necessary updates will
+    /// be part of the database transaction. On failure (e.g. double spend)
+    /// the database transaction is rolled back and the operation will take
+    /// no effect.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
@@ -652,26 +673,29 @@ pub trait ServerModule: Debug + Sized {
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
-    /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    /// Validate a transaction output before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
         output: &<Self::Decoder as Decoder>::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
-    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
-    /// database transaction is rolled back and the operation will take no effect.
+    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
+    /// all necessary updates to the database will be part of the database
+    /// transaction. On failure (e.g. double spend) the database transaction
+    /// is rolled back and the operation will take no effect.
     ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
+    /// note issuance) and can be used to retrieve its outcome later using
+    /// `output_status`.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
@@ -679,40 +703,45 @@ pub trait ServerModule: Debug + Sized {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
-    /// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
+    /// This function is called once all transactions have been processed and
+    /// changes were written to the database. This allows running
+    /// finalization code before the next epoch.
     ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
+    /// Passes in the `consensus_peers` that contributed to this epoch and
+    /// returns a list of peers to drop if any are misbehaving.
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId>;
 
-    /// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
+    /// Retrieve the current status of the output. Depending on the module this
+    /// might contain data needed by the client to access funds or give an
+    /// estimate of when funds will be available. Returns `None` if the
+    /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<<Self::Decoder as Decoder>::OutputOutcome>;
 
-    /// Queries the database and returns all assets and liabilities of the module.
+    /// Queries the database and returns all assets and liabilities of the
+    /// module.
     ///
-    /// Summing over all modules, if liabilities > assets then an error has occurred in the database
-    /// and consensus should halt.
+    /// Summing over all modules, if liabilities > assets then an error has
+    /// occurred in the database and consensus should halt.
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
 
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
+    /// Returns a list of custom API endpoints defined by the module. These are
+    /// made available both to users as well as to other modules. They thus
+    /// should be deterministic, only dependant on their input and the
+    /// current epoch.
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>>;
 }
 
-/// Creates a struct that can be used to make our module-decodable structs interact with
-/// `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper that holds the data as serialized
+/// Creates a struct that can be used to make our module-decodable structs
+/// interact with `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper
+/// that holds the data as serialized
 // bytes internally.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SerdeModuleEncoding<T: Encodable + Decodable>(Vec<u8>, #[serde(skip)] PhantomData<T>);

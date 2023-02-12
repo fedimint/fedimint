@@ -1,4 +1,5 @@
-//! Adapter that implements a message based protocol on top of a stream based one
+//! Adapter that implements a message based protocol on top of a stream based
+//! one
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::{Read, Write};
@@ -18,7 +19,8 @@ use crate::logging::LOG_NET_PEER;
 /// Owned [`FramedTransport`] trait object
 pub type AnyFramedTransport<M> = Box<dyn FramedTransport<M> + Send + Unpin + 'static>;
 
-/// A bidirectional framed transport adapter that can be split into its read and write half
+/// A bidirectional framed transport adapter that can be split into its read and
+/// write half
 pub trait FramedTransport<T>:
     Sink<T, Error = anyhow::Error> + Stream<Item = Result<T, anyhow::Error>>
 {
@@ -39,7 +41,8 @@ pub trait FramedTransport<T>:
     }
 }
 
-/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based [`BidiFramed`] instances
+/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based
+/// [`BidiFramed`] instances
 pub type TcpBidiFramed<T> = BidiFramed<T, OwnedWriteHalf, OwnedReadHalf>;
 
 /// Sink (sending) half of [`BidiFramed`]
@@ -49,9 +52,10 @@ pub type FramedStream<S, T> = FramedRead<S, BincodeCodec<T>>;
 
 /// Framed transport codec for streams
 ///
-/// Wraps a stream `S` and allows sending packetized data of type `T` over it. Data items are
-/// encoded using [`bincode`] and the bytes are sent over the stream prepended with a length field.
-/// `BidiFramed` implements `Sink<T>` and `Stream<Item=Result<T, _>>`.
+/// Wraps a stream `S` and allows sending packetized data of type `T` over it.
+/// Data items are encoded using [`bincode`] and the bytes are sent over the
+/// stream prepended with a length field. `BidiFramed` implements `Sink<T>` and
+/// `Stream<Item=Result<T, _>>`.
 #[derive(Debug)]
 pub struct BidiFramed<T, WH, RH> {
     sink: FramedSink<WH, T>,
@@ -72,7 +76,8 @@ where
 {
     /// Builds a new `BidiFramed` codec around a stream `stream`.
     ///
-    /// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case the stream is a tokio TCP stream.
+    /// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case
+    /// the stream is a tokio TCP stream.
     pub fn new<S>(stream: S) -> BidiFramed<T, WriteHalf<S>, ReadHalf<S>>
     where
         S: AsyncRead + AsyncWrite,
@@ -86,8 +91,9 @@ where
 
     /// Splits the codec in its sending and receiving parts
     ///
-    /// This can be useful in cases where potentially simultaneous read and write operations are
-    /// required. Otherwise a we would need a mutex to guard access.
+    /// This can be useful in cases where potentially simultaneous read and
+    /// write operations are required. Otherwise a we would need a mutex to
+    /// guard access.
     pub fn borrow_parts(&mut self) -> (&mut FramedSink<WH, T>, &mut FramedStream<RH, T>) {
         (&mut self.sink, &mut self.stream)
     }
@@ -99,8 +105,9 @@ where
 {
     /// Special constructor for tokio TCP connections.
     ///
-    /// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient method of splitting the
-    /// stream into a read and a write half this constructor takes advantage of.
+    /// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient
+    /// method of splitting the stream into a read and a write half this
+    /// constructor takes advantage of.
     pub fn new_from_tcp(stream: tokio::net::TcpStream) -> TcpBidiFramed<T> {
         let (read, write) = stream.into_split();
         BidiFramed {
@@ -194,7 +201,8 @@ where
             e
         })?;
 
-        // Lastly we update the length field by counting how many bytes have been written
+        // Lastly we update the length field by counting how many bytes have been
+        // written
         let new_len = dst.len();
         let encoded_len = new_len - old_len - 8;
         dst[old_len..old_len + 8].copy_from_slice(&encoded_len.to_le_bytes()[..]);

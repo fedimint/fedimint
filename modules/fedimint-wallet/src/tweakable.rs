@@ -9,7 +9,8 @@ pub trait Contract {
     fn encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()>;
 }
 
-/// A key or object containing keys that may be tweaked for pay-to-contract constructions
+/// A key or object containing keys that may be tweaked for pay-to-contract
+/// constructions
 pub trait Tweakable {
     /// Tweak the key with a `tweak` contract
     fn tweak<Ctx: Verification, Ctr: Contract>(&self, tweak: &Ctr, secp: &Secp256k1<Ctx>) -> Self;

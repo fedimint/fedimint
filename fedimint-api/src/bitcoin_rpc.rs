@@ -2,10 +2,12 @@ use std::ffi::OsStr;
 
 use url::Url;
 
-/// Name of the env value used for passing bitcoind rpc url to modules that need it
+/// Name of the env value used for passing bitcoind rpc url to modules that need
+/// it
 pub const FM_BITCOIND_RPC_ENV: &str = "FM_BITCOIND_RPC";
 
-/// Name of the env value used for passing electrum rpc url to modules that need it
+/// Name of the env value used for passing electrum rpc url to modules that need
+/// it
 pub const FM_ELECTRUM_RPC_ENV: &str = "FM_ELECTRUM_RPC";
 
 /// Default url that will be used if [`FM_BITCOIND_RPC_ENV`] is not set
@@ -24,7 +26,8 @@ pub enum BitcoinRpcBackendType {
     Electrum,
 }
 
-/// Get the value of url the module would use by reading it from process environemnt
+/// Get the value of url the module would use by reading it from process
+/// environemnt
 ///
 /// Should be used in test code only to mimick prod code behavior
 pub fn read_bitcoin_backend_from_global_env() -> anyhow::Result<BitcoindRpcBackend> {

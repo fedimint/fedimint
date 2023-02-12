@@ -29,9 +29,13 @@ pub mod legacy {
     use secp256k1_zkp::{schnorr, XOnlyPublicKey};
     use serde::{Deserialize, Serialize};
 
-    /// An atomic value transfer operation within the Fedimint system and consensus
+    /// An atomic value transfer operation within the Fedimint system and
+    /// consensus
     ///
-    /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
+    /// The mint enforces that the total value of the outputs equals the total
+    /// value of the inputs, to prevent creating funds out of thin air. In some
+    /// cases, the value of the inputs and outputs can both be 0 e.g. when
+    /// creating an offer to a Lightning Gateway.
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     pub struct Transaction {
         /// [`Input`]s consumed by the transaction
@@ -44,10 +48,13 @@ pub mod legacy {
 
     /// An Input consumed by a Transaction is defined within a Fedimint Module.
     ///
-    /// The user must be able to produce an aggregate Schnorr signature for the transaction over all the inputs.
+    /// The user must be able to produce an aggregate Schnorr signature for the
+    /// transaction over all the inputs.
     ///
     /// Each input has an associated secret/public key pair.
-    /// Inputs can not have keys if the transaction value is 0. This is useful for non-monetary transactions to announce information to the mint like incoming LN contract offers.
+    /// Inputs can not have keys if the transaction value is 0. This is useful
+    /// for non-monetary transactions to announce information to the mint like
+    /// incoming LN contract offers.
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
         // TODO: maybe treat every note as a seperate input?
@@ -69,7 +76,8 @@ pub mod legacy {
         /// Hash of the transaction (excluding the signature).
         ///
         /// Transaction signature commits to this hash.
-        /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+        /// To generate it without already having a signature use
+        /// [`Self::tx_hash_from_parts`].
         pub fn tx_hash(&self) -> TransactionId {
             Self::tx_hash_from_parts(&self.inputs, &self.outputs)
         }
@@ -114,9 +122,9 @@ pub mod legacy {
         ) -> Result<(), TransactionError> {
             let keys = keys.collect::<Vec<_>>();
 
-            // If there are no keys from inputs there are no inputs to protect from re-binding. This
-            // behavior is useful for non-monetary transactions that just announce something, like LN
-            // incoming contract offers.
+            // If there are no keys from inputs there are no inputs to protect from
+            // re-binding. This behavior is useful for non-monetary transactions
+            // that just announce something, like LN incoming contract offers.
             if keys.is_empty() {
                 return Ok(());
             }
@@ -274,7 +282,8 @@ impl TransactionBuilder {
     }
 
     /// Builds and signs the final transaction with exact change amounts
-    /// WARNING - could result in an unbalanced tx that will be rejected by the federation
+    /// WARNING - could result in an unbalanced tx that will be rejected by the
+    /// federation
     pub async fn build_with_change<R: RngCore + CryptoRng>(
         mut self,
         change_module: MintClient,

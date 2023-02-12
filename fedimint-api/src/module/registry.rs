@@ -42,7 +42,8 @@ impl<M> ModuleRegistry<M> {
         self.0.get(&id)
     }
 
-    /// Return the module data belonging to the module identified by the supplied `module_id`
+    /// Return the module data belonging to the module identified by the
+    /// supplied `module_id`
     ///
     /// # Panics
     /// If the module isn't in the registry
@@ -70,5 +71,6 @@ impl ServerModuleRegistry {
     }
 }
 
-/// Collection of decoders belonging to modules, typically obtained from a `ModuleRegistry`
+/// Collection of decoders belonging to modules, typically obtained from a
+/// `ModuleRegistry`
 pub type ModuleDecoderRegistry = ModuleRegistry<DynDecoder>;

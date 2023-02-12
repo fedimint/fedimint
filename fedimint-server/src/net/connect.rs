@@ -1,4 +1,5 @@
-//! Provides an abstract network connection interface and multiple implementations
+//! Provides an abstract network connection interface and multiple
+//! implementations
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -35,8 +36,8 @@ pub type ConnectionListener<M> =
 
 /// Allows to connect to peers and to listen for incoming connections
 ///
-/// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted
-/// for production deployments.
+/// Connections are message based ([`FramedTransport`]) and should be
+/// authenticated and encrypted for production deployments.
 #[async_trait]
 pub trait Connector<M> {
     /// Connect to a `destination`
@@ -45,7 +46,8 @@ pub trait Connector<M> {
     /// Listen for incoming connections on `bind_addr`
     async fn listen(&self, bind_addr: SocketAddr) -> Result<ConnectionListener<M>, anyhow::Error>;
 
-    /// Transform this concrete `Connector` into an owned trait object version of itself
+    /// Transform this concrete `Connector` into an owned trait object version
+    /// of itself
     fn into_dyn(self) -> AnyConnector<M>
     where
         Self: Sized + Send + Sync + Unpin + 'static,
@@ -60,7 +62,8 @@ pub struct TlsTcpConnector {
     our_certificate: rustls::Certificate,
     our_private_key: rustls::PrivateKey,
     peer_certs: Arc<PeerCertStore>,
-    /// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls` understands
+    /// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls`
+    /// understands
     cert_store: RootCertStore,
     peer_names: HashMap<PeerId, String>,
 }
@@ -473,7 +476,8 @@ mod tests {
 
     #[tokio::test]
     async fn connect_success() {
-        // FIXME: don't actually bind here, probably requires yet another Box<dyn Trait> layer :(
+        // FIXME: don't actually bind here, probably requires yet another Box<dyn Trait>
+        // layer :(
         let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
         let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
         let connectors = gen_connector_config(5)

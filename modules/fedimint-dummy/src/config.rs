@@ -12,9 +12,11 @@ use crate::KIND;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DummyConfig {
-    /// Contains all configuration that will be encrypted such as private key material
+    /// Contains all configuration that will be encrypted such as private key
+    /// material
     pub private: DummyConfigPrivate,
-    /// Contains all configuration that needs to be the same for every federation member
+    /// Contains all configuration that needs to be the same for every
+    /// federation member
     pub consensus: DummyConfigConsensus,
 }
 

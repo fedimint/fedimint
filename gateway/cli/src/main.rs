@@ -50,7 +50,8 @@ pub enum Commands {
     /// Deposit funds into a gateway federation
     Deposit {
         federation_id: FederationId,
-        /// The TxOutProof which was created from sending BTC to the pegin-address
+        /// The TxOutProof which was created from sending BTC to the
+        /// pegin-address
         #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
         #[clap(value_parser = from_hex::<Transaction>)]
