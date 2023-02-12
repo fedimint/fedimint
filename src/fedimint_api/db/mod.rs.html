@@ -1516,8 +1516,6 @@
 <a href="#1516" id="1516">1516</a>
 <a href="#1517" id="1517">1517</a>
 <a href="#1518" id="1518">1518</a>
-<a href="#1519" id="1519">1519</a>
-<a href="#1520" id="1520">1520</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -1570,7 +1568,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IDatabase: Debug + Send + Sync {
-    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>&gt;;
+    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt;;
 }
 
 <span class="attr">#[derive(Clone, Debug)]
@@ -1953,13 +1951,13 @@
 
 <span class="attr">#[doc = <span class="string">&quot; A handle to a type-erased database implementation&quot;</span>]
 </span><span class="kw">pub struct </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
-    tx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>&gt;,
+    tx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
     decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; std::ops::Deref <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">type </span>Target = <span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>;
+    <span class="kw">type </span>Target = <span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
         <span class="kw-2">&amp;*</span><span class="self">self</span>.tx
@@ -1986,7 +1984,7 @@
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;parent</span>&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt; {
     <span class="kw">pub fn </span>new(
-        dbtx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt; + Send + <span class="lifetime">&#39;parent</span>&gt;,
+        dbtx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt;&gt;,
         decoders: ModuleDecoderRegistry,
     ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt; {
         DatabaseTransaction {
@@ -2976,9 +2974,7 @@
 
         <span class="attr">#[async_trait]
         </span><span class="kw">impl </span>IDatabase <span class="kw">for </span>FakeDatabase {
-            <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(
-                <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-            ) -&gt; Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send + <span class="lifetime">&#39;a</span>&gt; {
+            <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
                 Box::new(FakeTransaction(PhantomData))
             }
         }
