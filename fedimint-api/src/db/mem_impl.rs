@@ -61,7 +61,7 @@ impl MemDatabase {
 
 #[async_trait]
 impl IDatabase for MemDatabase {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
         let db_copy = self.data.lock().unwrap().clone();
         let mut memtx = MemTransaction {
             operations: Vec::new(),

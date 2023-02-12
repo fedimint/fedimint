@@ -50,7 +50,7 @@ pub type PrefixStream<'a> = Pin<Box<dyn Stream<Item = (Vec<u8>, Vec<u8>)> + Send
 
 #[async_trait]
 pub trait IDatabase: Debug + Send + Sync {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a>;
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>>;
 }
 
 #[derive(Clone, Debug)]
@@ -433,13 +433,13 @@ impl<'isolated, 'parent, T: Send + Encodable + 'isolated> IDatabaseTransaction<'
 
 #[doc = " A handle to a type-erased database implementation"]
 pub struct DatabaseTransaction<'a> {
-    tx: Box<dyn IDatabaseTransaction<'a> + Send + 'a>,
+    tx: Box<dyn IDatabaseTransaction<'a>>,
     decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
 }
 
 impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
-    type Target = dyn IDatabaseTransaction<'a> + Send + 'a;
+    type Target = dyn IDatabaseTransaction<'a>;
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.tx
@@ -466,7 +466,7 @@ fn decode_value<V: DatabaseValue>(
 
 impl<'parent> DatabaseTransaction<'parent> {
     pub fn new(
-        dbtx: Box<dyn IDatabaseTransaction<'parent> + Send + 'parent>,
+        dbtx: Box<dyn IDatabaseTransaction<'parent>>,
         decoders: ModuleDecoderRegistry,
     ) -> DatabaseTransaction<'parent> {
         DatabaseTransaction {
@@ -1456,9 +1456,7 @@ mod tests {
 
         #[async_trait]
         impl IDatabase for FakeDatabase {
-            async fn begin_transaction<'a>(
-                &'a self,
-            ) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
+            async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
                 Box::new(FakeTransaction(PhantomData))
             }
         }

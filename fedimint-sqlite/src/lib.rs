@@ -53,7 +53,7 @@ impl SqliteDb {
 
 #[async_trait]
 impl IDatabase for SqliteDb {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
         let mut tx = SqliteDbTransaction(self.0.begin().await.unwrap());
         tx.set_tx_savepoint().await;
         Box::new(tx)
