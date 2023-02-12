@@ -11,9 +11,9 @@ use fedimint_api::{
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_rocksdb::RocksDbReadOnly;
+use fedimint_server::config::io::{read_server_configs, SALT_FILE};
 use fedimint_server::{config::ServerConfig, db as ConsensusRange};
 use fedimint_wallet::WalletGen;
-use fedimintd::SALT_FILE;
 use futures::StreamExt;
 use mint_client::db as ClientRange;
 use mint_client::ln::db as ClientLightningRange;
@@ -80,7 +80,7 @@ impl<'a> DatabaseDump<'a> {
 
         let salt_path = cfg_dir.join(SALT_FILE);
         let key = aead::get_key(password, salt_path).unwrap();
-        let cfg = fedimintd::read_server_configs(&key, cfg_dir).unwrap();
+        let cfg = read_server_configs(&key, cfg_dir).unwrap();
         let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
         let dbtx = DatabaseTransaction::new(Box::new(read_only), decoders);
 

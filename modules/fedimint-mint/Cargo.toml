@@ -11,6 +11,10 @@ license = "MIT"
 name = "fedimint_mint"
 path = "src/lib.rs"
 
+[features]
+# FIXME: Currently required because the client depends on the server modules
+server = ["fedimint-server"]
+
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1"
@@ -33,6 +37,7 @@ thiserror = "1.0.37"
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 tracing ="0.1.37"
 impl-tools = "0.6.1"
+fedimint-server = { path = "../../fedimint-server", optional = true  }
 
 [dev-dependencies]
 rand = "0.8"

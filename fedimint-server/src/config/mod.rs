@@ -7,9 +7,9 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, DkgRunner,
-    FederationId, JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
-    ThresholdKeys, TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
+    JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
@@ -25,6 +25,7 @@ use tokio_rustls::rustls;
 use tracing::{error, info};
 use url::Url;
 
+use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
 use crate::fedimint_api::encoding::Encodable;
 use crate::fedimint_api::BitcoinHash;
 use crate::fedimint_api::NumPeers;
@@ -33,6 +34,9 @@ use crate::net::connect::TlsConfig;
 use crate::net::connect::{parse_host_port, Connector};
 use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
+
+pub mod distributedgen;
+pub mod io;
 
 /// The maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;

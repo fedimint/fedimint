@@ -12,6 +12,10 @@ license = "MIT"
 name = "fedimint_ln"
 path = "src/lib.rs"
 
+[features]
+# FIXME: Currently required because the client depends on the server modules
+server = ["fedimint-server"]
+
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1"
@@ -34,6 +38,7 @@ tracing = "0.1.37"
 rand = "0.8"
 url = { version = "2.3.1", features = ["serde"] }
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
+fedimint-server = { path = "../../fedimint-server", optional = true  }
 
 [dev-dependencies]
 tokio = {version = "1.25.0", features = [ "full" ] }
