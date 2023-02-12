@@ -84,7 +84,7 @@ pub trait TypedApiEndpoint {
 
     async fn handle<'a, 'b>(
         state: &'a Self::State,
-        dbtx: &'a mut fedimint_api::db::DatabaseTransaction<'b>,
+        dbtx: &'a mut fedimint_core::db::DatabaseTransaction<'b>,
         params: Self::Param,
     ) -> Result<Self::Response, ApiError>;
 }
@@ -97,7 +97,7 @@ pub mod __reexports {
 /// # Example
 ///
 /// ```rust
-/// # use fedimint_api::module::{api_endpoint, ApiEndpoint};
+/// # use crate::module::{api_endpoint, ApiEndpoint};
 /// struct State;
 ///
 /// let _: ApiEndpoint<State> = api_endpoint! {
@@ -124,7 +124,7 @@ macro_rules! __api_endpoint {
 
             async fn handle<'a, 'b>(
                 $state: &'a Self::State,
-                $dbtx: &'a mut fedimint_api::db::DatabaseTransaction<'b>,
+                $dbtx: &'a mut fedimint_core::db::DatabaseTransaction<'b>,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
@@ -136,15 +136,15 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
-use fedimint_api::config::ModuleConfigResponse;
 
 use self::registry::ModuleDecoderRegistry;
+use crate::config::ModuleConfigResponse;
 
 type HandlerFnReturn<'a> = BoxFuture<'a, Result<serde_json::Value, ApiError>>;
 type HandlerFn<M> = Box<
     dyn for<'a> Fn(
             &'a M,
-            fedimint_api::db::DatabaseTransaction<'a>,
+            fedimint_core::db::DatabaseTransaction<'a>,
             serde_json::Value,
             Option<ModuleInstanceId>,
         ) -> HandlerFnReturn<'a>
@@ -182,7 +182,7 @@ impl ApiEndpoint<()> {
         )]
         async fn handle_request<'a, 'b, E>(
             state: &'a E::State,
-            dbtx: &mut fedimint_api::db::DatabaseTransaction<'b>,
+            dbtx: &mut fedimint_core::db::DatabaseTransaction<'b>,
             param: E::Param,
         ) -> Result<E::Response, ApiError>
         where
@@ -215,7 +215,7 @@ impl ApiEndpoint<()> {
 
                     dbtx.commit_tx()
                         .await
-                        .map_err(|_err| fedimint_api::module::ApiError {
+                        .map_err(|_err| fedimint_core::module::ApiError {
                             code: 500,
                             message: "Internal Server Error".to_string(),
                         })?;
@@ -749,7 +749,7 @@ pub struct SerdeModuleEncoding<T: Encodable + Decodable>(Vec<u8>, #[serde(skip)]
 impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding<T> {
     fn from(value: &T) -> Self {
         let mut bytes = vec![];
-        fedimint_api::encoding::Encodable::consensus_encode(value, &mut bytes)
+        fedimint_core::encoding::Encodable::consensus_encode(value, &mut bytes)
             .expect("Writing to buffer can never fail");
         Self(bytes, PhantomData)
     }

@@ -7,8 +7,8 @@ use anyhow::{bail, format_err, Context};
 use bitcoin::consensus::Encodable;
 use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
-use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_api::module::__reexports::serde_json::Value;
+use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
+use fedimint_core::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
 use tracing::warn;
@@ -122,7 +122,7 @@ where
     T: ::bitcoincore_rpc::RpcApi + Debug + Send + Sync,
 {
     async fn get_network(&self) -> Result<Network> {
-        let network = fedimint_api::task::block_in_place(|| {
+        let network = fedimint_core::task::block_in_place(|| {
             self.0.get_blockchain_info().map_err(anyhow::Error::from)
         })?;
         Ok(match network.chain.as_str() {
@@ -135,7 +135,7 @@ where
     }
 
     async fn get_block_height(&self) -> Result<u64> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             self.0
                 .get_block_count()
                 .map_err(anyhow::Error::from)
@@ -144,7 +144,7 @@ where
     }
 
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             bitcoincore_rpc::RpcApi::get_block_hash(&self.0, height)
                 .map_err(anyhow::Error::from)
                 .map_err(Into::into)
@@ -152,7 +152,7 @@ where
     }
 
     async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             bitcoincore_rpc::RpcApi::get_block(&self.0, hash)
                 .map_err(anyhow::Error::from)
                 .map_err(Into::into)
@@ -160,7 +160,7 @@ where
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
-        Ok(fedimint_api::task::block_in_place(|| {
+        Ok(fedimint_core::task::block_in_place(|| {
             self.0
                 .estimate_smart_fee(confirmation_target, Some(EstimateMode::Conservative))
                 .map_err(anyhow::Error::from)
@@ -173,7 +173,7 @@ where
     }
 
     async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
-        fedimint_api::task::block_in_place(|| match self.0.send_raw_transaction(&transaction) {
+        fedimint_core::task::block_in_place(|| match self.0.send_raw_transaction(&transaction) {
             // for our purposes, this is not an error
             Err(::bitcoincore_rpc::Error::JsonRpc(JsonError::Rpc(RpcError {
                 code: RPC_VERIFY_ALREADY_IN_CHAIN,
@@ -206,7 +206,7 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_network(&self) -> Result<Network> {
-        let resp = fedimint_api::task::block_in_place(|| {
+        let resp = fedimint_core::task::block_in_place(|| {
             self.0.server_features().map_err(anyhow::Error::from)
         })?;
         Ok(match resp.genesis_hash.to_hex().as_str() {
@@ -223,13 +223,13 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_block_height(&self) -> Result<u64> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             Ok(self.0.block_headers_subscribe_raw()?.height as u64)
         })
     }
 
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             Ok(self
                 .0
                 .block_headers(height as usize, 1)?
@@ -245,7 +245,7 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             Ok(Some(Feerate {
                 sats_per_kvb: (self.0.estimate_fee(confirmation_target as usize)? * 100_000_000f64)
                     .ceil() as u64,
@@ -254,7 +254,7 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             let mut bytes = vec![];
             transaction
                 .consensus_encode(&mut bytes)
@@ -273,7 +273,7 @@ impl IBitcoindRpc for ElectrumClient {
             bail!("Electrum backend does not contain the block at {height}H yet");
         }
 
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             let txid = transaction.txid();
 
             let output = transaction

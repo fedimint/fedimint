@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
-use fedimint_api::{
+use fedimint_core::{
     core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT},
     msats, Amount, OutPoint, PeerId, Tiered, TieredMulti,
 };

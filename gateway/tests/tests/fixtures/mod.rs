@@ -1,7 +1,7 @@
 use anyhow::Result;
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::module::DynModuleGen;
-use fedimint_api::task::TaskGroup;
+use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::module::DynModuleGen;
+use fedimint_core::task::TaskGroup;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_testing::{

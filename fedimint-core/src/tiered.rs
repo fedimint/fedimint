@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 
-use fedimint_api::Amount;
 use serde::{Deserialize, Serialize};
 use tbs::{PublicKeyShare, SecretKeyShare};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
+use crate::Amount;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 pub struct InvalidAmountTierError(pub Amount);
@@ -130,9 +130,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fedimint_api::Amount;
-
     use super::Tiered;
+    use crate::Amount;
 
     #[test]
     fn tier_generation_including_max_amount() {

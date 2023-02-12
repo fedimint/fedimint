@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use aead::{encrypted_read, encrypted_write, get_key};
 use clap::{Parser, Subcommand};
-use fedimint_api::task::TaskGroup;
-use fedimint_api::Amount;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::Amount;
 use fedimint_server::config::io::{
     create_cert, encrypted_json_write, run_dkg, write_nonprivate_configs, PRIVATE_CONFIG,
     SALT_FILE, TLS_PK,

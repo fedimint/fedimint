@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use fedimint_api::core::ModuleInstanceId;
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::ApiError;
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::module::interconnect::ModuleInterconect;
+use fedimint_core::module::ApiError;
 use serde_json::Value;
 
 use crate::consensus::FedimintConsensus;

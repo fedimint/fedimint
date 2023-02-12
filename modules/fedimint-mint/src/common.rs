@@ -2,10 +2,10 @@ use std::fmt::Debug;
 use std::io;
 
 use bitcoin_hashes::sha256;
-use fedimint_api::core::Decoder;
-use fedimint_api::encoding::DecodeError;
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_core::core::Decoder;
+use fedimint_core::encoding::DecodeError;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,7 @@ use crate::{MintConsensusItem, MintInput, MintOutput, MintOutputOutcome};
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
     pub id: secp256k1::XOnlyPublicKey,
-    #[serde(with = "fedimint_api::hex::serde")]
+    #[serde(with = "fedimint_core::hex::serde")]
     pub payload: Vec<u8>,
     pub timestamp: std::time::SystemTime,
 }

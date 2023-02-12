@@ -718,7 +718,7 @@ where
 #[macro_export]
 macro_rules! impl_db_prefix_const {
     (key = $key:ty, value = $val:ty, prefix = $prefix:expr $(, key_prefix = $prefix_ty:ty)* $(,)?) => {
-        impl fedimint_api::db::DatabaseKeyPrefixConst for $key {
+        impl fedimint_core::db::DatabaseKeyPrefixConst for $key {
             const DB_PREFIX: u8 = $prefix as u8;
             type Key = Self;
             type Value = $val;

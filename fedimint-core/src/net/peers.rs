@@ -2,11 +2,11 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::cancellable::Cancellable;
+use crate::PeerId;
 
 #[cfg(not(target_family = "wasm"))]
 pub mod fake;

@@ -8,21 +8,21 @@ use std::sync::Arc;
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
-use fedimint_api::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
-use fedimint_api::db::Database;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::module::DynModuleGen;
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::load_from_file;
+use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::core::{
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
+use fedimint_core::db::Database;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::DynModuleGen;
 use fedimint_core::query::EventuallyConsistent;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_mint::common::MintDecoder;
 use fedimint_mint::MintGen;
 use mint_client::mint::SpendableNote;

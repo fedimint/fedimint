@@ -2,14 +2,15 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::net::peers::{IPeerConnections, PeerConnections};
-use fedimint_api::task::TaskHandle;
-use fedimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::sleep;
+
+use crate::cancellable::{Cancellable, Cancelled};
+use crate::net::peers::{IPeerConnections, PeerConnections};
+use crate::task::TaskHandle;
+use crate::PeerId;
 
 struct FakePeerConnections<Msg> {
     tx: Sender<Msg>,

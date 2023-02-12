@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use fedimint_api::Amount;
+use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 
 pub mod fixtures;

@@ -1,12 +1,12 @@
 pub mod legacy {
-    use fedimint_api::core::{
+    use fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
+    use fedimint_core::core::{
         Decoder, DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN,
         LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
-    use fedimint_api::encoding::{Decodable, Encodable};
-    use fedimint_api::ServerModule;
-    use fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
+    use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::CoreError;
+    use fedimint_core::ServerModule;
     use fedimint_ln::contracts::incoming::OfferId;
     use fedimint_ln::contracts::{
         AccountContractOutcome, ContractOutcome, DecryptedPreimage, OutgoingContractOutcome,
@@ -23,8 +23,8 @@ pub mod legacy {
         LN(<<Lightning as ServerModule>::Decoder as Decoder>::OutputOutcome),
     }
 
-    impl From<fedimint_api::core::DynOutputOutcome> for OutputOutcome {
-        fn from(oo: fedimint_api::core::DynOutputOutcome) -> Self {
+    impl From<fedimint_core::core::DynOutputOutcome> for OutputOutcome {
+        fn from(oo: fedimint_core::core::DynOutputOutcome) -> Self {
             match oo.module_instance_id() {
                 LEGACY_HARDCODED_INSTANCE_ID_LN => OutputOutcome::LN(
                     oo.as_any()

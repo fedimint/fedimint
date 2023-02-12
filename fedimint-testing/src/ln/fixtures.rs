@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_api::Amount;
+use fedimint_core::Amount;
 use fedimint_ln::route_hints::RouteHint;
 use futures::stream;
 use lightning::ln::PaymentSecret;

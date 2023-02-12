@@ -7,16 +7,17 @@
 use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
-use fedimint_api::{
-    db::DatabaseTransaction,
-    module::{audit::Audit, interconnect::ModuleInterconect},
-    OutPoint, PeerId,
-};
 
 use super::*;
 use crate::module::{
     ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, ModuleConsensusVersion, ModuleError,
     ServerModule, TransactionItemAmount,
+};
+use crate::{
+    db::DatabaseTransaction,
+    dyn_newtype_define,
+    module::{audit::Audit, interconnect::ModuleInterconect},
+    OutPoint, PeerId,
 };
 
 pub trait IVerificationCache: Debug {
@@ -422,7 +423,7 @@ where
                 path,
                 handler: Box::new(
                     move |module: &DynServerModule,
-                          dbtx: fedimint_api::db::DatabaseTransaction<'_>,
+                          dbtx: fedimint_core::db::DatabaseTransaction<'_>,
                           value: serde_json::Value,
                           module_instance_id: Option<ModuleInstanceId>| {
                         let typed_module = module

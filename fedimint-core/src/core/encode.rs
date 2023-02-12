@@ -1,9 +1,8 @@
 use std::io;
 
-use fedimint_api::encoding::{Decodable, DecodeError};
-
 use super::ModuleInstanceId;
 use crate::core::DynDecoder;
+use crate::encoding::{Decodable, DecodeError};
 use crate::module::registry::ModuleDecoderRegistry;
 
 pub fn module_decode_key_prefixed_decodable<T, F, R>(

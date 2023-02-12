@@ -3,9 +3,9 @@ use std::io::Error;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::OutPoint;
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::OutPoint;
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
@@ -13,7 +13,7 @@ use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, Identif
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContractOffer {
     /// Amount for which the user is willing to sell the preimage
-    pub amount: fedimint_api::Amount,
+    pub amount: fedimint_core::Amount,
     pub hash: bitcoin_hashes::sha256::Hash,
     pub encrypted_preimage: EncryptedPreimage,
     pub expiry_time: Option<u64>,

@@ -5,16 +5,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use fedimint_api::config::ConfigResponse;
-use fedimint_api::core::ModuleInstanceId;
-use fedimint_api::server::DynServerModule;
-use fedimint_api::{
+use fedimint_core::config::ConfigResponse;
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::epoch::SerdeEpochHistory;
+use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::server::DynServerModule;
+use fedimint_core::{
     module::{api_endpoint, ApiEndpoint, ApiError},
     task::TaskHandle,
     TransactionId,
 };
-use fedimint_core::epoch::SerdeEpochHistory;
-use fedimint_core::outcome::TransactionStatus;
 use futures::FutureExt;
 use jsonrpsee::{
     server::ServerBuilder,

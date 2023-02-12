@@ -24,9 +24,9 @@ use std::{
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
-use fedimint_api::{task::TaskGroup, Amount, TransactionId};
+use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::{config::FederationId, module::registry::ModuleDecoderRegistry};
+use fedimint_core::{task::TaskGroup, Amount, TransactionId};
 use fedimint_server::api::WsClientConnectInfo;
 use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::ln::route_hints::RouteHint;
@@ -443,7 +443,7 @@ impl LnGateway {
                 }
             }
 
-            fedimint_api::task::sleep_until(least_wait_until).await;
+            fedimint_core::task::sleep_until(least_wait_until).await;
         }
         Ok(())
     }

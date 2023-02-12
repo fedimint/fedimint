@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::anyhow;
 use bitcoin::Address;
-use fedimint_api::{
+use fedimint_core::{
     config::{FederationId, ModuleGenRegistry},
     module::registry::ModuleDecoderRegistry,
     task::TaskGroup,
@@ -396,7 +396,7 @@ impl Gateway {
                 }
             }
 
-            fedimint_api::task::sleep_until(least_wait_until).await;
+            fedimint_core::task::sleep_until(least_wait_until).await;
         }
         Ok(())
     }

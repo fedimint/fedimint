@@ -7,7 +7,7 @@ use cln_plugin::{anyhow, options, Builder, Error, Plugin};
 use cln_rpc::model::{ListchannelsRequest, ListpeersPeersChannelsState, ListpeersRequest};
 use cln_rpc::primitives::ShortChannelId;
 use cln_rpc::{model, Request, Response};
-use fedimint_api::Amount;
+use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::ln::route_hints::{RouteHint, RouteHintHop};

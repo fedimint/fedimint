@@ -5,25 +5,25 @@ use std::fmt;
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use common::DummyDecoder;
-use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::{
+use fedimint_core::cancellable::Cancellable;
+use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
-use fedimint_api::core::{ModuleInstanceId, ModuleKind};
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::module::audit::Audit;
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{
+use fedimint_core::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::module::audit::Audit;
+use fedimint_core::module::interconnect::ModuleInterconect;
+use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
-use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::server::DynServerModule;
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
+use fedimint_core::net::peers::MuxPeerConnections;
+use fedimint_core::server::DynServerModule;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

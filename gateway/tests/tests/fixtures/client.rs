@@ -3,14 +3,14 @@ use std::{collections::BTreeSet, path::PathBuf};
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::{
+use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
+use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::{
     config::{ClientConfig, FederationId},
     core::LEGACY_HARDCODED_INSTANCE_ID_LN,
     module::registry::ModuleDecoderRegistry,
     PeerId,
 };
-use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
 use ln_gateway::{
     client::{DynDbFactory, IGatewayClientBuilder},
     LnGatewayError,

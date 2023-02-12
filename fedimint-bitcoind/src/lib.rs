@@ -7,7 +7,7 @@ use anyhow::bail;
 pub use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
-use fedimint_api::{
+use fedimint_core::{
     bitcoin_rpc::BitcoinRpcBackendType, dyn_newtype_define, task::TaskHandle, Feerate,
 };
 use tracing::info;

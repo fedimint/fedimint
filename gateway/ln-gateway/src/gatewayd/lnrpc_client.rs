@@ -2,7 +2,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fedimint_api::dyn_newtype_define;
+use fedimint_core::dyn_newtype_define;
 use futures::stream::BoxStream;
 use mint_client::modules::ln::route_hints::RouteHint;
 use tonic::{

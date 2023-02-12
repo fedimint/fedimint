@@ -5,17 +5,20 @@ use std::time::Duration;
 use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::{
+use fedimint_core::cancellable::{Cancellable, Cancelled};
+pub use fedimint_core::config::*;
+use fedimint_core::config::{
     ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
     JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
-use fedimint_api::task::{timeout, Elapsed, TaskGroup};
-use fedimint_api::PeerId;
-pub use fedimint_core::config::*;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::encoding::Encodable;
+use fedimint_core::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
+use fedimint_core::task::{timeout, Elapsed, TaskGroup};
+use fedimint_core::BitcoinHash;
+use fedimint_core::NumPeers;
+use fedimint_core::PeerId;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
@@ -26,9 +29,6 @@ use tracing::{error, info};
 use url::Url;
 
 use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
-use crate::fedimint_api::encoding::Encodable;
-use crate::fedimint_api::BitcoinHash;
-use crate::fedimint_api::NumPeers;
 use crate::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use crate::net::connect::TlsConfig;
 use crate::net::connect::{parse_host_port, Connector};

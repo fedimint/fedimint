@@ -1,7 +1,7 @@
 use bitcoin::Network;
-use fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
-use fedimint_api::module::DynModuleGen;
-use fedimint_api::{Amount, Tiered};
+use fedimint_core::config::{ConfigGenParams, ModuleGenRegistry};
+use fedimint_core::module::DynModuleGen;
+use fedimint_core::{Amount, Tiered};
 use fedimint_ln::LightningGen;
 use fedimint_mint::{MintGen, MintGenParams};
 use fedimint_wallet::{WalletGen, WalletGenParams};

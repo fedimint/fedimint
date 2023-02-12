@@ -32,7 +32,6 @@ futures = "0.3.24"
 itertools = "0.10.5"
 jsonrpsee = { version = "0.16.2", features = ["server"] }
 mint-client = { path = "../client/client-lib" }
-fedimint-api = { path = "../fedimint-api" }
 fedimint-core = { path = "../fedimint-core" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-server = { path = "../fedimint-server" }

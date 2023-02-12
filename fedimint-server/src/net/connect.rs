@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use anyhow::format_err;
 use async_trait::async_trait;
-use fedimint_api::PeerId;
+use fedimint_core::PeerId;
 use futures::Stream;
 use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
@@ -250,7 +250,7 @@ pub mod mock {
     use std::time::Duration;
 
     use anyhow::Error;
-    use fedimint_api::PeerId;
+    use fedimint_core::PeerId;
     use futures::{FutureExt, SinkExt, Stream, StreamExt};
     use tokio::io::{
         AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
@@ -438,7 +438,7 @@ pub mod mock {
 mod tests {
     use std::net::SocketAddr;
 
-    use fedimint_api::PeerId;
+    use fedimint_core::PeerId;
     use futures::{SinkExt, StreamExt};
     use url::Url;
 

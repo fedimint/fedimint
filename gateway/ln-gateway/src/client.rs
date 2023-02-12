@@ -6,9 +6,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use fedimint_api::config::{FederationId, ModuleGenRegistry};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::{
+use fedimint_core::config::{FederationId, ModuleGenRegistry};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::{
     db::{mem_impl::MemDatabase, Database},
     dyn_newtype_define,
 };

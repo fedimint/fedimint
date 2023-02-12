@@ -22,27 +22,27 @@ use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::{
+use fedimint_core::cancellable::{Cancellable, Cancelled};
+use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
-use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::audit::Audit;
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{
+use fedimint_core::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::audit::Audit;
+use fedimint_core::module::interconnect::ModuleInterconect;
+use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
-use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::server::DynServerModule;
-use fedimint_api::task::TaskGroup;
-use fedimint_api::time::SystemTime;
-use fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
-use fedimint_api::{OutPoint, ServerModule};
+use fedimint_core::net::peers::MuxPeerConnections;
+use fedimint_core::server::DynServerModule;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::time::SystemTime;
+use fedimint_core::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
+use fedimint_core::{OutPoint, ServerModule};
 #[cfg(feature = "server")]
 use fedimint_server::config::distributedgen::DkgRunner;
 use futures::StreamExt;
@@ -182,13 +182,13 @@ impl std::fmt::Display for LightningOutput {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractOutput {
-    pub amount: fedimint_api::Amount,
+    pub amount: fedimint_core::Amount,
     pub contract: contracts::Contract,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize, Clone)]
 pub struct ContractAccount {
-    pub amount: fedimint_api::Amount,
+    pub amount: fedimint_core::Amount,
     pub contract: contracts::FundedContract,
 }
 
@@ -1103,7 +1103,7 @@ impl Lightning {
 }
 
 plugin_types_trait_impl!(
-    fedimint_api::core::MODULE_KEY_LN,
+    fedimint_core::core::MODULE_KEY_LN,
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,
@@ -1130,7 +1130,7 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
 // TODO: upstream serde support to LDK
 /// Hack to get a route hint that implements serde traits.
 pub mod route_hints {
-    use fedimint_api::encoding::{Decodable, Encodable};
+    use fedimint_core::encoding::{Decodable, Encodable};
     use secp256k1::PublicKey;
     use serde::{Deserialize, Serialize};
 

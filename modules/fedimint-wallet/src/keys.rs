@@ -4,7 +4,7 @@ use std::str::FromStr;
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::PublicKey;
-use fedimint_api::encoding::Encodable;
+use fedimint_core::encoding::Encodable;
 use miniscript::{MiniscriptKey, ToPublicKey};
 use serde::{Deserialize, Serialize};
 

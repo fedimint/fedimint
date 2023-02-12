@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use serde::{Deserialize, Serialize};
 
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::tiered::InvalidAmountTierError;
 use crate::{Amount, Tiered};
@@ -346,8 +346,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use fedimint_api::Amount;
-
+    use crate::Amount;
     use crate::{Tiered, TieredMulti};
 
     #[test]

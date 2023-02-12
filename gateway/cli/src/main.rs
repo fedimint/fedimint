@@ -2,7 +2,7 @@ use std::{net::SocketAddr, path::PathBuf};
 
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_api::config::FederationId;
+use fedimint_core::config::FederationId;
 use ln_gateway::{
     config::GatewayConfig,
     rpc::{

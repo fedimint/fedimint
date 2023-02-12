@@ -3,16 +3,16 @@ pub mod fake;
 use async_trait::async_trait;
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
-use fedimint_api::NumPeers;
 use fedimint_core::api::FederationApiExt;
 use fedimint_core::api::{
     erased_multi_param, erased_no_param, erased_single_param, FederationResult, IFederationApi,
 };
+use fedimint_core::core::{
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_core::query::{EventuallyConsistent, Retry404, UnionResponsesSingle};
+use fedimint_core::NumPeers;
 use fedimint_mint::db::ECashUserBackupSnapshot;
 
 use crate::modules::ln::contracts::incoming::IncomingContractOffer;

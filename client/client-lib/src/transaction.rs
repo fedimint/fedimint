@@ -1,10 +1,10 @@
 use bitcoin::KeyPair;
-use fedimint_api::config::ClientConfig;
-use fedimint_api::core::client::ClientModule;
-use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::Amount;
+use fedimint_core::config::ClientConfig;
+use fedimint_core::core::client::ClientModule;
+use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::Amount;
 use rand::{CryptoRng, RngCore};
 use secp256k1::Secp256k1;
 
@@ -17,15 +17,15 @@ use crate::{module_decode_stubs, Client, DecryptedPreimage, MintClient, MintOutp
 /// Old transaction definition used by old client.
 pub mod legacy {
     use bitcoin_hashes::Hash;
-    use fedimint_api::core::DynInput;
-    use fedimint_api::core::DynOutput;
-    use fedimint_api::core::{
+    use fedimint_core::core::DynInput;
+    use fedimint_core::core::DynOutput;
+    use fedimint_core::core::{
         Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
-    use fedimint_api::encoding::{Decodable, Encodable};
-    use fedimint_api::{ServerModule, TransactionId};
+    use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::transaction::{agg_keys, TransactionError};
+    use fedimint_core::{ServerModule, TransactionId};
     use secp256k1_zkp::{schnorr, XOnlyPublicKey};
     use serde::{Deserialize, Serialize};
 

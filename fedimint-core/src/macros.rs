@@ -145,7 +145,7 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
         $vis:vis $name:ident($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
-        $vis struct $name($container<dyn $trait + Send + Sync + 'static>, ::fedimint_api::core::ModuleInstanceId);
+        $vis struct $name($container<dyn $trait + Send + Sync + 'static>, ::fedimint_core::core::ModuleInstanceId);
 
         impl std::ops::Deref for $name {
             type Target = dyn $trait + Send + Sync + 'static;
@@ -157,11 +157,11 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
         }
 
         impl $name {
-            pub fn module_instance_id(&self) -> ::fedimint_api::core::ModuleInstanceId {
+            pub fn module_instance_id(&self) -> ::fedimint_core::core::ModuleInstanceId {
                 self.1
             }
 
-            pub fn from_typed<I>(module_instance_id: ::fedimint_api::core::ModuleInstanceId, typed: I) -> Self
+            pub fn from_typed<I>(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -> Self
             where
                 I: $trait + Send + Sync + 'static {
 
@@ -182,11 +182,11 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
         $vis struct $name<$lifetime>($container<dyn $trait<$lifetime> + Send + $lifetime>, ModuleInstanceId);
 
         impl $name {
-            pub fn module_instance_id(&self) -> ::fedimint_api::core::ModuleInstanceId {
+            pub fn module_instance_id(&self) -> ::fedimint_core::core::ModuleInstanceId {
                 self.1
             }
 
-            pub fn from_typed<I>(module_instance_id: ::fedimint_api::core::ModuleInstanceId, typed: I) -> Self
+            pub fn from_typed<I>(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -> Self
             where
                 I: $trait + Send + Sync + 'static {
 

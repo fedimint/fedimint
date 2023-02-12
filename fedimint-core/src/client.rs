@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::task::{RwLock, RwLockWriteGuard};
-use fedimint_api::{NumPeers, OutPoint, PeerId, TransactionId};
-// use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-// use fedimint_core::modules::ln::contracts::ContractId;
-// use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
-// use fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
-// use fedimint_core::transaction::Transaction;
-// use fedimint_core::CoreError;
+use crate::task::{RwLock, RwLockWriteGuard};
+use crate::{NumPeers, OutPoint, PeerId, TransactionId};
+// use crate::modules::ln::contracts::incoming::IncomingContractOffer;
+// use crate::modules::ln::contracts::ContractId;
+// use crate::modules::ln::{ContractAccount, LightningGateway};
+// use crate::outcome::{TransactionStatus, TryIntoOutcome};
+// use crate::transaction::Transaction;
+// use crate::CoreError;
 // use jsonrpsee_core::client::ClientT;
 // use jsonrpsee_core::Error as JsonRpcError;
 // use jsonrpsee_types::error::CallError as RpcCallError;
@@ -29,9 +29,9 @@ use fedimint_api::{NumPeers, OutPoint, PeerId, TransactionId};
 //     ValidHistory,
 // };
 use bitcoin::{Address, Amount};
-// use fedimint_core::config::ClientConfig;
-// use fedimint_core::epoch::EpochHistory;
-// use fedimint_core::modules::wallet::PegOutFees;
+// use crate::config::ClientConfig;
+// use crate::epoch::EpochHistory;
+// use crate::modules::wallet::PegOutFees;
 use futures::stream::FuturesUnordered;
 
 use futures::StreamExt;

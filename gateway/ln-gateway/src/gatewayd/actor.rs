@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
+use fedimint_core::{task::TaskGroup, Amount, OutPoint, TransactionId};
 use futures::stream::StreamExt;
 use mint_client::modules::{
     ln::{

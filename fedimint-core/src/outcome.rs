@@ -1,4 +1,4 @@
-use fedimint_api::module::SerdeModuleEncoding;
+use fedimint_core::module::SerdeModuleEncoding;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -15,4 +15,4 @@ pub enum TransactionStatus {
     },
 }
 
-pub type SerdeOutputOutcome = SerdeModuleEncoding<fedimint_api::core::DynOutputOutcome>;
+pub type SerdeOutputOutcome = SerdeModuleEncoding<fedimint_core::core::DynOutputOutcome>;

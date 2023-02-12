@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use fedimint_api::{core::ModuleInstanceId, PeerId};
+use fedimint_core::{core::ModuleInstanceId, PeerId};
 use fedimint_ln::LightningGateway;
 use mint_client::api::fake::FederationApiFaker;
 use tokio::sync::Mutex;

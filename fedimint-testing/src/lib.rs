@@ -5,14 +5,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
-use fedimint_api::core::{Decoder, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
-use fedimint_api::db::mem_impl::MemDatabase;
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleGen, TransactionItemAmount};
-use fedimint_api::{OutPoint, PeerId, ServerModule};
+use fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+use fedimint_core::core::{Decoder, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::module::interconnect::ModuleInterconect;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::{ApiError, InputMeta, ModuleError, ModuleGen, TransactionItemAmount};
+use fedimint_core::{OutPoint, PeerId, ServerModule};
 
 pub mod btc;
 pub mod ln;
@@ -247,7 +247,7 @@ where
                         &fedimint_wallet::db::RoundConsensusKey,
                         &fedimint_wallet::RoundConsensus {
                             block_height: 0,
-                            fee_rate: fedimint_api::Feerate { sats_per_kvb: 0 },
+                            fee_rate: fedimint_core::Feerate { sats_per_kvb: 0 },
                             randomness_beacon: tweak,
                         },
                     )

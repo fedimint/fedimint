@@ -21,36 +21,36 @@ use bitcoin::{
 use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
 use db::DbKeyPrefix;
-use fedimint_api::bitcoin_rpc::{
+use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::bitcoin_rpc::{
     select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
     FM_ELECTRUM_RPC_ENV,
 };
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::{
+use fedimint_core::cancellable::{Cancellable, Cancelled};
+use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
-use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
-use fedimint_api::core::{ModuleInstanceId, ModuleKind};
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
-use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::module::audit::Audit;
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{
+use fedimint_core::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
+use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::module::audit::Audit;
+use fedimint_core::module::interconnect::ModuleInterconect;
+use fedimint_core::module::{
     api_endpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta, IntoModuleError,
     ModuleConsensusVersion, ModuleGen, TransactionItemAmount,
 };
-use fedimint_api::module::{ApiEndpoint, ModuleError};
-use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::server::DynServerModule;
+use fedimint_core::module::{ApiEndpoint, ModuleError};
+use fedimint_core::net::peers::MuxPeerConnections;
+use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
-use fedimint_api::task::sleep;
-use fedimint_api::task::{TaskGroup, TaskHandle};
-use fedimint_api::{
+use fedimint_core::task::sleep;
+use fedimint_core::task::{TaskGroup, TaskHandle};
+use fedimint_core::{
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Feerate, NumPeers, OutPoint,
     PeerId, ServerModule,
 };
-use fedimint_bitcoind::DynBitcoindRpc;
 use futures::{stream, StreamExt};
 use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
@@ -658,7 +658,7 @@ impl ServerModule for Wallet {
 
         Ok(InputMeta {
             amount: TransactionItemAmount {
-                amount: fedimint_api::Amount::from_sats(input.tx_output().value),
+                amount: fedimint_core::Amount::from_sats(input.tx_output().value),
                 fee: self.cfg.consensus.fee_consensus.peg_in_abs,
             },
             puk_keys: vec![*input.tweak_contract_key()],
@@ -726,7 +726,7 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a WalletOutput,
-        out_point: fedimint_api::OutPoint,
+        out_point: fedimint_core::OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
         debug!(
@@ -1656,7 +1656,7 @@ pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_hand
         broadcast_pending_tx(db.begin_transaction().await, &rpc).await;
         // FIXME: remove after modularization finishes
         #[cfg(not(target_family = "wasm"))]
-        fedimint_api::task::sleep(Duration::from_secs(10)).await;
+        fedimint_core::task::sleep(Duration::from_secs(10)).await;
     }
 }
 
@@ -1700,7 +1700,7 @@ impl PartialEq for PegOutSignatureItem {
 impl Eq for PegOutSignatureItem {}
 
 plugin_types_trait_impl!(
-    fedimint_api::core::MODULE_KEY_WALLET,
+    fedimint_core::core::MODULE_KEY_WALLET,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,

@@ -1,8 +1,9 @@
 //! Implements a connection manager for communication with other federation
 //! members
 //!
-//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its
-//! main implementation is [`ReconnectPeerConnections`], see these for details.
+//! The main interface is [`fedimint_core::net::peers::IPeerConnections`] and
+//! its main implementation is [`ReconnectPeerConnections`], see these for
+//! details.
 
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap};
@@ -12,10 +13,10 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::net::peers::IPeerConnections;
-use fedimint_api::task::{TaskGroup, TaskHandle};
-use fedimint_api::PeerId;
+use fedimint_core::cancellable::{Cancellable, Cancelled};
+use fedimint_core::net::peers::IPeerConnections;
+use fedimint_core::task::{TaskGroup, TaskHandle};
+use fedimint_core::PeerId;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;
@@ -624,8 +625,8 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    use fedimint_api::task::TaskGroup;
-    use fedimint_api::PeerId;
+    use fedimint_core::task::TaskGroup;
+    use fedimint_core::PeerId;
     use futures::Future;
 
     use crate::net::connect::mock::MockNetwork;

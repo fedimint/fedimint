@@ -8,7 +8,7 @@ use bitcoin_hashes::{hex::ToHex, sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
-use fedimint_api::{task::TaskGroup, Amount};
+use fedimint_core::{task::TaskGroup, Amount};
 use ln_gateway::gatewaylnrpc::{
     complete_htlcs_request::{Action, Cancel, Settle},
     gateway_lightning_server::{GatewayLightning, GatewayLightningServer},

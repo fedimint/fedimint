@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use erased_serde::Serialize;
-use fedimint_api::{
+use fedimint_core::{
     config::ModuleGenRegistry,
     db::DatabaseTransaction,
     encoding::Encodable,
@@ -325,7 +325,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientMintRange::PendingNotesKeyPrefix,
                         ClientMintRange::PendingNotesKey,
-                        fedimint_api::TieredMulti<mint_client::mint::SpendableNote>,
+                        fedimint_core::TieredMulti<mint_client::mint::SpendableNote>,
                         mint_client,
                         "Pending Notes"
                     );

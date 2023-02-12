@@ -14,7 +14,6 @@ path = "tests/tests.rs"
 anyhow = "1.0.66"
 async-trait = "0.1.64"
 bitcoin = "0.29.2"
-fedimint-api = { path = "../../fedimint-api" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
 fedimint-testing = { path = "../../fedimint-testing" }

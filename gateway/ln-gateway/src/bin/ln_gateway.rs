@@ -1,7 +1,7 @@
 use cln_plugin::Error;
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::module::DynModuleGen;
-use fedimint_api::{
+use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::module::DynModuleGen;
+use fedimint_core::{
     core::{
         LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,

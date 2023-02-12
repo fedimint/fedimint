@@ -6,8 +6,8 @@ use std::io::Cursor;
 use bitcoin::hashes::hex::{FromHex, ToHex};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use miniscript::{Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
@@ -324,8 +324,8 @@ mod tests {
     use std::io::Cursor;
 
     use bitcoin::hashes::hex::FromHex;
-    use fedimint_api::encoding::Decodable;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::encoding::Decodable;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
 
     use super::TxOutProof;
 
