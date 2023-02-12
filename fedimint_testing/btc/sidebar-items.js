@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["bitcoind",""],["fixtures",""]],"trait":[["BitcoinTest",""]]};
+window.SIDEBAR_ITEMS = {"mod":["bitcoind","fixtures"],"trait":["BitcoinTest"]};

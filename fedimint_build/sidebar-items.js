@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["print_git_hash",""]]};
+window.SIDEBAR_ITEMS = {"fn":["print_git_hash"]};

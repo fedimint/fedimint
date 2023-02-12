@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["SanitizedUrl","Wrapper for `Url` that only prints the scheme, domain, port and path portion of a `Url` in its `Display` implementation. This is useful to hide private information like user names and passwords in logs or UIs."]]};
+window.SIDEBAR_ITEMS = {"struct":["SanitizedUrl"]};

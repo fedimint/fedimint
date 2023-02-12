@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["assert_all_equal",""],["assert_all_equal_result","Make sure all elements are equal for `Result<O, E>`"],["member_validate",""]],"mod":[["btc",""]],"opaque":[["",""]],"struct":[["FakeFed",""],["FakeInterconnect",""],["TestInputMeta",""]]};
+window.SIDEBAR_ITEMS = {"fn":["assert_all_equal","assert_all_equal_result","member_validate"],"mod":["btc"],"opaque":[""],"struct":["FakeFed","FakeInterconnect","TestInputMeta"]};

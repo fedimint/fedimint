@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"struct":[["FeeConsensus",""],["MintClientConfig",""],["MintConfig",""],["MintConfigConsensus",""],["MintConfigPrivate",""],["__FieldVisitor",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"constant":["FIELDS"],"enum":["__Field"],"struct":["FeeConsensus","MintClientConfig","MintConfig","MintConfigConsensus","MintConfigPrivate","__FieldVisitor","__Visitor"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"opaque":[["",""]],"struct":[["Error","The Errors that may occur when processing a `Request`."],["Response","A Response to a submitted `Request`."],["RpcClient",""]]};
+window.SIDEBAR_ITEMS = {"opaque":[""],"struct":["Error","Response","RpcClient"]};

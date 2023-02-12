@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["module_decode_key_prefixed_decodable",""]]};
+window.SIDEBAR_ITEMS = {"fn":["module_decode_key_prefixed_decodable"]};

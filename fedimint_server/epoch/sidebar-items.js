@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["ConsensusItem",""],["EpochVerifyError",""]],"struct":[["EpochOutcome",""],["SerdeSignature",""],["SerdeSignatureShare",""],["SignedEpochOutcome",""],["UnzipConsensusItem",""]],"trait":[["IterUnzipConsensusItem",""]],"type":[["SerdeConsensusItem",""],["SerdeEpochHistory",""]]};
+window.SIDEBAR_ITEMS = {"enum":["ConsensusItem","EpochVerifyError"],"struct":["EpochOutcome","SerdeSignature","SerdeSignatureShare","SignedEpochOutcome","UnzipConsensusItem"],"trait":["IterUnzipConsensusItem"],"type":["SerdeConsensusItem","SerdeEpochHistory"]};

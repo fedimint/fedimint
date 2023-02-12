@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["load_from_file",""]],"mod":[["serde_binary_human_readable",""]]};
+window.SIDEBAR_ITEMS = {"fn":["load_from_file"],"mod":["serde_binary_human_readable"]};

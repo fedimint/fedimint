@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["__Field",""]],"struct":[["RouteHint","A list of hops along a payment path terminating with a channel to the recipient."],["RouteHintHop",""],["__FieldVisitor",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"constant":["FIELDS"],"enum":["__Field"],"struct":["RouteHint","RouteHintHop","__FieldVisitor","__Visitor"]};

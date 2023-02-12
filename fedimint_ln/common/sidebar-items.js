@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["LightningDecoder",""]]};
+window.SIDEBAR_ITEMS = {"struct":["LightningDecoder"]};

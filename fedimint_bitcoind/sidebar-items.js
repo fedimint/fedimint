@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["bitcoincore_rpc",""]],"opaque":[["",""]],"static":[["CALLSITE",""],["META",""]],"struct":[["DynBitcoindRpc",""],["RetryClient","Wrapper around [`IBitcoindRpc`] that will retry failed calls"]],"trait":[["IBitcoindRpc","Trait that allows interacting with the Bitcoin blockchain"]],"type":[["Result","`Result<T, Error>`"]]};
+window.SIDEBAR_ITEMS = {"mod":["bitcoincore_rpc"],"opaque":[""],"static":["CALLSITE","META"],"struct":["DynBitcoindRpc","RetryClient"],"trait":["IBitcoindRpc"],"type":["Result"]};

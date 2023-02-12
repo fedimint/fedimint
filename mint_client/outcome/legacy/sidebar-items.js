@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["OutputOutcome",""]],"trait":[["TryIntoOutcome",""]]};
+window.SIDEBAR_ITEMS = {"enum":["OutputOutcome"],"trait":["TryIntoOutcome"]};

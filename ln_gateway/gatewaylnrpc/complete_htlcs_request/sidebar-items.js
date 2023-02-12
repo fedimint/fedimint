@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["STRUCT_NAME",""]],"enum":[["Action",""]],"fn":[["ScalarWrapper",""]],"struct":[["Cancel",""],["Settle",""]]};
+window.SIDEBAR_ITEMS = {"constant":["STRUCT_NAME"],"enum":["Action"],"fn":["ScalarWrapper"],"struct":["Cancel","Settle"]};

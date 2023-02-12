@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["FIELDS",""]],"enum":[["PegInProofError",""],["__Field",""]],"fn":[["validate_peg_in_proof",""]],"struct":[["CompressedPublicKeyTranslator",""],["PegInProof","A proof about a script owning a certain output. Verifyable using headers only."],["TxOutProof",""],["__FieldVisitor",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"constant":["FIELDS"],"enum":["PegInProofError","__Field"],"fn":["validate_peg_in_proof"],"struct":["CompressedPublicKeyTranslator","PegInProof","TxOutProof","__FieldVisitor","__Visitor"]};

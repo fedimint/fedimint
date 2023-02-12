@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["actor",""],["gateway",""],["lnrpc_client",""]]};
+window.SIDEBAR_ITEMS = {"mod":["actor","gateway","lnrpc_client"]};

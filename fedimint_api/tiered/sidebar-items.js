@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"opaque":[["",""]],"struct":[["InvalidAmountTierError",""],["Tiered",""],["__Visitor",""]]};
+window.SIDEBAR_ITEMS = {"opaque":[""],"struct":["InvalidAmountTierError","Tiered","__Visitor"]};

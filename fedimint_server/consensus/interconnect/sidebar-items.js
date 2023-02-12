@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["FedimintInterconnect",""]]};
+window.SIDEBAR_ITEMS = {"struct":["FedimintInterconnect"]};

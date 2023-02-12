@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["fake",""]],"trait":[["LnFederationApi",""],["MintFederationApi",""],["WalletFederationApi",""]]};
+window.SIDEBAR_ITEMS = {"mod":["fake"],"trait":["LnFederationApi","MintFederationApi","WalletFederationApi"]};

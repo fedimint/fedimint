@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["CoreError",""]],"mod":[["api",""],["config","Fedimint toplevel config"],["epoch",""],["outcome",""],["query",""],["transaction",""],["util",""]]};
+window.SIDEBAR_ITEMS = {"enum":["CoreError"],"mod":["api","config","epoch","outcome","query","transaction","util"]};
