@@ -87,12 +87,7 @@ pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Result<Vec<u8>> {
 /// stretching along with a 128-bit salt that is randomly generated to
 /// discourage rainbow attacks.  HMAC-SHA256 is used for the authentication
 /// code.  All crypto is from the widely-used `ring` crate we also use for TLS.
-pub fn get_key(password: Option<String>, salt_path: PathBuf) -> Result<LessSafeKey> {
-    let password = match password {
-        None => rpassword::prompt_password("Enter a password to encrypt configs: ").unwrap(),
-        Some(password) => password,
-    };
-
+pub fn get_key(password: &str, salt_path: PathBuf) -> Result<LessSafeKey> {
     let salt_str = fs::read_to_string(salt_path)?;
     let salt = hex::decode(salt_str)?;
     let mut key = [0u8; ring::digest::SHA256_OUTPUT_LEN];

@@ -7,12 +7,8 @@ use aead::{encrypted_read, encrypted_write, get_key};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
-use fedimint_server::config::io::{
-    create_cert, encrypted_json_write, run_dkg, write_nonprivate_configs, PRIVATE_CONFIG,
-    SALT_FILE, TLS_PK,
-};
+use fedimint_server::config::io::{create_cert, run_dkg, write_server_config, SALT_FILE};
 use fedimintd::*;
-use tokio_rustls::rustls;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -46,9 +42,9 @@ enum Command {
         #[arg(long = "name")]
         name: String,
 
-        /// The password that encrypts the configs, will prompt if not passed in
+        /// The password that encrypts the configs
         #[arg(env = "FM_PASSWORD")]
-        password: Option<String>,
+        password: String,
     },
     /// All peers must run distributed key gen at the same time to create
     /// configs
@@ -88,9 +84,9 @@ enum Command {
         #[arg(long = "finalty", default_value = "10")]
         finality_delay: u32,
 
-        /// The password that encrypts the configs, will prompt if not passed in
+        /// The password that encrypts the configs
         #[arg(env = "FM_PASSWORD")]
-        password: Option<String>,
+        password: String,
     },
 
     ConfigDecrypt {
@@ -104,9 +100,9 @@ enum Command {
         /// in_file directory
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
-        /// The password that encrypts the configs, will prompt if not passed in
+        /// The password that encrypts the configs
         #[arg(env = "FM_PASSWORD")]
-        password: Option<String>,
+        password: String,
     },
 
     ConfigEncrypt {
@@ -120,9 +116,9 @@ enum Command {
         /// out_file directory
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
-        /// The password that encrypts the configs, will prompt if not passed in
+        /// The password that encrypts the configs
         #[arg(env = "FM_PASSWORD")]
-        password: Option<String>,
+        password: String,
     },
 }
 
@@ -145,7 +141,7 @@ async fn main() -> anyhow::Result<()> {
             name,
             password,
         } => {
-            let config_str = create_cert(dir_out_path, p2p_url, api_url, name, password)?;
+            let config_str = create_cert(dir_out_path, p2p_url, api_url, name, &password)?;
             Ok(println!("{config_str}"))
         }
         Command::Run {
@@ -159,15 +155,13 @@ async fn main() -> anyhow::Result<()> {
             finality_delay,
             password,
         } => {
-            let key = get_key(password, dir_out_path.join(SALT_FILE))?;
-            let pk_bytes = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
             let server = if let Ok(v) = run_dkg(
                 bind_p2p,
                 bind_api,
                 &dir_out_path,
                 federation_name,
                 certs,
-                rustls::PrivateKey(pk_bytes),
+                &password,
                 &mut task_group,
                 CODE_VERSION,
                 configure_modules(max_denomination, network, finality_delay),
@@ -181,8 +175,7 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             };
 
-            encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
-            write_nonprivate_configs(&server, dir_out_path, &module_registry())
+            write_server_config(&server, dir_out_path, &password, &module_registry())
         }
         Command::VersionHash => Ok(println!("{CODE_VERSION}")),
         Command::ConfigDecrypt {
@@ -192,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
             password,
         } => {
             let salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&in_file));
-            let key = get_key(password, salt_file)?;
+            let key = get_key(&password, salt_file)?;
             let decrypted_bytes = encrypted_read(&key, in_file)?;
 
             let mut out_file_handle =
@@ -212,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
             in_file_handle.read_to_end(&mut plaintext_bytes).unwrap();
 
             let salt_file = salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&out_file));
-            let key = get_key(password, salt_file)?;
+            let key = get_key(&password, salt_file)?;
             encrypted_write(plaintext_bytes, &key, out_file)
         }
     }

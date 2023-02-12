@@ -16,7 +16,6 @@ dependencies = [
  "hex",
  "rand",
  "ring",
- "rpassword",
 ]
 
 [[package]]

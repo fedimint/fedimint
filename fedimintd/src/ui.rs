@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aead::{encrypted_read, get_key};
 use anyhow::{format_err, Error};
 use askama::Template;
 use axum::extract::Form;
@@ -18,8 +17,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
 use fedimint_server::config::io::{
-    create_cert, encrypted_json_write, parse_peer_params, run_dkg, write_nonprivate_configs,
-    CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG, SALT_FILE, TLS_PK,
+    create_cert, parse_peer_params, run_dkg, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
@@ -27,7 +25,6 @@ use serde::Deserialize;
 use tokio::select;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
-use tokio_rustls::rustls;
 use tracing::{debug, error};
 use url::Url;
 
@@ -147,8 +144,6 @@ async fn post_guardians(
     }
 
     // Actually run DKG
-    let key = get_key(Some(state.password.clone()), state.data_dir.join(SALT_FILE))?;
-    let pk_bytes = encrypted_read(&key, state.data_dir.join(TLS_PK))?;
     let max_denomination = Amount::from_msats(100000000000);
     let dir_out_path = state.data_dir.clone();
     let fedimintd_sender = state.sender.clone();
@@ -166,6 +161,7 @@ async fn post_guardians(
     let mut dkg_task_group = state.task_group.make_subgroup().await;
     state.dkg_task_group = Some(dkg_task_group.clone());
     let module_gens = state.module_gens.clone();
+    let password = state.password.clone();
     state
         .task_group
         .spawn("admin UI running DKG", move |_| async move {
@@ -178,7 +174,7 @@ async fn post_guardians(
                 &dir_out_path,
                 params.federation_name,
                 connection_strings,
-                rustls::PrivateKey(pk_bytes),
+                &password,
                 &mut dkg_task_group,
                 CODE_VERSION,
                 configure_modules(max_denomination, params.network, params.finality_delay),
@@ -187,8 +183,7 @@ async fn post_guardians(
             .await;
 
             let write_result = maybe_config.and_then(|server| {
-                encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
-                write_nonprivate_configs(&server, dir_out_path, &module_gens)
+                write_server_config(&server, dir_out_path, &password, &module_gens)
             });
 
             match write_result {
@@ -286,7 +281,7 @@ async fn post_federation_params(
         form.p2p_url.clone(),
         form.api_url.clone(),
         form.guardian_name.clone(),
-        Some(state.password.clone()),
+        &state.password,
     )?;
 
     // Update state
