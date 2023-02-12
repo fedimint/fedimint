@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_core::task::TaskGroup;
+use fedimint_core::{Amount, OutPoint, TransactionId};
 use futures::stream::StreamExt;
 use mint_client::modules::ln::contracts::{ContractId, Preimage};
 use mint_client::modules::ln::route_hints::RouteHint;

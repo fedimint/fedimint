@@ -8,10 +8,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::module::audit::Audit;
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::{OutPoint, PeerId};
+use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::module::audit::Audit;
+use fedimint_core::module::interconnect::ModuleInterconect;
+use fedimint_core::{OutPoint, PeerId};
 
 use super::*;
 use crate::module::{
@@ -422,7 +422,7 @@ where
                 path,
                 handler: Box::new(
                     move |module: &DynServerModule,
-                          dbtx: fedimint_api::db::DatabaseTransaction<'_>,
+                          dbtx: fedimint_core::db::DatabaseTransaction<'_>,
                           value: serde_json::Value,
                           module_instance_id: Option<ModuleInstanceId>| {
                         let typed_module = module

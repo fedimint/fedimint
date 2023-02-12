@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Debug;
 use std::mem;
 
-use fedimint_api::PeerId;
+use fedimint_core::PeerId;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use tracing::debug;

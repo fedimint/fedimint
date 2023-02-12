@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+use fedimint_core::db::{IDatabase, IDatabaseTransaction, PrefixStream};
 use futures::stream;
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
@@ -64,7 +64,7 @@ impl IDatabase for RocksDb {
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             let val = self.0.get(key).unwrap();
             self.0.put(key, value)?;
             Ok(val)
@@ -72,11 +72,11 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_api::task::block_in_place(|| Ok(self.0.snapshot().get(key)?))
+        fedimint_core::task::block_in_place(|| Ok(self.0.snapshot().get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             let val = self.0.get(key).unwrap();
             self.0.delete(key)?;
             Ok(val)
@@ -84,7 +84,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
@@ -107,14 +107,14 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     }
 
     async fn commit_tx(self: Box<Self>) -> Result<()> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             self.0.commit()?;
             Ok(())
         })
     }
 
     async fn rollback_tx_to_savepoint(&mut self) {
-        fedimint_api::task::block_in_place(|| match self.0.rollback_to_savepoint() {
+        fedimint_core::task::block_in_place(|| match self.0.rollback_to_savepoint() {
             Ok(()) => {}
             _ => {
                 warn!("Rolling back database transaction without a set savepoint");
@@ -123,7 +123,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
     }
 
     async fn set_tx_savepoint(&mut self) {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             self.0.set_savepoint();
         })
     }
@@ -136,7 +136,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_api::task::block_in_place(|| Ok(self.0.get(key)?))
+        fedimint_core::task::block_in_place(|| Ok(self.0.get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -144,7 +144,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             let prefix = key_prefix.to_vec();
 
             let rocksdb_iter = self
@@ -177,8 +177,8 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
 
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
-    use fedimint_api::db::Database;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::db::Database;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
 
     use crate::RocksDb;
 
@@ -196,13 +196,13 @@ mod fedimint_rocksdb_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(open_temp_db("fcb-rocksdb-test-insert-elements"))
+        fedimint_core::db::verify_insert_elements(open_temp_db("fcb-rocksdb-test-insert-elements"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(open_temp_db(
+        fedimint_core::db::verify_remove_nonexisting(open_temp_db(
             "fcb-rocksdb-test-remove-nonexisting",
         ))
         .await;
@@ -210,19 +210,19 @@ mod fedimint_rocksdb_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_existing(open_temp_db("fcb-rocksdb-test-remove-existing"))
+        fedimint_core::db::verify_remove_existing(open_temp_db("fcb-rocksdb-test-remove-existing"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(open_temp_db("fcb-rocksdb-test-read-own-writes"))
+        fedimint_core::db::verify_read_own_writes(open_temp_db("fcb-rocksdb-test-read-own-writes"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(open_temp_db(
+        fedimint_core::db::verify_prevent_dirty_reads(open_temp_db(
             "fcb-rocksdb-test-prevent-dirty-reads",
         ))
         .await;
@@ -230,18 +230,18 @@ mod fedimint_rocksdb_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(open_temp_db("fcb-rocksdb-test-find-by-prefix"))
+        fedimint_core::db::verify_find_by_prefix(open_temp_db("fcb-rocksdb-test-find-by-prefix"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit")).await;
+        fedimint_core::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit")).await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_prevent_nonrepeatable_reads() {
-        fedimint_api::db::verify_prevent_nonrepeatable_reads(open_temp_db(
+        fedimint_core::db::verify_prevent_nonrepeatable_reads(open_temp_db(
             "fcb-rocksdb-test-prevent-nonrepeatable-reads",
         ))
         .await;
@@ -249,7 +249,7 @@ mod fedimint_rocksdb_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(open_temp_db(
+        fedimint_core::db::verify_rollback_to_savepoint(open_temp_db(
             "fcb-rocksdb-test-rollback-to-savepoint",
         ))
         .await;
@@ -257,19 +257,19 @@ mod fedimint_rocksdb_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_phantom_entry() {
-        fedimint_api::db::verify_phantom_entry(open_temp_db("fcb-rocksdb-test-phantom-entry"))
+        fedimint_core::db::verify_phantom_entry(open_temp_db("fcb-rocksdb-test-phantom-entry"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_write_conflict() {
-        fedimint_api::db::expect_write_conflict(open_temp_db("fcb-rocksdb-test-write-conflict"))
+        fedimint_core::db::expect_write_conflict(open_temp_db("fcb-rocksdb-test-write-conflict"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(open_temp_db(
+        fedimint_core::db::verify_remove_by_prefix(open_temp_db(
             "fcb-rocksdb-test-remove-by-prefix",
         ))
         .await;
@@ -277,7 +277,7 @@ mod fedimint_rocksdb_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_module_dbtx() {
-        fedimint_api::db::verify_module_prefix(open_temp_db("fcb-rocksdb-test-module-prefix"))
+        fedimint_core::db::verify_module_prefix(open_temp_db("fcb-rocksdb-test-module-prefix"))
             .await;
     }
 
@@ -294,7 +294,7 @@ mod fedimint_rocksdb_tests {
             ModuleDecoderRegistry::default(),
         );
 
-        fedimint_api::db::verify_module_db(
+        fedimint_core::db::verify_module_db(
             open_temp_db("fcb-rocksdb-test-module-db"),
             module_db.new_isolated(module_instance_id),
         )

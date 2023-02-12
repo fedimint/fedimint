@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::PeerId;
+use fedimint_core::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 

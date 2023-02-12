@@ -13,8 +13,8 @@ use std::io::Read;
 use std::sync::Arc;
 
 pub use bitcoin::KeyPair;
-use fedimint_api::dyn_newtype_define;
-use fedimint_api::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
+use fedimint_core::dyn_newtype_define;
+use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -148,7 +148,7 @@ macro_rules! module_plugin_trait_define{
                 self
             }
 
-            fn clone(&self, instance_id: ::fedimint_api::core::ModuleInstanceId) -> $newtype_ty {
+            fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $newtype_ty {
                 $newtype_ty::from_typed(instance_id, <Self as Clone>::clone(self))
             }
 
@@ -178,15 +178,15 @@ macro_rules! module_plugin_trait_define{
 #[macro_export]
 macro_rules! plugin_types_trait_impl {
     ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
-        impl fedimint_api::core::Input for $input {}
+        impl fedimint_core::core::Input for $input {}
 
-        impl fedimint_api::core::Output for $output {}
+        impl fedimint_core::core::Output for $output {}
 
-        impl fedimint_api::core::OutputOutcome for $outcome {}
+        impl fedimint_core::core::OutputOutcome for $outcome {}
 
-        impl fedimint_api::core::ModuleConsensusItem for $ci {}
+        impl fedimint_core::core::ModuleConsensusItem for $ci {}
 
-        impl fedimint_api::server::VerificationCache for $cache {}
+        impl fedimint_core::server::VerificationCache for $cache {}
     };
 }
 

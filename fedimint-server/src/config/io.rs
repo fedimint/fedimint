@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use aead::{encrypted_read, encrypted_write, get_key, LessSafeKey};
 use anyhow::{ensure, format_err};
 use bitcoin_hashes::hex::{FromHex, ToHex};
-use fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
-use fedimint_api::task::TaskGroup;
-use fedimint_api::PeerId;
 use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::config::{ConfigGenParams, ModuleGenRegistry};
+use fedimint_core::task::TaskGroup;
+use fedimint_core::PeerId;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
@@ -20,7 +20,7 @@ use url::Url;
 use crate::config::{
     connect, gen_cert_and_key, PeerServerParams, ServerConfig, ServerConfigParams,
 };
-use crate::fedimint_api::net::peers::IMuxPeerConnections;
+use crate::fedimint_core::net::peers::IMuxPeerConnections;
 use crate::multiplexed::PeerConnectionMultiplexer;
 
 /// Client configuration file

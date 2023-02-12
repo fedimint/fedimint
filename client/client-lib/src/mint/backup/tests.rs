@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
-use fedimint_api::core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT};
-use fedimint_api::{msats, Amount, OutPoint, PeerId, Tiered, TieredMulti};
+use fedimint_core::core::{self, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_MINT};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::transaction::Transaction;
+use fedimint_core::{msats, Amount, OutPoint, PeerId, Tiered, TieredMulti};
 use fedimint_derive_secret::DerivableSecret;
 use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare};
 

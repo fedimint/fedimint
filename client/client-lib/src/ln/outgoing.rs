@@ -1,5 +1,5 @@
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::Amount;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::Amount;
 use serde::Serialize;
 
 use crate::modules::ln::contracts::outgoing::OutgoingContract;

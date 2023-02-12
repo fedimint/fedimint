@@ -24,7 +24,7 @@ counter = "0.5.7"
 erased-serde = "0.3"
 futures = "0.3"
 itertools = "0.10.5"
-fedimint-api = { path = "../../fedimint-api" }
+fedimint-core ={ path = "../../fedimint-core" }
 rand = "0.8"
 rayon = "1.6.1"
 secp256k1 = "0.24.2"

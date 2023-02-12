@@ -21,24 +21,24 @@ use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::config::{ClientConfig, FederationId, ModuleGenRegistry};
-use fedimint_api::core::{
-    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
-use fedimint_api::db::Database;
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::task::{self, sleep};
-use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::time::SystemTime;
-use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::api::{
     DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
     WsFederationApi,
 };
+use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
+use fedimint_core::core::{
+    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
+use fedimint_core::db::Database;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SignedEpochOutcome;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::task::{self, sleep};
+use fedimint_core::tiered::InvalidAmountTierError;
+use fedimint_core::time::SystemTime;
+use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
@@ -923,11 +923,11 @@ impl Client<UserClientConfig> {
                     return Ok(());
                 }
                 tracing::info!("Signature response not returned yet");
-                fedimint_api::task::sleep(interval).await
+                fedimint_core::task::sleep(interval).await
             }
         };
 
-        fedimint_api::task::timeout(Duration::from_secs(40), poll())
+        fedimint_core::task::timeout(Duration::from_secs(40), poll())
             .await
             .map_err(|_| ClientError::Timeout)?
     }
@@ -1118,7 +1118,7 @@ impl Client<UserClientConfig> {
             )
             .json(&payload)
             .send();
-        let result = fedimint_api::task::timeout(Duration::from_secs(120), future)
+        let result = fedimint_core::task::timeout(Duration::from_secs(120), future)
             .await
             .map_err(|_| ClientError::OutgoingPaymentTimeout)?
             .map_err(ClientError::HttpError);
@@ -1129,7 +1129,7 @@ impl Client<UserClientConfig> {
                     return Ok(());
                 }
 
-                fedimint_api::task::timeout(
+                fedimint_core::task::timeout(
                     Duration::from_secs(10),
                     self.ln_client().await_outgoing_refundable(contract_id),
                 )

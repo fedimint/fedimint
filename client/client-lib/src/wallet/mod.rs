@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use bitcoin::{Address, KeyPair};
 use db::PegInKey;
-use fedimint_api::core::client::ClientModule;
-use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::{Amount, ServerModule};
 use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+use fedimint_core::core::client::ClientModule;
+use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::module::TransactionItemAmount;
+use fedimint_core::{Amount, ServerModule};
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
@@ -159,7 +159,7 @@ impl WalletClient {
 
     pub async fn await_peg_out_outcome(
         &self,
-        out_point: fedimint_api::OutPoint,
+        out_point: fedimint_core::OutPoint,
     ) -> Result<bitcoin::Txid> {
         // TODO: define timeout centrally
         let timeout = std::time::Duration::from_secs(15);
@@ -198,16 +198,16 @@ mod tests {
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
-    use fedimint_api::config::ConfigGenParams;
-    use fedimint_api::core::{
+    use fedimint_core::config::ConfigGenParams;
+    use fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
-    use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::db::Database;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
-    use fedimint_api::task::TaskGroup;
-    use fedimint_api::{Feerate, OutPoint, TransactionId};
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::Database;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
+    use fedimint_core::task::TaskGroup;
+    use fedimint_core::{Feerate, OutPoint, TransactionId};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
     use tokio::sync::Mutex;
@@ -367,7 +367,7 @@ mod tests {
         fed.lock().await.consensus_round(&[], &[]).await;
 
         // wait for broadcast
-        fedimint_api::task::sleep(Duration::from_secs(12)).await;
+        fedimint_core::task::sleep(Duration::from_secs(12)).await;
         assert!(btc_rpc.is_btc_sent_to(amount, addr).await);
 
         let wallet_value = fed

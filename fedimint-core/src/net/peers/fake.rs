@@ -2,10 +2,10 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::net::peers::{IPeerConnections, PeerConnections};
-use fedimint_api::task::TaskHandle;
-use fedimint_api::PeerId;
+use fedimint_core::cancellable::{Cancellable, Cancelled};
+use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
+use fedimint_core::task::TaskHandle;
+use fedimint_core::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Receiver, Sender};

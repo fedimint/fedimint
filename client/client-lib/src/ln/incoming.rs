@@ -1,6 +1,6 @@
 use bitcoin::secp256k1::KeyPair;
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::Amount;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 use serde::Serialize;
 

@@ -2,14 +2,14 @@ use std::collections::BTreeMap;
 
 use anyhow::{bail, format_err};
 use bitcoin::Network;
-use fedimint_api::config::{
+use fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-use fedimint_api::core::ModuleKind;
-use fedimint_api::encoding::Encodable;
-use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::{Feerate, PeerId};
+use fedimint_core::core::ModuleKind;
+use fedimint_core::encoding::Encodable;
+use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
@@ -74,15 +74,15 @@ impl TypedClientModuleConfig for WalletClientConfig {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
-    pub peg_in_abs: fedimint_api::Amount,
-    pub peg_out_abs: fedimint_api::Amount,
+    pub peg_in_abs: fedimint_core::Amount,
+    pub peg_out_abs: fedimint_core::Amount,
 }
 
 impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            peg_in_abs: fedimint_api::Amount::ZERO,
-            peg_out_abs: fedimint_api::Amount::ZERO,
+            peg_in_abs: fedimint_core::Amount::ZERO,
+            peg_out_abs: fedimint_core::Amount::ZERO,
         }
     }
 }

@@ -2,13 +2,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use erased_serde::Serialize;
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::encoding::Encodable;
-use fedimint_api::module::DynModuleGen;
-use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
+use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::encoding::Encodable;
+use fedimint_core::module::DynModuleGen;
+use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_rocksdb::RocksDbReadOnly;
@@ -327,7 +327,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientMintRange::PendingNotesKeyPrefix,
                         ClientMintRange::PendingNotesKey,
-                        fedimint_api::TieredMulti<mint_client::mint::SpendableNote>,
+                        fedimint_core::TieredMulti<mint_client::mint::SpendableNote>,
                         mint_client,
                         "Pending Notes"
                     );

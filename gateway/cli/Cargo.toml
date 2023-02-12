@@ -19,7 +19,7 @@ clap = { version = "4.1.4", features = ["derive", "std", "help", "usage", "error
 fedimint-server = { path = "../../fedimint-server/" }
 ln-gateway = { path= "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
-fedimint-api = { path = "../../fedimint-api" }
+fedimint-core ={ path = "../../fedimint-core" }
 reqwest = { version = "0.11.14", features = [ "json" ], default-features = false }
 rpassword = "7.2.0"
 serde = { version = "1.0", features = ["derive"] }

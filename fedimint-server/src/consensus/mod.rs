@@ -9,18 +9,20 @@ use std::iter::FromIterator;
 use std::os::unix::prelude::OsStrExt;
 use std::sync::Mutex;
 
-use fedimint_api::config::{ConfigResponse, ModuleGenRegistry};
-use fedimint_api::core::ModuleInstanceId;
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::audit::Audit;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry};
-use fedimint_api::module::{ModuleError, TransactionItemAmount};
-use fedimint_api::server::{DynServerModule, DynVerificationCache};
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
+use fedimint_core::config::{ConfigResponse, ModuleGenRegistry};
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
+use fedimint_core::module::audit::Audit;
+use fedimint_core::module::registry::{
+    ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
+};
+use fedimint_core::module::{ModuleError, TransactionItemAmount};
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::server::{DynServerModule, DynVerificationCache};
+use fedimint_core::task::TaskGroup;
+use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
 use futures::future::select_all;
 use futures::StreamExt;
 use hbbft::honey_badger::Batch;
@@ -360,11 +362,11 @@ impl FedimintConsensus {
     async fn process_module_consensus_items(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        module_cis: &[(PeerId, fedimint_api::core::DynModuleConsensusItem)],
+        module_cis: &[(PeerId, fedimint_core::core::DynModuleConsensusItem)],
     ) {
         let per_module_cis: HashMap<
             ModuleInstanceId,
-            Vec<(PeerId, fedimint_api::core::DynModuleConsensusItem)>,
+            Vec<(PeerId, fedimint_core::core::DynModuleConsensusItem)>,
         > = module_cis
             .iter()
             .cloned()

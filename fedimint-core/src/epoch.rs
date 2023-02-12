@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
-use fedimint_api::core::DynModuleConsensusItem as ModuleConsensusItem;
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::module::SerdeModuleEncoding;
-use fedimint_api::{PeerId, TransactionId};
+use fedimint_core::core::DynModuleConsensusItem as ModuleConsensusItem;
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::SerdeModuleEncoding;
+use fedimint_core::{PeerId, TransactionId};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -205,8 +205,8 @@ mod tests {
     use std::collections::{BTreeSet, HashSet};
 
     use bitcoin::hashes::Hash;
-    use fedimint_api::encoding::Encodable;
-    use fedimint_api::PeerId;
+    use fedimint_core::encoding::Encodable;
+    use fedimint_core::PeerId;
     use rand::rngs::OsRng;
     use threshold_crypto::{SecretKey, SecretKeySet};
 

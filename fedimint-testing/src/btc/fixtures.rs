@@ -8,8 +8,8 @@ use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, BlockHeader, Network, PackedLockTime, Transaction, TxOut,
 };
-use fedimint_api::{Amount, Feerate};
 use fedimint_bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};
+use fedimint_core::{Amount, Feerate};
 use fedimint_wallet::txoproof::TxOutProof;
 use rand::rngs::OsRng;
 

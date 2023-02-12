@@ -4,8 +4,8 @@ use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
-use fedimint_api::db::Database;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_core::db::Database;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::StreamExt;
 
 use crate::dump::DatabaseDump;

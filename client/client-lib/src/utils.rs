@@ -2,12 +2,12 @@ use std::str::FromStr;
 
 use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex::FromHex;
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::db::Database;
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::{ParseAmountError, TieredMulti};
 use fedimint_core::api::DynFederationApi;
+use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::db::Database;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::{ParseAmountError, TieredMulti};
 use lightning_invoice::Currency;
 
 use crate::mint::SpendableNote;
@@ -46,13 +46,13 @@ pub fn parse_bitcoin_amount(
     }
 }
 
-pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_api::Amount, ParseAmountError> {
+pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmountError> {
     if let Some(i) = s.find(char::is_alphabetic) {
         let (amt, denom) = s.split_at(i);
-        fedimint_api::Amount::from_str_in(amt, denom.parse()?)
+        fedimint_core::Amount::from_str_in(amt, denom.parse()?)
     } else {
         //default to millisatoshi
-        fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
+        fedimint_core::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
     }
 }
 
@@ -82,18 +82,18 @@ pub fn network_to_currency(network: Network) -> Currency {
 fn sanity_check_parse_fedimint_amount() {
     assert_eq!(
         parse_fedimint_amount("34").unwrap(),
-        fedimint_api::Amount { msats: 34 }
+        fedimint_core::Amount { msats: 34 }
     );
     assert_eq!(
         parse_fedimint_amount("34msat").unwrap(),
-        fedimint_api::Amount { msats: 34 }
+        fedimint_core::Amount { msats: 34 }
     );
     assert_eq!(
         parse_fedimint_amount("34sat").unwrap(),
-        fedimint_api::Amount { msats: 34 * 1000 }
+        fedimint_core::Amount { msats: 34 * 1000 }
     );
     assert_eq!(
         parse_fedimint_amount("34satoshi").unwrap(),
-        fedimint_api::Amount { msats: 34 * 1000 }
+        fedimint_core::Amount { msats: 34 * 1000 }
     );
 }

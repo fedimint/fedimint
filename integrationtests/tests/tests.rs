@@ -5,8 +5,8 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{msats, sats, TieredMulti};
+use fedimint_core::task::TaskGroup;
+use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
 use fedimint_mint::{MintConsensusItem, MintOutputSignatureShare};
@@ -386,7 +386,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
         fed.subset_peers(&[3])
             .await
             .override_proposal(vec![ConsensusItem::Module(
-                fedimint_api::core::DynModuleConsensusItem::from_typed(
+                fedimint_core::core::DynModuleConsensusItem::from_typed(
                     fed.ln_id,
                     LightningConsensusItem {
                         contract_id,
@@ -436,7 +436,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
             .await;
         let out_point = fed.database_add_notes_for_user(&user, sats(2000)).await;
         let bad_proposal = vec![ConsensusItem::Module(
-            fedimint_api::core::DynModuleConsensusItem::from_typed(
+            fedimint_core::core::DynModuleConsensusItem::from_typed(
                 fed.mint_id,
                 MintConsensusItem {
                     out_point,

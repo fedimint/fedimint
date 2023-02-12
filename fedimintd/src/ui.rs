@@ -11,12 +11,12 @@ use axum::routing::{get, post};
 use axum::Router;
 use axum_macros::debug_handler;
 use bitcoin::Network;
-use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
-use fedimint_api::task::TaskGroup;
-use fedimint_api::Amount;
 use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
+use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
+use fedimint_core::Amount;
 use fedimint_server::config::io::{
     create_cert, encrypted_json_write, parse_peer_params, run_dkg, write_nonprivate_configs,
     CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG, SALT_FILE, TLS_PK,
@@ -229,7 +229,7 @@ async fn params_page(
     axum::extract::State(_state): axum::extract::State<MutableState>,
 ) -> UrlConnection {
     let (ro_bitcoin_rpc_type, ro_bitcoin_rpc_url) =
-        match fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
+        match fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
             Ok(BitcoindRpcBackend::Bitcoind(url)) => {
                 let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
                 ("bitcoind", url_str)

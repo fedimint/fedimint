@@ -8,7 +8,6 @@ All e-cash is backed by bitcoin with deposits and withdrawals that can occur on-
 ## Crate organization
 The [Fedimint federation](#Federation-Nodes) consists of nodes that are primarily built from the following crates:
 * `fedimint` - the main consensus code for processing transactions and REST API
-* `fedimint-api` - the common serialization and database representations for communication between crates
 * `fedimint-derive` - helper macros for serialization
 * `crypto/tbs` - helper cryptography library for threshold blind signatures
 * `integrationtests/fedimint-tests` - integration testing framework
@@ -18,7 +17,7 @@ The [Fedimint federation](#Federation-Nodes) consists of nodes that are primaril
 * `modules/fedimint-mint` - a blinded mint that issues e-cash
 * `modules/fedimint-ln` - a Lightning payment service
 
-* `fedimint-core` - common code used by both client and server. Can't be in `fedimint-api` because it depends on modules
+* `fedimint-core` - common code used by both client and server
 
 The [user client](#User-Client):
 * `client/client-lib` - provides a library for sending transactions to the federation

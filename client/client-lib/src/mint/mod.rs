@@ -6,14 +6,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use db::{NoteKey, NoteKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use fedimint_api::core::client::ClientModule;
-use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
 use fedimint_core::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
+use fedimint_core::core::client::ClientModule;
+use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::TransactionItemAmount;
+use fedimint_core::tiered::InvalidAmountTierError;
+use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
 use futures::{Future, StreamExt};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -447,7 +447,7 @@ impl MintClient {
                 // custom return type instead of error for retrying
                 Err(e) if e.is_retryable() && total_time < MINT_E_CASH_FETCH_TIMEOUT => {
                     trace!("Mint returned retryable error: {:?}", e);
-                    fedimint_api::task::sleep(retry_duration).await
+                    fedimint_core::task::sleep(retry_duration).await
                 }
                 Err(e) => {
                     warn!("Mint returned error: {:?}", e);
@@ -679,16 +679,16 @@ mod tests {
     use std::sync::Arc;
 
     use bitcoin::hashes::Hash;
-    use fedimint_api::config::ConfigGenParams;
-    use fedimint_api::core::{
+    use fedimint_core::api::WsFederationApi;
+    use fedimint_core::config::ConfigGenParams;
+    use fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     };
-    use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::db::Database;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
-    use fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
-    use fedimint_core::api::WsFederationApi;
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::Database;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
+    use fedimint_core::{Amount, OutPoint, Tiered, TransactionId};
     use fedimint_mint::common::MintDecoder;
     use fedimint_testing::FakeFed;
     use futures::executor::block_on;

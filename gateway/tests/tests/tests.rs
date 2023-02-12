@@ -22,8 +22,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::Result;
-use fedimint_api::config::FederationId;
 use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::config::FederationId;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response, RpcClient};
 use ln_gateway::rpc::{

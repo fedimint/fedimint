@@ -37,7 +37,7 @@ cln-plugin = "0.1.1"
 futures = "0.3.24"
 lightning-invoice = "0.21.0"
 fedimint-server = { path = "../../fedimint-server/" }
-fedimint-api = { path = "../../fedimint-api" }
+fedimint-core ={ path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 mint-client = { path = "../../client/client-lib" }
 prost = "0.11"

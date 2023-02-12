@@ -14,8 +14,8 @@ path = "src/lib.rs"
 
 [dependencies]
 bitcoin = "0.29.2"
-fedimint-api  = { path = "../fedimint-api/" }
+fedimint-core  = { path = "../fedimint-core/" }
 thiserror = "1.0.30"
 
 [dev-dependencies]
-fedimint-api = { path = "../fedimint-api/" }
+fedimint-core ={ path = "../fedimint-core/" }

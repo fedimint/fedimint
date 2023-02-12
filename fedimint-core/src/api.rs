@@ -7,14 +7,14 @@ use std::{cmp, result};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_api::config::{
+use fedimint_core::config::{
     ApiEndpoint, ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry,
 };
-use fedimint_api::core::DynOutputOutcome;
-use fedimint_api::fmt_utils::AbbreviateDebug;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
-use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_core::core::DynOutputOutcome;
+use fedimint_core::fmt_utils::AbbreviateDebug;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::{sleep, RwLock, RwLockWriteGuard};
+use fedimint_core::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 #[cfg(not(target_family = "wasm"))]
@@ -519,7 +519,7 @@ where
                     Ok(t) => return Ok(t),
                     Err(e) if e.is_retryable() => {
                         trace!("Federation api returned retryable error: {:?}", e);
-                        fedimint_api::task::sleep(interval).await
+                        fedimint_core::task::sleep(interval).await
                     }
                     Err(e) => {
                         warn!("Federation api returned error: {:?}", e);
@@ -528,7 +528,7 @@ where
                 }
             }
         };
-        fedimint_api::task::timeout(timeout, poll())
+        fedimint_core::task::timeout(timeout, poll())
             .await
             .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }

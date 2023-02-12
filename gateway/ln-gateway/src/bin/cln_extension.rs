@@ -12,8 +12,8 @@ use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
-use fedimint_api::task::TaskGroup;
-use fedimint_api::Amount;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::Amount;
 use ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
