@@ -555,9 +555,9 @@ pub struct Signature;
 /// Transaction that was already signed
 #[derive(Encodable)]
 pub struct Transaction {
-    inputs: Vec<DynInput>,
-    outputs: Vec<DynOutput>,
-    signature: Signature,
+    pub inputs: Vec<DynInput>,
+    pub outputs: Vec<DynOutput>,
+    pub signature: Signature,
 }
 
 impl Decodable for Transaction

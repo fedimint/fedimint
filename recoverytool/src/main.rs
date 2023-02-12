@@ -1,20 +1,34 @@
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use std::hash::Hasher;
 use std::path::PathBuf;
 
+use anyhow::anyhow;
+use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::sha256::Hash;
+use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
-use clap::{ArgGroup, Parser};
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+use clap::{ArgGroup, Parser, Subcommand};
+use fedimint_core::core::{
+    DynModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_core::db::Database;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_ln::common::LightningDecoder;
+use fedimint_mint::common::MintDecoder;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
+use fedimint_server::db::EpochHistoryKeyPrefix;
+use fedimint_server::epoch::{IterUnzipConsensusItem, SignedEpochOutcome, UnzipConsensusItem};
+use fedimint_server::transaction::Transaction;
+use fedimint_wallet::common::WalletDecoder;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet::keys::CompressedPublicKey;
 use fedimint_wallet::tweakable::Tweakable;
-use fedimint_wallet::{PegInDescriptor, SpendableUTXO};
+use fedimint_wallet::{PegInDescriptor, SpendableUTXO, WalletConsensusItem, WalletInput};
 use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
@@ -29,12 +43,6 @@ use tracing_subscriber::EnvFilter;
         .args(["config", "descriptor"]),
 ))]
 struct RecoveryTool {
-    /// Extract UTXOs from a database without module partitioning
-    #[arg(long = "legacy")]
-    legacy: bool,
-    /// Path to database
-    #[arg(long = "db")]
-    db: PathBuf,
     /// Directory containing server config files
     #[arg(long = "cfg")]
     config: Option<PathBuf>,
@@ -50,7 +58,42 @@ struct RecoveryTool {
     key: Option<SecretKey>,
     /// Network to operate on, has to be specified if --cfg isn't present
     #[arg(long = "network", default_value = "bitcoin", requires = "descriptor")]
-    network: bitcoin::network::constants::Network,
+    network: Network,
+    #[command(subcommand)]
+    strategy: TweakSource,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+enum TweakSource {
+    /// Derive the wallet descriptor using a single tweak
+    Direct {
+        #[arg(value_parser = tweak_parser)]
+        tweak: [u8; 32],
+    },
+    /// Derive all wallet descriptors of confirmed UTXOs in the on-chain wallet.
+    /// Note that unconfirmed change UTXOs will not appear here.
+    Utxos {
+        /// Extract UTXOs from a database without module partitioning
+        #[arg(long = "legacy")]
+        legacy: bool,
+        /// Path to database
+        #[arg(long = "db")]
+        db: PathBuf,
+    },
+    /// Derive all wallet descriptors of tweaks that were ever used according to
+    /// the epoch log. In a long-running and busy federation this list will
+    /// contain many empty descriptors.
+    Epochs {
+        /// Path to database
+        #[arg(long = "db")]
+        db: PathBuf,
+    },
+}
+
+fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 32]> {
+    <Vec<u8> as FromHex>::from_hex(hex)?
+        .try_into()
+        .map_err(|_| anyhow!("taks have to be 32 bytes long"))
 }
 
 #[tokio::main]
@@ -81,51 +124,179 @@ async fn main() {
         panic!("Either config or descriptor will be provided by clap");
     };
 
-    let db = Database::new(
-        RocksDb::open(opts.db).expect("Error opening DB"),
-        Default::default(),
-    );
+    match opts.strategy {
+        TweakSource::Direct { tweak } => {
+            let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
+            let wallets = vec![ImportableWalletMin { descriptor }];
 
-    let db = if opts.legacy {
-        db
-    } else {
-        db.new_isolated(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-    };
+            serde_json::to_writer(std::io::stdout().lock(), &wallets)
+                .expect("Could not encode to stdout")
+        }
+        TweakSource::Utxos { legacy, db } => {
+            let db = Database::new(
+                RocksDb::open(db).expect("Error opening DB"),
+                Default::default(),
+            );
 
-    let ctx = secp256k1::Secp256k1::new();
+            let db = if legacy {
+                db
+            } else {
+                db.new_isolated(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            };
 
-    let utxos: Vec<ImportableWallet> = db
-        .begin_transaction()
-        .await
-        .find_by_prefix(&UTXOPrefixKey)
-        .await
-        .map(|res| {
-            let (UTXOKey(outpoint), SpendableUTXO { tweak, amount }) = res.expect("DB error");
-            let secret_key = base_key.tweak(&tweak, &ctx);
-            let pub_key =
-                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&secret_key));
-            let descriptor = base_descriptor
-                .tweak(&tweak, &ctx)
-                .translate_pk(&mut SecretKeyInjector {
-                    secret: bitcoin::util::key::PrivateKey {
-                        compressed: true,
-                        network,
-                        inner: secret_key,
-                    },
-                    public: pub_key,
+            let utxos: Vec<ImportableWallet> = db
+                .begin_transaction()
+                .await
+                .find_by_prefix(&UTXOPrefixKey)
+                .await
+                .map(|res| {
+                    let (UTXOKey(outpoint), SpendableUTXO { tweak, amount }) =
+                        res.expect("DB error");
+                    let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
+
+                    ImportableWallet {
+                        outpoint,
+                        descriptor,
+                        amount_sat: amount,
+                    }
                 })
-                .expect("can't fail");
+                .collect()
+                .await;
 
-            ImportableWallet {
-                outpoint,
-                descriptor,
-                amount_sat: amount,
+            serde_json::to_writer(std::io::stdout().lock(), &utxos)
+                .expect("Could not encode to stdout")
+        }
+        TweakSource::Epochs { db } => {
+            let decoders = ModuleDecoderRegistry::from_iter([
+                (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
+                (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
+                (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
+            ]);
+
+            let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
+            let mut dbtx = db.begin_transaction().await;
+
+            let tweaks = dbtx
+                .find_by_prefix(&EpochHistoryKeyPrefix)
+                .await
+                .flat_map(|res| {
+                    let (_, SignedEpochOutcome { outcome, .. }) = res.expect("DB error");
+
+                    let UnzipConsensusItem {
+                        transaction: transaction_cis,
+                        module: module_cis,
+                        ..
+                    } = outcome
+                        .items
+                        .into_iter()
+                        .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
+                        .unzip_consensus_item();
+
+                    // Get all user-submitted tweaks and if we did a peg-out tx also return the
+                    // consensus round's tweak used for change
+                    let epoch_tweak = round_tweak(module_cis.into_iter().map(|(_, ci)| ci));
+                    let (mut peg_in_tweaks, peg_out_present) =
+                        input_tweaks_output_present(transaction_cis.into_iter().map(|(_, ci)| ci));
+
+                    if peg_out_present {
+                        peg_in_tweaks.insert(epoch_tweak);
+                    }
+
+                    futures::stream::iter(peg_in_tweaks.into_iter())
+                });
+
+            let wallets = tweaks
+                .map(|tweak| {
+                    let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
+                    ImportableWalletMin { descriptor }
+                })
+                .collect::<Vec<_>>()
+                .await;
+
+            serde_json::to_writer(std::io::stdout().lock(), &wallets)
+                .expect("Could not encode to stdout")
+        }
+    }
+}
+
+fn input_tweaks_output_present(
+    transactions: impl Iterator<Item = Transaction>,
+) -> (BTreeSet<[u8; 32]>, bool) {
+    let mut contains_peg_out = false;
+    let tweaks =
+        transactions
+            .flat_map(|tx| {
+                if tx.outputs.iter().any(|output| {
+                    output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET
+                }) {
+                    contains_peg_out = true;
+                }
+
+                tx.inputs.into_iter().filter_map(|input| {
+                    if input.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                        return None;
+                    }
+
+                    Some(
+                        input
+                            .as_any()
+                            .downcast_ref::<WalletInput>()
+                            .expect("Instance id mapping incorrect")
+                            .0
+                            .tweak_contract_key()
+                            .serialize(),
+                    )
+                })
+            })
+            .collect::<BTreeSet<_>>();
+
+    (tweaks, contains_peg_out)
+}
+
+fn round_tweak(module_cis: impl Iterator<Item = DynModuleConsensusItem>) -> [u8; 32] {
+    fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
+        lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
+        lhs
+    }
+
+    module_cis
+        .filter_map(|mci| {
+            if mci.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                return None;
+            }
+
+            let wci = mci
+                .as_any()
+                .downcast_ref::<WalletConsensusItem>()
+                .expect("Instance id mapping incorrect");
+            match wci {
+                WalletConsensusItem::RoundConsensus(rci) => Some(rci.randomness),
+                WalletConsensusItem::PegOutSignature(_) => None,
             }
         })
-        .collect()
-        .await;
+        .fold([0; 32], xor)
+}
 
-    serde_json::to_writer(std::io::stdout().lock(), &utxos).expect("Could not encode to stdout")
+fn tweak_descriptor(
+    base_descriptor: &PegInDescriptor,
+    base_sk: &SecretKey,
+    tweak: &[u8; 32],
+    network: Network,
+) -> Descriptor<Key> {
+    let secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);
+    let pub_key =
+        CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&secret_key));
+    base_descriptor
+        .tweak(tweak, secp256k1::SECP256K1)
+        .translate_pk(&mut SecretKeyInjector {
+            secret: bitcoin::util::key::PrivateKey {
+                compressed: true,
+                network,
+                inner: secret_key,
+            },
+            public: pub_key,
+        })
+        .expect("can't fail")
 }
 
 /// A UTXO with its Bitcoin Core importable descriptor
@@ -135,6 +306,12 @@ struct ImportableWallet {
     descriptor: Descriptor<Key>,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     amount_sat: bitcoin::Amount,
+}
+
+/// A Bitcoin Core importable descriptor
+#[derive(Debug, Serialize)]
+struct ImportableWalletMin {
+    descriptor: Descriptor<Key>,
 }
 
 /// `MiniscriptKey` that is either a WIF-encoded private key or a compressed,
