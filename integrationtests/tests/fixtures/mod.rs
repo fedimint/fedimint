@@ -5,23 +5,18 @@ use std::iter::repeat;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
-use std::sync::atomic::{AtomicI64, AtomicU16};
+use std::sync::atomic::{AtomicI64, AtomicU16, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::KeyPair;
-use bitcoin::{secp256k1, Address};
+use bitcoin::{secp256k1, Address, KeyPair};
 use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
-use fedimint_api::core;
 use fedimint_api::core::{
-    DynModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
-};
-use fedimint_api::core::{
-    ModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
+    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
@@ -30,51 +25,44 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::net::peers::IMuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::{timeout, TaskGroup};
-use fedimint_api::OutPoint;
-use fedimint_api::PeerId;
-use fedimint_api::TieredMulti;
-use fedimint_api::{sats, Amount};
+use fedimint_api::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::api::WsFederationApi;
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
-use fedimint_server::config::ServerConfigParams;
-use fedimint_server::config::{connect, ServerConfig};
-use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
-use fedimint_server::consensus::{FedimintConsensus, TransactionSubmissionError};
+use fedimint_server::config::{connect, ServerConfig, ServerConfigParams};
+use fedimint_server::consensus::{
+    ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
+};
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
-use fedimint_testing::{
-    btc::{fixtures::FakeBitcoinTest, BitcoinTest},
-    ln::{fixtures::FakeLightningTest, LightningTest},
-};
+use fedimint_testing::btc::fixtures::FakeBitcoinTest;
+use fedimint_testing::btc::BitcoinTest;
+use fedimint_testing::ln::fixtures::FakeLightningTest;
+use fedimint_testing::ln::LightningTest;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
-use fedimint_wallet::Wallet;
-use fedimint_wallet::{SpendableUTXO, WalletGen};
+use fedimint_wallet::{SpendableUTXO, Wallet, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
-use futures::FutureExt;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
+use ln_gateway::actor::GatewayActor;
+use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::cln::ClnRpc;
-use ln_gateway::{
-    actor::GatewayActor,
-    client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder},
-    config::GatewayConfig,
-    rpc::GatewayRequest,
-    LnGateway,
-};
-use mint_client::module_decode_stubs;
+use ln_gateway::config::GatewayConfig;
+use ln_gateway::rpc::GatewayRequest;
+use ln_gateway::LnGateway;
+use mint_client::mint::SpendableNote;
 use mint_client::transaction::legacy::Transaction;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::{
-    mint::SpendableNote, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
+    module_decode_stubs, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
 };
 use rand::rngs::OsRng;
 use rand::RngCore;

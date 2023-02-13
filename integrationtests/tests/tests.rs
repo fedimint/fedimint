@@ -10,8 +10,9 @@ use fedimint_api::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
 use fedimint_mint::{MintConsensusItem, MintOutputSignatureShare};
-use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
-use fedimint_server::consensus::TransactionSubmissionError::TransactionReplayError;
+use fedimint_server::consensus::TransactionSubmissionError::{
+    TransactionError, TransactionReplayError,
+};
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
 use fedimint_wallet::PegOutSignatureItem;
