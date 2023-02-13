@@ -5,14 +5,12 @@ use std::path::{Path, PathBuf};
 
 use aead::{encrypted_read, encrypted_write, get_key};
 use clap::{Parser, Subcommand};
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
-use fedimint_ln::LightningGen;
-use fedimint_mint::MintGen;
-use fedimint_wallet::WalletGen;
-use fedimintd::distributedgen::{create_cert, run_dkg};
+use fedimint_server::config::io::{
+    create_cert, encrypted_json_write, run_dkg, write_nonprivate_configs, PRIVATE_CONFIG,
+    SALT_FILE, TLS_PK,
+};
 use fedimintd::*;
 use tokio_rustls::rustls;
 use tracing::info;
@@ -136,12 +134,6 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let module_config_gens = ModuleGenRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ]);
-
     let mut task_group = TaskGroup::new();
 
     let command: Command = Cli::parse().command;
@@ -177,7 +169,9 @@ async fn main() -> anyhow::Result<()> {
                 certs,
                 rustls::PrivateKey(pk_bytes),
                 &mut task_group,
+                CODE_VERSION,
                 configure_modules(max_denomination, network, finality_delay),
+                module_registry(),
             )
             .await
             {
@@ -188,7 +182,7 @@ async fn main() -> anyhow::Result<()> {
             };
 
             encrypted_json_write(&server.private, &key, dir_out_path.join(PRIVATE_CONFIG))?;
-            write_nonprivate_configs(&server, dir_out_path, &module_config_gens)
+            write_nonprivate_configs(&server, dir_out_path, &module_registry())
         }
         Command::VersionHash => Ok(println!("{CODE_VERSION}")),
         Command::ConfigDecrypt {

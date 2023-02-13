@@ -10,8 +10,7 @@ use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    scalar, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
@@ -33,6 +32,10 @@ use fedimint_api::{
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
     PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
+#[cfg(feature = "server")]
+use fedimint_server::config::distributedgen::scalar;
+#[cfg(feature = "server")]
+use fedimint_server::config::distributedgen::DkgRunner;
 use futures::StreamExt;
 use impl_tools::autoimpl;
 use itertools::Itertools;
@@ -228,6 +231,21 @@ impl ModuleGen for MintGen {
             .collect()
     }
 
+    // FIXME: Currently required because the client depends on the server modules
+    #[cfg(not(feature = "server"))]
+    async fn distributed_gen(
+        &self,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        our_id: &PeerId,
+        module_instance_id: ModuleInstanceId,
+        peers: &[PeerId],
+        _params: &ConfigGenParams,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+        unimplemented!()
+    }
+
+    #[cfg(feature = "server")]
     async fn distributed_gen(
         &self,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,

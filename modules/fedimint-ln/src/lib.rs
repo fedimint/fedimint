@@ -24,7 +24,7 @@ use config::FeeConsensus;
 use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig, TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ServerModuleConfig, TypedServerModuleConfig,
 };
 use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
@@ -43,6 +43,8 @@ use fedimint_api::task::TaskGroup;
 use fedimint_api::time::SystemTime;
 use fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
 use fedimint_api::{OutPoint, ServerModule};
+#[cfg(feature = "server")]
+use fedimint_server::config::distributedgen::DkgRunner;
 use futures::StreamExt;
 use itertools::Itertools;
 use rand::rngs::OsRng;
@@ -306,6 +308,21 @@ impl ModuleGen for LightningGen {
         server_cfg
     }
 
+    // FIXME: Currently required because the client depends on the server modules
+    #[cfg(not(feature = "server"))]
+    async fn distributed_gen(
+        &self,
+        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        our_id: &PeerId,
+        module_instance_id: ModuleInstanceId,
+        peers: &[PeerId],
+        _params: &ConfigGenParams,
+        _task_group: &mut TaskGroup,
+    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+        unimplemented!()
+    }
+
+    #[cfg(feature = "server")]
     async fn distributed_gen(
         &self,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
