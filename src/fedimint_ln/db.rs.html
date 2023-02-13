@@ -142,8 +142,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = ContractKey,
     value = ContractAccount,
-    prefix = DbKeyPrefix::Contract,
-    key_prefix = ContractKeyPrefix
+    db_prefix = DbKeyPrefix::Contract,
+    query_prefix = ContractKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -155,8 +155,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = ContractUpdateKey,
     value = LightningOutputOutcome,
-    prefix = DbKeyPrefix::ContractUpdate,
-    key_prefix = ContractUpdateKeyPrefix
+    db_prefix = DbKeyPrefix::ContractUpdate,
+    query_prefix = ContractUpdateKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -168,8 +168,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = OfferKey,
     value = IncomingContractOffer,
-    prefix = DbKeyPrefix::Offer,
-    key_prefix = OfferKeyPrefix
+    db_prefix = DbKeyPrefix::Offer,
+    query_prefix = OfferKeyPrefix
 );
 
 <span class="comment">// TODO: remove redundancy
@@ -183,8 +183,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = ProposeDecryptionShareKey,
     value = PreimageDecryptionShare,
-    prefix = DbKeyPrefix::ProposeDecryptionShare,
-    key_prefix = ProposeDecryptionShareKeyPrefix
+    db_prefix = DbKeyPrefix::ProposeDecryptionShare,
+    query_prefix = ProposeDecryptionShareKeyPrefix
 );
 
 <span class="doccomment">/// Preimage decryption shares we received
@@ -198,8 +198,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = AgreedDecryptionShareKey,
     value = PreimageDecryptionShare,
-    prefix = DbKeyPrefix::AgreedDecryptionShare,
-    key_prefix = AgreedDecryptionShareKeyPrefix
+    db_prefix = DbKeyPrefix::AgreedDecryptionShare,
+    query_prefix = AgreedDecryptionShareKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -211,8 +211,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = LightningGatewayKey,
     value = LightningGateway,
-    prefix = DbKeyPrefix::LightningGateway,
-    key_prefix = LightningGatewayKeyPrefix
+    db_prefix = DbKeyPrefix::LightningGateway,
+    query_prefix = LightningGatewayKeyPrefix
 );
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

@@ -1540,6 +1540,29 @@
 <a href="#1540" id="1540">1540</a>
 <a href="#1541" id="1541">1541</a>
 <a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a>
+<a href="#1550" id="1550">1550</a>
+<a href="#1551" id="1551">1551</a>
+<a href="#1552" id="1552">1552</a>
+<a href="#1553" id="1553">1553</a>
+<a href="#1554" id="1554">1554</a>
+<a href="#1555" id="1555">1555</a>
+<a href="#1556" id="1556">1556</a>
+<a href="#1557" id="1557">1557</a>
+<a href="#1558" id="1558">1558</a>
+<a href="#1559" id="1559">1559</a>
+<a href="#1560" id="1560">1560</a>
+<a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
+<a href="#1563" id="1563">1563</a>
+<a href="#1564" id="1564">1564</a>
+<a href="#1565" id="1565">1565</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::marker::PhantomData;
@@ -2236,38 +2259,61 @@
 }
 
 <span class="doccomment">/// This is a helper macro that generates the implementations of
-/// DatabaseKeyPrefixConst necessary for reading/writing to the
+/// [`DatabaseKeyPrefixConst`] necessary for reading/writing to the
 /// database and fetching by prefix.
 ///
 /// - `key`: This is the type of struct that will be used as the key into the
-///   database.
+///   database
 /// - `value`: This is the type of struct that will be used as the value into
-///   the database.
-/// - `prefix`: Enum expression that is represented as a `u8` that is the prefix
-///   prepended to this key.
-/// - `key_prefix`: Optional type of struct that can be passed multiple times if
-///   necessary. These will be used
-/// as the key prefix when querying the database via `find_by_prefix`.
+///   the database
+/// - `db_prefix`: Required enum expression that is represented as a `u8` and is
+///   prepended to this key
+/// - `query_prefix`: Optional type of struct that can be passed zero or more
+///   times. Every query prefix can be used to query the database via
+///   `find_by_prefix`
 ///
 /// Examples:
 ///
-/// `impl_db_prefix_const!(key = TestKey, value = TestVal, prefix =
-/// TestDbKeyPrefix::Test);`
+/// Only use the required parameters
 ///
-/// `impl_db_prefix_const!(key = AltTestKey, value = TestVal, prefix =
-/// TestDbKeyPrefix::AltTest, key_prefix = AltDbPrefixTestPrefix);`
+/// ```
+/// use fedimint_api::db::TestDbKeyPrefix;
+///
+/// use crate::fedimint_api::impl_db_prefix_const;
+///
+/// impl_db_prefix_const!(
+///     key = TestKey,
+///     value = TestVal,
+///     db_prefix = TestDbKeyPrefix::Test
+/// );
+/// ```
+///
+/// Use the required parameters and specify one `query_prefix`.
+///
+/// ```
+/// use fedimint_api::db::TestDbKeyPrefix;
+///
+/// use crate::fedimint_api::impl_db_prefix_const;
+///
+/// impl_db_prefix_const!(
+///     key = AltTestKey,
+///     value = TestVal,
+///     db_prefix = TestDbKeyPrefix::AltTest,
+///     query_prefix = AltDbPrefixTestPrefix
+/// );
+/// ```
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>impl_db_prefix_const {
-    (key = <span class="macro-nonterminal">$key</span>:ty, value = <span class="macro-nonterminal">$val</span>:ty, prefix = <span class="macro-nonterminal">$prefix</span>:expr $(, key_prefix = <span class="macro-nonterminal">$prefix_ty</span>:ty)* $(,)<span class="question-mark">?</span>) =&gt; {
+    (key = <span class="macro-nonterminal">$key</span>:ty, value = <span class="macro-nonterminal">$val</span>:ty, db_prefix = <span class="macro-nonterminal">$db_prefix</span>:expr $(, query_prefix = <span class="macro-nonterminal">$query_prefix</span>:ty)* $(,)<span class="question-mark">?</span>) =&gt; {
         <span class="kw">impl </span>fedimint_api::db::DatabaseKeyPrefixConst <span class="kw">for </span><span class="macro-nonterminal">$key </span>{
-            <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$prefix </span><span class="kw">as </span>u8;
+            <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$db_prefix </span><span class="kw">as </span>u8;
             <span class="kw">type </span>Key = <span class="self">Self</span>;
             <span class="kw">type </span>Value = <span class="macro-nonterminal">$val</span>;
         }
 
         $(
-            <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseKeyPrefixConst </span><span class="kw">for </span><span class="macro-nonterminal">$prefix_ty </span>{
-                <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$prefix </span><span class="kw">as </span>u8;
+            <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseKeyPrefixConst </span><span class="kw">for </span><span class="macro-nonterminal">$query_prefix </span>{
+                <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$db_prefix </span><span class="kw">as </span>u8;
                 <span class="kw">type </span>Key = <span class="macro-nonterminal">$key</span>;
                 <span class="kw">type </span>Value = <span class="macro-nonterminal">$val</span>;
             }
@@ -2373,8 +2419,8 @@
     <span class="macro">impl_db_prefix_const!</span>(
         key = TestKey,
         value = TestVal,
-        prefix = TestDbKeyPrefix::Test,
-        key_prefix = DbPrefixTestPrefix
+        db_prefix = TestDbKeyPrefix::Test,
+        query_prefix = DbPrefixTestPrefix
     );
 
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
@@ -2386,8 +2432,8 @@
     <span class="macro">impl_db_prefix_const!</span>(
         key = AltTestKey,
         value = TestVal,
-        prefix = TestDbKeyPrefix::AltTest,
-        key_prefix = AltDbPrefixTestPrefix
+        db_prefix = TestDbKeyPrefix::AltTest,
+        query_prefix = AltDbPrefixTestPrefix
     );
 
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
@@ -2399,8 +2445,8 @@
     <span class="macro">impl_db_prefix_const!</span>(
         key = PercentTestKey,
         value = TestVal,
-        prefix = TestDbKeyPrefix::PercentTestKey,
-        key_prefix = PercentPrefixTestPrefix
+        db_prefix = TestDbKeyPrefix::PercentTestKey,
+        query_prefix = PercentPrefixTestPrefix
     );
 
     <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]

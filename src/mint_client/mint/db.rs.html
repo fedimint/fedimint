@@ -117,8 +117,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = NoteKey,
     value = SpendableNote,
-    prefix = DbKeyPrefix::Note,
-    key_prefix = NoteKeyPrefix
+    db_prefix = DbKeyPrefix::Note,
+    query_prefix = NoteKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
@@ -130,8 +130,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = PendingNotesKey,
     value = TieredMulti&lt;SpendableNote&gt;,
-    prefix = DbKeyPrefix::PendingNotes,
-    key_prefix = PendingNotesKeyPrefix
+    db_prefix = DbKeyPrefix::PendingNotes,
+    query_prefix = PendingNotesKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
@@ -143,8 +143,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = OutputFinalizationKey,
     value = NoteIssuanceRequests,
-    prefix = DbKeyPrefix::OutputFinalizationData,
-    key_prefix = OutputFinalizationKeyPrefix
+    db_prefix = DbKeyPrefix::OutputFinalizationData,
+    query_prefix = OutputFinalizationKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
@@ -156,13 +156,13 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = NextECashNoteIndexKey,
     value = u64,
-    prefix = DbKeyPrefix::NextECashNoteIndex,
-    key_prefix = NextECashNoteIndexKeyPrefix
+    db_prefix = DbKeyPrefix::NextECashNoteIndex,
+    query_prefix = NextECashNoteIndexKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>NotesPerDenominationKey;
 
-<span class="macro">impl_db_prefix_const!</span>(key = NotesPerDenominationKey, value = u16, prefix = <span class="number">0</span>);
+<span class="macro">impl_db_prefix_const!</span>(key = NotesPerDenominationKey, value = u16, db_prefix = <span class="number">0</span>);
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

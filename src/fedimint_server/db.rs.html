@@ -138,8 +138,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = AcceptedTransactionKey,
     value = AcceptedTransaction,
-    prefix = DbKeyPrefix::AcceptedTransaction,
-    key_prefix = AcceptedTransactionKeyPrefix
+    db_prefix = DbKeyPrefix::AcceptedTransaction,
+    query_prefix = AcceptedTransactionKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -151,8 +151,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = RejectedTransactionKey,
     value = String,
-    prefix = DbKeyPrefix::RejectedTransaction,
-    key_prefix = RejectedTransactionKeyPrefix
+    db_prefix = DbKeyPrefix::RejectedTransaction,
+    query_prefix = RejectedTransactionKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -164,8 +164,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = DropPeerKey,
     value = (),
-    prefix = DbKeyPrefix::DropPeer,
-    key_prefix = DropPeerKeyPrefix
+    db_prefix = DbKeyPrefix::DropPeer,
+    query_prefix = DropPeerKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
@@ -177,8 +177,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = EpochHistoryKey,
     value = SignedEpochOutcome,
-    prefix = DbKeyPrefix::EpochHistory,
-    key_prefix = EpochHistoryKeyPrefix
+    db_prefix = DbKeyPrefix::EpochHistory,
+    query_prefix = EpochHistoryKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -187,7 +187,7 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = LastEpochKey,
     value = EpochHistoryKey,
-    prefix = DbKeyPrefix::LastEpoch
+    db_prefix = DbKeyPrefix::LastEpoch
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -199,8 +199,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = ClientConfigSignatureKey,
     value = SerdeSignature,
-    prefix = DbKeyPrefix::ClientConfigSignature,
-    key_prefix = ClientConfigSignatureKeyPrefix
+    db_prefix = DbKeyPrefix::ClientConfigSignature,
+    query_prefix = ClientConfigSignatureKeyPrefix
 );
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

@@ -164,8 +164,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = NonceKey,
     value = (),
-    prefix = DbKeyPrefix::NoteNonce,
-    key_prefix = NonceKeyPrefix
+    db_prefix = DbKeyPrefix::NoteNonce,
+    query_prefix = NonceKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -179,8 +179,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = ProposedPartialSignatureKey,
     value = MintOutputSignatureShare,
-    prefix = DbKeyPrefix::ProposedPartialSig,
-    key_prefix = ProposedPartialSignaturesKeyPrefix
+    db_prefix = DbKeyPrefix::ProposedPartialSig,
+    query_prefix = ProposedPartialSignaturesKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -200,9 +200,9 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = ReceivedPartialSignatureKey,
     value = MintOutputSignatureShare,
-    prefix = DbKeyPrefix::ReceivedPartialSig,
-    key_prefix = ReceivedPartialSignaturesKeyPrefix,
-    key_prefix = ReceivedPartialSignatureKeyOutputPrefix
+    db_prefix = DbKeyPrefix::ReceivedPartialSig,
+    query_prefix = ReceivedPartialSignaturesKeyPrefix,
+    query_prefix = ReceivedPartialSignatureKeyOutputPrefix
 );
 
 <span class="doccomment">/// Transaction id and output index identifying an output outcome
@@ -215,8 +215,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = OutputOutcomeKey,
     value = MintOutputBlindSignatures,
-    prefix = DbKeyPrefix::OutputOutcome,
-    key_prefix = OutputOutcomeKeyPrefix
+    db_prefix = DbKeyPrefix::OutputOutcome,
+    query_prefix = OutputOutcomeKeyPrefix
 );
 
 <span class="doccomment">/// Represents the amounts of issued (signed) and redeemed (verified) notes for
@@ -235,8 +235,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = MintAuditItemKey,
     value = Amount,
-    prefix = DbKeyPrefix::MintAuditItem,
-    key_prefix = MintAuditItemKeyPrefix
+    db_prefix = DbKeyPrefix::MintAuditItem,
+    query_prefix = MintAuditItemKeyPrefix
 );
 
 <span class="doccomment">/// Key used to store user&#39;s ecash backups
@@ -249,8 +249,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = EcashBackupKey,
     value = ECashUserBackupSnapshot,
-    prefix = DbKeyPrefix::EcashBackup,
-    key_prefix = EcashBackupKeyPrefix
+    db_prefix = DbKeyPrefix::EcashBackup,
+    query_prefix = EcashBackupKeyPrefix
 );
 
 <span class="doccomment">/// User&#39;s backup, received at certain time, containing encrypted payload

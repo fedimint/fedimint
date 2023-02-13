@@ -125,8 +125,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = OutgoingPaymentKey,
     value = OutgoingContractData,
-    prefix = DbKeyPrefix::OutgoingPayment,
-    key_prefix = OutgoingPaymentKeyPrefix
+    db_prefix = DbKeyPrefix::OutgoingPayment,
+    query_prefix = OutgoingPaymentKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -138,8 +138,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = OutgoingPaymentClaimKey,
     value = (),
-    prefix = DbKeyPrefix::OutgoingPaymentClaim,
-    key_prefix = OutgoingPaymentClaimKeyPrefix
+    db_prefix = DbKeyPrefix::OutgoingPaymentClaim,
+    query_prefix = OutgoingPaymentClaimKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -151,8 +151,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = OutgoingContractAccountKey,
     value = OutgoingContractAccount,
-    prefix = DbKeyPrefix::OutgoingContractAccount,
-    key_prefix = OutgoingContractAccountKeyPrefix
+    db_prefix = DbKeyPrefix::OutgoingContractAccount,
+    query_prefix = OutgoingContractAccountKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -164,8 +164,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = ConfirmedInvoiceKey,
     value = ConfirmedInvoice,
-    prefix = DbKeyPrefix::ConfirmedInvoice,
-    key_prefix = ConfirmedInvoiceKeyPrefix
+    db_prefix = DbKeyPrefix::ConfirmedInvoice,
+    query_prefix = ConfirmedInvoiceKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -177,8 +177,8 @@
 <span class="macro">impl_db_prefix_const!</span>(
     key = LightningGatewayKey,
     value = LightningGateway,
-    prefix = DbKeyPrefix::LightningGateway,
-    key_prefix = LightningGatewayKeyPrefix
+    db_prefix = DbKeyPrefix::LightningGateway,
+    query_prefix = LightningGatewayKeyPrefix
 );
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
