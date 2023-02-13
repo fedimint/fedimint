@@ -968,6 +968,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
+ "strum",
+ "strum_macros",
  "tbs",
  "test-log",
  "thiserror",
@@ -1046,6 +1048,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

@@ -14,7 +14,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
@@ -155,6 +155,7 @@ pub struct MintGen;
 #[async_trait]
 impl ModuleGen for MintGen {
     const KIND: ModuleKind = KIND;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     type Decoder = MintDecoder;
 

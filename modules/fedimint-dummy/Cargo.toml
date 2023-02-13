@@ -29,3 +29,4 @@ strum_macros = "0.24"
 impl-tools = "0.6.1"
 thiserror = "1.0.37"
 fedimint-server = { path = "../../fedimint-server", optional = true  }
+tracing = "0.1.37"

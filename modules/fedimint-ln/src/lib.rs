@@ -28,7 +28,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
@@ -257,6 +257,7 @@ pub struct LightningGen;
 #[async_trait]
 impl ModuleGen for LightningGen {
     const KIND: ModuleKind = KIND;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
     type Decoder = LightningDecoder;
 
     fn decoder(&self) -> LightningDecoder {
