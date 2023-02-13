@@ -13,8 +13,7 @@ use fedimint_api::config::{
 use fedimint_api::core::DynOutputOutcome;
 use fedimint_api::fmt_utils::AbbreviateDebug;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::task::sleep;
-use fedimint_api::task::{RwLock, RwLockWriteGuard};
+use fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
@@ -804,16 +803,12 @@ impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        fmt,
-        str::FromStr,
-        sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
-            Mutex,
-        },
-        time::Duration,
-    };
+    use std::collections::HashSet;
+    use std::fmt;
+    use std::str::FromStr;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Mutex;
+    use std::time::Duration;
 
     use anyhow::anyhow;
     use jsonrpsee_core::client::BatchResponse;

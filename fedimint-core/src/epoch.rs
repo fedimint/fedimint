@@ -1,5 +1,4 @@
-use std::collections::BTreeSet;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use fedimint_api::core::DynModuleConsensusItem as ModuleConsensusItem;
@@ -211,8 +210,10 @@ mod tests {
     use rand::rngs::OsRng;
     use threshold_crypto::{SecretKey, SecretKeySet};
 
-    use crate::epoch::{ConsensusItem, SerdeSignatureShare, Sha256};
-    use crate::epoch::{EpochOutcome, EpochVerifyError, SerdeSignature, SignedEpochOutcome};
+    use crate::epoch::{
+        ConsensusItem, EpochOutcome, EpochVerifyError, SerdeSignature, SerdeSignatureShare, Sha256,
+        SignedEpochOutcome,
+    };
 
     fn signed_history(
         epoch: u16,
