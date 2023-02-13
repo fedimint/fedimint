@@ -20,7 +20,6 @@ use ln_gateway::{
         PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     },
     ln::{LightningError, LnRpc},
-    Result,
 };
 use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
@@ -109,19 +108,19 @@ impl LnRpc for FakeLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for FakeLightningTest {
-    async fn pubkey(&self) -> Result<GetPubKeyResponse> {
+    async fn pubkey(&self) -> ln_gateway::Result<GetPubKeyResponse> {
         Ok(GetPubKeyResponse {
             pub_key: self.gateway_node_pub_key.serialize().to_vec(),
         })
     }
 
-    async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
+    async fn route_hints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
         Ok(GetRouteHintsResponse {
             route_hints: vec![RouteHint(vec![])],
         })
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
+    async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
         let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
         *self.amount_sent.lock().unwrap() += Invoice::from_signed(signed)
             .unwrap()
@@ -136,14 +135,14 @@ impl ILnRpcClient for FakeLightningTest {
     async fn subscribe_htlcs<'a>(
         &self,
         _subscription: SubscribeInterceptHtlcsRequest,
-    ) -> Result<HtlcStream<'a>> {
+    ) -> ln_gateway::Result<HtlcStream<'a>> {
         Ok(Box::pin(stream::iter(vec![])))
     }
 
     async fn complete_htlc(
         &self,
         _complete: CompleteHtlcsRequest,
-    ) -> Result<CompleteHtlcsResponse> {
+    ) -> ln_gateway::Result<CompleteHtlcsResponse> {
         Ok(CompleteHtlcsResponse {})
     }
 }
