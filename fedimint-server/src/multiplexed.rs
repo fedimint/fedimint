@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_api::cancellable::Cancellable;
-use fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
+use fedimint_core::cancellable::Cancellable;
+use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -176,10 +176,10 @@ where
 pub mod test {
     use std::time::Duration;
 
-    use fedimint_api::net::peers::fake::make_fake_peer_connection;
-    use fedimint_api::net::peers::IMuxPeerConnections;
-    use fedimint_api::task::TaskGroup;
-    use fedimint_api::PeerId;
+    use fedimint_core::net::peers::fake::make_fake_peer_connection;
+    use fedimint_core::net::peers::IMuxPeerConnections;
+    use fedimint_core::task::TaskGroup;
+    use fedimint_core::PeerId;
     use rand::rngs::OsRng;
     use rand::Rng;
     use tokio::time::sleep;

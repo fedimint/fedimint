@@ -1,6 +1,6 @@
 use bitcoin::{BlockHash, Txid};
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::impl_db_prefix_const;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::impl_db_prefix_const;
 use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -102,7 +102,7 @@ impl_db_prefix_const!(
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct PegOutBitcoinTransaction(pub fedimint_api::OutPoint);
+pub struct PegOutBitcoinTransaction(pub fedimint_core::OutPoint);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PegOutBitcoinTransactionPrefix;

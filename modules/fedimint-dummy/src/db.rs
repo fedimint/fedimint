@@ -1,5 +1,5 @@
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::impl_db_prefix_const;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::impl_db_prefix_const;
 use serde::Serialize;
 use strum_macros::EnumIter;
 

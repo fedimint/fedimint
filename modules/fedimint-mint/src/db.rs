@@ -1,7 +1,7 @@
 use std::time::SystemTime;
 
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::{impl_db_prefix_const, Amount, OutPoint, PeerId};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::{impl_db_prefix_const, Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -126,6 +126,6 @@ impl_db_prefix_const!(
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct ECashUserBackupSnapshot {
     pub timestamp: SystemTime,
-    #[serde(with = "fedimint_api::hex::serde")]
+    #[serde(with = "fedimint_core::hex::serde")]
     pub data: Vec<u8>,
 }

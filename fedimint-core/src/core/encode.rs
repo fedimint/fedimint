@@ -1,6 +1,6 @@
 use std::io;
 
-use fedimint_api::encoding::{Decodable, DecodeError};
+use fedimint_core::encoding::{Decodable, DecodeError};
 
 use super::ModuleInstanceId;
 use crate::core::DynDecoder;

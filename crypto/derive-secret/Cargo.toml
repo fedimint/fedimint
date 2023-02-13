@@ -14,7 +14,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.66"
-fedimint-api = { path = "../../fedimint-api" }
+fedimint-core ={ path = "../../fedimint-core" }
 hkdf = { path = "../../crypto/hkdf" }
 ring = "0.16.20"
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }

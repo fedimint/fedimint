@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 
-use fedimint_api::Amount;
+use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
 use tbs::{PublicKeyShare, SecretKeyShare};
 
@@ -130,7 +130,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fedimint_api::Amount;
+    use fedimint_core::Amount;
 
     use super::Tiered;
 

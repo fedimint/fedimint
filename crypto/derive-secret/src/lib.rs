@@ -2,7 +2,7 @@
 
 use std::fmt::Formatter;
 
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, Encodable};
 use hkdf::hashes::Sha512;
 use hkdf::{bitcoin_hashes, Hkdf};
 use ring::aead;

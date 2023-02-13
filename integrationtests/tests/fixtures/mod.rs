@@ -11,23 +11,23 @@ use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, KeyPair};
-use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
-use fedimint_api::cancellable::Cancellable;
-use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
-use fedimint_api::core::{
+use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::api::WsFederationApi;
+use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
+use fedimint_core::cancellable::Cancellable;
+use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_api::db::mem_impl::MemDatabase;
-use fedimint_api::db::Database;
-use fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_api::module::DynModuleGen;
-use fedimint_api::net::peers::IMuxPeerConnections;
-use fedimint_api::server::DynServerModule;
-use fedimint_api::task::{timeout, TaskGroup};
-use fedimint_api::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
-use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_core::api::WsFederationApi;
+use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::Database;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_core::module::DynModuleGen;
+use fedimint_core::net::peers::IMuxPeerConnections;
+use fedimint_core::server::DynServerModule;
+use fedimint_core::task::{timeout, TaskGroup};
+use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
@@ -199,8 +199,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let bitcoin_rpc_url =
                 match read_bitcoin_backend_from_global_env().expect("invalid bitcoin rpc url") {
-                    fedimint_api::bitcoin_rpc::BitcoindRpcBackend::Bitcoind(url) => url,
-                    fedimint_api::bitcoin_rpc::BitcoindRpcBackend::Electrum(_) => {
+                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Bitcoind(url) => url,
+                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Electrum(_) => {
                         panic!("Electrum backend not supported for tests")
                     }
                 };
@@ -903,7 +903,7 @@ impl FederationTest {
     ) -> OutPoint {
         let bytes: [u8; 32] = rand::random();
         let out_point = OutPoint {
-            txid: fedimint_api::TransactionId::from_inner(bytes),
+            txid: fedimint_core::TransactionId::from_inner(bytes),
             out_idx: 0,
         };
 

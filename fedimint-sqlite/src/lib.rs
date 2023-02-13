@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+use fedimint_core::db::{IDatabase, IDatabaseTransaction, PrefixStream};
 use futures::stream;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::SqliteConnectOptions;
@@ -155,9 +155,9 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
 mod fedimint_sqlite_tests {
     use std::fs;
 
-    use fedimint_api::core::ModuleInstanceId;
-    use fedimint_api::db::Database;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::core::ModuleInstanceId;
+    use fedimint_core::db::Database;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use rand::rngs::OsRng;
     use rand::RngCore;
 
@@ -186,43 +186,44 @@ mod fedimint_sqlite_tests {
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(open_temp_db("insert-elements").await).await;
+        fedimint_core::db::verify_insert_elements(open_temp_db("insert-elements").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(open_temp_db("remove-nonexisting").await).await;
+        fedimint_core::db::verify_remove_nonexisting(open_temp_db("remove-nonexisting").await)
+            .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_existing(open_temp_db("remove-existing").await).await;
+        fedimint_core::db::verify_remove_existing(open_temp_db("remove-existing").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(open_temp_db("read-own-writes").await).await;
+        fedimint_core::db::verify_read_own_writes(open_temp_db("read-own-writes").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(open_temp_db("prevent_dirty_reads").await)
+        fedimint_core::db::verify_prevent_dirty_reads(open_temp_db("prevent_dirty_reads").await)
             .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(open_temp_db("find_by_prefix").await).await;
+        fedimint_core::db::verify_find_by_prefix(open_temp_db("find_by_prefix").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db("commit").await).await;
+        fedimint_core::db::verify_commit(open_temp_db("commit").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_nonrepeatable_reads() {
-        fedimint_api::db::verify_prevent_nonrepeatable_reads(
+        fedimint_core::db::verify_prevent_nonrepeatable_reads(
             open_temp_db("prevent-nonrepeatable-reads").await,
         )
         .await;
@@ -230,39 +231,41 @@ mod fedimint_sqlite_tests {
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(open_temp_db("rollback-to-savepoint").await)
-            .await;
+        fedimint_core::db::verify_rollback_to_savepoint(
+            open_temp_db("rollback-to-savepoint").await,
+        )
+        .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_phantom_entry() {
-        fedimint_api::db::verify_phantom_entry(open_temp_db("phantom-entry").await).await;
+        fedimint_core::db::verify_phantom_entry(open_temp_db("phantom-entry").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_write_conflict() {
-        fedimint_api::db::expect_write_conflict(open_temp_db("write-conflict").await).await;
+        fedimint_core::db::expect_write_conflict(open_temp_db("write-conflict").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_sqlite_prefix() {
-        fedimint_api::db::verify_string_prefix(open_temp_db("verify-string-prefix").await).await;
+        fedimint_core::db::verify_string_prefix(open_temp_db("verify-string-prefix").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(open_temp_db("verify-remove-by-prefix").await)
+        fedimint_core::db::verify_remove_by_prefix(open_temp_db("verify-remove-by-prefix").await)
             .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_module_dbtx() {
-        fedimint_api::db::verify_module_prefix(open_temp_db("verify-module-prefix").await).await;
+        fedimint_core::db::verify_module_prefix(open_temp_db("verify-module-prefix").await).await;
     }
 
     #[test_log::test(tokio::test)]
     async fn test_module_db() {
-        fedimint_api::db::verify_module_db(
+        fedimint_core::db::verify_module_db(
             open_temp_db("verify-module-db1").await,
             open_temp_module_db("verify-module-db2", 1).await,
         )

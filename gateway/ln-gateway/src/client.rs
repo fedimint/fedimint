@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::config::{FederationId, ModuleGenRegistry};
-use fedimint_api::db::mem_impl::MemDatabase;
-use fedimint_api::db::Database;
-use fedimint_api::dyn_newtype_define;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_core::config::{FederationId, ModuleGenRegistry};
+use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::Database;
+use fedimint_core::dyn_newtype_define;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_server::api::{
     DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };

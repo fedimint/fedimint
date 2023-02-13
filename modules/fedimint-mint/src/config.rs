@@ -2,14 +2,14 @@ use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 
 use anyhow::bail;
-use fedimint_api::config::{
+use fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-use fedimint_api::core::ModuleKind;
-use fedimint_api::encoding::Encodable;
-use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
+use fedimint_core::core::ModuleKind;
+use fedimint_core::encoding::Encodable;
+use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
@@ -120,15 +120,15 @@ impl TypedServerModuleConfig for MintConfig {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
-    pub note_issuance_abs: fedimint_api::Amount,
-    pub note_spend_abs: fedimint_api::Amount,
+    pub note_issuance_abs: fedimint_core::Amount,
+    pub note_spend_abs: fedimint_core::Amount,
 }
 
 impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            note_issuance_abs: fedimint_api::Amount::ZERO,
-            note_spend_abs: fedimint_api::Amount::ZERO,
+            note_issuance_abs: fedimint_core::Amount::ZERO,
+            note_spend_abs: fedimint_core::Amount::ZERO,
         }
     }
 }

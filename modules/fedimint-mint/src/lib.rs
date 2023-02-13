@@ -8,27 +8,27 @@ use async_trait::async_trait;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::config::{
+use fedimint_core::cancellable::{Cancellable, Cancelled};
+use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_api::core::{ModuleInstanceId, ModuleKind};
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::module::audit::Audit;
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::module::audit::Audit;
+use fedimint_core::module::interconnect::ModuleInterconect;
+use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
-use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::server::DynServerModule;
-use fedimint_api::task::TaskGroup;
-use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::{
+use fedimint_core::net::peers::MuxPeerConnections;
+use fedimint_core::server::DynServerModule;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::tiered::InvalidAmountTierError;
+use fedimint_core::{
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
     PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
@@ -349,7 +349,7 @@ impl ModuleGen for MintGen {
                         dbtx,
                         MintAuditItemKeyPrefix,
                         MintAuditItemKey,
-                        fedimint_api::Amount,
+                        fedimint_core::Amount,
                         mint,
                         "Mint Audit Items"
                     );
@@ -1192,7 +1192,7 @@ impl Extend<(Amount, BlindNonce)> for MintOutput {
 }
 
 plugin_types_trait_impl!(
-    fedimint_api::core::MODULE_KEY_MINT,
+    fedimint_core::core::MODULE_KEY_MINT,
     MintInput,
     MintOutput,
     MintOutputOutcome,
@@ -1250,11 +1250,11 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    use fedimint_api::config::{
+    use fedimint_core::config::{
         ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
-    use fedimint_api::module::ModuleGen;
-    use fedimint_api::{Amount, PeerId, TieredMulti};
+    use fedimint_core::module::ModuleGen;
+    use fedimint_core::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::config::{FeeConsensus, MintClientConfig};

@@ -13,7 +13,6 @@ members = [
     "fedimint-client",
     "fedimint-derive",
     "fedimint-dbtool",
-    "fedimint-api",
     "fedimint-rocksdb",
     "fedimint-testing",
     "fedimint-server",

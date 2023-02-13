@@ -7,13 +7,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::config::FederationId;
-use fedimint_api::core::client::ClientModule;
-use fedimint_api::db::DatabaseTransaction;
-use fedimint_api::module::TransactionItemAmount;
-use fedimint_api::task::timeout;
-use fedimint_api::Amount;
 use fedimint_core::api::FederationError;
+use fedimint_core::config::FederationId;
+use fedimint_core::core::client::ClientModule;
+use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::module::TransactionItemAmount;
+use fedimint_core::task::timeout;
+use fedimint_core::Amount;
 use futures::StreamExt;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -335,13 +335,15 @@ mod tests {
     use std::time::SystemTime;
 
     use bitcoin::hashes::{sha256, Hash};
-    use fedimint_api::config::ConfigGenParams;
-    use fedimint_api::core::{DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN};
-    use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::db::Database;
-    use fedimint_api::module::registry::ModuleDecoderRegistry;
-    use fedimint_api::{Amount, OutPoint, TransactionId};
+    use fedimint_core::config::ConfigGenParams;
+    use fedimint_core::core::{
+        DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
+    };
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::Database;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
+    use fedimint_core::{Amount, OutPoint, TransactionId};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
     use tokio::sync::Mutex;

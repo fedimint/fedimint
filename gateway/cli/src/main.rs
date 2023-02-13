@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_api::config::FederationId;
+use fedimint_core::config::FederationId;
 use ln_gateway::config::GatewayConfig;
 use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::rpc::{

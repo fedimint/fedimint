@@ -6,9 +6,9 @@ use std::io::Error;
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::{hash_newtype, Hash as BitcoinHash};
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::OutPoint;
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::OutPoint;
 use serde::{Deserialize, Serialize};
 
 /// Anything representing a contract which thus has an associated [`ContractId`]

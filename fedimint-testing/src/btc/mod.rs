@@ -3,7 +3,7 @@ pub mod fixtures;
 
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction};
-use fedimint_api::Amount;
+use fedimint_core::Amount;
 use fedimint_wallet::txoproof::TxOutProof;
 
 #[async_trait]

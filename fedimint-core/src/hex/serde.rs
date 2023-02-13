@@ -24,7 +24,7 @@ mod tests {
 
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Data {
-        #[serde(with = "fedimint_api::hex::serde")]
+        #[serde(with = "fedimint_core::hex::serde")]
         inner: Vec<u8>,
     }
 

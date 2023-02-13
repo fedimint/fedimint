@@ -1,11 +1,11 @@
 use anyhow::bail;
-use fedimint_api::config::{
+use fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-use fedimint_api::core::ModuleKind;
-use fedimint_api::encoding::Encodable;
-use fedimint_api::PeerId;
+use fedimint_core::core::ModuleKind;
+use fedimint_core::encoding::Encodable;
+use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 
@@ -95,15 +95,15 @@ impl TypedServerModuleConfig for LightningConfig {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct FeeConsensus {
-    pub contract_input: fedimint_api::Amount,
-    pub contract_output: fedimint_api::Amount,
+    pub contract_input: fedimint_core::Amount,
+    pub contract_output: fedimint_core::Amount,
 }
 
 impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            contract_input: fedimint_api::Amount::ZERO,
-            contract_output: fedimint_api::Amount::ZERO,
+            contract_input: fedimint_core::Amount::ZERO,
+            contract_output: fedimint_core::Amount::ZERO,
         }
     }
 }

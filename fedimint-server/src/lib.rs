@@ -1,4 +1,4 @@
-extern crate fedimint_api;
+extern crate fedimint_core;
 
 use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -8,18 +8,18 @@ use std::time::Duration;
 
 use anyhow::bail;
 use config::ServerConfig;
-use fedimint_api::cancellable::Cancellable;
-use fedimint_api::encoding::DecodeError;
-use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::net::peers::PeerConnections;
-use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
-use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
+use fedimint_core::cancellable::Cancellable;
+use fedimint_core::encoding::DecodeError;
 use fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::net::peers::PeerConnections;
+use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::transaction::Transaction;
 pub use fedimint_core::*;
+use fedimint_core::{NumPeers, PeerId};
 use futures::stream::Peekable;
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
@@ -36,8 +36,8 @@ use crate::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
 };
 use crate::db::LastEpochKey;
-use crate::fedimint_api::encoding::Encodable;
-use crate::fedimint_api::net::peers::IPeerConnections;
+use crate::fedimint_core::encoding::Encodable;
+use crate::fedimint_core::net::peers::IPeerConnections;
 use crate::logging::LOG_CONSENSUS;
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{PeerConnector, PeerSlice, ReconnectPeerConnections};

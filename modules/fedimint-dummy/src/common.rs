@@ -1,8 +1,8 @@
 use std::io;
 
-use fedimint_api::core::Decoder;
-use fedimint_api::encoding::{Decodable, DecodeError};
-use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_core::core::Decoder;
+use fedimint_core::encoding::{Decodable, DecodeError};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 
 use crate::{DummyConsensusItem, DummyInput, DummyOutput, DummyOutputOutcome};
 

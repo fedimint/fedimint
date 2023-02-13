@@ -20,7 +20,7 @@ async-trait = "0.1"
 bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
-fedimint-api = { path = "../../fedimint-api" }
+fedimint-core ={ path = "../../fedimint-core" }
 rand = "0.8"
 rayon = "1.6.1"
 serde = { version = "1.0.149", features = [ "derive" ] }

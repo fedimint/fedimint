@@ -1,11 +1,11 @@
-use fedimint_api::config::{
+use fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-use fedimint_api::core::ModuleKind;
-use fedimint_api::encoding::Encodable;
-use fedimint_api::module::__reexports::serde_json;
-use fedimint_api::PeerId;
+use fedimint_core::core::ModuleKind;
+use fedimint_core::encoding::Encodable;
+use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 
 use crate::KIND;
@@ -36,7 +36,7 @@ pub struct DummyClientConfig {
 }
 
 impl TypedClientModuleConfig for DummyClientConfig {
-    fn kind(&self) -> fedimint_api::core::ModuleKind {
+    fn kind(&self) -> fedimint_core::core::ModuleKind {
         KIND
     }
 }

@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use aead::get_key;
 use clap::Parser;
-use fedimint_api::db::Database;
-use fedimint_api::task::{sleep, TaskGroup};
+use fedimint_core::db::Database;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_server::config::io::{
     read_server_configs, DB_FILE, JSON_EXT, LOCAL_CONFIG, SALT_FILE,
 };

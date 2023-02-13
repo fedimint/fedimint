@@ -12,12 +12,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 
 use anyhow::Result;
-use fedimint_api::cancellable::{Cancellable, Cancelled};
-use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-use fedimint_api::task::TaskGroup;
-use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::api::{FederationError, GlobalFederationApi};
+use fedimint_core::cancellable::{Cancellable, Cancelled};
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
+use fedimint_core::task::TaskGroup;
+use fedimint_core::{NumPeers, PeerId};
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 use tracing::{error, info};

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_api::task::{RwLock, RwLockWriteGuard};
-use fedimint_api::{NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_core::task::{RwLock, RwLockWriteGuard};
+use fedimint_core::{NumPeers, OutPoint, PeerId, TransactionId};
 // use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 // use fedimint_core::modules::ln::contracts::ContractId;
 // use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
