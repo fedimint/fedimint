@@ -1,21 +1,17 @@
-use std::{
-    fmt::Debug,
-    fs::File,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::fmt::Debug;
+use std::fs::File;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_api::config::{FederationId, ModuleGenRegistry};
+use fedimint_api::db::mem_impl::MemDatabase;
+use fedimint_api::db::Database;
+use fedimint_api::dyn_newtype_define;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
-use fedimint_api::{
-    db::{mem_impl::MemDatabase, Database},
-    dyn_newtype_define,
+use fedimint_server::api::{
+    DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_server::api::DynFederationApi;
-use fedimint_server::api::GlobalFederationApi;
-use fedimint_server::api::WsClientConnectInfo;
-use fedimint_server::api::WsFederationApi;
 use fedimint_server::config::load_from_file;
 use mint_client::{module_decode_stubs, Client, GatewayClientConfig};
 use secp256k1::{KeyPair, PublicKey};

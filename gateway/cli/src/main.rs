@@ -1,14 +1,14 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::net::SocketAddr;
+use std::path::PathBuf;
 
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_api::config::FederationId;
-use ln_gateway::{
-    config::GatewayConfig,
-    rpc::{
-        rpc_client::RpcClient, BackupPayload, BalancePayload, ConnectFedPayload,
-        DepositAddressPayload, DepositPayload, RestorePayload, WithdrawPayload,
-    },
+use ln_gateway::config::GatewayConfig;
+use ln_gateway::rpc::rpc_client::RpcClient;
+use ln_gateway::rpc::{
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
+    RestorePayload, WithdrawPayload,
 };
 use mint_client::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::from_hex;

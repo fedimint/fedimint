@@ -1,10 +1,13 @@
 use std::net::SocketAddr;
 
-use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
+use axum::response::IntoResponse;
+use axum::routing::post;
+use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
 use mint_client::ln::PayInvoicePayload;
 use serde_json::json;
-use tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
+use tower_http::auth::RequireAuthorizationLayer;
+use tower_http::cors::CorsLayer;
 use tracing::instrument;
 
 use super::{

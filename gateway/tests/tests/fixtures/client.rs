@@ -1,20 +1,16 @@
+use std::collections::BTreeSet;
 use std::default::Default;
-use std::{collections::BTreeSet, path::PathBuf};
+use std::path::PathBuf;
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::{
-    config::{ClientConfig, FederationId},
-    core::LEGACY_HARDCODED_INSTANCE_ID_LN,
-    module::registry::ModuleDecoderRegistry,
-    PeerId,
-};
+use fedimint_api::config::{ClientConfig, FederationId, ModuleGenRegistry};
+use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
+use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_api::PeerId;
 use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
-use ln_gateway::{
-    client::{DynDbFactory, IGatewayClientBuilder},
-    LnGatewayError,
-};
+use ln_gateway::client::{DynDbFactory, IGatewayClientBuilder};
+use ln_gateway::LnGatewayError;
 use mint_client::{module_decode_stubs, Client, GatewayClient, GatewayClientConfig};
 use secp256k1::{PublicKey, Secp256k1};
 use url::Url;

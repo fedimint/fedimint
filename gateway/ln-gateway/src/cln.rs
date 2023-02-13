@@ -16,11 +16,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use tokio::io::{stdin, stdout};
 use tracing::{debug, error, instrument, trace, warn};
 
+use crate::ln::{LightningError, LnRpc};
+use crate::rpc::GatewayRpcSender;
 use crate::ReceivePaymentPayload;
-use crate::{
-    ln::{LightningError, LnRpc},
-    rpc::GatewayRpcSender,
-};
 
 /// The core-lightning `htlc_accepted` event's `amount` field has a "msat"
 /// suffix

@@ -11,41 +11,38 @@ pub mod gatewaylnrpc {
     tonic::include_proto!("gatewaylnrpc");
 }
 
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
-use fedimint_api::config::ModuleGenRegistry;
-use fedimint_api::{config::FederationId, module::registry::ModuleDecoderRegistry};
-use fedimint_api::{task::TaskGroup, Amount, TransactionId};
+use fedimint_api::config::{FederationId, ModuleGenRegistry};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_api::task::TaskGroup;
+use fedimint_api::{Amount, TransactionId};
 use fedimint_server::api::WsClientConnectInfo;
+use mint_client::ln::PayInvoicePayload;
+use mint_client::mint::MintClientError;
 use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::ln::route_hints::RouteHint;
-use mint_client::{ln::PayInvoicePayload, mint::MintClientError, ClientError, GatewayClient};
+use mint_client::{ClientError, GatewayClient};
 use rpc::{BackupPayload, RestorePayload};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, info, warn};
 
-use crate::{
-    actor::GatewayActor,
-    client::DynGatewayClientBuilder,
-    config::GatewayConfig,
-    ln::{LightningError, LnRpc},
-    rpc::{
-        rpc_server::run_webserver, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload,
-        ReceivePaymentPayload, WithdrawPayload,
-    },
+use crate::actor::GatewayActor;
+use crate::client::DynGatewayClientBuilder;
+use crate::config::GatewayConfig;
+use crate::ln::{LightningError, LnRpc};
+use crate::rpc::rpc_server::run_webserver;
+use crate::rpc::{
+    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, GatewayInfo,
+    GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload, WithdrawPayload,
 };
 
 const ROUTE_HINT_RETRIES: usize = 10;

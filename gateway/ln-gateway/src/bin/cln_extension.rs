@@ -1,29 +1,35 @@
-use std::{
-    array::TryFromSliceError, collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr,
-    sync::Arc, time::Duration,
-};
+use std::array::TryFromSliceError;
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
-use bitcoin_hashes::{hex::ToHex, sha256, Hash};
+use bitcoin_hashes::hex::ToHex;
+use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::{model, ClnRpc};
-use fedimint_api::{task::TaskGroup, Amount};
+use fedimint_api::task::TaskGroup;
+use fedimint_api::Amount;
+use ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
+use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
+    GatewayLightning, GatewayLightningServer,
+};
 use ln_gateway::gatewaylnrpc::{
-    complete_htlcs_request::{Action, Cancel, Settle},
-    gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
-use tokio::{
-    io::{stdin, stdout},
-    sync::{mpsc, oneshot, Mutex},
-};
+use tokio::io::{stdin, stdout};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{transport::Server, Status};
+use tonic::transport::Server;
+use tonic::Status;
 use tracing::{debug, error};
 
 #[derive(Parser)]

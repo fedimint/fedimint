@@ -1,31 +1,27 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
+use fedimint_api::task::TaskGroup;
+use fedimint_api::{Amount, OutPoint, TransactionId};
 use futures::stream::StreamExt;
-use mint_client::modules::{
-    ln::{
-        contracts::{ContractId, Preimage},
-        route_hints::RouteHint,
-    },
-    wallet::txoproof::TxOutProof,
-};
+use mint_client::modules::ln::contracts::{ContractId, Preimage};
+use mint_client::modules::ln::route_hints::RouteHint;
+use mint_client::modules::wallet::txoproof::TxOutProof;
 use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::{
-    gatewayd::lnrpc_client::DynLnRpcClient,
-    gatewaylnrpc::{
-        complete_htlcs_request::{Action, Cancel, Settle},
-        CompleteHtlcsRequest, PayInvoiceRequest, PayInvoiceResponse,
-        SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
-    },
-    rpc::FederationInfo,
-    utils::retry,
-    LnGatewayError, Result,
+use crate::gatewayd::lnrpc_client::DynLnRpcClient;
+use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
+use crate::gatewaylnrpc::{
+    CompleteHtlcsRequest, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    SubscribeInterceptHtlcsResponse,
 };
+use crate::rpc::FederationInfo;
+use crate::utils::retry;
+use crate::{LnGatewayError, Result};
 
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);

@@ -25,14 +25,11 @@ use anyhow::Result;
 use fedimint_api::config::FederationId;
 use fedimint_core::api::WsClientConnectInfo;
 use fixtures::{fixtures, Fixtures};
-use ln_gateway::rpc::rpc_client::{Error, Response};
-use ln_gateway::{
-    rpc::{
-        rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
-        DepositPayload, WithdrawPayload,
-    },
-    utils::retry,
+use ln_gateway::rpc::rpc_client::{Error, Response, RpcClient};
+use ln_gateway::rpc::{
+    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
+use ln_gateway::utils::retry;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
