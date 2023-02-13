@@ -15,8 +15,8 @@ use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::{
-    Address, AddressType, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script,
-    Transaction, TxIn, TxOut, Txid,
+    Address, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script, Transaction, TxIn,
+    TxOut, Txid,
 };
 use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
@@ -695,7 +695,10 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction,
         output: &WalletOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        if !is_address_valid_for_network(&output.recipient, self.cfg.consensus.network) {
+        if !output
+            .recipient
+            .is_valid_for_network(self.cfg.consensus.network)
+        {
             return Err(WalletError::WrongNetwork(
                 self.cfg.consensus.network,
                 output.recipient.network,
@@ -1644,17 +1647,6 @@ fn proprietary_tweak_key() -> ProprietaryKey {
         prefix: b"fedimint".to_vec(),
         subtype: 0x00,
         key: vec![],
-    }
-}
-
-pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool {
-    match (address.network, address.address_type()) {
-        (Network::Testnet, Some(AddressType::P2pkh))
-        | (Network::Testnet, Some(AddressType::P2sh)) => {
-            [Network::Testnet, Network::Regtest, Network::Signet].contains(&network)
-        }
-        (Network::Testnet, _) => [Network::Testnet, Network::Signet].contains(&network),
-        (addr_net, _) => addr_net == network,
     }
 }
 
