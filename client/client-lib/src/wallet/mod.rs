@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
-use bitcoin::Address;
-use bitcoin::KeyPair;
+use bitcoin::{Address, KeyPair};
 use db::PegInKey;
 use fedimint_api::core::client::ClientModule;
 use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, ServerModule};
-use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::api::OutputOutcomeError;
+use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
@@ -17,9 +15,7 @@ use crate::modules::wallet::common::WalletDecoder;
 use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::tweakable::Tweakable;
 use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-use crate::modules::wallet::WalletInput;
-use crate::modules::wallet::WalletOutput;
-use crate::modules::wallet::{Wallet, WalletOutputOutcome};
+use crate::modules::wallet::{Wallet, WalletInput, WalletOutput, WalletOutputOutcome};
 use crate::outcome::legacy::OutputOutcome;
 use crate::utils::ClientContext;
 use crate::MemberError;

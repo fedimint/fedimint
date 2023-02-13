@@ -8,9 +8,9 @@ use fedimint_api::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::NumPeers;
-use fedimint_core::api::FederationApiExt;
 use fedimint_core::api::{
-    erased_multi_param, erased_no_param, erased_single_param, FederationResult, IFederationApi,
+    erased_multi_param, erased_no_param, erased_single_param, FederationApiExt, FederationResult,
+    IFederationApi,
 };
 use fedimint_core::query::{EventuallyConsistent, Retry404, UnionResponsesSingle};
 use fedimint_mint::db::ECashUserBackupSnapshot;
