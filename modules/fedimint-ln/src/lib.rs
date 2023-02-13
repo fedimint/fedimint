@@ -24,9 +24,9 @@ use config::FeeConsensus;
 use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, ServerModuleConfig, TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
-use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -41,8 +41,9 @@ use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::time::SystemTime;
-use fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
-use fedimint_api::{OutPoint, ServerModule};
+use fedimint_api::{
+    plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule,
+};
 #[cfg(feature = "server")]
 use fedimint_server::config::distributedgen::DkgRunner;
 use futures::StreamExt;
@@ -58,8 +59,8 @@ use crate::common::LightningDecoder;
 use crate::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
 };
+use crate::contracts::incoming::{IncomingContractOffer, OfferId};
 use crate::contracts::{
-    incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
     IdentifyableContract, Preimage, PreimageDecryptionShare,
 };

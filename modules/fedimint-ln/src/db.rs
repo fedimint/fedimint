@@ -1,11 +1,11 @@
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::impl_db_prefix_const;
-use fedimint_api::{OutPoint, PeerId};
+use fedimint_api::{impl_db_prefix_const, OutPoint, PeerId};
 use secp256k1::PublicKey;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
+use crate::contracts::incoming::IncomingContractOffer;
+use crate::contracts::{ContractId, PreimageDecryptionShare};
 use crate::{ContractAccount, LightningGateway, LightningOutputOutcome};
 
 #[repr(u8)]

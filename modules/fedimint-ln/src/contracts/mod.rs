@@ -4,9 +4,8 @@ pub mod outgoing;
 
 use std::io::Error;
 
-use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
-use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin_hashes::{hash_newtype, Hash as BitcoinHash};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::OutPoint;

@@ -1,8 +1,7 @@
 use std::io;
 
 use fedimint_api::core::Decoder;
-use fedimint_api::encoding::Decodable;
-use fedimint_api::encoding::DecodeError;
+use fedimint_api::encoding::{Decodable, DecodeError};
 use fedimint_api::module::registry::ModuleDecoderRegistry;
 
 use crate::{LightningConsensusItem, LightningInput, LightningOutput, LightningOutputOutcome};

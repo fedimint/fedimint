@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use anyhow::bail;
-use anyhow::format_err;
+use anyhow::{bail, format_err};
 use bitcoin::Network;
-use fedimint_api::config::ClientModuleConfig;
-use fedimint_api::config::TypedServerModuleConfig;
-use fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
+use fedimint_api::config::{
+    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
+};
 use fedimint_api::core::ModuleKind;
 use fedimint_api::encoding::Encodable;
 use fedimint_api::module::__reexports::serde_json;

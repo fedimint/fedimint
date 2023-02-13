@@ -10,9 +10,9 @@ use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
