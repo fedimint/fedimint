@@ -1,11 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::{self, Debug};
+use std::fmt::{self, Debug, Display, Formatter};
+use std::io::{Cursor, Read};
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, result};
 
+use anyhow::ensure;
 use async_trait::async_trait;
+use bech32::Variant::Bech32m;
+use bech32::{FromBase32, ToBase32};
+use bitcoin::consensus::ReadExt;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{
     ApiEndpoint, ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry,
@@ -28,7 +34,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use threshold_crypto::PublicKey;
+use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
@@ -584,7 +590,7 @@ struct FederationMember<C> {
 /// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct WsClientConnectInfo {
     /// Urls that support the federation API (expected to be in PeerId order)
     pub urls: Vec<Url>,
@@ -610,6 +616,64 @@ impl WsClientConnectInfo {
         let honest: Vec<_> = all.into_iter().take(num_honest).collect();
 
         WsClientConnectInfo::new(&config.federation_id, &honest)
+    }
+}
+
+/// We can represent client connect info as a bech32 string for compactness and
+/// error-checking
+///
+/// Human readable part (HRP) includes the version
+/// ```txt
+/// [ hrp (4 bytes) ] [ id (48 bytes) ] ([ url len (2 bytes) ] [ url bytes (url len bytes) ])+
+/// ```
+const BECH32_HRP: &str = "fed1";
+
+impl FromStr for WsClientConnectInfo {
+    type Err = anyhow::Error;
+
+    fn from_str(encoded: &str) -> Result<Self, Self::Err> {
+        let (hrp, data, variant) = bech32::decode(encoded)?;
+
+        ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
+        ensure!(variant == Bech32m, "Expected Bech32m encoding");
+
+        let bytes: Vec<u8> = Vec::<u8>::from_base32(&data)?;
+        let total_len = bytes.len() as u64;
+        let mut cursor = Cursor::new(bytes);
+        let mut id_bytes = [0; PK_SIZE];
+        cursor.read_exact(&mut id_bytes)?;
+
+        let mut urls = vec![];
+        while cursor.position() < total_len {
+            let len = cursor.read_u16()? as usize;
+            let mut url_bytes = vec![0; len];
+            cursor.read_exact(&mut url_bytes)?;
+
+            let url = std::str::from_utf8(&url_bytes)?;
+            urls.push(url.parse()?);
+        }
+
+        Ok(Self {
+            urls,
+            id: FederationId(PublicKey::from_bytes(id_bytes)?),
+        })
+    }
+}
+
+/// Parses the connect info from a bech32 string
+impl Display for WsClientConnectInfo {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        let mut data = vec![];
+        data.extend(self.id.0.to_bytes());
+        for url in &self.urls {
+            let url_bytes = url.as_str().as_bytes();
+            data.extend((url_bytes.len() as u16).to_le_bytes());
+            data.extend(url.as_str().as_bytes());
+        }
+        let encode =
+            bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
+
+        formatter.write_str(&encode)
     }
 }
 
@@ -1025,5 +1089,17 @@ mod tests {
             reqa.is_err() ^ reqb.is_err(),
             "exactly one of two request should succeed"
         );
+    }
+
+    #[test]
+    fn converts_connect_string() {
+        let connect = WsClientConnectInfo {
+            urls: vec!["ws://test1".parse().unwrap(), "ws://test2".parse().unwrap()],
+            id: FederationId::dummy(),
+        };
+
+        let bech32 = connect.to_string();
+        let connect_parsed = WsClientConnectInfo::from_str(&bech32).expect("parses");
+        assert_eq!(connect, connect_parsed);
     }
 }

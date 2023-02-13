@@ -944,6 +944,7 @@ dependencies = [
  "anyhow",
  "async-lock",
  "async-trait",
+ "bech32",
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
