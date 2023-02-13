@@ -1451,6 +1451,24 @@
 <a href="#1451" id="1451">1451</a>
 <a href="#1452" id="1452">1452</a>
 <a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -1463,8 +1481,7 @@
 <span class="kw">use </span>db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    scalar, ConfigGenParams, DkgPeerMsg, DkgRunner, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
@@ -1486,6 +1503,10 @@
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
     PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
+<span class="attr">#[cfg(feature = <span class="string">&quot;server&quot;</span>)]
+</span><span class="kw">use </span>fedimint_server::config::distributedgen::scalar;
+<span class="attr">#[cfg(feature = <span class="string">&quot;server&quot;</span>)]
+</span><span class="kw">use </span>fedimint_server::config::distributedgen::DkgRunner;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>itertools::Itertools;
@@ -1681,7 +1702,22 @@
             .collect()
     }
 
-    <span class="kw">async fn </span>distributed_gen(
+    <span class="comment">// FIXME: Currently required because the client depends on the server modules
+    </span><span class="attr">#[cfg(not(feature = <span class="string">&quot;server&quot;</span>))]
+    </span><span class="kw">async fn </span>distributed_gen(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        module_instance_id: ModuleInstanceId,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
+
+    <span class="attr">#[cfg(feature = <span class="string">&quot;server&quot;</span>)]
+    </span><span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,

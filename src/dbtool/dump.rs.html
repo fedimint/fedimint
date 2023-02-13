@@ -425,9 +425,9 @@
 <span class="kw">use </span>fedimint_ln::LightningGen;
 <span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
+<span class="kw">use </span>fedimint_server::config::io::{read_server_configs, SALT_FILE};
 <span class="kw">use </span>fedimint_server::{config::ServerConfig, db <span class="kw">as </span>ConsensusRange};
 <span class="kw">use </span>fedimint_wallet::WalletGen;
-<span class="kw">use </span>fedimintd::SALT_FILE;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>mint_client::db <span class="kw">as </span>ClientRange;
 <span class="kw">use </span>mint_client::ln::db <span class="kw">as </span>ClientLightningRange;
@@ -494,7 +494,7 @@
 
         <span class="kw">let </span>salt_path = cfg_dir.join(SALT_FILE);
         <span class="kw">let </span>key = aead::get_key(password, salt_path).unwrap();
-        <span class="kw">let </span>cfg = fedimintd::read_server_configs(<span class="kw-2">&amp;</span>key, cfg_dir).unwrap();
+        <span class="kw">let </span>cfg = read_server_configs(<span class="kw-2">&amp;</span>key, cfg_dir).unwrap();
         <span class="kw">let </span>decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
         <span class="kw">let </span>dbtx = DatabaseTransaction::new(Box::new(read_only), decoders);
 

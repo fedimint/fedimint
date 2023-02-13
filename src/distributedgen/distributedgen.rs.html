@@ -224,12 +224,6 @@
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -237,14 +231,12 @@
 
 <span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_key};
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
-<span class="kw">use </span>fedimint_api::module::DynModuleGen;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::Amount;
-<span class="kw">use </span>fedimint_ln::LightningGen;
-<span class="kw">use </span>fedimint_mint::MintGen;
-<span class="kw">use </span>fedimint_wallet::WalletGen;
-<span class="kw">use </span>fedimintd::distributedgen::{create_cert, run_dkg};
+<span class="kw">use </span>fedimint_server::config::io::{
+    create_cert, encrypted_json_write, run_dkg, write_nonprivate_configs, PRIVATE_CONFIG,
+    SALT_FILE, TLS_PK,
+};
 <span class="kw">use </span>fedimintd::<span class="kw-2">*</span>;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
@@ -368,12 +360,6 @@
         )
         .init();
 
-    <span class="kw">let </span>module_config_gens = ModuleGenRegistry::from(<span class="macro">vec!</span>[
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ]);
-
     <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
 
     <span class="kw">let </span>command: Command = Cli::parse().command;
@@ -409,7 +395,9 @@
                 certs,
                 rustls::PrivateKey(pk_bytes),
                 <span class="kw-2">&amp;mut </span>task_group,
+                CODE_VERSION,
                 configure_modules(max_denomination, network, finality_delay),
+                module_registry(),
             )
             .<span class="kw">await
             </span>{
@@ -420,7 +408,7 @@
             };
 
             encrypted_json_write(<span class="kw-2">&amp;</span>server.private, <span class="kw-2">&amp;</span>key, dir_out_path.join(PRIVATE_CONFIG))<span class="question-mark">?</span>;
-            write_nonprivate_configs(<span class="kw-2">&amp;</span>server, dir_out_path, <span class="kw-2">&amp;</span>module_config_gens)
+            write_nonprivate_configs(<span class="kw-2">&amp;</span>server, dir_out_path, <span class="kw-2">&amp;</span>module_registry())
         }
         Command::VersionHash =&gt; <span class="prelude-val">Ok</span>(<span class="macro">println!</span>(<span class="string">&quot;{CODE_VERSION}&quot;</span>)),
         Command::ConfigDecrypt {

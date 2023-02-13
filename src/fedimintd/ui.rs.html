@@ -419,6 +419,8 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -440,6 +442,10 @@
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
+<span class="kw">use </span>fedimint_server::config::io::{
+    create_cert, encrypted_json_write, parse_peer_params, run_dkg, write_nonprivate_configs,
+    CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG, SALT_FILE, TLS_PK,
+};
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
 <span class="kw">use </span>serde::Deserialize;
@@ -450,11 +456,7 @@
 <span class="kw">use </span>tracing::{debug, error};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::distributedgen::{create_cert, parse_peer_params, run_dkg};
-<span class="kw">use crate</span>::{
-    configure_modules, encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT,
-    PRIVATE_CONFIG, SALT_FILE, TLS_PK,
-};
+<span class="kw">use crate</span>::{configure_modules, module_registry, CODE_VERSION};
 
 <span class="attr">#[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -603,7 +605,9 @@
                 connection_strings,
                 rustls::PrivateKey(pk_bytes),
                 <span class="kw-2">&amp;mut </span>dkg_task_group,
+                CODE_VERSION,
                 configure_modules(max_denomination, params.network, params.finality_delay),
+                module_registry(),
             )
             .<span class="kw">await</span>;
 

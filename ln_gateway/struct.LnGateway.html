@@ -28,7 +28,7 @@
     federation_id: <a class="struct" href="../fedimint_api/config/struct.FederationId.html" title="struct fedimint_api::config::FederationId">FederationId</a>
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="actor/struct.GatewayActor.html" title="struct ln_gateway::actor::GatewayActor">GatewayActor</a>&gt;&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.connect_federation" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#173-191">source</a><h4 class="code-header">pub async fn <a href="#method.connect_federation" class="fn">connect_federation</a>(
     &amp;self,
-    client: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;GatewayClient&gt;,
+    client: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="type" href="../mint_client/type.GatewayClient.html" title="type mint_client::GatewayClient">GatewayClient</a>&gt;,
     route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;RouteHint&gt;
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="actor/struct.GatewayActor.html" title="struct ln_gateway::actor::GatewayActor">GatewayActor</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Register a federation to the gateway.</p>
 <h5 id="returns"><a href="#returns">Returns</a></h5>
@@ -48,7 +48,7 @@ federation</p>
 receiving on behalf of a federation user.</p>
 </div></details><section id="method.handle_pay_invoice_msg" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#289-301">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.handle_pay_invoice_msg" class="fn">handle_pay_invoice_msg</a>(
     &amp;self,
-    payload: PayInvoicePayload
+    payload: <a class="struct" href="../mint_client/ln/struct.PayInvoicePayload.html" title="struct mint_client::ln::PayInvoicePayload">PayInvoicePayload</a>
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section><section id="method.handle_balance_msg" class="method"><a class="srclink rightside" href="../src/ln_gateway/lib.rs.html#303-308">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.handle_balance_msg" class="fn">handle_balance_msg</a>(
     &amp;self,
     payload: <a class="struct" href="rpc/struct.BalancePayload.html" title="struct ln_gateway::rpc::BalancePayload">BalancePayload</a>

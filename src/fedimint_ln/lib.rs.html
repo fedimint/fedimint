@@ -1190,6 +1190,23 @@
 <a href="#1190" id="1190">1190</a>
 <a href="#1191" id="1191">1191</a>
 <a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -1216,7 +1233,7 @@
 <span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, DkgRunner, ServerModuleConfig, TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ServerModuleConfig, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
@@ -1235,6 +1252,8 @@
 <span class="kw">use </span>fedimint_api::time::SystemTime;
 <span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
 <span class="kw">use </span>fedimint_api::{OutPoint, ServerModule};
+<span class="attr">#[cfg(feature = <span class="string">&quot;server&quot;</span>)]
+</span><span class="kw">use </span>fedimint_server::config::distributedgen::DkgRunner;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -1498,7 +1517,22 @@
         server_cfg
     }
 
-    <span class="kw">async fn </span>distributed_gen(
+    <span class="comment">// FIXME: Currently required because the client depends on the server modules
+    </span><span class="attr">#[cfg(not(feature = <span class="string">&quot;server&quot;</span>))]
+    </span><span class="kw">async fn </span>distributed_gen(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        module_instance_id: ModuleInstanceId,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
+
+    <span class="attr">#[cfg(feature = <span class="string">&quot;server&quot;</span>)]
+    </span><span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
         our_id: <span class="kw-2">&amp;</span>PeerId,

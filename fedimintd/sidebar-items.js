@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CLIENT_CONFIG","CLIENT_CONNECT_FILE","CODE_VERSION","CONSENSUS_CONFIG","DB_FILE","ENCRYPTED_EXT","JSON_EXT","LOCAL_CONFIG","PRIVATE_CONFIG","SALT_FILE","TLS_CERT","TLS_PK"],"fn":["configure_modules","encrypted_json_read","encrypted_json_write","plaintext_json_read","plaintext_json_write","read_server_configs","write_nonprivate_configs"],"mod":["distributedgen","ui"]};
+window.SIDEBAR_ITEMS = {"constant":["CODE_VERSION"],"fn":["configure_modules","module_registry"],"mod":["ui"]};
