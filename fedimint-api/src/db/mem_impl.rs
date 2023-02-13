@@ -159,7 +159,9 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
 #[cfg(test)]
 mod tests {
     use super::MemDatabase;
-    use crate::{core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry};
+    use crate::core::ModuleInstanceId;
+    use crate::db::Database;
+    use crate::module::registry::ModuleDecoderRegistry;
 
     fn database() -> Database {
         Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())

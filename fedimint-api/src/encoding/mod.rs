@@ -12,9 +12,8 @@ use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::format_err;
-use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use thiserror::Error;
 use url::Url;
