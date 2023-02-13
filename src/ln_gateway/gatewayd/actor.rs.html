@@ -417,11 +417,17 @@
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
 <a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>mint_client::modules::{
     ln::{
         contracts::{ContractId, Preimage},
@@ -506,15 +512,17 @@
     }
 
     <span class="kw">async fn </span>subscribe_htlcs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>actor = <span class="self">self</span>.to_owned();
-        <span class="kw">let </span>lnrpc_copy = <span class="self">self</span>.lnrpc.to_owned();
         <span class="kw">let </span>short_channel_id = <span class="self">self</span>.client.config().mint_channel_id;
         <span class="kw">let </span><span class="kw-2">mut </span>tg = <span class="self">self</span>.task_group.clone();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = lnrpc_copy
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
+            </span>.lnrpc
+            .to_owned()
             .subscribe_htlcs(SubscribeInterceptHtlcsRequest { short_channel_id })
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="kw">let </span>actor = <span class="self">self</span>.to_owned();
+        <span class="kw">let </span>lnrpc_copy = <span class="self">self</span>.lnrpc.to_owned();
         tg.spawn(
             <span class="string">&quot;Subscribe to intercepted HTLCs in stream&quot;</span>,
             <span class="kw">move </span>|subscription| <span class="kw">async move </span>{
@@ -523,14 +531,16 @@
                     outgoing_amount_msat,
                     intercepted_htlc_id,
                     ..
-                }) = <span class="kw">match </span>stream.message().<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(msg)) =&gt; <span class="prelude-val">Some</span>(msg),
-                    <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
+                }) = <span class="kw">match </span>stream.next().<span class="kw">await </span>{
+                    <span class="prelude-val">Some</span>(msg) =&gt; <span class="kw">match </span>msg {
+                        <span class="prelude-val">Ok</span>(msg) =&gt; <span class="prelude-val">Some</span>(msg),
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="macro">warn!</span>(<span class="string">&quot;Error sent over HTLC subscription: {}&quot;</span>, e);
+                            <span class="prelude-val">None
+                        </span>}
+                    },
+                    <span class="prelude-val">None </span>=&gt; {
                         <span class="macro">warn!</span>(<span class="string">&quot;HTLC stream closed by service&quot;</span>);
-                        <span class="prelude-val">None
-                    </span>}
-                    <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;HTLC stream closed with error: {:?}&quot;</span>, e);
                         <span class="prelude-val">None
                     </span>}
                 } {
@@ -837,4 +847,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (585f3eef2 2023-02-11)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["assert_all_equal","assert_all_equal_result","member_validate"],"mod":["btc"],"opaque":[""],"struct":["FakeFed","FakeInterconnect","TestInputMeta"]};
+window.SIDEBAR_ITEMS = {"fn":["assert_all_equal","assert_all_equal_result","member_validate"],"mod":["btc","ln"],"opaque":[""],"struct":["FakeFed","FakeInterconnect","TestInputMeta"]};
