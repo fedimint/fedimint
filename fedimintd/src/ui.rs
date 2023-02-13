@@ -17,8 +17,12 @@ use fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_api::task::TaskGroup;
 use fedimint_api::Amount;
-use fedimint_core::api::WsFederationConnect;
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::util::SanitizedUrl;
+use fedimint_server::config::io::{
+    create_cert, encrypted_json_write, parse_peer_params, run_dkg, write_nonprivate_configs,
+    CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG, SALT_FILE, TLS_PK,
+};
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
@@ -29,11 +33,7 @@ use tokio_rustls::rustls;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::distributedgen::{create_cert, parse_peer_params, run_dkg};
-use crate::{
-    configure_modules, encrypted_json_write, write_nonprivate_configs, CONSENSUS_CONFIG, JSON_EXT,
-    PRIVATE_CONFIG, SALT_FILE, TLS_PK,
-};
+use crate::{configure_modules, module_registry, CODE_VERSION};
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -75,7 +75,7 @@ async fn run_page(axum::extract::State(state): axum::extract::State<MutableState
                 match std::fs::File::open(path) {
                     Ok(file) => match serde_json::from_reader(file) {
                         Ok(cfg) => {
-                            let connect_info = WsFederationConnect::from(&cfg);
+                            let connect_info = WsClientConnectInfo::from_honest_peers(&cfg);
 
                             RunTemplateState::DkgDone(
                                 serde_json::to_string(&connect_info).expect("should deserialize"),
@@ -182,7 +182,9 @@ async fn post_guardians(
                 connection_strings,
                 rustls::PrivateKey(pk_bytes),
                 &mut dkg_task_group,
+                CODE_VERSION,
                 configure_modules(max_denomination, params.network, params.finality_delay),
+                module_registry(),
             )
             .await;
 
@@ -265,8 +267,8 @@ pub struct ParamsForm {
     guardians_count: u32,
     /// Which bitcoin network the federation is using
     network: Network,
-    /// The number of confirmations a deposit transaction requires before accepted by the
-    /// federation
+    /// The number of confirmations a deposit transaction requires before
+    /// accepted by the federation
     block_confirmations: u32,
 }
 
@@ -329,7 +331,7 @@ async fn qr(axum::extract::State(state): axum::extract::State<MutableState>) -> 
         Ok(file) => {
             let cfg: ClientConfig =
                 serde_json::from_reader(file).expect("Could not parse cfg file.");
-            let connect_info = WsFederationConnect::from(&cfg);
+            let connect_info = WsClientConnectInfo::from_honest_peers(&cfg);
             serde_json::to_string(&connect_info).expect("should deserialize")
         }
         Err(_) => "".into(),

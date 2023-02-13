@@ -7,9 +7,9 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, DkgRunner,
-    FederationId, JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
-    ThresholdKeys, TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
+    JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
@@ -25,6 +25,7 @@ use tokio_rustls::rustls;
 use tracing::{error, info};
 use url::Url;
 
+use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
 use crate::fedimint_api::encoding::Encodable;
 use crate::fedimint_api::BitcoinHash;
 use crate::fedimint_api::NumPeers;
@@ -33,6 +34,9 @@ use crate::net::connect::TlsConfig;
 use crate::net::connect::{parse_host_port, Connector};
 use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
+
+pub mod distributedgen;
+pub mod io;
 
 /// The maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
@@ -44,7 +48,8 @@ pub struct ServerConfig {
     pub consensus: ServerConfigConsensus,
     /// Contains all configuration that is locally configurable and not secret
     pub local: ServerConfigLocal,
-    /// Contains all configuration that will be encrypted such as private key material
+    /// Contains all configuration that will be encrypted such as private key
+    /// material
     pub private: ServerConfigPrivate,
 }
 
@@ -194,7 +199,8 @@ impl ServerConfigConsensus {
 }
 
 impl ServerConfig {
-    /// Creates a new config from the results of a trusted or distributed key setup
+    /// Creates a new config from the results of a trusted or distributed key
+    /// setup
     #[allow(clippy::too_many_arguments)]
     pub fn from(
         code_version: &str,
@@ -440,9 +446,11 @@ impl ServerConfig {
 
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
 
-        // NOTE: Currently we do not implement user-assisted module-kind to module-instance-id assignment
-        // We assume that user wants one instance of each module that was compiled in. This is how
-        // things were initially, where we consider "module as a code" as "module as an instance at runtime"
+        // NOTE: Currently we do not implement user-assisted module-kind to
+        // module-instance-id assignment We assume that user wants one instance
+        // of each module that was compiled in. This is how things were
+        // initially, where we consider "module as a code" as "module as an instance at
+        // runtime"
         for (module_instance_id, (_kind, gen)) in
             module_config_gens.legacy_init_order_iter().enumerate()
         {

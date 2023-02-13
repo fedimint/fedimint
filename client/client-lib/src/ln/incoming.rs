@@ -24,7 +24,8 @@ impl IncomingContractAccount {
     }
 }
 
-// TODO: should this have some kind of "state" enum - e.g. pending, paid, expired
+// TODO: should this have some kind of "state" enum - e.g. pending, paid,
+// expired
 /// Invoice whose "offer" has been accepted by federation
 #[derive(Debug, Encodable, Decodable)]
 pub struct ConfirmedInvoice {

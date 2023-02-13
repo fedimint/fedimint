@@ -9,11 +9,13 @@ use fedimint_ln::route_hints::RouteHint;
 use ln_gateway::ln::{LightningError, LnRpc};
 use tokio::sync::Mutex;
 
-/// A proxy for the underlying LnRpc which can be used to add behavoir to it using the "Decorator pattern"
+/// A proxy for the underlying LnRpc which can be used to add behavoir to it
+/// using the "Decorator pattern"
 pub struct LnRpcAdapter {
     /// The actual LnRpc that we add behavior to.
     client: Box<dyn LnRpc>,
-    /// A pair of <Invoice> and <Count> where client.pay() will fail <Count> times for each <Invoice>
+    /// A pair of <Invoice> and <Count> where client.pay() will fail <Count>
+    /// times for each <Invoice>
     fail_invoices: Arc<Mutex<HashMap<lightning_invoice::Invoice, u8>>>,
 }
 
@@ -27,7 +29,8 @@ impl LnRpcAdapter {
         }
     }
 
-    /// Register <invoice> to fail <times> before (attempt) succeeding. The invoice will be dropped from the HashMap after succeeding
+    /// Register <invoice> to fail <times> before (attempt) succeeding. The
+    /// invoice will be dropped from the HashMap after succeeding
     #[allow(dead_code)]
     pub async fn fail_invoice(&self, invoice: lightning_invoice::Invoice, times: u8) {
         self.fail_invoices.lock().await.insert(invoice, times + 1);

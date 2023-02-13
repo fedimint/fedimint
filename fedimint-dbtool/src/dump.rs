@@ -11,9 +11,9 @@ use fedimint_api::{
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_rocksdb::RocksDbReadOnly;
+use fedimint_server::config::io::{read_server_configs, SALT_FILE};
 use fedimint_server::{config::ServerConfig, db as ConsensusRange};
 use fedimint_wallet::WalletGen;
-use fedimintd::SALT_FILE;
 use futures::StreamExt;
 use mint_client::db as ClientRange;
 use mint_client::ln::db as ClientLightningRange;
@@ -80,7 +80,7 @@ impl<'a> DatabaseDump<'a> {
 
         let salt_path = cfg_dir.join(SALT_FILE);
         let key = aead::get_key(password, salt_path).unwrap();
-        let cfg = fedimintd::read_server_configs(&key, cfg_dir).unwrap();
+        let cfg = read_server_configs(&key, cfg_dir).unwrap();
         let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
         let dbtx = DatabaseTransaction::new(Box::new(read_only), decoders);
 
@@ -102,8 +102,8 @@ impl<'a> DatabaseDump<'a> {
         println!("{json}");
     }
 
-    /// Iterates through all the specified ranges in the database and retrieves the
-    /// data for each range. Prints serialized contents at the end.
+    /// Iterates through all the specified ranges in the database and retrieves
+    /// the data for each range. Prints serialized contents at the end.
     pub async fn dump_database(&mut self) {
         if !self.modules.is_empty() && self.modules.contains(&"consensus".to_string()) {
             self.retrieve_consensus_data().await;
@@ -134,7 +134,8 @@ impl<'a> DatabaseDump<'a> {
             }
         }
 
-        // TODO: When the client is modularized, these don't need to be hardcoded anymore
+        // TODO: When the client is modularized, these don't need to be hardcoded
+        // anymore
         if !self.modules.is_empty() && self.modules.contains(&"client".to_string()) {
             self.retrieve_client_data().await;
             self.retrieve_ln_client_data().await;
@@ -145,8 +146,8 @@ impl<'a> DatabaseDump<'a> {
         self.print_database();
     }
 
-    /// Iterates through each of the prefixes within the consensus range and retrieves
-    /// the corresponding data.
+    /// Iterates through each of the prefixes within the consensus range and
+    /// retrieves the corresponding data.
     async fn retrieve_consensus_data(&mut self) {
         let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
@@ -221,8 +222,8 @@ impl<'a> DatabaseDump<'a> {
             .insert("Consensus".to_string(), Box::new(consensus));
     }
 
-    /// Iterates through each of the prefixes within the lightning client range and retrieves
-    /// the corresponding data.
+    /// Iterates through each of the prefixes within the lightning client range
+    /// and retrieves the corresponding data.
     async fn retrieve_ln_client_data(&mut self) {
         let mut ln_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
@@ -288,8 +289,8 @@ impl<'a> DatabaseDump<'a> {
             .insert("Client Lightning".to_string(), Box::new(ln_client));
     }
 
-    /// Iterates through each of the prefixes within the mint client range and retrieves
-    /// the corresponding data.
+    /// Iterates through each of the prefixes within the mint client range and
+    /// retrieves the corresponding data.
     async fn retrieve_mint_client_data(&mut self) {
         let mut mint_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
@@ -355,8 +356,8 @@ impl<'a> DatabaseDump<'a> {
             .insert("Client Mint".to_string(), Box::new(mint_client));
     }
 
-    /// Iterates through each of the prefixes within the wallet client range and retrieves
-    /// the corresponding data.
+    /// Iterates through each of the prefixes within the wallet client range and
+    /// retrieves the corresponding data.
     async fn retrieve_wallet_client_data(&mut self) {
         let mut wallet_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let dbtx = &mut self.read_only;
@@ -383,8 +384,8 @@ impl<'a> DatabaseDump<'a> {
             .insert("Client Wallet".to_string(), Box::new(wallet_client));
     }
 
-    /// Iterates through each of the prefixes within the client range and retrieves
-    /// the corresponding data.
+    /// Iterates through each of the prefixes within the client range and
+    /// retrieves the corresponding data.
     async fn retrieve_client_data(&mut self) {
         let mut client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
         let prefix_names = &self.prefixes;

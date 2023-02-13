@@ -15,6 +15,7 @@ use fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleGen, Transact
 use fedimint_api::{OutPoint, PeerId, ServerModule};
 
 pub mod btc;
+pub mod ln;
 
 #[derive(Debug)]
 pub struct FakeFed<Module> {
@@ -202,9 +203,10 @@ where
     where
         <<Module as ServerModule>::Decoder as Decoder>::OutputOutcome: Eq,
     {
-        // Since every member is in the same epoch they should have the same internal state, even
-        // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
-        // main consensus loop into another thread to optimize latency. This test will probably fail
+        // Since every member is in the same epoch they should have the same internal
+        // state, even in terms of outcomes. This may change later once
+        // end_consensus_epoch is pulled out of the main consensus loop into
+        // another thread to optimize latency. This test will probably fail
         // then.
         let mut results = Vec::new();
         for (_, member, db, module_instance_id) in self.members.iter() {

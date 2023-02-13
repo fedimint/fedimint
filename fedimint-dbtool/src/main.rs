@@ -19,8 +19,8 @@ struct Options {
     command: DbCommand,
 }
 
-/// Tool to inspect and manipulate rocksdb databases. All binary arguments (keys, values) have to be
-/// hex encoded.
+/// Tool to inspect and manipulate rocksdb databases. All binary arguments
+/// (keys, values) have to be hex encoded.
 #[derive(Debug, Clone, Subcommand)]
 enum DbCommand {
     /// List all key-value pairs where the key begins with `prefix`
@@ -28,7 +28,8 @@ enum DbCommand {
         #[arg(value_parser = hex_parser)]
         prefix: Bytes,
     },
-    /// Write a key-value pair to the database, overwriting the previous value if present
+    /// Write a key-value pair to the database, overwriting the previous value
+    /// if present
     Write {
         #[arg(value_parser = hex_parser)]
         key: Bytes,
@@ -40,10 +41,11 @@ enum DbCommand {
         #[arg(value_parser = hex_parser)]
         key: Bytes,
     },
-    /// Dump a subset of the specified database and serialize the retrieved data to JSON.
-    /// Module and prefix are used to specify which subset of the database to dump.
-    /// Password is used to decrypt the server's configuration file. If dumping the client database,
-    /// the password can be an arbitrary string.
+    /// Dump a subset of the specified database and serialize the retrieved data
+    /// to JSON. Module and prefix are used to specify which subset of the
+    /// database to dump. Password is used to decrypt the server's
+    /// configuration file. If dumping the client database, the password can
+    /// be an arbitrary string.
     Dump {
         cfg_dir: PathBuf,
         #[arg(env = "FM_PASSWORD")]

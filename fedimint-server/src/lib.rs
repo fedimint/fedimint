@@ -215,7 +215,8 @@ impl FedimintServer {
 
     /// Loop `run_conensus_epoch` until shut down
     async fn run_consensus(mut self, task_handle: TaskHandle) {
-        // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
+        // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a
+        // problem for change, but maybe later for other use cases
         let mut rng = OsRng;
         let consensus = self.consensus.clone();
         self.start_consensus().await;
@@ -243,7 +244,8 @@ impl FedimintServer {
         info!("Consensus task shut down");
     }
 
-    /// Starts consensus by skipping to the last saved epoch history  and triggering a new epoch
+    /// Starts consensus by skipping to the last saved epoch history  and
+    /// triggering a new epoch
     pub async fn start_consensus(&mut self) {
         let db = self.consensus.db.clone();
         let mut tx = db.begin_transaction().await;
@@ -259,7 +261,8 @@ impl FedimintServer {
         self.request_rejoin(1).await;
     }
 
-    /// Returns the next epoch that we need to process, based on our saved history
+    /// Returns the next epoch that we need to process, based on our saved
+    /// history
     fn next_epoch_to_process(&self) -> u64 {
         self.last_processed_epoch
             .as_ref()
@@ -269,7 +272,8 @@ impl FedimintServer {
 
     /// Requests, verifies and processes history from peers
     ///
-    /// `last_outcome` - The consensus outcome (unprocessed), we're trying to process.
+    /// `last_outcome` - The consensus outcome (unprocessed), we're trying to
+    /// process.
     pub async fn process_outcome(
         &mut self,
         last_outcome: HbbftConsensusOutcome,
@@ -402,8 +406,8 @@ impl FedimintServer {
         }
     }
 
-    /// Handles one step of the HBBFT algorithm, sending messages to peers and parsing any
-    /// outcomes contained in the step
+    /// Handles one step of the HBBFT algorithm, sending messages to peers and
+    /// parsing any outcomes contained in the step
     async fn handle_step(&mut self, step: EpochStep) -> Cancellable<Vec<HbbftConsensusOutcome>> {
         for msg in step.messages {
             self.connections
@@ -492,9 +496,10 @@ impl FedimintServer {
         }
     }
 
-    /// If we are rejoining and received a threshold of messages from the same epoch, then skip
-    /// to that epoch.  Give ourselves a buffer of `NUM_EPOCHS_REJOIN_AHEAD` so we can ensure
-    /// we receive enough HBBFT messages to produce an outcome.
+    /// If we are rejoining and received a threshold of messages from the same
+    /// epoch, then skip to that epoch.  Give ourselves a buffer of
+    /// `NUM_EPOCHS_REJOIN_AHEAD` so we can ensure we receive enough HBBFT
+    /// messages to produce an outcome.
     async fn rejoin_at_epoch(&mut self, epoch: u64, peer: PeerId) {
         if let Some(epochs) = self.rejoin_at_epoch.as_mut() {
             let peers = epochs.entry(epoch).or_default();
@@ -508,7 +513,8 @@ impl FedimintServer {
         }
     }
 
-    /// Sends a rejoin request to all peers, indicating the number of epochs we want them to create
+    /// Sends a rejoin request to all peers, indicating the number of epochs we
+    /// want them to create
     async fn request_rejoin(&mut self, epochs_to_run: u64) {
         self.connections
             .send(

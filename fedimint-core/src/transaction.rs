@@ -10,7 +10,10 @@ use thiserror::Error;
 
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///
-/// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
+/// The mint enforces that the total value of the outputs equals the total value
+/// of the inputs, to prevent creating funds out of thin air. In some cases, the
+/// value of the inputs and outputs can both be 0 e.g. when creating an offer to
+/// a Lightning Gateway.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct Transaction {
     /// [`DynInput`]s consumed by the transaction
@@ -27,7 +30,8 @@ impl Transaction {
     /// Hash of the transaction (excluding the signature).
     ///
     /// Transaction signature commits to this hash.
-    /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+    /// To generate it without already having a signature use
+    /// [`Self::tx_hash_from_parts`].
     pub fn tx_hash(&self) -> TransactionId {
         Self::tx_hash_from_parts(&self.inputs, &self.outputs)
     }
@@ -51,9 +55,9 @@ impl Transaction {
     ) -> Result<(), TransactionError> {
         let keys = keys.collect::<Vec<_>>();
 
-        // If there are no keys from inputs there are no inputs to protect from re-binding. This
-        // behavior is useful for non-monetary transactions that just announce something, like LN
-        // incoming contract offers.
+        // If there are no keys from inputs there are no inputs to protect from
+        // re-binding. This behavior is useful for non-monetary transactions
+        // that just announce something, like LN incoming contract offers.
         if keys.is_empty() {
             return Ok(());
         }
@@ -88,7 +92,8 @@ pub fn agg_keys(keys: &[XOnlyPublicKey]) -> XOnlyPublicKey {
     new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
-/// Precompute a combined public key and the hash of the given public keys for Musig2.
+/// Precompute a combined public key and the hash of the given public keys for
+/// Musig2.
 fn new_pre_session<C>(
     keys: &[XOnlyPublicKey],
     ctx: &Secp256k1<C>,

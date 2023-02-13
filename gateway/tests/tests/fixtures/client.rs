@@ -10,7 +10,7 @@ use fedimint_api::{
     module::registry::ModuleDecoderRegistry,
     PeerId,
 };
-use fedimint_core::api::{DynFederationApi, WsFederationConnect};
+use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
 use ln_gateway::{
     client::{DynDbFactory, IGatewayClientBuilder},
     LnGatewayError,
@@ -71,14 +71,15 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
 
     async fn create_config(
         &self,
-        _connect: WsFederationConnect,
+        _connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         _module_gens: ModuleGenRegistry,
     ) -> Result<GatewayClientConfig, LnGatewayError> {
         // TODO: use the connect info urls to get the federation name?
-        // Simulate clients in the same federation by seeding the generated `client_config`
-        // Using some of the info in provided web socket connect info
+        // Simulate clients in the same federation by seeding the generated
+        // `client_config` Using some of the info in provided web socket connect
+        // info
         let auth_pk = threshold_crypto::SecretKey::random().public_key();
         let client_config = ClientConfig {
             federation_name: "".to_string(),

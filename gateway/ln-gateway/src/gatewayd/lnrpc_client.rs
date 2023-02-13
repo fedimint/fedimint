@@ -3,10 +3,11 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_api::dyn_newtype_define;
+use futures::stream::BoxStream;
 use mint_client::modules::ln::route_hints::RouteHint;
 use tonic::{
     transport::{Channel, Endpoint},
-    Request, Streaming,
+    Request,
 };
 use tracing::error;
 use url::Url;
@@ -25,7 +26,8 @@ pub struct GetRouteHintsResponse {
     pub route_hints: Vec<RouteHint>,
 }
 
-pub type HtlcStream = Streaming<SubscribeInterceptHtlcsResponse>;
+pub type HtlcStream<'a> =
+    BoxStream<'a, std::result::Result<SubscribeInterceptHtlcsResponse, tonic::Status>>;
 
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
@@ -38,13 +40,15 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
-    /// Subscribe to intercept htlcs that belong to a specific mint identified by `short_channel_id`
-    async fn subscribe_htlcs(
+    /// Subscribe to intercept htlcs that belong to a specific mint identified
+    /// by `short_channel_id`
+    async fn subscribe_htlcs<'a>(
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
-    ) -> Result<HtlcStream>;
+    ) -> Result<HtlcStream<'a>>;
 
-    /// Request completion of an intercepted htlc after processing and determining an outcome
+    /// Request completion of an intercepted htlc after processing and
+    /// determining an outcome
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse>;
 }
 
@@ -60,9 +64,10 @@ impl DynLnRpcClient {
     }
 }
 
-/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for convenience,
-/// and makes real RPC requests over the wire to a remote lightning node.
-/// The lightning node is exposed via a corresponding `GatewayLightningServer`.
+/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
+/// convenience, and makes real RPC requests over the wire to a remote lightning
+/// node. The lightning node is exposed via a corresponding
+/// `GatewayLightningServer`.
 #[derive(Debug)]
 pub struct NetworkLnRpcClient {
     client: GatewayLightningClient<Channel>,
@@ -110,16 +115,16 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(res.into_inner())
     }
 
-    async fn subscribe_htlcs(
+    async fn subscribe_htlcs<'a>(
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
-    ) -> Result<HtlcStream> {
+    ) -> Result<HtlcStream<'a>> {
         let req = Request::new(subscription);
 
         let mut client = self.client.clone();
         let res = client.subscribe_intercept_htlcs(req).await?;
 
-        Ok(res.into_inner())
+        Ok(Box::pin(res.into_inner()))
     }
 
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {

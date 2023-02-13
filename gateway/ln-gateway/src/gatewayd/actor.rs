@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
+use futures::stream::StreamExt;
 use mint_client::modules::{
     ln::{
         contracts::{ContractId, Preimage},
@@ -87,15 +88,17 @@ impl GatewayActor {
     }
 
     async fn subscribe_htlcs(&self) -> Result<()> {
-        let actor = self.to_owned();
-        let lnrpc_copy = self.lnrpc.to_owned();
         let short_channel_id = self.client.config().mint_channel_id;
         let mut tg = self.task_group.clone();
 
-        let mut stream = lnrpc_copy
+        let mut stream = self
+            .lnrpc
+            .to_owned()
             .subscribe_htlcs(SubscribeInterceptHtlcsRequest { short_channel_id })
             .await?;
 
+        let actor = self.to_owned();
+        let lnrpc_copy = self.lnrpc.to_owned();
         tg.spawn(
             "Subscribe to intercepted HTLCs in stream",
             move |subscription| async move {
@@ -104,14 +107,16 @@ impl GatewayActor {
                     outgoing_amount_msat,
                     intercepted_htlc_id,
                     ..
-                }) = match stream.message().await {
-                    Ok(Some(msg)) => Some(msg),
-                    Ok(None) => {
+                }) = match stream.next().await {
+                    Some(msg) => match msg {
+                        Ok(msg) => Some(msg),
+                        Err(e) => {
+                            warn!("Error sent over HTLC subscription: {}", e);
+                            None
+                        }
+                    },
+                    None => {
                         warn!("HTLC stream closed by service");
-                        None
-                    }
-                    Err(e) => {
-                        error!("HTLC stream closed with error: {:?}", e);
                         None
                     }
                 } {
@@ -120,9 +125,11 @@ impl GatewayActor {
                         break;
                     }
 
-                    // TODO: Assert short channel id matches the one we subscribed to, or cancel processing of intercepted HTLC
-                    // TODO: Assert the offered fee derived from invoice amount and outgoing amount is acceptable or cancel processing of intercepted HTLC
-                    // TODO: Assert the HTLC expiry or cancel processing of intercepted HTLC
+                    // TODO: Assert short channel id matches the one we subscribed to, or cancel
+                    // processing of intercepted HTLC TODO: Assert the offered
+                    // fee derived from invoice amount and outgoing amount is acceptable or cancel
+                    // processing of intercepted HTLC TODO: Assert the HTLC
+                    // expiry or cancel processing of intercepted HTLC
 
                     let hash = match sha256::Hash::from_slice(&payment_hash) {
                         Ok(hash) => hash,
@@ -157,8 +164,10 @@ impl GatewayActor {
                                 .await
                             {
                                 error!("Failed to complete HTLC: {:?}", e);
-                                // Note: To prevent loss of funds for the gateway,
-                                // we should either retry completing the htlc or reclaim funds from the federation
+                                // Note: To prevent loss of funds for the
+                                // gateway,
+                                // we should either retry completing the htlc or
+                                // reclaim funds from the federation
                             };
                         }
                         Err(e) => {

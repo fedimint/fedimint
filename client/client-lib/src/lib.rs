@@ -104,7 +104,8 @@ use crate::{
     wallet::WalletClient,
 };
 
-/// Number of blocks until outgoing lightning contracts times out and user client can get refund
+/// Number of blocks until outgoing lightning contracts times out and user
+/// client can get refund
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 /// Mint module's secret key derivation child id
 pub const MINT_SECRET_CHILD_ID: ChildId = ChildId(0);
@@ -134,8 +135,9 @@ pub struct GatewayClientConfig {
     pub api: Url,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
     /// Channel identifier assigned to the mint by the gateway.
-    /// All clients in this federation should use this value as `short_channel_id`
-    /// when creating invoices to be settled by this gateway.
+    /// All clients in this federation should use this value as
+    /// `short_channel_id` when creating invoices to be settled by this
+    /// gateway.
     pub mint_channel_id: u64,
 }
 
@@ -211,7 +213,8 @@ impl<T> Client<T> {
     }
 }
 
-// TODO: `get_module` is parsing `serde_json::Value` every time, which is not best for performance
+// TODO: `get_module` is parsing `serde_json::Value` every time, which is not
+// best for performance
 impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     pub fn db(&self) -> &Database {
         &self.context.db
@@ -321,7 +324,8 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         }
     }
 
-    /// Fetches the client secret from the database or generates a new one if none is present
+    /// Fetches the client secret from the database or generates a new one if
+    /// none is present
     async fn get_secret(db: &Database) -> DerivableSecret {
         let mut tx = db.begin_transaction().await;
         let client_secret = tx.get_value(&ClientSecretKey).await.expect("DB error");
@@ -367,7 +371,9 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
 
     /// Submits a transaction to the fed, making change using our change module
     ///
-    /// TODO: For safety, if the submission fails, the DB write still occurs.  We should instead ensure the state of the client and consensus are always the same.
+    /// TODO: For safety, if the submission fails, the DB write still occurs.
+    /// We should instead ensure the state of the client and consensus are
+    /// always the same.
     pub async fn submit_tx_with_change<R: RngCore + CryptoRng>(
         &self,
         tx: TransactionBuilder,
@@ -388,18 +394,20 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     /// Spent some [`SpendableNote`]s to receive a freshly minted ones
     ///
     /// This is useful in scenarios where certain notes were handed over
-    /// directly to us by another user as a payment. By spending them we can make sure
-    /// they can no longer be potentially double-spent.
+    /// directly to us by another user as a payment. By spending them we can
+    /// make sure they can no longer be potentially double-spent.
     ///
-    /// On success the out point of the newly issued e-cash notes is returned. It can be used to
-    /// easily poll the transaction status using [`MintClient::fetch_notes`] until it returns
-    /// `Ok(())`, indicating we received our newly issued e-cash notes.
+    /// On success the out point of the newly issued e-cash notes is returned.
+    /// It can be used to easily poll the transaction status using
+    /// [`MintClient::fetch_notes`] until it returns `Ok(())`, indicating we
+    /// received our newly issued e-cash notes.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
         notes: TieredMulti<SpendableNote>,
         mut rng: R,
     ) -> Result<OutPoint> {
-        // Ensure we have the notes in the DB (in case we received them from another user)
+        // Ensure we have the notes in the DB (in case we received them from another
+        // user)
         let mut dbtx = self.context.db.begin_transaction().await;
         for (amount, note) in notes.clone() {
             let key = NoteKey {
@@ -421,7 +429,8 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     /// Validate signatures on notes.
     ///
     /// This function checks if signatures are valid
-    /// based on the federation public key. It does not check if the nonce is unspent.
+    /// based on the federation public key. It does not check if the nonce is
+    /// unspent.
     pub async fn validate_note_signatures(&self, notes: &TieredMulti<SpendableNote>) -> Result<()> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
         notes.iter_items().try_for_each(|(amt, note)| {
@@ -433,15 +442,19 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         })
     }
 
-    /// Pay by creating notes provided (and most probably controlled) by the recipient.
+    /// Pay by creating notes provided (and most probably controlled) by the
+    /// recipient.
     ///
     /// A standard way to facilitate a payment between users of a mint.
     /// Generate a transaction spending notes we own as inputs and
-    /// creating new notes from [`BlindNonce`]s provided by the recipient as outputs.
+    /// creating new notes from [`BlindNonce`]s provided by the recipient as
+    /// outputs.
     ///
-    /// Returns a `OutPoint` of a fedimint transaction created and submitted as a payment.
+    /// Returns a `OutPoint` of a fedimint transaction created and submitted as
+    /// a payment.
     ///
-    /// The name is derived from Bitcoin's terminology of "pay to `<address-type>`".
+    /// The name is derived from Bitcoin's terminology of "pay to
+    /// `<address-type>`".
     pub async fn pay_to_blind_nonces<R: RngCore + CryptoRng>(
         &self,
         blind_nonces: TieredMulti<BlindNonce>,
@@ -461,11 +474,13 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
-    /// Receive e-cash directly from another user when online (vs. offline transfer)
+    /// Receive e-cash directly from another user when online (vs. offline
+    /// transfer)
     ///
-    /// Generates notes that another user will pay for and let us know the OutPoint in `create_tx`
-    /// Payer can use the `pay_to_blind_nonces` function
-    /// Allows transfer of e-cash without risk of double-spend or not having exact change
+    /// Generates notes that another user will pay for and let us know the
+    /// OutPoint in `create_tx` Payer can use the `pay_to_blind_nonces`
+    /// function Allows transfer of e-cash without risk of double-spend or
+    /// not having exact change
     pub async fn receive_notes<F, Fut>(&self, amount: Amount, create_tx: F)
     where
         F: FnMut(TieredMulti<BlindNonce>) -> Fut,
@@ -524,9 +539,11 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         })
     }
 
-    /// Returns a bitcoin address suited to perform a fedimint [peg-in](Self::peg_in)
+    /// Returns a bitcoin address suited to perform a fedimint
+    /// [peg-in](Self::peg_in)
     ///
-    /// This function requires a cryptographically secure randomness source, and utilizes the [wallet-clients](crate::wallet::WalletClient)
+    /// This function requires a cryptographically secure randomness source, and
+    /// utilizes the [wallet-clients](crate::wallet::WalletClient)
     /// [get_new_pegin_address](crate::wallet::WalletClient::get_new_pegin_address) to **derive** a bitcoin-address from the federations
     /// public descriptor by tweaking it.
     /// - this function will write to the clients DB
@@ -544,8 +561,8 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
 
     /// Issues a spendable amount of ecash
     ///
-    /// **WARNING** the ecash will be deleted from the database, the returned ecash must be
-    /// `reissued` or it will be lost
+    /// **WARNING** the ecash will be deleted from the database, the returned
+    /// ecash must be `reissued` or it will be lost
     pub async fn spend_ecash<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
@@ -627,9 +644,10 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         Ok(notes)
     }
 
-    /// Tries to fetch e-cash notes from a certain out point. An error may just mean having queried
-    /// the federation too early. Use [`MintClientError::is_retryable`] to determine
-    /// if the operation should be retried at a later time.
+    /// Tries to fetch e-cash notes from a certain out point. An error may just
+    /// mean having queried the federation too early. Use
+    /// [`MintClientError::is_retryable`] to determine if the operation
+    /// should be retried at a later time.
     pub async fn fetch_notes<'a>(&self, outpoint: OutPoint) -> Result<()> {
         let mut dbtx = self.context.db.begin_transaction().await;
         self.mint_client().fetch_notes(&mut dbtx, outpoint).await?;
@@ -637,8 +655,8 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         Ok(())
     }
 
-    /// Should be called after any transaction that might have failed in order to get any note
-    /// inputs back.
+    /// Should be called after any transaction that might have failed in order
+    /// to get any note inputs back.
     #[instrument(skip_all, level = "debug")]
     pub async fn reissue_pending_notes<R: RngCore + CryptoRng>(&self, rng: R) -> Result<OutPoint> {
         let mut dbtx = self.context.db.begin_transaction().await;
@@ -743,7 +761,8 @@ impl Client<UserClientConfig> {
     }
 
     pub async fn fetch_active_gateway(&self) -> Result<LightningGateway> {
-        // FIXME: forgetting about old gws might not always be ideal. We assume that the gateway stays the same except for route hints for now.
+        // FIXME: forgetting about old gws might not always be ideal. We assume that the
+        // gateway stays the same except for route hints for now.
         if let Some(gateway) = self
             .context
             .db
@@ -759,9 +778,11 @@ impl Client<UserClientConfig> {
 
         self.switch_active_gateway(None).await
     }
-    /// Switches the clients active gateway to a registered gateway with the given node pubkey.
-    /// If no pubkey is given (node_pub_key == None) the first available registered gateway is activated.
-    /// This behavior is useful for scenarios where we don't know any registered gateways in advance.
+    /// Switches the clients active gateway to a registered gateway with the
+    /// given node pubkey. If no pubkey is given (node_pub_key == None) the
+    /// first available registered gateway is activated. This behavior is
+    /// useful for scenarios where we don't know any registered gateways in
+    /// advance.
     pub async fn switch_active_gateway(
         &self,
         node_pub_key: Option<secp256k1::PublicKey>,
@@ -842,8 +863,9 @@ impl Client<UserClientConfig> {
 
     /// Claims a refund for an expired or cancelled outgoing contract
     ///
-    /// This can be necessary when the Lightning gateway cannot route the payment, is malicious or
-    /// offline. The function returns the out point of the e-cash output generated as change.
+    /// This can be necessary when the Lightning gateway cannot route the
+    /// payment, is malicious or offline. The function returns the out point
+    /// of the e-cash output generated as change.
     pub async fn try_refund_outgoing_contract(
         &self,
         contract_id: ContractId,
@@ -890,8 +912,8 @@ impl Client<UserClientConfig> {
 
     /// Waits for the federation to sign an ecash note.
     ///
-    /// This function will poll until the returned result includes a SigResponse from the federation
-    /// or it will timeout.
+    /// This function will poll until the returned result includes a SigResponse
+    /// from the federation or it will timeout.
     pub async fn await_outpoint_outcome(&self, outpoint: OutPoint) -> Result<()> {
         let poll = || async {
             let interval = Duration::from_secs(1);
@@ -1088,8 +1110,8 @@ impl Client<UserClientConfig> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
-    /// Notify gateway that we've escrowed notes they can claim by routing our payment and wait
-    /// for them to do so
+    /// Notify gateway that we've escrowed notes they can claim by routing our
+    /// payment and wait for them to do so
     pub async fn await_outgoing_contract_execution(
         &self,
         contract_id: ContractId,
@@ -1147,8 +1169,9 @@ impl Client<GatewayClientConfig> {
             .map_err(ClientError::LnClientError)
     }
 
-    /// Check if we can claim the contract account and returns the max delay in blocks for how long
-    /// other nodes on the route are allowed to delay the payment.
+    /// Check if we can claim the contract account and returns the max delay in
+    /// blocks for how long other nodes on the route are allowed to delay
+    /// the payment.
     pub async fn validate_outgoing_account(
         &self,
         account: &OutgoingContractAccount,
@@ -1175,8 +1198,8 @@ impl Client<GatewayClientConfig> {
         }
 
         let consensus_block_height = self.context.api.fetch_consensus_block_height().await?;
-        // Calculate max delay taking into account current consensus block height and our safety
-        // margin.
+        // Calculate max delay taking into account current consensus block height and
+        // our safety margin.
         let max_delay = (account.contract.timelock as u64)
             .checked_sub(consensus_block_height)
             .and_then(|delta| delta.checked_sub(self.config.timelock_delta))
@@ -1202,12 +1225,14 @@ impl Client<GatewayClientConfig> {
         Some(self.config().node_pub_key) == maybe_route_hint_first_id
     }
 
-    /// Save the details about an outgoing payment the client is about to process. This function has
-    /// to be called prior to instructing the lightning node to pay the invoice since otherwise a
-    /// crash could lead to loss of funds.
+    /// Save the details about an outgoing payment the client is about to
+    /// process. This function has to be called prior to instructing the
+    /// lightning node to pay the invoice since otherwise a crash could lead
+    /// to loss of funds.
     ///
-    /// Note though that extended periods of staying offline will result in loss of funds anyway if
-    /// the client can not claim the respective contract in time.
+    /// Note though that extended periods of staying offline will result in loss
+    /// of funds anyway if the client can not claim the respective contract
+    /// in time.
     pub async fn save_outgoing_payment(&self, contract: OutgoingContractAccount) {
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.insert_entry(
@@ -1219,7 +1244,8 @@ impl Client<GatewayClientConfig> {
         dbtx.commit_tx().await.expect("DB Error");
     }
 
-    /// Lists all previously saved transactions that have not been driven to completion so far
+    /// Lists all previously saved transactions that have not been driven to
+    /// completion so far
     pub async fn list_pending_outgoing(&self) -> Vec<OutgoingContractAccount> {
         self.context
             .db
@@ -1246,7 +1272,8 @@ impl Client<GatewayClientConfig> {
         self.cancel_outgoing_contract(contract_account).await
     }
 
-    /// Cancel an outgoing contract we haven't accepted yet, possibly because it was underfunded
+    /// Cancel an outgoing contract we haven't accepted yet, possibly because it
+    /// was underfunded
     pub async fn cancel_outgoing_contract(
         &self,
         contract_account: OutgoingContractAccount,
@@ -1265,7 +1292,8 @@ impl Client<GatewayClientConfig> {
             signature: None,
         };
 
-        // TODO: protect against crashes, but the timout being hit eventually anyway makes this less of an issue
+        // TODO: protect against crashes, but the timout being hit eventually anyway
+        // makes this less of an issue
         self.context
             .api
             .submit_transaction(cancel_tx.into_type_erased())
@@ -1274,12 +1302,14 @@ impl Client<GatewayClientConfig> {
         Ok(())
     }
 
-    /// Claim an outgoing contract after acquiring the preimage by paying the associated invoice and
-    /// initiates e-cash issuances to receive the bitcoin from the contract (these still need to be
-    /// fetched later to finalize them).
+    /// Claim an outgoing contract after acquiring the preimage by paying the
+    /// associated invoice and initiates e-cash issuances to receive the
+    /// bitcoin from the contract (these still need to be fetched later to
+    /// finalize them).
     ///
-    /// Callers need to make sure that the contract can still be claimed by the gateway and has not
-    /// timed out yet. Otherwise the transaction will fail.
+    /// Callers need to make sure that the contract can still be claimed by the
+    /// gateway and has not timed out yet. Otherwise the transaction will
+    /// fail.
     pub async fn claim_outgoing_contract(
         &self,
         contract_id: ContractId,
@@ -1308,12 +1338,14 @@ impl Client<GatewayClientConfig> {
 
     /// Buy a lightning preimage listed for sale inside the federation
     ///
-    /// Called when a lightning gateway attempts to satisfy a contract on behalf of a user
+    /// Called when a lightning gateway attempts to satisfy a contract on behalf
+    /// of a user
     ///
-    /// * `payment_hash` - hash of the preimage we want to buy.
-    ///     It is included inside a bolt11 invoice and should match the offer hash
-    /// * `htlc_amount` - amount from the htlc the gateway wants to pay.
-    ///     Should be less than or equal to the offer amount depending on gateway fee policy
+    /// * `payment_hash` - hash of the preimage we want to buy. It is included
+    ///   inside a bolt11 invoice and should match the offer hash
+    /// * `htlc_amount` - amount from the htlc the gateway wants to pay. Should
+    ///   be less than or equal to the offer amount depending on gateway fee
+    ///   policy
     #[instrument(name = "Client::buy_preimage_offer", skip(self, rng))]
     pub async fn buy_preimage_offer(
         &self,
@@ -1380,8 +1412,8 @@ impl Client<GatewayClientConfig> {
         Ok(mint_tx_id)
     }
 
-    /// Lists all claim transactions for outgoing contracts that we have submitted but were not part
-    /// of the consensus yet.
+    /// Lists all claim transactions for outgoing contracts that we have
+    /// submitted but were not part of the consensus yet.
     pub async fn list_pending_claimed_outgoing(&self) -> Vec<ContractId> {
         self.context
             .db
@@ -1394,7 +1426,8 @@ impl Client<GatewayClientConfig> {
             .await
     }
 
-    /// Wait for a lightning preimage gateway has purchased to be decrypted by the federation
+    /// Wait for a lightning preimage gateway has purchased to be decrypted by
+    /// the federation
     pub async fn await_preimage_decryption(&self, outpoint: OutPoint) -> Result<Preimage> {
         Ok(self
             .context
@@ -1409,8 +1442,8 @@ impl Client<GatewayClientConfig> {
     }
 
     // TODO: improve error propagation on tx transmission
-    /// Waits for a outgoing contract claim transaction to be confirmed and retransmits it
-    /// periodically if this does not happen.
+    /// Waits for a outgoing contract claim transaction to be confirmed and
+    /// retransmits it periodically if this does not happen.
     pub async fn await_outgoing_contract_claimed(
         &self,
         contract_id: ContractId,
@@ -1477,8 +1510,9 @@ impl Debug for ClientSecret {
     }
 }
 
-/// Builds a fake module registry which is only usable for decoding messages since the client isn't
-/// modularized yet but we need the decoding functionality.
+/// Builds a fake module registry which is only usable for decoding messages
+/// since the client isn't modularized yet but we need the decoding
+/// functionality.
 pub fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::from_iter([
         (

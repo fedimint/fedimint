@@ -43,8 +43,8 @@ pub enum FundedContract {
     Outgoing(outgoing::OutgoingContract),
 }
 
-/// Outcome of a contract. Only incoming contracts currently need to communicate anything back to
-/// the user (the decrypted preimage).
+/// Outcome of a contract. Only incoming contracts currently need to communicate
+/// anything back to the user (the decrypted preimage).
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum ContractOutcome {
     Account(AccountContractOutcome),
@@ -79,8 +79,8 @@ impl IdentifyableContract for FundedContract {
 }
 
 impl Contract {
-    /// Creates the initial contract outcome that is created on transaction acceptance. Depending on
-    /// the contract type it is not yet final.
+    /// Creates the initial contract outcome that is created on transaction
+    /// acceptance. Depending on the contract type it is not yet final.
     pub fn to_outcome(&self) -> ContractOutcome {
         match self {
             Contract::Account(_) => ContractOutcome::Account(AccountContractOutcome {}),
@@ -129,7 +129,8 @@ impl Preimage {
     ///
     /// # Errors
     ///
-    /// Returns [`secp256k1::Error::InvalidPublicKey`] if the Preimage does not represent a valid Secp256k1 point x coordinate.
+    /// Returns [`secp256k1::Error::InvalidPublicKey`] if the Preimage does not
+    /// represent a valid Secp256k1 point x coordinate.
     pub fn to_public_key(&self) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
         secp256k1::XOnlyPublicKey::from_slice(&self.0)
     }

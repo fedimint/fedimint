@@ -280,7 +280,8 @@ impl IBitcoindRpc for ElectrumClient {
                 .first()
                 .expect("Transaction must contain at least one output");
 
-            // if transaction is confirmed, we're going to find the confirmation event in the history of ifs first output
+            // if transaction is confirmed, we're going to find the confirmation event in
+            // the history of ifs first output
             Ok(self
                 .0
                 .script_get_history(&output.script_pubkey)?

@@ -20,7 +20,8 @@ pub mod bitcoincore_rpc;
 /// Functions may panic if if the bitcoind node is not reachable.
 #[async_trait]
 pub trait IBitcoindRpc: Debug + Send + Sync {
-    /// `true` if it's real-bitcoin (not electrum) backend and thus supports `get_block` call
+    /// `true` if it's real-bitcoin (not electrum) backend and thus supports
+    /// `get_block` call
     ///
     /// This is a bit of a workaround to support electrum.
     fn backend_type(&self) -> BitcoinRpcBackendType {
@@ -36,12 +37,14 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     /// Returns the block hash at a given height
     ///
     /// # Panics
-    /// If the node does not know a block for that height. Make sure to only query blocks of a
-    /// height less or equal to the one returned by `Self::get_block_height`.
+    /// If the node does not know a block for that height. Make sure to only
+    /// query blocks of a height less or equal to the one returned by
+    /// `Self::get_block_height`.
     ///
-    /// While there is a corner case that the blockchain shrinks between these two calls (through on
-    /// average heavier blocks on a fork) this is prevented by only querying hashes for blocks
-    /// tailing the chain tip by a certain number of blocks.
+    /// While there is a corner case that the blockchain shrinks between these
+    /// two calls (through on average heavier blocks on a fork) this is
+    /// prevented by only querying hashes for blocks tailing the chain tip
+    /// by a certain number of blocks.
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash>;
 
     /// Returns the block with the given hash
@@ -50,9 +53,10 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     /// If the block doesn't exist.
     async fn get_block(&self, hash: &BlockHash) -> Result<bitcoin::Block>;
 
-    /// Estimates the fee rate for a given confirmation target. Make sure that all federation
-    /// members use the same algorithm to avoid widely diverging results. If the node is not ready
-    /// yet to return a fee rate estimation this function returns `None`.
+    /// Estimates the fee rate for a given confirmation target. Make sure that
+    /// all federation members use the same algorithm to avoid widely
+    /// diverging results. If the node is not ready yet to return a fee rate
+    /// estimation this function returns `None`.
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>>;
 
     /// Submits a transaction to the Bitcoin network

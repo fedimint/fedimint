@@ -16,7 +16,7 @@ use fedimint_api::{
     task::TaskGroup,
     Amount, TransactionId,
 };
-use fedimint_server::api::WsFederationConnect;
+use fedimint_server::api::WsClientConnectInfo;
 use mint_client::{
     ln::PayInvoicePayload,
     modules::ln::{contracts::Preimage, route_hints::RouteHint},
@@ -175,7 +175,7 @@ impl Gateway {
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
-        let connect: WsFederationConnect = serde_json::from_str(&payload.connect).map_err(|e| {
+        let connect: WsClientConnectInfo = serde_json::from_str(&payload.connect).map_err(|e| {
             LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
@@ -183,8 +183,9 @@ impl Gateway {
         let node_pub_key = PublicKey::from_slice(&pub_key)
             .map_err(|e| LnGatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
-        // The gateway deterministically assigns a channel id (u64) to each federation connected.
-        // TODO: explicitly handle the case where the channel id overflows
+        // The gateway deterministically assigns a channel id (u64) to each federation
+        // connected. TODO: explicitly handle the case where the channel id
+        // overflows
         let channel_id = self.channel_id_generator.fetch_add(1, Ordering::SeqCst);
 
         let gw_client_cfg = self
@@ -233,8 +234,8 @@ impl Gateway {
         })
     }
 
-    /// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
-    /// a federation user.
+    /// Handles an intercepted HTLC that might be an incoming payment we are
+    /// receiving on behalf of a federation user.
     async fn handle_receive_payment(&self, _payload: ReceivePaymentPayload) -> Result<Preimage> {
         Err(LnGatewayError::Other(anyhow::anyhow!(
             "Not implemented: handle_receive_payment"
@@ -324,7 +325,8 @@ impl Gateway {
         })
         .await;
 
-        // TODO: try to drive forward outgoing and incoming payments that were interrupted
+        // TODO: try to drive forward outgoing and incoming payments that were
+        // interrupted
         let loop_ctrl = tg.make_handle();
         loop {
             // Shut down main loop if requested

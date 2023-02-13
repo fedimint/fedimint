@@ -29,7 +29,8 @@ pub struct Elapsed;
 
 #[derive(Debug, Default)]
 struct TaskGroupInner {
-    /// Was the shutdown requested, either externally or due to any task failure?
+    /// Was the shutdown requested, either externally or due to any task
+    /// failure?
     is_shutting_down: AtomicBool,
     #[allow(clippy::type_complexity)]
     on_shutdown: Mutex<Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send + 'static>>>,
@@ -88,9 +89,9 @@ impl TaskGroup {
     /// calling [`Self::join_all`] and detecting any panics on just a
     /// subset of tasks.
     ///
-    /// The code create a subgroup is responsible for calling [`Self::join_all`].
-    /// If it won't, the parent subgroup **will not** detect any panics in the
-    /// tasks spawned by the subgroup.
+    /// The code create a subgroup is responsible for calling
+    /// [`Self::join_all`]. If it won't, the parent subgroup **will not**
+    /// detect any panics in the tasks spawned by the subgroup.
     pub async fn make_subgroup(&self) -> TaskGroup {
         let new_tg = Self::new();
         self.make_handle()

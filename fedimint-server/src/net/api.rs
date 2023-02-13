@@ -98,7 +98,8 @@ fn attach_endpoints(
             endpoint.path
         };
 
-        // Another memory leak that is fine because the function is only called once at startup
+        // Another memory leak that is fine because the function is only called once at
+        // startup
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module

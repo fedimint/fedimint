@@ -66,26 +66,29 @@ pub trait IServerModule: Debug {
         module_instance_id: ModuleInstanceId,
     ) -> ConsensusProposal<DynModuleConsensusItem>;
 
-    /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The database transaction will be
-    /// committed to the database after all other modules ran `begin_consensus_epoch`,
-    /// so the results are available when processing transactions.
+    /// This function is called once before transaction processing starts. All
+    /// module consensus items of this round are supplied as
+    /// `consensus_items`. The database transaction will be committed to the
+    /// database after all other modules ran `begin_consensus_epoch`, so the
+    /// results are available when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
     );
 
-    /// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
+    /// Some modules may have slow to verify inputs that would block transaction
+    /// processing. If the slow part of verification can be modeled as a
+    /// pure function not involving any system state we can build a lookup
+    /// table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
     fn build_verification_cache(&self, inputs: &[DynInput]) -> DynVerificationCache;
 
-    /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    /// Validate a transaction input before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     async fn validate_input<'a>(
         &self,
         interconnect: &'a dyn ModuleInterconect,
@@ -94,13 +97,14 @@ pub trait IServerModule: Debug {
         input: &DynInput,
     ) -> Result<InputMeta, ModuleError>;
 
-    /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
-    /// the operation will take no effect.
+    /// Try to spend a transaction input. On success all necessary updates will
+    /// be part of the database transaction. On failure (e.g. double spend)
+    /// the database transaction is rolled back and the operation will take
+    /// no effect.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
@@ -109,26 +113,29 @@ pub trait IServerModule: Debug {
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
-    /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    /// Validate a transaction output before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
         output: &DynOutput,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
-    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
-    /// database transaction is rolled back and the operation will take no effect.
+    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
+    /// all necessary updates to the database will be part of the database
+    /// transaction. On failure (e.g. double spend) the database transaction
+    /// is rolled back and the operation will take no effect.
     ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
+    /// note issuance) and can be used to retrieve its outcome later using
+    /// `output_status`.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -136,20 +143,22 @@ pub trait IServerModule: Debug {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
-    /// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
+    /// This function is called once all transactions have been processed and
+    /// changes were written to the database. This allows running
+    /// finalization code before the next epoch.
     ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
+    /// Passes in the `consensus_peers` that contributed to this epoch and
+    /// returns a list of peers to drop if any are misbehaving.
     async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'a>,
     ) -> Vec<PeerId>;
 
-    /// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
+    /// Retrieve the current status of the output. Depending on the module this
+    /// might contain data needed by the client to access funds or give an
+    /// estimate of when funds will be available. Returns `None` if the
+    /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -157,15 +166,17 @@ pub trait IServerModule: Debug {
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome>;
 
-    /// Queries the database and returns all assets and liabilities of the module.
+    /// Queries the database and returns all assets and liabilities of the
+    /// module.
     ///
-    /// Summing over all modules, if liabilities > assets then an error has occurred in the database
-    /// and consensus should halt.
+    /// Summing over all modules, if liabilities > assets then an error has
+    /// occurred in the database and consensus should halt.
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
 
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
+    /// Returns a list of custom API endpoints defined by the module. These are
+    /// made available both to users as well as to other modules. They thus
+    /// should be deterministic, only dependant on their input and the
+    /// current epoch.
     fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>>;
 }
 
@@ -207,10 +218,11 @@ where
             .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
     }
 
-    /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The database transaction will be
-    /// committed to the database after all other modules ran `begin_consensus_epoch`,
-    /// so the results are available when processing transactions.
+    /// This function is called once before transaction processing starts. All
+    /// module consensus items of this round are supplied as
+    /// `consensus_items`. The database transaction will be committed to the
+    /// database after all other modules ran `begin_consensus_epoch`, so the
+    /// results are available when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -236,9 +248,10 @@ where
         .await
     }
 
-    /// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
+    /// Some modules may have slow to verify inputs that would block transaction
+    /// processing. If the slow part of verification can be modeled as a
+    /// pure function not involving any system state we can build a lookup
+    /// table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
     fn build_verification_cache<'a>(&self, inputs: &[DynInput]) -> DynVerificationCache {
         <Self as ServerModule>::build_verification_cache(
@@ -252,10 +265,11 @@ where
         .into()
     }
 
-    /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    /// Validate a transaction input before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     async fn validate_input<'a>(
         &self,
         interconnect: &'a dyn ModuleInterconect,
@@ -280,13 +294,14 @@ where
         .map(Into::into)
     }
 
-    /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
-    /// the operation will take no effect.
+    /// Try to spend a transaction input. On success all necessary updates will
+    /// be part of the database transaction. On failure (e.g. double spend)
+    /// the database transaction is rolled back and the operation will take
+    /// no effect.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
@@ -311,10 +326,11 @@ where
         .map(Into::into)
     }
 
-    /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    /// Validate a transaction output before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
@@ -331,16 +347,18 @@ where
         .await
     }
 
-    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
-    /// database transaction is rolled back and the operation will take no effect.
+    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
+    /// all necessary updates to the database will be part of the database
+    /// transaction. On failure (e.g. double spend) the database transaction
+    /// is rolled back and the operation will take no effect.
     ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
+    /// note issuance) and can be used to retrieve its outcome later using
+    /// `output_status`.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     async fn apply_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -359,11 +377,12 @@ where
         .await
     }
 
-    /// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
+    /// This function is called once all transactions have been processed and
+    /// changes were written to the database. This allows running
+    /// finalization code before the next epoch.
     ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
+    /// Passes in the `consensus_peers` that contributed to this epoch and
+    /// returns a list of peers to drop if any are misbehaving.
     async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
@@ -372,9 +391,10 @@ where
         <Self as ServerModule>::end_consensus_epoch(self, consensus_peers, dbtx).await
     }
 
-    /// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
+    /// Retrieve the current status of the output. Depending on the module this
+    /// might contain data needed by the client to access funds or give an
+    /// estimate of when funds will be available. Returns `None` if the
+    /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -386,10 +406,11 @@ where
             .map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
     }
 
-    /// Queries the database and returns all assets and liabilities of the module.
+    /// Queries the database and returns all assets and liabilities of the
+    /// module.
     ///
-    /// Summing over all modules, if liabilities > assets then an error has occurred in the database
-    /// and consensus should halt.
+    /// Summing over all modules, if liabilities > assets then an error has
+    /// occurred in the database and consensus should halt.
     async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
         <Self as ServerModule>::audit(self, dbtx, audit).await
     }

@@ -34,11 +34,13 @@ impl<Msg> DerefMut for PeerConnections<Msg> {
 /// * Connections to peers are authenticated and encrypted
 /// * Messages are received exactly once and in the order they were sent
 /// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and resent on reconnect, this
-///   avoids the need to rejoin the consensus, which is more tricky.
+/// * Messages are cached in case of short-lived network interruptions and
+///   resent on reconnect, this avoids the need to rejoin the consensus, which
+///   is more tricky.
 ///
-/// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
-/// The thus disconnected peer will need to rejoin the consensus at a later time.  
+/// In case of longer term interruptions the message cache has to be dropped to
+/// avoid DoS attacks. The thus disconnected peer will need to rejoin the
+/// consensus at a later time.
 #[async_trait]
 pub trait IPeerConnections<Msg>
 where
@@ -46,8 +48,8 @@ where
 {
     /// Send a message to a specific peer.
     ///
-    /// The message is sent immediately and cached if the peer is reachable and only cached
-    /// otherwise.
+    /// The message is sent immediately and cached if the peer is reachable and
+    /// only cached otherwise.
     async fn send(&mut self, peers: &[PeerId], msg: Msg) -> Cancellable<()>;
 
     /// Await receipt of a message from any connected peer.
@@ -80,11 +82,12 @@ impl<MuxKey, Msg> Deref for MuxPeerConnections<MuxKey, Msg> {
 }
 
 #[async_trait]
-/// Like [`IPeerConnections`] but with an ability to handle multiple destinations (like modules) per each peer-connection.
+/// Like [`IPeerConnections`] but with an ability to handle multiple
+/// destinations (like modules) per each peer-connection.
 ///
 /// Notably, unlike [`IPeerConnections`] implementations need to be thread-safe,
-/// as the primary intendet use should support multiple threads using multiplexed
-/// channel at the same time.
+/// as the primary intendet use should support multiple threads using
+/// multiplexed channel at the same time.
 pub trait IMuxPeerConnections<MuxKey, Msg>
 where
     Msg: Serialize + DeserializeOwned + Unpin + Send,

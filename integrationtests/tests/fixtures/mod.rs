@@ -10,11 +10,9 @@ use std::sync::atomic::{AtomicI64, AtomicU16};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
-use fake::FakeLightningTest;
 use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
@@ -50,7 +48,10 @@ use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
-use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
+use fedimint_testing::{
+    btc::{fixtures::FakeBitcoinTest, BitcoinTest},
+    ln::{fixtures::FakeLightningTest, LightningTest},
+};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::Wallet;
@@ -61,7 +62,6 @@ use futures::FutureExt;
 use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use lightning_invoice::Invoice;
 use ln_gateway::cln::ClnRpc;
 use ln_gateway::{
     actor::GatewayActor,
@@ -88,7 +88,6 @@ use url::Url;
 use crate::fixtures::utils::LnRpcAdapter;
 use crate::ConsensusItem;
 
-mod fake;
 mod real;
 mod utils;
 
@@ -119,8 +118,8 @@ pub struct Fixtures {
     pub task_group: TaskGroup,
 }
 
-/// Helper for generating fixtures, passing them into test code, then shutting down the task thread
-/// when the test is complete.
+/// Helper for generating fixtures, passing them into test code, then shutting
+/// down the task thread when the test is complete.
 pub async fn test<B>(
     num_peers: u16,
     f: impl FnOnce(
@@ -146,8 +145,8 @@ where
     fixtures.task_group.shutdown_join_all(None).await
 }
 
-/// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
-/// federation nodes starting at port DEFAULT_P2P_PORT.
+/// Generates the fixtures for an integration test and spawns API and HBBFT
+/// consensus threads for federation nodes starting at port DEFAULT_P2P_PORT.
 pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
@@ -484,18 +483,6 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
         .unwrap()
 }
 
-#[async_trait]
-pub trait LightningTest {
-    /// Creates invoice from a non-gateway LN node
-    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
-
-    /// Returns the amount that the gateway LN node has sent
-    async fn amount_sent(&self) -> Amount;
-
-    /// Is this a LN instance shared with other tests
-    fn is_shared(&self) -> bool;
-}
-
 pub struct GatewayTest {
     pub actor: Arc<GatewayActor>,
     pub adapter: Arc<LnRpcAdapter>,
@@ -706,7 +693,8 @@ struct ServerTest {
 
 /// Represents a collection of fedimint peer servers
 impl FederationTest {
-    /// Returns the first item with the given module id from the last consensus outcome
+    /// Returns the first item with the given module id from the last consensus
+    /// outcome
     pub async fn find_module_item(&self, id: ModuleInstanceId) -> Option<DynModuleConsensusItem> {
         self.last_consensus
             .lock()
@@ -769,8 +757,8 @@ impl FederationTest {
         Ok(())
     }
 
-    /// Returns a fixture that only calls on a subset of the peers.  Note that PeerIds are always
-    /// starting at 0 in tests.
+    /// Returns a fixture that only calls on a subset of the peers.  Note that
+    /// PeerIds are always starting at 0 in tests.
     pub async fn subset_peers(&self, peers: &[u16]) -> Self {
         let peers = peers
             .iter()
@@ -800,8 +788,8 @@ impl FederationTest {
         user: &UserTest<C>,
         amount: Amount,
     ) -> TieredMulti<SpendableNote> {
-        // We mimic the logic in the spend_ecash function because we need to know whether we will
-        // be running 2 epochs for a reissue or not
+        // We mimic the logic in the spend_ecash function because we need to know
+        // whether we will be running 2 epochs for a reissue or not
         let notes = user.client.mint_client().select_notes(amount).await;
         if notes.unwrap().total_amount() == amount {
             return user.client.spend_ecash(amount, rng()).await.unwrap();
@@ -811,8 +799,8 @@ impl FederationTest {
         user.client.remint_ecash_await(amount).await.unwrap()
     }
 
-    /// Mines a UTXO then mints notes for user, assuring that the balance sheet of the federation
-    /// nets out to zero.
+    /// Mines a UTXO then mints notes for user, assuring that the balance sheet
+    /// of the federation nets out to zero.
     pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
@@ -825,8 +813,8 @@ impl FederationTest {
         self.mint_notes_for_user(user, amount).await;
     }
 
-    /// Inserts notes directly into the databases of federation nodes, runs consensus to sign them
-    /// then fetches the notes for the user client.
+    /// Inserts notes directly into the databases of federation nodes, runs
+    /// consensus to sign them then fetches the notes for the user client.
     pub async fn mint_notes_for_user<C: AsRef<ClientConfig> + Clone + Send>(
         &self,
         user: &UserTest<C>,
@@ -878,8 +866,8 @@ impl FederationTest {
             .await;
     }
 
-    /// Removes the ecash nonces from the fed DB to simulate the fed losing track of what ecash
-    /// has already been spent
+    /// Removes the ecash nonces from the fed DB to simulate the fed losing
+    /// track of what ecash has already been spent
     pub async fn clear_spent_mint_nonces(&self) {
         for server in &self.servers {
             block_on(async {
@@ -974,8 +962,9 @@ impl FederationTest {
         out_point
     }
 
-    /// Has every federation node broadcast any transactions pending to the Bitcoin network, otherwise
-    /// transactions will only get broadcast every 10 seconds.
+    /// Has every federation node broadcast any transactions pending to the
+    /// Bitcoin network, otherwise transactions will only get broadcast
+    /// every 10 seconds.
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
             let svr = server.lock().await;
@@ -1020,21 +1009,24 @@ impl FederationTest {
         self.run_consensus_epochs_wait(epochs).await.unwrap();
     }
 
-    /// Process n consensus epoch. Wait for events triggering them in case of empty proposals.
+    /// Process n consensus epoch. Wait for events triggering them in case of
+    /// empty proposals.
     ///
-    /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
-    /// it will wait forever.
+    /// If proposals are empty you will need to run a concurrent task that
+    /// triggers a new epoch or it will wait forever.
     ///
-    /// When conditions triggering proposals are already in place, calling this functions has
-    /// the same effect as calling [`run_consensus_epochs`], as blocking conditions can't
-    /// happen. However in that situation calling [`run_consensus_epochs`] is preferable, as
-    /// it will snappily panic, instead of hanging indefinitely in case of a bug.
+    /// When conditions triggering proposals are already in place, calling this
+    /// functions has the same effect as calling [`run_consensus_epochs`],
+    /// as blocking conditions can't happen. However in that situation
+    /// calling [`run_consensus_epochs`] is preferable, as it will snappily
+    /// panic, instead of hanging indefinitely in case of a bug.
     ///
-    /// When called concurrently with actions triggering new epochs, care must be taken
-    /// as random epochs due to wallet module height changes can be triggered randomly,
-    /// making the use of this function flaky. Typically `bitcoin.lock_exclusive()` should
-    /// be called to avoid flakiness, but that makes the whole test run serially, which is
-    /// very undesirable. Prefer structuring your test to not require that (so you can use
+    /// When called concurrently with actions triggering new epochs, care must
+    /// be taken as random epochs due to wallet module height changes can be
+    /// triggered randomly, making the use of this function flaky. Typically
+    /// `bitcoin.lock_exclusive()` should be called to avoid flakiness, but
+    /// that makes the whole test run serially, which is very undesirable.
+    /// Prefer structuring your test to not require that (so you can use
     /// `run_consensus_wait` instead).
     pub async fn run_consensus_epochs_wait(&self, epochs: usize) -> anyhow::Result<()> {
         for _ in 0..(epochs) {
@@ -1054,7 +1046,8 @@ impl FederationTest {
         Ok(())
     }
 
-    /// Does any of the modules return consensus proposal that forces a new epoch
+    /// Does any of the modules return consensus proposal that forces a new
+    /// epoch
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn has_pending_epoch(&self) -> bool {
         for server in &self.servers {
@@ -1080,8 +1073,8 @@ impl FederationTest {
     /// Get the consensus items proposed by all the peers
     ///
     /// Notably, unlike [`has_pending_epoch`] this does not return
-    /// pending transactions, neither does it ignore consensus items that actually
-    /// do not trigger epoch on their own.
+    /// pending transactions, neither does it ignore consensus items that
+    /// actually do not trigger epoch on their own.
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn get_pending_epoch_proposals(&self) -> Vec<ConsensusItem> {
         let mut proposals = vec![];
@@ -1125,7 +1118,8 @@ impl FederationTest {
         Ok(())
     }
 
-    /// Force these peers to rejoin consensus, simulating what happens upon node restart
+    /// Force these peers to rejoin consensus, simulating what happens upon node
+    /// restart
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn rejoin_consensus(&self) -> Cancellable<()> {
         for server in &self.servers {
@@ -1141,8 +1135,8 @@ impl FederationTest {
         Ok(())
     }
 
-    // Necessary to allow servers to progress concurrently, should be fine since the same server
-    // will never run an epoch concurrently with itself.
+    // Necessary to allow servers to progress concurrently, should be fine since the
+    // same server will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
     async fn consensus_epoch(
         server: Arc<Mutex<ServerTest>>,

@@ -9,6 +9,7 @@ use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
+use fedimint_api::config::ApiEndpoint;
 pub use module::ServerModule;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -58,8 +59,9 @@ hash_newtype!(
 )]
 pub struct PeerId(u16);
 
-/// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
-/// this is also why the amount type from rust-bitcoin isn't used instead.
+/// Represents an amount of BTC inside the system. The base denomination is
+/// milli satoshi for now, this is also why the amount type from rust-bitcoin
+/// isn't used instead.
 #[derive(
     Debug,
     Clone,
@@ -125,7 +127,8 @@ pub fn sats(amount: u64) -> Amount {
 pub struct OutPoint {
     /// The referenced transaction ID
     pub txid: TransactionId,
-    /// As a transaction may have multiple outputs, this refers to the index of the output in a transaction
+    /// As a transaction may have multiple outputs, this refers to the index of
+    /// the output in a transaction
     pub out_idx: u64,
 }
 
@@ -155,6 +158,12 @@ impl NumPeers for Vec<PeerId> {
     }
 }
 
+impl NumPeers for Vec<ApiEndpoint> {
+    fn total(&self) -> usize {
+        self.len()
+    }
+}
+
 impl NumPeers for BTreeSet<PeerId> {
     fn total(&self) -> usize {
         self.len()
@@ -170,7 +179,8 @@ pub trait NumPeers {
         (self.total() - 1) / 3
     }
 
-    /// number of peers to select such that one is honest (under our assumptions)
+    /// number of peers to select such that one is honest (under our
+    /// assumptions)
     fn one_honest(&self) -> usize {
         self.max_evil() + 1
     }

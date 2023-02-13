@@ -4,15 +4,13 @@ use std::time::Duration;
 
 use aead::get_key;
 use clap::Parser;
-use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::db::Database;
-use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::{sleep, TaskGroup};
-use fedimint_ln::LightningGen;
-use fedimint_mint::MintGen;
+use fedimint_server::config::io::{
+    read_server_configs, DB_FILE, JSON_EXT, LOCAL_CONFIG, SALT_FILE,
+};
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
-use fedimint_wallet::WalletGen;
 use fedimintd::ui::run_ui;
 use fedimintd::ui::UiMessage;
 use fedimintd::*;
@@ -22,8 +20,6 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
-
-use crate::{JSON_EXT, LOCAL_CONFIG};
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -144,12 +140,6 @@ async fn main() {
 async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> {
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
-    let module_inits = ModuleGenRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ]);
-
     info!("Starting pre-check");
 
     // Run admin UI if a socket address was given for it
@@ -166,7 +156,6 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
         // Spawn admin UI
         let data_dir = opts.data_dir.clone();
         let ui_task_group = task_group.make_subgroup().await;
-        let module_gens = module_inits.clone();
         task_group
             .spawn("admin-ui", move |_| async move {
                 run_ui(
@@ -175,13 +164,14 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
                     listen_ui,
                     password,
                     ui_task_group,
-                    module_gens,
+                    module_registry(),
                 )
                 .await;
             })
             .await;
 
-        // If federation configs (e.g. local.json) missing, wait for admin UI to report DKG completion
+        // If federation configs (e.g. local.json) missing, wait for admin UI to report
+        // DKG completion
         let local_cfg_path = opts.data_dir.join(LOCAL_CONFIG).with_extension(JSON_EXT);
         if !std::path::Path::new(&local_cfg_path).exists() {
             loop {
@@ -202,7 +192,7 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
     let key = get_key(opts.password, salt_path)?;
     let cfg = read_server_configs(&key, opts.data_dir.clone())?;
 
-    let decoders = module_inits.decoders(cfg.iter_module_instances())?;
+    let decoders = module_registry().decoders(cfg.iter_module_instances())?;
 
     let db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
@@ -210,7 +200,7 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
     );
 
     let (consensus, tx_receiver) =
-        FedimintConsensus::new(cfg.clone(), db, module_inits, &mut task_group).await?;
+        FedimintConsensus::new(cfg.clone(), db, module_registry(), &mut task_group).await?;
 
     FedimintServer::run(cfg, consensus, tx_receiver, decoders, &mut task_group).await?;
 

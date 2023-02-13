@@ -7,7 +7,9 @@ use std::{cmp, result};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_api::config::{ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry};
+use fedimint_api::config::{
+    ApiEndpoint, ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry,
+};
 use fedimint_api::core::DynOutputOutcome;
 use fedimint_api::fmt_utils::AbbreviateDebug;
 use fedimint_api::module::registry::ModuleDecoderRegistry;
@@ -131,7 +133,8 @@ impl OutputOutcomeError {
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait IFederationApi: Debug {
-    /// List of all federation members for the purpose of iterating each member in the federation.
+    /// List of all federation members for the purpose of iterating each member
+    /// in the federation.
     ///
     /// The underlying implementation is resonsible for knowing how many
     /// and `PeerId`s of each. The caller of this interface most probably
@@ -148,18 +151,20 @@ pub trait IFederationApi: Debug {
     ) -> result::Result<Value, jsonrpsee_core::Error>;
 }
 
-/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when no arguments are passed to the API call
+/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when
+/// no arguments are passed to the API call
 ///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you'll make it easier
-/// to change it in the future.
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
+/// using this function you'll make it easier to change it in the future.
 pub fn erased_no_param() -> Vec<JsonValue> {
     vec![JsonValue::Null]
 }
 
-/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when one argument are passed to the API call
+/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when
+/// one argument are passed to the API call
 ///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you'll make it easier
-/// to change it in the future.
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
+/// using this function you'll make it easier to change it in the future.
 pub fn erased_single_param<Params>(param: &Params) -> Vec<JsonValue>
 where
     Params: Serialize,
@@ -170,12 +175,13 @@ where
     vec![params_raw]
 }
 
-/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when multiple argument are passed to the API call
+/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when
+/// multiple argument are passed to the API call
 ///
 /// Use a tuple as `params`.
 ///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you'll make it easier
-/// to change it in the future.
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
+/// using this function you'll make it easier to change it in the future.
 pub fn erased_multi_param<Params>(param: &Params) -> Vec<JsonValue>
 where
     Params: Serialize,
@@ -192,9 +198,11 @@ pub trait DynTryIntoOutcome: Sized {
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-/// An extension trait allowing to making federation-wide API call on top [`IFederationApi`].
+/// An extension trait allowing to making federation-wide API call on top
+/// [`IFederationApi`].
 pub trait FederationApiExt: IFederationApi {
-    /// Make an aggregate request to federation, using `strategy` to logically merge the responses.
+    /// Make an aggregate request to federation, using `strategy` to logically
+    /// merge the responses.
     async fn request_with_strategy<MemberRet: serde::de::DeserializeOwned, FedRet: Debug>(
         &self,
         mut strategy: impl QueryStrategy<MemberRet, FedRet> + Send,
@@ -223,8 +231,8 @@ pub trait FederationApiExt: IFederationApi {
         let mut member_delay_ms = BTreeMap::new();
         let mut member_errors = BTreeMap::new();
 
-        // Delegates the response handling to the `QueryStrategy` with an exponential back-off
-        // with every new set of requests
+        // Delegates the response handling to the `QueryStrategy` with an exponential
+        // back-off with every new set of requests
         let max_delay_ms = 1000;
         loop {
             let response = futures.next().await;
@@ -558,9 +566,9 @@ where
     }
 }
 
-/// Mint API client that will try to run queries against all `members` expecting equal
-/// results from at least `min_eq_results` of them. Members that return differing results are
-/// returned as a member faults list.
+/// Mint API client that will try to run queries against all `members` expecting
+/// equal results from at least `min_eq_results` of them. Members that return
+/// differing results are returned as a member faults list.
 #[derive(Debug)]
 pub struct WsFederationApi<C = WsClient> {
     peers: BTreeSet<PeerId>,
@@ -575,28 +583,40 @@ struct FederationMember<C> {
 }
 
 /// Information required for client to construct [`WsFederationApi`] instance
+///
+/// Can be used to download the configs and bootstrap a client
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WsFederationConnect {
-    pub members: Vec<(PeerId, Url)>,
+pub struct WsClientConnectInfo {
+    /// Urls that support the federation API (expected to be in PeerId order)
+    pub urls: Vec<Url>,
+    /// Authentication id for the federation
     pub id: FederationId,
 }
 
-impl From<&ClientConfig> for WsFederationConnect {
-    fn from(config: &ClientConfig) -> Self {
-        let members: Vec<(PeerId, Url)> = config
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(id, node)| {
-                let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                let url = node.url.clone();
-                (peer_id, url)
-            })
-            .collect();
-        WsFederationConnect {
-            members,
-            id: config.federation_id.clone(),
+impl WsClientConnectInfo {
+    pub fn new(id: &FederationId, endpoints: &[ApiEndpoint]) -> Self {
+        Self {
+            urls: endpoints.iter().map(|node| node.url.clone()).collect(),
+            id: id.clone(),
         }
+    }
+
+    /// Construct from a config using only a number of peers where one is
+    /// expected to be honest
+    ///
+    /// Minimizes the serialized size of the connect info
+    pub fn from_honest_peers(config: &ClientConfig) -> Self {
+        let all = config.nodes.clone();
+        let num_honest = all.one_honest();
+        let honest: Vec<_> = all.into_iter().take(num_honest).collect();
+
+        WsClientConnectInfo::new(&config.federation_id, &honest)
+    }
+}
+
+impl From<&ClientConfig> for WsClientConnectInfo {
+    fn from(config: &ClientConfig) -> Self {
+        WsClientConnectInfo::new(&config.federation_id, &config.nodes)
     }
 }
 
@@ -655,16 +675,23 @@ impl WsFederationApi<WsClient> {
         Self::new_with_client(members)
     }
 
+    /// Creates a new API client from a client config
     pub fn from_config(config: &ClientConfig) -> Self {
+        Self::from_urls(&config.into())
+    }
+
+    /// Creates a new API client from connection info
+    pub fn from_urls(connection: &WsClientConnectInfo) -> Self {
         Self::new(
-            config
-                .nodes
+            connection
+                .urls
                 .iter()
                 .enumerate()
-                .map(|(id, node)| {
-                    let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                    let url = node.url.clone();
-                    (peer_id, url)
+                .map(|(id, url)| {
+                    // FIXME: potentially wrong could download actual PeerId later, but doesn't
+                    // matter in practice
+                    let peer_id = PeerId::from(id as u16);
+                    (peer_id, url.clone())
                 })
                 .collect(),
         )
@@ -755,10 +782,11 @@ impl<C: JsonRpcClient> FederationMember<C> {
     }
 }
 
-/// `jsonrpsee` converts the `Url` to a `&str` internally and then parses it as an `Uri`.
-/// Unfortunately `Url` swallows ports that it considers default ports (e.g. 80 and 443 for HTTP(S))
-/// which makes the `Uri` parsing fail in these cases. This function works around this limitation in
-/// a limited way (not fully standard compliant, but work for our use case).
+/// `jsonrpsee` converts the `Url` to a `&str` internally and then parses it as
+/// an `Uri`. Unfortunately `Url` swallows ports that it considers default ports
+/// (e.g. 80 and 443 for HTTP(S)) which makes the `Uri` parsing fail in these
+/// cases. This function works around this limitation in a limited way (not
+/// fully standard compliant, but work for our use case).
 ///
 /// See <https://github.com/paritytech/jsonrpsee/issues/554#issue-1048646896>
 fn url_to_string_with_default_port(url: &Url) -> String {

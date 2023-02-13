@@ -20,7 +20,8 @@ use crate::PegInDescriptor;
 pub struct WalletConfig {
     /// Contains all configuration that is locally configurable and not secret
     pub local: WalletConfigLocal,
-    /// Contains all configuration that will be encrypted such as private key material
+    /// Contains all configuration that will be encrypted such as private key
+    /// material
     pub private: WalletConfigPrivate,
     /// Contains all configuration that needs to be the same for every server
     pub consensus: WalletConfigConsensus,
@@ -43,9 +44,11 @@ pub struct WalletConfigConsensus {
     pub peg_in_descriptor: PegInDescriptor,
     /// The public keys for the bitcoin multisig
     pub peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey>,
-    /// How many bitcoin blocks to wait before considering a transaction confirmed
+    /// How many bitcoin blocks to wait before considering a transaction
+    /// confirmed
     pub finality_delay: u32,
-    /// If we cannot determine the feerate from our bitcoin node, default to this
+    /// If we cannot determine the feerate from our bitcoin node, default to
+    /// this
     pub default_fee: Feerate,
     /// Fees for bitcoin transactions
     pub fee_consensus: FeeConsensus,

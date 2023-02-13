@@ -19,7 +19,7 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::api::{
-    FederationApiExt, GlobalFederationApi, IFederationApi, WsFederationApi, WsFederationConnect,
+    FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::load_from_file;
 use fedimint_core::query::EventuallyConsistent;
@@ -108,7 +108,7 @@ enum CliOutput {
     },
 
     ConnectInfo {
-        connect_info: WsFederationConnect,
+        connect_info: WsClientConnectInfo,
     },
 
     JoinFederation {
@@ -217,7 +217,8 @@ enum Command {
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
 
-    /// Send direct method call to the API, waiting for all peers to agree on a response
+    /// Send direct method call to the API, waiting for all peers to agree on a
+    /// response
     Api {
         method: String,
         /// JSON args that will be serialized and send with the request
@@ -239,7 +240,8 @@ enum Command {
         notes: TieredMulti<SpendableNote>,
     },
 
-    /// Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
+    /// Validate notes without claiming them (only checks if signatures valid,
+    /// does not check if nonce unspent)
     Validate {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
@@ -300,12 +302,15 @@ enum Command {
     /// Upload the (encrypted) snapshot of mint notes to federation
     Backup,
 
-    /// Restore the previously created backup of mint notes (with `backup` command)
+    /// Restore the previously created backup of mint notes (with `backup`
+    /// command)
     Restore {
-        /// The amount of nonces to look ahead when scanning epoch history (per amount tier)
+        /// The amount of nonces to look ahead when scanning epoch history (per
+        /// amount tier)
         ///
-        /// Larger values might make the restore initialization slower and memory usage
-        /// slightly higher, but help restore all mint notes in some rare situations.
+        /// Larger values might make the restore initialization slower and
+        /// memory usage slightly higher, but help restore all mint
+        /// notes in some rare situations.
         #[clap(long = "gap-limit", default_value = "100")]
         gap_limit: usize,
     },
@@ -383,9 +388,9 @@ async fn main() {
 
         let cli = Cli::parse();
         if let Command::JoinFederation { connect } = cli.command {
-            let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
+            let connect_obj: WsClientConnectInfo = serde_json::from_str(&connect)
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
-            let api = Arc::new(WsFederationApi::new(connect_obj.members))
+            let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;
             let cfg: ClientConfig = api
                 .download_client_config(&connect_obj.id, module_gens.clone())
@@ -625,7 +630,7 @@ async fn handle_command(
             )
         }
         Command::ConnectInfo => {
-            let info = WsFederationConnect::from(client.config().as_ref());
+            let info = WsClientConnectInfo::from_honest_peers(client.config().as_ref());
             Ok(CliOutput::ConnectInfo {
                 connect_info: (info),
             })

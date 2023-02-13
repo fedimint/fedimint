@@ -292,14 +292,16 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
 }
 
 async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Result<()> {
-    // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad proposal
+    // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad
+    // proposal
     fed.subset_peers(&[1, 2, 3])
         .await
         .run_consensus_epochs(1)
         .await;
     fed.subset_peers(&[0]).await.run_consensus_epochs(1).await;
 
-    // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
+    // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0
+    // won't be included
     for maybe_cancelled in join_all(vec![
         Either::Left(fed.subset_peers(&[1, 2]).await.run_consensus_epochs_wait(1)),
         Either::Right(
@@ -557,7 +559,10 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         receiving_user.assert_total_notes(sats(1000)).await; // this user received the 1000 sat invoice
 
         if !lightning.is_shared() {
-            assert_eq!(lightning.amount_sent().await, sats(0)); // We did not route any payments over the lightning network
+            assert_eq!(lightning.amount_sent().await, sats(0)); // We did not
+                                                                // route any payments
+                                                                // over the lightning
+                                                                // network
         }
         assert_eq!(fed.max_balance_sheet(), 0);
     })
@@ -687,10 +692,14 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
 
         assert!(response.is_err());
 
-        // TODO: Assert that the gateway has reclaimed the funds used to buy the preimage
+        // TODO: Assert that the gateway has reclaimed the funds used to buy the
+        // preimage
 
         if !lightning.is_shared() {
-            assert_eq!(lightning.amount_sent().await, sats(0)); // We did not route any payments over the lightning network
+            assert_eq!(lightning.amount_sent().await, sats(0)); // We did not
+                                                                // route any payments
+                                                                // over the lightning
+                                                                // network
         }
         assert_eq!(fed.max_balance_sheet(), 0);
     })
@@ -717,7 +726,8 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         assert_eq!(user.total_notes().await, sats(0));
         assert_eq!(gateway.user.total_notes().await, starting_balance);
 
-        // Create lightning invoice whose associated "offer" is accepted by federation consensus
+        // Create lightning invoice whose associated "offer" is accepted by federation
+        // consensus
         let (txid, invoice, payment_keypair) = user
             .client
             .generate_unsigned_invoice_and_submit(preimage_price, "".into(), &mut rng(), None)
@@ -733,9 +743,10 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
 
         // Gateway deposits ecash to trigger preimage decryption by the federation
 
-        // Usually, the invoice amount needed to buy preimage is equivalent to the `preimage_price`
-        // however, for this test, the gateway deposits more than is necessary to check that
-        // we never overspend when buying the preimage!
+        // Usually, the invoice amount needed to buy preimage is equivalent to the
+        // `preimage_price` however, for this test, the gateway deposits more
+        // than is necessary to check that we never overspend when buying the
+        // preimage!
         let invoice_amount = preimage_price + sats(50);
         let (outpoint, contract_id) = gateway
             .actor
@@ -901,7 +912,8 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()
             )
             .await;
 
-        // Gateway fails to acquire preimage, so it cancels the contract so the user can try another one
+        // Gateway fails to acquire preimage, so it cancels the contract so the user can
+        // try another one
         gateway
             .client
             .abort_outgoing_payment(contract_id)
@@ -1150,7 +1162,8 @@ async fn ecash_can_be_recovered() -> Result<()> {
         for _ in 0..10 {
             let ecash = fed.spend_ecash(&user_send, sats(10)).await;
             user_receive.client.reissue(ecash, rng()).await.unwrap();
-            fed.run_consensus_epochs(2).await; // process transaction + sign new notes
+            fed.run_consensus_epochs(2).await; // process transaction + sign new
+                                               // notes
         }
 
         user_send

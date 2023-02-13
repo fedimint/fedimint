@@ -31,14 +31,16 @@ pub mod server;
 
 /// Module instance ID
 ///
-/// This value uniquely identifies a single instance of a module in a federation.
+/// This value uniquely identifies a single instance of a module in a
+/// federation.
 ///
 /// In case a single [`ModuleKind`] is instantiated twice (rare, but possible),
 /// each instance will have a different id.
 ///
 /// Note: We have used this type differently before, assuming each `u16`
 /// uniquly identifies a type of module in question. This function will move
-/// to a `ModuleKind` type which only identifies type of a module (mint vs wallet vs ln, etc)
+/// to a `ModuleKind` type which only identifies type of a module (mint vs
+/// wallet vs ln, etc)
 // TODO: turn in a newtype
 pub type ModuleInstanceId = u16;
 
@@ -173,7 +175,8 @@ macro_rules! module_plugin_trait_define{
     };
 }
 
-/// Implements the necessary traits for all associated types of a `FederationServer` module.
+/// Implements the necessary traits for all associated types of a
+/// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl {
     ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
@@ -217,7 +220,8 @@ macro_rules! newtype_impl_eq_passthrough_with_instance_id {
     };
 }
 
-/// Implementes the `Display` trait for dyn newtypes whose traits implement `Display`
+/// Implementes the `Display` trait for dyn newtypes whose traits implement
+/// `Display`
 macro_rules! newtype_impl_display_passthrough {
     ($newtype:ty) => {
         impl std::fmt::Display for $newtype {
@@ -242,27 +246,32 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
 ///
 /// Static-polymorphism version of [`IDecoder`]
 ///
-/// All methods are static, as the decoding code is supposed to be instance-independent,
-/// at least until we start to support modules with overriden [`ModuleInstanceId`]s
+/// All methods are static, as the decoding code is supposed to be
+/// instance-independent, at least until we start to support modules with
+/// overriden [`ModuleInstanceId`]s
 pub trait Decoder: Debug + Send + Sync + 'static {
     type Input: Input;
     type Output: Output;
     type OutputOutcome: OutputOutcome;
     type ConsensusItem: ModuleConsensusItem;
 
-    /// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    /// Decode `Input` compatible with this module, after the module key prefix
+    /// was already decoded
     fn decode_input(&self, r: &mut dyn io::Read) -> Result<Self::Input, DecodeError>;
 
-    /// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    /// Decode `Output` compatible with this module, after the module key prefix
+    /// was already decoded
     fn decode_output(&self, r: &mut dyn io::Read) -> Result<Self::Output, DecodeError>;
 
-    /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    /// Decode `OutputOutcome` compatible with this module, after the module key
+    /// prefix was already decoded
     fn decode_output_outcome(
         &self,
         r: &mut dyn io::Read,
     ) -> Result<Self::OutputOutcome, DecodeError>;
 
-    /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    /// Decode `ConsensusItem` compatible with this module, after the module key
+    /// prefix was already decoded
     fn decode_consensus_item(
         &self,
         r: &mut dyn io::Read,
@@ -270,28 +279,32 @@ pub trait Decoder: Debug + Send + Sync + 'static {
 }
 
 pub trait IDecoder: Debug {
-    /// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    /// Decode `Input` compatible with this module, after the module key prefix
+    /// was already decoded
     fn decode_input(
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
     ) -> Result<DynInput, DecodeError>;
 
-    /// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    /// Decode `Output` compatible with this module, after the module key prefix
+    /// was already decoded
     fn decode_output(
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
     ) -> Result<DynOutput, DecodeError>;
 
-    /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    /// Decode `OutputOutcome` compatible with this module, after the module key
+    /// prefix was already decoded
     fn decode_output_outcome(
         &self,
         r: &mut dyn io::Read,
         instance_id: ModuleInstanceId,
     ) -> Result<DynOutputOutcome, DecodeError>;
 
-    /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    /// Decode `ConsensusItem` compatible with this module, after the module key
+    /// prefix was already decoded
     fn decode_consensus_item(
         &self,
         r: &mut dyn io::Read,

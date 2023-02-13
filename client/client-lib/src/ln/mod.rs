@@ -78,8 +78,9 @@ impl ClientModule for LnClient {
 
 #[allow(dead_code)]
 impl LnClient {
-    /// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
-    /// till the block height defined by `timelock`, after that we can claim our money back.
+    /// Create an output that incentivizes a Lighning gateway to pay an invoice
+    /// for us. It has time till the block height defined by `timelock`,
+    /// after that we can claim our money back.
     pub async fn create_outgoing_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
@@ -152,7 +153,8 @@ impl LnClient {
     pub async fn is_outgoing_contract_refundable(&self, id: ContractId) -> Result<bool> {
         let contract = self.get_outgoing_contract(id).await?;
 
-        // If the contract was cancelled by the LN gateway we can get a refund instantly …
+        // If the contract was cancelled by the LN gateway we can get a refund instantly
+        // …
         if contract.contract.cancelled {
             return Ok(true);
         }
@@ -282,7 +284,8 @@ impl LnClient {
         Ok(confirmed_invoice)
     }
 
-    /// Used by gateway to prematurely return funds to the user if the payment failed
+    /// Used by gateway to prematurely return funds to the user if the payment
+    /// failed
     pub fn create_cancel_outgoing_output(
         &self,
         contract_id: ContractId,

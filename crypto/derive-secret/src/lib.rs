@@ -59,7 +59,8 @@ impl DerivableSecret {
             let secret = self
                 .kdf
                 .derive::<32>(&tagged_derive(SECP256K1_TAG, ChildId(key_try)));
-            // The secret not forming a valid key is highly unlikely, this approach is the same used when generating a random secp key.
+            // The secret not forming a valid key is highly unlikely, this approach is the
+            // same used when generating a random secp key.
             if let Ok(key) = KeyPair::from_seckey_slice(ctx, &secret) {
                 return key;
             }

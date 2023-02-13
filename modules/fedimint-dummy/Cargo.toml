@@ -10,6 +10,10 @@ license = "MIT"
 name = "fedimint_dummy"
 path = "src/lib.rs"
 
+[features]
+# FIXME: Currently required because the client depends on the server modules
+server = ["fedimint-server"]
+
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1"
@@ -25,3 +29,4 @@ strum = "0.24"
 strum_macros = "0.24"
 impl-tools = "0.6.1"
 thiserror = "1.0.37"
+fedimint-server = { path = "../../fedimint-server", optional = true  }

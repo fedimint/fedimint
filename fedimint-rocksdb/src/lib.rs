@@ -49,7 +49,7 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
 
 #[async_trait]
 impl IDatabase for RocksDb {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + Send + 'a> {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
         let mut rocksdb_tx = RocksDbTransaction(

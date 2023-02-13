@@ -18,7 +18,8 @@ pub enum CoreError {
 }
 
 impl CoreError {
-    /// Returns `true` if queried outpoint isn't ready yet but may become ready later
+    /// Returns `true` if queried outpoint isn't ready yet but may become ready
+    /// later
     pub fn is_retryable(&self) -> bool {
         matches!(self, CoreError::PendingPreimage)
     }
