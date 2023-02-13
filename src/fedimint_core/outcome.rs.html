@@ -16,7 +16,7 @@
 <a href="#16" id="16">16</a>
 <a href="#17" id="17">17</a>
 <a href="#18" id="18">18</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::module::SerdeModuleEncoding;
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -33,6 +33,6 @@
     },
 }
 
-<span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;fedimint_api::core::DynOutputOutcome&gt;;
+<span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;fedimint_core::core::DynOutputOutcome&gt;;
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

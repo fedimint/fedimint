@@ -91,9 +91,9 @@
 <span class="kw">use </span>std::io;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_api::core::Decoder;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::core::Decoder;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -102,7 +102,7 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BackupRequest {
     <span class="kw">pub </span>id: secp256k1::XOnlyPublicKey,
-    <span class="attr">#[serde(with = <span class="string">&quot;fedimint_api::hex::serde&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;fedimint_core::hex::serde&quot;</span>)]
     </span><span class="kw">pub </span>payload: Vec&lt;u8&gt;,
     <span class="kw">pub </span>timestamp: std::time::SystemTime,
 }

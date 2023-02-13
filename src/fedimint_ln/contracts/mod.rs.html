@@ -207,9 +207,9 @@
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::{hash_newtype, Hash <span class="kw">as </span>BitcoinHash};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::OutPoint;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="doccomment">/// Anything representing a contract which thus has an associated [`ContractId`]

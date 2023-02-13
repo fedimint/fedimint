@@ -116,9 +116,9 @@
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::{hash_newtype, Hash <span class="kw">as </span>BitcoinHash};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::OutPoint;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
@@ -126,7 +126,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>IncomingContractOffer {
     <span class="doccomment">/// Amount for which the user is willing to sell the preimage
-    </span><span class="kw">pub </span>amount: fedimint_api::Amount,
+    </span><span class="kw">pub </span>amount: fedimint_core::Amount,
     <span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
     <span class="kw">pub </span>encrypted_preimage: EncryptedPreimage,
     <span class="kw">pub </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,

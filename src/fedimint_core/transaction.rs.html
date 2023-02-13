@@ -170,10 +170,10 @@
 <a href="#170" id="170">170</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
-<span class="kw">use </span>fedimint_api::core::{DynInput, DynOutput};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::SerdeModuleEncoding;
-<span class="kw">use </span>fedimint_api::{Amount, TransactionId};
+<span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
+<span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 <span class="kw">use </span>thiserror::Error;

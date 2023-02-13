@@ -361,12 +361,12 @@
 <a href="#361" id="361">361</a>
 <a href="#362" id="362">362</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
-<span class="kw">use </span>fedimint_api::config::ClientConfig;
-<span class="kw">use </span>fedimint_api::core::client::ClientModule;
-<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
-<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_core::core::client::ClientModule;
+<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>secp256k1::Secp256k1;
 
@@ -379,13 +379,13 @@
 <span class="doccomment">/// Old transaction definition used by old client.
 </span><span class="kw">pub mod </span>legacy {
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_api::core::{
+    <span class="kw">use </span>fedimint_core::core::{
         Decoder, DynInput, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_LN,
         LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
-    <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-    <span class="kw">use </span>fedimint_api::{ServerModule, TransactionId};
+    <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_core::transaction::{agg_keys, TransactionError};
+    <span class="kw">use </span>fedimint_core::{ServerModule, TransactionId};
     <span class="kw">use </span>secp256k1_zkp::{schnorr, XOnlyPublicKey};
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 

@@ -1479,27 +1479,27 @@
 <span class="kw">pub use </span>common::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
-<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>fedimint_api::module::audit::Audit;
-<span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
+<span class="kw">use </span>fedimint_core::module::audit::Audit;
+<span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::server::DynServerModule;
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
-<span class="kw">use </span>fedimint_api::{
+<span class="kw">use </span>fedimint_core::net::peers::MuxPeerConnections;
+<span class="kw">use </span>fedimint_core::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_core::{
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
     PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
@@ -1820,7 +1820,7 @@
                         dbtx,
                         MintAuditItemKeyPrefix,
                         MintAuditItemKey,
-                        fedimint_api::Amount,
+                        fedimint_core::Amount,
                         mint,
                         <span class="string">&quot;Mint Audit Items&quot;
                     </span>);
@@ -2663,7 +2663,7 @@
 }
 
 <span class="macro">plugin_types_trait_impl!</span>(
-    fedimint_api::core::MODULE_KEY_MINT,
+    fedimint_core::core::MODULE_KEY_MINT,
     MintInput,
     MintOutput,
     MintOutputOutcome,
@@ -2721,11 +2721,11 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
-    <span class="kw">use </span>fedimint_api::config::{
+    <span class="kw">use </span>fedimint_core::config::{
         ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
-    <span class="kw">use </span>fedimint_api::module::ModuleGen;
-    <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
+    <span class="kw">use </span>fedimint_core::module::ModuleGen;
+    <span class="kw">use </span>fedimint_core::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};

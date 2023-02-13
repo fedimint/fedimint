@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ModuleRegistry"],"type":["ModuleDecoderRegistry","ModuleInstanceId","ServerModuleRegistry"]};

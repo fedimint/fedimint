@@ -231,8 +231,8 @@
 
 <span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_key};
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_server::config::io::{
     create_cert, encrypted_json_write, run_dkg, write_nonprivate_configs, PRIVATE_CONFIG,
     SALT_FILE, TLS_PK,

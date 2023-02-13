@@ -558,7 +558,7 @@
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
 <a href="#560" id="560">560</a>
-</pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
+</pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_core;
 
 <span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -568,18 +568,18 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>config::ServerConfig;
-<span class="kw">use </span>fedimint_api::cancellable::Cancellable;
-<span class="kw">use </span>fedimint_api::encoding::DecodeError;
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
-<span class="kw">use </span>fedimint_api::task::{sleep, TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
+<span class="kw">use </span>fedimint_core::cancellable::Cancellable;
+<span class="kw">use </span>fedimint_core::encoding::DecodeError;
 <span class="kw">use </span>fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
+<span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
 <span class="kw">use </span>futures::stream::Peekable;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
@@ -596,8 +596,8 @@
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::LastEpochKey;
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::IPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::peers::IPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::logging::LOG_CONSENSUS;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{PeerConnector, PeerSlice, ReconnectPeerConnections};

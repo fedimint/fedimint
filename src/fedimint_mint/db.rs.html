@@ -131,8 +131,8 @@
 <a href="#131" id="131">131</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
 
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::{impl_db_prefix_const, Amount, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::{impl_db_prefix_const, Amount, OutPoint, PeerId};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
 
@@ -257,7 +257,7 @@
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ECashUserBackupSnapshot {
     <span class="kw">pub </span>timestamp: SystemTime,
-    <span class="attr">#[serde(with = <span class="string">&quot;fedimint_api::hex::serde&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">&quot;fedimint_core::hex::serde&quot;</span>)]
     </span><span class="kw">pub </span>data: Vec&lt;u8&gt;,
 }
 </code></pre></div>

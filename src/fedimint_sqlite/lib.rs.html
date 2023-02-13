@@ -269,11 +269,14 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+<span class="kw">use </span>fedimint_core::db::{IDatabase, IDatabaseTransaction, PrefixStream};
 <span class="kw">use </span>futures::stream;
 <span class="kw">use </span>sqlx::migrate::MigrateDatabase;
 <span class="kw">use </span>sqlx::sqlite::SqliteConnectOptions;
@@ -426,9 +429,9 @@
 </span><span class="kw">mod </span>fedimint_sqlite_tests {
     <span class="kw">use </span>std::fs;
 
-    <span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
-    <span class="kw">use </span>fedimint_api::db::Database;
-    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+    <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>rand::RngCore;
 
@@ -457,43 +460,44 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_insert_elements() {
-        fedimint_api::db::verify_insert_elements(open_temp_db(<span class="string">&quot;insert-elements&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_insert_elements(open_temp_db(<span class="string">&quot;insert-elements&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_nonexisting() {
-        fedimint_api::db::verify_remove_nonexisting(open_temp_db(<span class="string">&quot;remove-nonexisting&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_remove_nonexisting(open_temp_db(<span class="string">&quot;remove-nonexisting&quot;</span>).<span class="kw">await</span>)
+            .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_existing() {
-        fedimint_api::db::verify_remove_existing(open_temp_db(<span class="string">&quot;remove-existing&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_remove_existing(open_temp_db(<span class="string">&quot;remove-existing&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_read_own_writes() {
-        fedimint_api::db::verify_read_own_writes(open_temp_db(<span class="string">&quot;read-own-writes&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_read_own_writes(open_temp_db(<span class="string">&quot;read-own-writes&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_prevent_dirty_reads() {
-        fedimint_api::db::verify_prevent_dirty_reads(open_temp_db(<span class="string">&quot;prevent_dirty_reads&quot;</span>).<span class="kw">await</span>)
+        fedimint_core::db::verify_prevent_dirty_reads(open_temp_db(<span class="string">&quot;prevent_dirty_reads&quot;</span>).<span class="kw">await</span>)
             .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_find_by_prefix() {
-        fedimint_api::db::verify_find_by_prefix(open_temp_db(<span class="string">&quot;find_by_prefix&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_find_by_prefix(open_temp_db(<span class="string">&quot;find_by_prefix&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_commit() {
-        fedimint_api::db::verify_commit(open_temp_db(<span class="string">&quot;commit&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_commit(open_temp_db(<span class="string">&quot;commit&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_prevent_nonrepeatable_reads() {
-        fedimint_api::db::verify_prevent_nonrepeatable_reads(
+        fedimint_core::db::verify_prevent_nonrepeatable_reads(
             open_temp_db(<span class="string">&quot;prevent-nonrepeatable-reads&quot;</span>).<span class="kw">await</span>,
         )
         .<span class="kw">await</span>;
@@ -501,39 +505,41 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_rollback_to_savepoint() {
-        fedimint_api::db::verify_rollback_to_savepoint(open_temp_db(<span class="string">&quot;rollback-to-savepoint&quot;</span>).<span class="kw">await</span>)
-            .<span class="kw">await</span>;
+        fedimint_core::db::verify_rollback_to_savepoint(
+            open_temp_db(<span class="string">&quot;rollback-to-savepoint&quot;</span>).<span class="kw">await</span>,
+        )
+        .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_phantom_entry() {
-        fedimint_api::db::verify_phantom_entry(open_temp_db(<span class="string">&quot;phantom-entry&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_phantom_entry(open_temp_db(<span class="string">&quot;phantom-entry&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_write_conflict() {
-        fedimint_api::db::expect_write_conflict(open_temp_db(<span class="string">&quot;write-conflict&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::expect_write_conflict(open_temp_db(<span class="string">&quot;write-conflict&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_sqlite_prefix() {
-        fedimint_api::db::verify_string_prefix(open_temp_db(<span class="string">&quot;verify-string-prefix&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_string_prefix(open_temp_db(<span class="string">&quot;verify-string-prefix&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_dbtx_remove_by_prefix() {
-        fedimint_api::db::verify_remove_by_prefix(open_temp_db(<span class="string">&quot;verify-remove-by-prefix&quot;</span>).<span class="kw">await</span>)
+        fedimint_core::db::verify_remove_by_prefix(open_temp_db(<span class="string">&quot;verify-remove-by-prefix&quot;</span>).<span class="kw">await</span>)
             .<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_module_dbtx() {
-        fedimint_api::db::verify_module_prefix(open_temp_db(<span class="string">&quot;verify-module-prefix&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
+        fedimint_core::db::verify_module_prefix(open_temp_db(<span class="string">&quot;verify-module-prefix&quot;</span>).<span class="kw">await</span>).<span class="kw">await</span>;
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_module_db() {
-        fedimint_api::db::verify_module_db(
+        fedimint_core::db::verify_module_db(
             open_temp_db(<span class="string">&quot;verify-module-db1&quot;</span>).<span class="kw">await</span>,
             open_temp_module_db(<span class="string">&quot;verify-module-db2&quot;</span>, <span class="number">1</span>).<span class="kw">await</span>,
         )

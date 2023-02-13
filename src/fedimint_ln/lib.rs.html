@@ -1232,26 +1232,26 @@
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>config::FeeConsensus;
 <span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
-<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::audit::Audit;
-<span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::audit::Audit;
+<span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::server::DynServerModule;
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::time::SystemTime;
-<span class="kw">use </span>fedimint_api::{
+<span class="kw">use </span>fedimint_core::net::peers::MuxPeerConnections;
+<span class="kw">use </span>fedimint_core::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::time::SystemTime;
+<span class="kw">use </span>fedimint_core::{
     plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule,
 };
 <span class="attr">#[cfg(feature = <span class="string">&quot;server&quot;</span>)]
@@ -1393,13 +1393,13 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractOutput {
-    <span class="kw">pub </span>amount: fedimint_api::Amount,
+    <span class="kw">pub </span>amount: fedimint_core::Amount,
     <span class="kw">pub </span>contract: contracts::Contract,
 }
 
 <span class="attr">#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ContractAccount {
-    <span class="kw">pub </span>amount: fedimint_api::Amount,
+    <span class="kw">pub </span>amount: fedimint_core::Amount,
     <span class="kw">pub </span>contract: contracts::FundedContract,
 }
 
@@ -2314,7 +2314,7 @@
 }
 
 <span class="macro">plugin_types_trait_impl!</span>(
-    fedimint_api::core::MODULE_KEY_LN,
+    fedimint_core::core::MODULE_KEY_LN,
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,
@@ -2341,7 +2341,7 @@
 <span class="comment">// TODO: upstream serde support to LDK
 </span><span class="doccomment">/// Hack to get a route hint that implements serde traits.
 </span><span class="kw">pub mod </span>route_hints {
-    <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+    <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>secp256k1::PublicKey;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 

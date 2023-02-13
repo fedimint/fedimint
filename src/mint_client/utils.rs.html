@@ -101,12 +101,12 @@
 
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
 <span class="kw">use </span>bitcoin_hashes::hex::FromHex;
-<span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
-<span class="kw">use </span>fedimint_api::db::Database;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::{ParseAmountError, TieredMulti};
 <span class="kw">use </span>fedimint_core::api::DynFederationApi;
+<span class="kw">use </span>fedimint_core::config::ModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::{ParseAmountError, TieredMulti};
 <span class="kw">use </span>lightning_invoice::Currency;
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::SpendableNote;
@@ -145,13 +145,13 @@
     }
 }
 
-<span class="kw">pub fn </span>parse_fedimint_amount(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::Amount, ParseAmountError&gt; {
+<span class="kw">pub fn </span>parse_fedimint_amount(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_core::Amount, ParseAmountError&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = s.find(char::is_alphabetic) {
         <span class="kw">let </span>(amt, denom) = s.split_at(i);
-        fedimint_api::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
+        fedimint_core::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
     } <span class="kw">else </span>{
         <span class="comment">//default to millisatoshi
-        </span>fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
+        </span>fedimint_core::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
     }
 }
 
@@ -181,19 +181,19 @@
 </span><span class="kw">fn </span>sanity_check_parse_fedimint_amount() {
     <span class="macro">assert_eq!</span>(
         parse_fedimint_amount(<span class="string">&quot;34&quot;</span>).unwrap(),
-        fedimint_api::Amount { msats: <span class="number">34 </span>}
+        fedimint_core::Amount { msats: <span class="number">34 </span>}
     );
     <span class="macro">assert_eq!</span>(
         parse_fedimint_amount(<span class="string">&quot;34msat&quot;</span>).unwrap(),
-        fedimint_api::Amount { msats: <span class="number">34 </span>}
+        fedimint_core::Amount { msats: <span class="number">34 </span>}
     );
     <span class="macro">assert_eq!</span>(
         parse_fedimint_amount(<span class="string">&quot;34sat&quot;</span>).unwrap(),
-        fedimint_api::Amount { msats: <span class="number">34 </span>* <span class="number">1000 </span>}
+        fedimint_core::Amount { msats: <span class="number">34 </span>* <span class="number">1000 </span>}
     );
     <span class="macro">assert_eq!</span>(
         parse_fedimint_amount(<span class="string">&quot;34satoshi&quot;</span>).unwrap(),
-        fedimint_api::Amount { msats: <span class="number">34 </span>* <span class="number">1000 </span>}
+        fedimint_core::Amount { msats: <span class="number">34 </span>* <span class="number">1000 </span>}
     );
 }
 </code></pre></div>

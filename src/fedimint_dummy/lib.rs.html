@@ -337,25 +337,25 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>common::DummyDecoder;
-<span class="kw">use </span>fedimint_api::cancellable::Cancellable;
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::cancellable::Cancellable;
+<span class="kw">use </span>fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>fedimint_api::module::audit::Audit;
-<span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
+<span class="kw">use </span>fedimint_core::module::audit::Audit;
+<span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::server::DynServerModule;
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
+<span class="kw">use </span>fedimint_core::net::peers::MuxPeerConnections;
+<span class="kw">use </span>fedimint_core::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 

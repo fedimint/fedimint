@@ -373,8 +373,8 @@
 <span class="kw">use </span>bitcoin::hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
 <span class="kw">use </span>secp256k1::{Secp256k1, Verification};
 <span class="kw">use </span>serde::de::Error;
@@ -691,8 +691,8 @@
     <span class="kw">use </span>std::io::Cursor;
 
     <span class="kw">use </span>bitcoin::hashes::hex::FromHex;
-    <span class="kw">use </span>fedimint_api::encoding::Decodable;
-    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>fedimint_core::encoding::Decodable;
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 
     <span class="kw">use </span><span class="kw">super</span>::TxOutProof;
 

@@ -691,11 +691,13 @@
 <a href="#691" id="691">691</a>
 <a href="#692" id="692">692</a>
 <a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
-//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its
-//! main implementation is [`ReconnectPeerConnections`], see these for details.
+//! The main interface is [`fedimint_core::net::peers::IPeerConnections`] and
+//! its main implementation is [`ReconnectPeerConnections`], see these for
+//! details.
 
 </span><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeSet, HashMap};
@@ -705,10 +707,10 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::net::peers::IPeerConnections;
-<span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
+<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>futures::{SinkExt, StreamExt};
 <span class="kw">use </span>hbbft::Target;
@@ -1317,8 +1319,8 @@
     <span class="kw">use </span>std::collections::HashMap;
     <span class="kw">use </span>std::time::Duration;
 
-    <span class="kw">use </span>fedimint_api::task::TaskGroup;
-    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>fedimint_core::task::TaskGroup;
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::Future;
 
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::MockNetwork;

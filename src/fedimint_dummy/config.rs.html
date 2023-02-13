@@ -70,14 +70,14 @@
 <a href="#70" id="70">70</a>
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::config::{
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::core::ModuleKind;
-<span class="kw">use </span>fedimint_api::encoding::Encodable;
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>fedimint_core::core::ModuleKind;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::KIND;
@@ -108,7 +108,7 @@
 }
 
 <span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>DummyClientConfig {
-    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_api::core::ModuleKind {
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::core::ModuleKind {
         KIND
     }
 }

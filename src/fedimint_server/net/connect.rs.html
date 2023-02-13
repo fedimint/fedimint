@@ -635,7 +635,7 @@
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>futures::Stream;
 <span class="kw">use </span>tokio::io::{ReadHalf, WriteHalf};
 <span class="kw">use </span>tokio::net::{TcpListener, TcpStream};
@@ -875,7 +875,7 @@
     <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>anyhow::Error;
-    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
     <span class="kw">use </span>tokio::io::{
         AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
@@ -1063,7 +1063,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::net::SocketAddr;
 
-    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::{SinkExt, StreamExt};
     <span class="kw">use </span>url::Url;
 

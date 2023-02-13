@@ -232,10 +232,10 @@
 <span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_key, LessSafeKey};
 <span class="kw">use </span>anyhow::{ensure, format_err};
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
-<span class="kw">use </span>fedimint_api::config::{ConfigGenParams, ModuleGenRegistry};
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
+<span class="kw">use </span>fedimint_core::config::{ConfigGenParams, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -246,7 +246,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::{
     connect, gen_cert_and_key, PeerServerParams, ServerConfig, ServerConfigParams,
 };
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::IMuxPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::peers::IMuxPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 
 <span class="doccomment">/// Client configuration file

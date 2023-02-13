@@ -412,11 +412,11 @@
 
 <span class="kw">use </span>bitcoin::{Address, KeyPair};
 <span class="kw">use </span>db::PegInKey;
-<span class="kw">use </span>fedimint_api::core::client::ClientModule;
-<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
-<span class="kw">use </span>fedimint_api::{Amount, ServerModule};
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+<span class="kw">use </span>fedimint_core::core::client::ClientModule;
+<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
+<span class="kw">use </span>fedimint_core::{Amount, ServerModule};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
@@ -569,7 +569,7 @@
 
     <span class="kw">pub async fn </span>await_peg_out_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        out_point: fedimint_api::OutPoint,
+        out_point: fedimint_core::OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
         <span class="comment">// TODO: define timeout centrally
         </span><span class="kw">let </span>timeout = std::time::Duration::from_secs(<span class="number">15</span>);
@@ -608,16 +608,16 @@
     <span class="kw">use </span>bitcoin::hashes::sha256;
     <span class="kw">use </span>bitcoin::{Address, Txid};
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
-    <span class="kw">use </span>fedimint_api::core::{
+    <span class="kw">use </span>fedimint_core::config::ConfigGenParams;
+    <span class="kw">use </span>fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
-    <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_api::db::Database;
-    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_api::task::TaskGroup;
-    <span class="kw">use </span>fedimint_api::{Feerate, OutPoint, TransactionId};
+    <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
+    <span class="kw">use </span>fedimint_core::task::TaskGroup;
+    <span class="kw">use </span>fedimint_core::{Feerate, OutPoint, TransactionId};
     <span class="kw">use </span>fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>tokio::sync::Mutex;
@@ -777,7 +777,7 @@
         fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 
         <span class="comment">// wait for broadcast
-        </span>fedimint_api::task::sleep(Duration::from_secs(<span class="number">12</span>)).<span class="kw">await</span>;
+        </span>fedimint_core::task::sleep(Duration::from_secs(<span class="number">12</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(btc_rpc.is_btc_sent_to(amount, addr).<span class="kw">await</span>);
 
         <span class="kw">let </span>wallet_value = fed

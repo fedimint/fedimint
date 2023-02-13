@@ -152,16 +152,14 @@
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>legacy {
-    <span class="kw">use </span>fedimint_api::core::{
+    <span class="kw">use </span>fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
+    <span class="kw">use </span>fedimint_core::core::{
         Decoder, DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN,
         LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
-    <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-    <span class="kw">use </span>fedimint_api::ServerModule;
-    <span class="kw">use </span>fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
-    <span class="kw">use </span>fedimint_core::CoreError;
+    <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+    <span class="kw">use </span>fedimint_core::{CoreError, ServerModule};
     <span class="kw">use </span>fedimint_ln::contracts::incoming::OfferId;
     <span class="kw">use </span>fedimint_ln::contracts::{
         AccountContractOutcome, ContractOutcome, DecryptedPreimage, OutgoingContractOutcome,
@@ -178,8 +176,8 @@
         LN(&lt;&lt;Lightning <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome),
     }
 
-    <span class="kw">impl </span>From&lt;fedimint_api::core::DynOutputOutcome&gt; <span class="kw">for </span>OutputOutcome {
-        <span class="kw">fn </span>from(oo: fedimint_api::core::DynOutputOutcome) -&gt; <span class="self">Self </span>{
+    <span class="kw">impl </span>From&lt;fedimint_core::core::DynOutputOutcome&gt; <span class="kw">for </span>OutputOutcome {
+        <span class="kw">fn </span>from(oo: fedimint_core::core::DynOutputOutcome) -&gt; <span class="self">Self </span>{
             <span class="kw">match </span>oo.module_instance_id() {
                 LEGACY_HARDCODED_INSTANCE_ID_LN =&gt; OutputOutcome::LN(
                     oo.as_any()

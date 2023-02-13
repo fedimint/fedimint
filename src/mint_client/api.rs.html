@@ -175,16 +175,16 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
-<span class="kw">use </span>fedimint_api::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
-<span class="kw">use </span>fedimint_api::NumPeers;
 <span class="kw">use </span>fedimint_core::api::{
     erased_multi_param, erased_no_param, erased_single_param, FederationApiExt, FederationResult,
     IFederationApi,
 };
+<span class="kw">use </span>fedimint_core::core::{
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 <span class="kw">use </span>fedimint_core::query::{EventuallyConsistent, Retry404, UnionResponsesSingle};
+<span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>fedimint_mint::db::ECashUserBackupSnapshot;
 
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::incoming::IncomingContractOffer;

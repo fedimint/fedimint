@@ -227,11 +227,11 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::config::{FederationId, ModuleGenRegistry};
-<span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_api::db::Database;
-<span class="kw">use </span>fedimint_api::dyn_newtype_define;
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::config::{FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
+<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::dyn_newtype_define;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_server::api::{
     DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };

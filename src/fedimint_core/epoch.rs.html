@@ -362,11 +362,11 @@
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
-<span class="kw">use </span>fedimint_api::core::DynModuleConsensusItem <span class="kw">as </span>ModuleConsensusItem;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::module::SerdeModuleEncoding;
-<span class="kw">use </span>fedimint_api::{PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::core::DynModuleConsensusItem <span class="kw">as </span>ModuleConsensusItem;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable, UnzipConsensus};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
+<span class="kw">use </span>fedimint_core::{PeerId, TransactionId};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -566,8 +566,8 @@
     <span class="kw">use </span>std::collections::{BTreeSet, HashSet};
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
-    <span class="kw">use </span>fedimint_api::encoding::Encodable;
-    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>fedimint_core::encoding::Encodable;
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>threshold_crypto::{SecretKey, SecretKeySet};
 

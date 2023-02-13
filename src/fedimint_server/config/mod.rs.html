@@ -811,17 +811,17 @@
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
-<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
+<span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
+<span class="kw">use </span>fedimint_core::config::{
     ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
     JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
     TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-<span class="kw">use </span>fedimint_api::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
-<span class="kw">use </span>fedimint_api::task::{timeout, Elapsed, TaskGroup};
-<span class="kw">use </span>fedimint_api::PeerId;
-<span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+<span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
+<span class="kw">use </span>fedimint_core::task::{timeout, Elapsed, TaskGroup};
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>hbbft::NetworkInfo;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -832,8 +832,8 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{DkgRunner, ThresholdKeys};
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::{BitcoinHash, NumPeers};
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::{BitcoinHash, NumPeers};
 <span class="kw">use </span><span class="kw">crate</span>::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, Connector, TlsConfig};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::NetworkConfig;

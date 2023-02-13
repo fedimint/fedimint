@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["_dyn_newtype_define_inner","_dyn_newtype_define_with_instance_id_inner","_dyn_newtype_impl_deref_mut","dyn_newtype_define","dyn_newtype_define_with_instance_id","dyn_newtype_impl_dyn_clone_passhthrough","dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id"]};

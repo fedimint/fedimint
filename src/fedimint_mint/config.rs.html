@@ -136,14 +136,14 @@
 <span class="kw">use </span>std::iter::FromIterator;
 
 <span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::core::ModuleKind;
-<span class="kw">use </span>fedimint_api::encoding::Encodable;
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
+<span class="kw">use </span>fedimint_core::core::ModuleKind;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
+<span class="kw">use </span>fedimint_core::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
@@ -254,15 +254,15 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
-    <span class="kw">pub </span>note_issuance_abs: fedimint_api::Amount,
-    <span class="kw">pub </span>note_spend_abs: fedimint_api::Amount,
+    <span class="kw">pub </span>note_issuance_abs: fedimint_core::Amount,
+    <span class="kw">pub </span>note_spend_abs: fedimint_core::Amount,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>FeeConsensus {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            note_issuance_abs: fedimint_api::Amount::ZERO,
-            note_spend_abs: fedimint_api::Amount::ZERO,
+            note_issuance_abs: fedimint_core::Amount::ZERO,
+            note_spend_abs: fedimint_core::Amount::ZERO,
         }
     }
 }

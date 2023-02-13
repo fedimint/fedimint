@@ -240,14 +240,14 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
-<span class="kw">use </span>fedimint_api::config::ConfigResponse;
-<span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
-<span class="kw">use </span>fedimint_api::server::DynServerModule;
-<span class="kw">use </span>fedimint_api::task::TaskHandle;
-<span class="kw">use </span>fedimint_api::TransactionId;
+<span class="kw">use </span>fedimint_core::config::ConfigResponse;
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::epoch::SerdeEpochHistory;
+<span class="kw">use </span>fedimint_core::module::{api_endpoint, ApiEndpoint, ApiError};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::task::TaskHandle;
+<span class="kw">use </span>fedimint_core::TransactionId;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>jsonrpsee::server::ServerBuilder;
 <span class="kw">use </span>jsonrpsee::types::error::CallError;

@@ -1663,24 +1663,24 @@
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>fedimint_api::config::{ClientConfig, FederationId, ModuleGenRegistry};
-<span class="kw">use </span>fedimint_api::core::{
-    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
-<span class="kw">use </span>fedimint_api::db::Database;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
-<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
-<span class="kw">use </span>fedimint_api::time::SystemTime;
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::api::{
     DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
     WsFederationApi,
 };
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::core::{
+    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
+<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, sleep};
+<span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_core::time::SystemTime;
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>futures::stream::{<span class="self">self</span>, FuturesUnordered};
 <span class="kw">use </span>futures::StreamExt;
@@ -2565,11 +2565,11 @@
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
                 <span class="macro">tracing::info!</span>(<span class="string">&quot;Signature response not returned yet&quot;</span>);
-                fedimint_api::task::sleep(interval).<span class="kw">await
+                fedimint_core::task::sleep(interval).<span class="kw">await
             </span>}
         };
 
-        fedimint_api::task::timeout(Duration::from_secs(<span class="number">40</span>), poll())
+        fedimint_core::task::timeout(Duration::from_secs(<span class="number">40</span>), poll())
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| ClientError::Timeout)<span class="question-mark">?
     </span>}
@@ -2760,7 +2760,7 @@
             )
             .json(<span class="kw-2">&amp;</span>payload)
             .send();
-        <span class="kw">let </span>result = fedimint_api::task::timeout(Duration::from_secs(<span class="number">120</span>), future)
+        <span class="kw">let </span>result = fedimint_core::task::timeout(Duration::from_secs(<span class="number">120</span>), future)
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| ClientError::OutgoingPaymentTimeout)<span class="question-mark">?
             </span>.map_err(ClientError::HttpError);
@@ -2771,7 +2771,7 @@
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
 
-                fedimint_api::task::timeout(
+                fedimint_core::task::timeout(
                     Duration::from_secs(<span class="number">10</span>),
                     <span class="self">self</span>.ln_client().await_outgoing_refundable(contract_id),
                 )

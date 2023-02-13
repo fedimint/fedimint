@@ -302,8 +302,8 @@
 <span class="kw">use </span>bitcoin::consensus::Encodable;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>electrum_client::ElectrumApi;
-<span class="kw">use </span>fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json::Value;
+<span class="kw">use </span>fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json::Value;
 <span class="kw">use </span>jsonrpc::error::Error <span class="kw">as </span>JsonError;
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>tracing::warn;
@@ -417,7 +417,7 @@
     </span>T: ::bitcoincore_rpc::RpcApi + Debug + Send + Sync,
 {
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Network&gt; {
-        <span class="kw">let </span>network = fedimint_api::task::block_in_place(|| {
+        <span class="kw">let </span>network = fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.get_blockchain_info().map_err(anyhow::Error::from)
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>network.chain.as_str() {
@@ -430,7 +430,7 @@
     }
 
     <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0
                 </span>.get_block_count()
                 .map_err(anyhow::Error::from)
@@ -439,7 +439,7 @@
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHash&gt; {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             bitcoincore_rpc::RpcApi::get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, height)
                 .map_err(anyhow::Error::from)
                 .map_err(Into::into)
@@ -447,7 +447,7 @@
     }
 
     <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;Block&gt; {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             bitcoincore_rpc::RpcApi::get_block(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, hash)
                 .map_err(anyhow::Error::from)
                 .map_err(Into::into)
@@ -455,7 +455,7 @@
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
-        <span class="prelude-val">Ok</span>(fedimint_api::task::block_in_place(|| {
+        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0
                 </span>.estimate_smart_fee(confirmation_target, <span class="prelude-val">Some</span>(EstimateMode::Conservative))
                 .map_err(anyhow::Error::from)
@@ -468,7 +468,7 @@
     }
 
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        fedimint_api::task::block_in_place(|| <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.send_raw_transaction(<span class="kw-2">&amp;</span>transaction) {
+        fedimint_core::task::block_in_place(|| <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.send_raw_transaction(<span class="kw-2">&amp;</span>transaction) {
             <span class="comment">// for our purposes, this is not an error
             </span><span class="prelude-val">Err</span>(::bitcoincore_rpc::Error::JsonRpc(JsonError::Rpc(RpcError {
                 code: RPC_VERIFY_ALREADY_IN_CHAIN,
@@ -501,7 +501,7 @@
     }
 
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Network&gt; {
-        <span class="kw">let </span>resp = fedimint_api::task::block_in_place(|| {
+        <span class="kw">let </span>resp = fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.server_features().map_err(anyhow::Error::from)
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>resp.genesis_hash.to_hex().as_str() {
@@ -518,13 +518,13 @@
     }
 
     <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.block_headers_subscribe_raw()<span class="question-mark">?</span>.height <span class="kw">as </span>u64)
         })
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHash&gt; {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             <span class="prelude-val">Ok</span>(<span class="self">self
                 </span>.<span class="number">0
                 </span>.block_headers(height <span class="kw">as </span>usize, <span class="number">1</span>)<span class="question-mark">?
@@ -540,7 +540,7 @@
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(Feerate {
                 sats_per_kvb: (<span class="self">self</span>.<span class="number">0</span>.estimate_fee(confirmation_target <span class="kw">as </span>usize)<span class="question-mark">? </span>* <span class="number">100_000_000f64</span>)
                     .ceil() <span class="kw">as </span>u64,
@@ -549,7 +549,7 @@
     }
 
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
             transaction
                 .consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
@@ -568,7 +568,7 @@
             <span class="macro">bail!</span>(<span class="string">&quot;Electrum backend does not contain the block at {height}H yet&quot;</span>);
         }
 
-        fedimint_api::task::block_in_place(|| {
+        fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>txid = transaction.txid();
 
             <span class="kw">let </span>output = transaction

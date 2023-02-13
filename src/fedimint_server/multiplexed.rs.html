@@ -258,8 +258,8 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::cancellable::Cancellable;
-<span class="kw">use </span>fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
+<span class="kw">use </span>fedimint_core::cancellable::Cancellable;
+<span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::Mutex;
@@ -429,10 +429,10 @@
 </span><span class="kw">pub mod </span>test {
     <span class="kw">use </span>std::time::Duration;
 
-    <span class="kw">use </span>fedimint_api::net::peers::fake::make_fake_peer_connection;
-    <span class="kw">use </span>fedimint_api::net::peers::IMuxPeerConnections;
-    <span class="kw">use </span>fedimint_api::task::TaskGroup;
-    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>fedimint_core::net::peers::fake::make_fake_peer_connection;
+    <span class="kw">use </span>fedimint_core::net::peers::IMuxPeerConnections;
+    <span class="kw">use </span>fedimint_core::task::TaskGroup;
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>rand::Rng;
     <span class="kw">use </span>tokio::time::sleep;

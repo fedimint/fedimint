@@ -883,12 +883,12 @@
 <span class="kw">use </span>std::ops::Range;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_core::api::{FederationError, GlobalFederationApi};
+<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_mint::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 <span class="kw">use </span>tracing::{error, info};

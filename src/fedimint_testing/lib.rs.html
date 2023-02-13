@@ -375,14 +375,14 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
-<span class="kw">use </span>fedimint_api::core::{Decoder, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
-<span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleGen, TransactionItemAmount};
-<span class="kw">use </span>fedimint_api::{OutPoint, PeerId, ServerModule};
+<span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+<span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::{ApiError, InputMeta, ModuleError, ModuleGen, TransactionItemAmount};
+<span class="kw">use </span>fedimint_core::{OutPoint, PeerId, ServerModule};
 
 <span class="kw">pub mod </span>btc;
 <span class="kw">pub mod </span>ln;
@@ -617,7 +617,7 @@
                         <span class="kw-2">&amp;</span>fedimint_wallet::db::RoundConsensusKey,
                         <span class="kw-2">&amp;</span>fedimint_wallet::RoundConsensus {
                             block_height: <span class="number">0</span>,
-                            fee_rate: fedimint_api::Feerate { sats_per_kvb: <span class="number">0 </span>},
+                            fee_rate: fedimint_core::Feerate { sats_per_kvb: <span class="number">0 </span>},
                             randomness_beacon: tweak,
                         },
                     )

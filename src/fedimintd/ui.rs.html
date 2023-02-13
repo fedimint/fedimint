@@ -432,12 +432,12 @@
 <span class="kw">use </span>axum::Router;
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_api::bitcoin_rpc::BitcoindRpcBackend;
-<span class="kw">use </span>fedimint_api::config::{ClientConfig, ModuleGenRegistry};
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
+<span class="kw">use </span>fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_server::config::io::{
     create_cert, encrypted_json_write, parse_peer_params, run_dkg, write_nonprivate_configs,
     CONSENSUS_CONFIG, JSON_EXT, PRIVATE_CONFIG, SALT_FILE, TLS_PK,
@@ -650,7 +650,7 @@
     axum::extract::State(_state): axum::extract::State&lt;MutableState&gt;,
 ) -&gt; UrlConnection {
     <span class="kw">let </span>(ro_bitcoin_rpc_type, ro_bitcoin_rpc_url) =
-        <span class="kw">match </span>fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
+        <span class="kw">match </span>fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
             <span class="prelude-val">Ok</span>(BitcoindRpcBackend::Bitcoind(url)) =&gt; {
                 <span class="kw">let </span>url_str = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, SanitizedUrl::new_borrowed(<span class="kw-2">&amp;</span>url));
                 (<span class="string">&quot;bitcoind&quot;</span>, url_str)

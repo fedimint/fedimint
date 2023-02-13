@@ -465,8 +465,8 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::{model, ClnRpc};
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,

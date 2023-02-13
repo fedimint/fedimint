@@ -889,6 +889,8 @@
 <a href="#889" id="889">889</a>
 <a href="#890" id="890">890</a>
 <a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -900,18 +902,20 @@
 <span class="kw">use </span>std::os::unix::prelude::OsStrExt;
 <span class="kw">use </span>std::sync::Mutex;
 
-<span class="kw">use </span>fedimint_api::config::{ConfigResponse, ModuleGenRegistry};
-<span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::audit::Audit;
-<span class="kw">use </span>fedimint_api::module::registry::{ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry};
-<span class="kw">use </span>fedimint_api::module::{ModuleError, TransactionItemAmount};
-<span class="kw">use </span>fedimint_api::server::{DynServerModule, DynVerificationCache};
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::config::{ConfigResponse, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::<span class="kw-2">*</span>;
+<span class="kw">use </span>fedimint_core::module::audit::Audit;
+<span class="kw">use </span>fedimint_core::module::registry::{
+    ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
+};
+<span class="kw">use </span>fedimint_core::module::{ModuleError, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::server::{DynServerModule, DynVerificationCache};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>hbbft::honey_badger::Batch;
@@ -1251,11 +1255,11 @@
     </span><span class="kw">async fn </span>process_module_consensus_items(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        module_cis: <span class="kw-2">&amp;</span>[(PeerId, fedimint_api::core::DynModuleConsensusItem)],
+        module_cis: <span class="kw-2">&amp;</span>[(PeerId, fedimint_core::core::DynModuleConsensusItem)],
     ) {
         <span class="kw">let </span>per_module_cis: HashMap&lt;
             ModuleInstanceId,
-            Vec&lt;(PeerId, fedimint_api::core::DynModuleConsensusItem)&gt;,
+            Vec&lt;(PeerId, fedimint_core::core::DynModuleConsensusItem)&gt;,
         &gt; = module_cis
             .iter()
             .cloned()

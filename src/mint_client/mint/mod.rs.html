@@ -1004,14 +1004,14 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>db::{NoteKey, NoteKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-<span class="kw">use </span>fedimint_api::core::client::ClientModule;
-<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
-<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
+<span class="kw">use </span>fedimint_core::core::client::ClientModule;
+<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
+<span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>futures::{Future, StreamExt};
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1445,7 +1445,7 @@
                 // custom return type instead of error for retrying
                 </span><span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() &amp;&amp; total_time &lt; MINT_E_CASH_FETCH_TIMEOUT =&gt; {
                     <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, e);
-                    fedimint_api::task::sleep(retry_duration).<span class="kw">await
+                    fedimint_core::task::sleep(retry_duration).<span class="kw">await
                 </span>}
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">warn!</span>(<span class="string">&quot;Mint returned error: {:?}&quot;</span>, e);
@@ -1677,16 +1677,16 @@
     <span class="kw">use </span>std::sync::Arc;
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
-    <span class="kw">use </span>fedimint_api::config::ConfigGenParams;
-    <span class="kw">use </span>fedimint_api::core::{
+    <span class="kw">use </span>fedimint_core::api::WsFederationApi;
+    <span class="kw">use </span>fedimint_core::config::ConfigGenParams;
+    <span class="kw">use </span>fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     };
-    <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_api::db::Database;
-    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TransactionId};
-    <span class="kw">use </span>fedimint_core::api::WsFederationApi;
+    <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
+    <span class="kw">use </span>fedimint_core::{Amount, OutPoint, Tiered, TransactionId};
     <span class="kw">use </span>fedimint_mint::common::MintDecoder;
     <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>futures::executor::block_on;

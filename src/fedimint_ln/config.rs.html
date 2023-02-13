@@ -108,13 +108,13 @@
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::core::ModuleKind;
-<span class="kw">use </span>fedimint_api::encoding::Encodable;
-<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>fedimint_core::core::ModuleKind;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 
@@ -204,15 +204,15 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
-    <span class="kw">pub </span>contract_input: fedimint_api::Amount,
-    <span class="kw">pub </span>contract_output: fedimint_api::Amount,
+    <span class="kw">pub </span>contract_input: fedimint_core::Amount,
+    <span class="kw">pub </span>contract_output: fedimint_core::Amount,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>FeeConsensus {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            contract_input: fedimint_api::Amount::ZERO,
-            contract_output: fedimint_api::Amount::ZERO,
+            contract_input: fedimint_core::Amount::ZERO,
+            contract_output: fedimint_core::Amount::ZERO,
         }
     }
 }

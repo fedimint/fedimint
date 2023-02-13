@@ -1778,35 +1778,35 @@
 };
 <span class="kw">use </span>config::WalletConfigConsensus;
 <span class="kw">use </span>db::DbKeyPrefix;
-<span class="kw">use </span>fedimint_api::bitcoin_rpc::{
+<span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
+<span class="kw">use </span>fedimint_core::bitcoin_rpc::{
     select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
     FM_ELECTRUM_RPC_ENV,
 };
-<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>fedimint_api::module::audit::Audit;
-<span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
+<span class="kw">use </span>fedimint_core::module::audit::Audit;
+<span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
     IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
-<span class="kw">use </span>fedimint_api::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::net::peers::MuxPeerConnections;
+<span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-</span><span class="kw">use </span>fedimint_api::task::sleep;
-<span class="kw">use </span>fedimint_api::task::{TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_api::{
+</span><span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::{
     plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Feerate, NumPeers, OutPoint,
     PeerId, ServerModule,
 };
-<span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>futures::{stream, StreamExt};
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
@@ -2414,7 +2414,7 @@
 
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
-                amount: fedimint_api::Amount::from_sats(input.tx_output().value),
+                amount: fedimint_core::Amount::from_sats(input.tx_output().value),
                 fee: <span class="self">self</span>.cfg.consensus.fee_consensus.peg_in_abs,
             },
             puk_keys: <span class="macro">vec!</span>[<span class="kw-2">*</span>input.tweak_contract_key()],
@@ -2482,7 +2482,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>WalletOutput,
-        out_point: fedimint_api::OutPoint,
+        out_point: fedimint_core::OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
@@ -3412,7 +3412,7 @@
         broadcast_pending_tx(db.begin_transaction().<span class="kw">await</span>, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
         <span class="comment">// FIXME: remove after modularization finishes
         </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-        </span>fedimint_api::task::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
+        </span>fedimint_core::task::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
     }
 }
 
@@ -3456,7 +3456,7 @@
 <span class="kw">impl </span>Eq <span class="kw">for </span>PegOutSignatureItem {}
 
 <span class="macro">plugin_types_trait_impl!</span>(
-    fedimint_api::core::MODULE_KEY_WALLET,
+    fedimint_core::core::MODULE_KEY_WALLET,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,

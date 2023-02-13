@@ -407,10 +407,10 @@
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>bitcoin::Address;
-<span class="kw">use </span>fedimint_api::config::{FederationId, ModuleGenRegistry};
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::task::TaskGroup;
-<span class="kw">use </span>fedimint_api::{Amount, TransactionId};
+<span class="kw">use </span>fedimint_core::config::{FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>fedimint_server::api::WsClientConnectInfo;
 <span class="kw">use </span>mint_client::ln::PayInvoicePayload;
 <span class="kw">use </span>mint_client::modules::ln::contracts::Preimage;
@@ -789,7 +789,7 @@
                 }
             }
 
-            fedimint_api::task::sleep_until(least_wait_until).<span class="kw">await</span>;
+            fedimint_core::task::sleep_until(least_wait_until).<span class="kw">await</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }

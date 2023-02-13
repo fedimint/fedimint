@@ -418,13 +418,13 @@
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>erased_serde::Serialize;
-<span class="kw">use </span>fedimint_api::config::ModuleGenRegistry;
-<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_api::encoding::Encodable;
-<span class="kw">use </span>fedimint_api::module::DynModuleGen;
-<span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
+<span class="kw">use </span>fedimint_core::config::ModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::module::DynModuleGen;
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
 <span class="kw">use </span>fedimint_ln::LightningGen;
 <span class="kw">use </span>fedimint_mint::MintGen;
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
@@ -743,7 +743,7 @@
                         dbtx,
                         ClientMintRange::PendingNotesKeyPrefix,
                         ClientMintRange::PendingNotesKey,
-                        fedimint_api::TieredMulti&lt;mint_client::mint::SpendableNote&gt;,
+                        fedimint_core::TieredMulti&lt;mint_client::mint::SpendableNote&gt;,
                         mint_client,
                         <span class="string">&quot;Pending Notes&quot;
                     </span>);

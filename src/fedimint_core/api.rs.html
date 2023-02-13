@@ -1036,14 +1036,14 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_api::config::{
+<span class="kw">use </span>fedimint_core::config::{
     ApiEndpoint, ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry,
 };
-<span class="kw">use </span>fedimint_api::core::DynOutputOutcome;
-<span class="kw">use </span>fedimint_api::fmt_utils::AbbreviateDebug;
-<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::task::{sleep, RwLock, RwLockWriteGuard};
-<span class="kw">use </span>fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::core::DynOutputOutcome;
+<span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, RwLockWriteGuard};
+<span class="kw">use </span>fedimint_core::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1548,7 +1548,7 @@
                     <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
                     <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
                         <span class="macro">trace!</span>(<span class="string">&quot;Federation api returned retryable error: {:?}&quot;</span>, e);
-                        fedimint_api::task::sleep(interval).<span class="kw">await
+                        fedimint_core::task::sleep(interval).<span class="kw">await
                     </span>}
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="macro">warn!</span>(<span class="string">&quot;Federation api returned error: {:?}&quot;</span>, e);
@@ -1557,7 +1557,7 @@
                 }
             }
         };
-        fedimint_api::task::timeout(timeout, poll())
+        fedimint_core::task::timeout(timeout, poll())
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
     </span>}

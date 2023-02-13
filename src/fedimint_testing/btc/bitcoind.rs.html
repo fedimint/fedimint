@@ -136,8 +136,8 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::{sha256d, Hash};
 <span class="kw">use </span>bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
-<span class="kw">use </span>fedimint_api::Feerate;
 <span class="kw">use </span>fedimint_bitcoind::{IBitcoindRpc, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>fedimint_core::Feerate;
 
 <span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>FakeBitcoindRpcState {
