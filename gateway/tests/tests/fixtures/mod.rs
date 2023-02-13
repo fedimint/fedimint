@@ -1,41 +1,37 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use fedimint_api::config::ModuleGenRegistry;
 use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
-use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
+use fedimint_testing::{
+    btc::{fixtures::FakeBitcoinTest, BitcoinTest},
+    ln::fixtures::FakeLightningTest,
+};
 use ln_gateway::{
     client::{DynGatewayClientBuilder, MemDbFactory},
-    config::GatewayConfig,
-    rpc::GatewayRequest,
-    LnGateway,
+    gatewayd::{gateway::Gateway, lnrpc_client::DynLnRpcClient},
 };
-use mint_client::module_decode_stubs;
-use mint_client::modules::wallet::WalletGen;
-use tokio::sync::mpsc;
+use mint_client::{module_decode_stubs, modules::wallet::WalletGen};
+use url::Url;
 
 pub mod client;
 pub mod fed;
-pub mod ln;
 
 pub struct Fixtures {
     pub bitcoin: Box<dyn BitcoinTest>,
-    pub gateway: LnGateway,
+    pub gateway: Gateway,
     pub task_group: TaskGroup,
 }
 
-pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
-    let task_group = TaskGroup::new();
+pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
+    // Create a lightning rpc client
+    let lnrpc: DynLnRpcClient = FakeLightningTest::new().into();
 
-    let ln_rpc = Arc::new(ln::MockLnRpc::new());
-
+    // Create federation client builder
     let client_builder: DynGatewayClientBuilder =
-        client::TestGatewayClientBuilder::new(MemDbFactory.into(), gw_cfg.announce_address.clone())
-            .into();
-    let (tx, rx) = mpsc::channel::<GatewayRequest>(100);
+        client::TestGatewayClientBuilder::new(MemDbFactory.into(), api_addr).into();
+
     let decoders = module_decode_stubs();
     let module_gens = ModuleGenRegistry::from(vec![
         DynModuleGen::from(WalletGen),
@@ -43,14 +39,14 @@ pub async fn fixtures(gw_cfg: GatewayConfig) -> Result<Fixtures> {
         DynModuleGen::from(LightningGen),
     ]);
 
-    let gateway = LnGateway::new(
-        gw_cfg,
+    // Create task group for controlled shutdown of the gateway
+    let task_group = TaskGroup::new();
+
+    let gateway = Gateway::new(
+        lnrpc,
+        client_builder,
         decoders,
         module_gens,
-        ln_rpc,
-        client_builder,
-        tx,
-        rx,
         task_group.clone(),
     )
     .await;

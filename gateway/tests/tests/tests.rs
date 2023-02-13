@@ -28,7 +28,6 @@ use fedimint_core::api::WsClientConnectInfo;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::{
-    config::GatewayConfig,
     rpc::{
         rpc_client::RpcClient, BalancePayload, ConnectFedPayload, DepositAddressPayload,
         DepositPayload, WithdrawPayload,
@@ -48,32 +47,26 @@ async fn test_gateway_authentication() -> Result<()> {
         .init();
     let gw_password = "password".to_string();
     let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
-    let gw_bind_address = SocketAddr::from(([127, 0, 0, 1], gw_port));
-    let gw_announce_address =
-        Url::parse(&format!("http://{gw_bind_address}")).expect("Invalid gateway address");
+    let gw_listen = SocketAddr::from(([127, 0, 0, 1], gw_port));
+    let gw_api_addr = Url::parse(&format!("http://{gw_listen}")).expect("Invalid gateway address");
     let federation_id = FederationId::dummy();
-
-    let cfg = GatewayConfig {
-        password: gw_password.clone(),
-        bind_address: gw_bind_address,
-        announce_address: gw_announce_address.clone(),
-    };
 
     let Fixtures {
         bitcoin,
         gateway,
         mut task_group,
-    } = fixtures(cfg).await?;
+    } = fixtures(gw_api_addr.clone()).await?;
 
     // Run gateway in an isolate thread, so we dont block the test thread
+    let password = gw_password.clone();
     task_group
         .spawn("Run Gateway", move |_| async move {
-            if gateway.run().await.is_err() {}
+            if gateway.run(gw_listen, password).await.is_err() {}
         })
         .await;
 
     // Create an RPC client reference
-    let client_ref = &RpcClient::new(gw_announce_address);
+    let client_ref = &RpcClient::new(gw_api_addr);
 
     // Test gateway authentication on `connect_federation` function
     // *  `connect_federation` with correct password succeeds

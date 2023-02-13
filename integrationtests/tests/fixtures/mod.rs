@@ -10,11 +10,9 @@ use std::sync::atomic::{AtomicI64, AtomicU16};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address};
-use fake::FakeLightningTest;
 use fedimint_api::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::config::{ClientConfig, ModuleGenRegistry};
@@ -50,7 +48,10 @@ use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
-use fedimint_testing::btc::{fixtures::FakeBitcoinTest, BitcoinTest};
+use fedimint_testing::{
+    btc::{fixtures::FakeBitcoinTest, BitcoinTest},
+    ln::{fixtures::FakeLightningTest, LightningTest},
+};
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::Wallet;
@@ -61,7 +62,6 @@ use futures::FutureExt;
 use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use lightning_invoice::Invoice;
 use ln_gateway::cln::ClnRpc;
 use ln_gateway::{
     actor::GatewayActor,
@@ -88,7 +88,6 @@ use url::Url;
 use crate::fixtures::utils::LnRpcAdapter;
 use crate::ConsensusItem;
 
-mod fake;
 mod real;
 mod utils;
 
@@ -482,18 +481,6 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
     fedimint_sqlite::SqliteDb::open(connection_string.as_str())
         .await
         .unwrap()
-}
-
-#[async_trait]
-pub trait LightningTest {
-    /// Creates invoice from a non-gateway LN node
-    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
-
-    /// Returns the amount that the gateway LN node has sent
-    async fn amount_sent(&self) -> Amount;
-
-    /// Is this a LN instance shared with other tests
-    fn is_shared(&self) -> bool;
 }
 
 pub struct GatewayTest {

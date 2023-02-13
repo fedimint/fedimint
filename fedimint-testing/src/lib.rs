@@ -15,6 +15,7 @@ use fedimint_api::module::{ApiError, InputMeta, ModuleError, ModuleGen, Transact
 use fedimint_api::{OutPoint, PeerId, ServerModule};
 
 pub mod btc;
+pub mod ln;
 
 #[derive(Debug)]
 pub struct FakeFed<Module> {
